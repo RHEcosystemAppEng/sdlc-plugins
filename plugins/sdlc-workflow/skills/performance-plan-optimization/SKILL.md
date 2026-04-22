@@ -17,44 +17,30 @@ You are an AI optimization planning assistant. You generate a structured optimiz
 - This skill does NOT modify source code files — only creates planning artifacts and Jira issues
 - This skill requires an existing workflow-analysis-report.md from the analyze-module skill
 
+**Apply:** [Execution Guardrails](../performance/execution-guardrails.template.md)
+
+### Blocking Steps (this skill)
+- Step 4.3 – Decision when zero anti-patterns found (abort or document as clean)
+- Step 8.2 – Jira Epic credential confirmation
+- Step 9.2 – Jira Task credential confirmation (per task)
+
+### Completeness Requirements (this skill)
+- All optimizations analyzed with severity, effort, and impact before Step 5
+- All RECOMMEND and CAUTION optimizations get Jira tasks (none silently skipped)
+- All cross-functional impacts documented in Epic description
+- Optimization plan document written to file before Jira issues created
+
+### Error Handling (this skill)
+- Missing analysis report → halt at Step 3 with remediation: run `performance-analyze-module`
+- Jira MCP unavailable → trigger REST fallback per shared/jira-rest-fallback.md;
+  do not halt unless REST also fails
+- Jira credential failure → retry once, then halt with exact error and remediation steps
+
 ## Step 1 – Determine Target Repository
 
 If the user provided a repository path as an argument, use that as the target. Otherwise, use the current working directory.
 
-**Validate repository type based on analysis scope:**
-
-1. **Check if performance-config.md exists:**
-   - If exists: Read `metadata.analysis_scope` field
-   - If not exists: Skip validation (setup hasn't run yet, proceed to Step 2)
-
-2. **Conditional validation based on scope:**
-
-   **If `analysis_scope = "backend-only"`:**
-   - Verify backend repository indicators exist:
-     - Rust: `Cargo.toml`, `src/main.rs` or `src/lib.rs`
-     - Java: `pom.xml` or `build.gradle`, `src/main/java/`
-     - Python: `requirements.txt` or `pyproject.toml`, Python files
-     - Node: `package.json` with server dependencies (express, fastify, etc.)
-     - Ruby: `Gemfile`, `.rb` files
-     - C#: `.csproj`, `.cs` files
-   - **Skip frontend indicator validation**
-
-   **If `analysis_scope = "frontend-only"`:**
-   - Verify frontend application indicators exist:
-     - `package.json` with frontend dependencies
-     - `src/` or `app/` directory
-     - Frontend framework indicators (React, Vue, Angular, Svelte, Next.js configuration files)
-   - **Skip backend indicator validation**
-
-   **If `analysis_scope = "full-stack"` or `"full-stack-monorepo"`:**
-   - **Verify BOTH frontend AND backend indicators exist**
-   - Frontend indicators (same as frontend-only above)
-   - Backend indicators (same as backend-only above)
-   - Both must be present for full-stack analysis
-
-   **If config doesn't exist:**
-   - Skip validation entirely (setup phase hasn't completed)
-   - Proceed to Step 2
+Verify repository type matches the `metadata.analysis_scope` setting in `.claude/performance-config.md`.
 
 ## Step 2 – Verify Performance Configuration Exists
 
@@ -78,41 +64,41 @@ If the user provided a repository path as an argument, use that as the target. O
 
 ## Step 4 – Read and Parse Analysis Report
 
+Read `metadata.metric_type` from `performance-config.md` to determine which anti-pattern sections to parse.
+
 Read the analysis report at `{analysis-directory}/workflow-analysis-report.md`.
 
 **Validation checks:**
 
 1. **Check if report file exists:**
-   ```bash
-   if [ ! -f "$report_file" ]; then
-     error: "Analysis report not found at expected location.
-     
-     Please run /sdlc-workflow:performance-analyze-module first to generate
-     the analysis report, then re-run this skill."
-     exit 1
-   fi
-   ```
+   Use the Read tool to check if the report file exists. If the Read tool returns an error (file not found):
+   
+   Inform the user:
+   > ❌ **Analysis report not found at expected location**
+   >
+   > Please run `/sdlc-workflow:performance-analyze-module` first to generate
+   > the analysis report, then re-run this skill.
+   
+   Stop execution.
 
 2. **Check for required sections:**
-   ```bash
-   if ! grep -q "## Anti-Pattern Analysis" "$report_file"; then
-     error: "Analysis report incomplete (missing Anti-Pattern Analysis section).
-     
-     The report may be corrupted or from an old version.
-     Please re-run /sdlc-workflow:performance-analyze-module to regenerate
-     the analysis report."
-     exit 1
-   fi
-   ```
+   
+   Search the report content for the "## Anti-Pattern Analysis" section header.
+   If not found:
+   
+   Inform the user:
+   > ❌ **Analysis report incomplete (missing Anti-Pattern Analysis section)**
+   >
+   > The report may be corrupted or from an old version.
+   > Please re-run `/sdlc-workflow:performance-analyze-module` to regenerate the analysis report.
+   
+   Stop execution.
 
 3. **Parse anti-pattern counts and check if any exist:**
    
    Parse the Anti-Pattern Analysis section and sum all instance counts.
    
-   ```
-   total_instances = sum(all anti-pattern instance counts)
-   
-   if total_instances == 0:
+   If total instance count == 0:
      warn:
      > ℹ️ **No anti-patterns detected in analysis report**
      >
@@ -157,66 +143,22 @@ Store this data for use in Steps 5, 6, 7, and 8.
 
 Before grouping optimizations into tasks, analyze the potential impact of each optimization on other functionalities in the application. This step ensures performance improvements don't break existing features or degrade user experience in other workflows.
 
-**Apply:** [Common Pattern: Code Intelligence Strategy](../performance/common-patterns.md#pattern-9-code-intelligence-strategy-serena-first-with-grep-fallback)
+**Apply:** [Common Pattern: Code Intelligence Strategy](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
 **Key Principle:** Always use Serena MCP first for code analysis, with Grep as fallback strategy.
 
 ### Step 5.1 – Identify Affected Code Modules
 
-For each optimization recommendation from the analysis report (extracted in Step 4):
+**Apply:** [Common Pattern: Code Intelligence Strategy](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback) — Symbol Reference Discovery
 
-**Extract optimization metadata:**
-- File paths and line numbers from anti-pattern findings
-- Code locations (component names, handler functions, class names)
-- Optimization type (bundle size, render, backend query, caching, etc.)
-
-**Use Serena-first strategy (Pattern 9) to find usage:**
-
-```python
-# FIRST CHOICE: Serena MCP (if available from CLAUDE.md Repository Registry)
-if serena_available:
-    try:
-        # Find all references to affected component/function
-        affected_usage = mcp__serena__find_referencing_symbols(
-            symbol_name=affected_component_name,
-            relative_path="src/"
-        )
-        method_used = "Serena MCP"
-        confidence = "High"
-        log: f"✅ Found {len(affected_usage)} references via Serena MCP"
-    except (ToolNotFoundError, Exception) as e:
-        log: f"⚠️ Serena MCP failed: {e}, falling back to Grep"
-        # Fall through to Grep fallback
-
-# FALLBACK STRATEGY: Grep search
-if method_used != "Serena MCP":
-    # Search for imports and usage patterns
-    grep -r "import.*{affected_component}" src/
-    grep -r "from.*{affected_file}.*import" src/
-    grep -r "{affected_function}(" src/
-    method_used = "Grep (Fallback)"
-    confidence = "Medium"
-    log: "ℹ️ Using Grep fallback (pattern matching only)"
-```
+**Find references to:**
+- Affected component/function from optimization target
+- Store: file paths, line numbers, usage context
 
 **Classify impact scope:**
+- Isolated (0 files), Low (1-2 files), Medium (3-5 files), High (6+ files)
 
-Based on the number of files/components found:
-
-- **Isolated**: Single file/component (no other files import or reference it)
-- **Low**: 2-3 files in same module/layer
-- **Medium**: 4-7 files OR cross-layer (e.g., frontend component + backend API)
-- **High**: ≥8 files OR core infrastructure (routing, authentication, state management, database schema)
-
-**Document which method was used:**
-```
-optimization_analysis[optimization_name] = {
-    "detection_method": method_used,  # "Serena MCP" | "Grep (Fallback)"
-    "confidence": confidence,          # "High" | "Medium"
-    "affected_files_count": count,
-    "impact_scope": scope              # "Isolated" | "Low" | "Medium" | "High"
-}
-```
+**Next:** Document impact in Epic Summary (Step 5.2)
 
 ### Step 5.2 – Assess Cross-Functional Impact Severity
 
@@ -334,7 +276,23 @@ For each optimization, create a structured impact analysis document:
 ### Optimization: {optimization-name}
 
 **Performance Benefit:** {quantified-impact} ({percentage}% improvement)  
-**Estimated Impact:** {time-savings-ms} ms or {size-reduction-kb} KB
+**Estimated Impact:** {time-savings-ms} ms or {size-reduction-kb} KB or {throughput-gain} req/sec
+
+**Impact Calculation Formulas:**
+
+**For Frontend Optimizations:**
+- Bundle size reduction → Transfer time savings: `size_reduction_kb / (bandwidth_mbps * 125) * 1000` ms
+- Blocking resource removal → LCP improvement: ~50% of resource load time
+- Layout thrashing fix → Reflow savings: `(n_reflows - 1) × 5ms`
+
+**For Backend Optimizations:**
+- N+1 query fix → Response time savings: `(n_queries - 1) × 10ms` per request
+- Pagination implementation → Latency reduction: Assume 50% for large result sets (>1000 rows)
+- Caching implementation → Latency reduction: `operation_time × cache_hit_rate`
+  - Example: 100ms operation with 80% cache hit rate = 80ms average savings
+- Throughput improvement from DB load reduction: `baseline_throughput × (1 + improvement_ratio)`
+  - Example: Removing N+1 queries may increase capacity by 20-50%
+- Over-fetching fix → Response payload reduction: `(unused_fields / total_fields) × response_size_kb`
 
 **Cross-Functional Impact Analysis:**
 - **Detection Method:** {Serena MCP | Grep (Fallback)}
@@ -488,194 +446,7 @@ Construct the plan filename: `optimization-plan.md`
 
 ### Step 7.2 – Plan Document Structure
 
-```markdown
-# Performance Optimization Plan
-
-**Workflow:** {workflow-name}  
-**Generated:** {iso-8601-timestamp}  
-**Overall Rating:** {current-rating} → Target: Excellent
-
----
-
-## Executive Summary
-
-**Current State:**
-- LCP (p95): {current-lcp} ms (Target: 2500 ms)
-- FCP (p95): {current-fcp} ms (Target: 1800 ms)
-- DOM Interactive (p95): {current-domInteractive} ms (Target: 3500 ms)
-- Total Load Time (p95): {current-total} ms (Target: 4000 ms)
-
-**Expected Impact:**
-- Estimated LCP improvement: {lcp-improvement} ms ({lcp-percentage}% reduction)
-- Estimated FCP improvement: {fcp-improvement} ms ({fcp-percentage}% reduction)
-- Estimated DOM Interactive improvement: {domInteractive-improvement} ms ({domInteractive-percentage}% reduction)
-- Estimated bundle size reduction: {bundle-size-reduction} KB
-
-**Total Effort Estimate:** {total-effort-days} days
-
----
-
-## Impact Analysis Summary
-
-**Total Optimizations Evaluated:** {total-count}  
-**Recommended:** {recommend-count} optimizations → {task-count} tasks  
-**Recommended with Caution:** {caution-count} optimizations (extra safeguards required)  
-**Conditional:** {conditional-count} optimizations (prerequisites not met)  
-**Deferred:** {defer-count} optimizations (documented for future review)  
-**Rejected:** {reject-count} optimizations (risk > benefit)
-
-### Decision Distribution
-
-| Decision | Count | Reason |
-|---|---|---|
-| RECOMMEND | {recommend-count} | Safe, high-benefit optimizations |
-| RECOMMEND WITH CAUTION | {caution-count} | High benefit but medium-high risk, extra safeguards required |
-| CONDITIONAL | {conditional-count} | Prerequisites not met (infrastructure, feature flags, etc.) |
-| DEFER | {defer-count} | Risk currently outweighs benefit |
-| REJECT | {reject-count} | Not worth pursuing |
-
----
-
-## Task Sequence
-
-| # | Task | Category | Impact | Effort | Dependencies |
-|---|---|---|---|---|---|
-| 1 | {task-1-summary} | {category-1} | {impact-1} | {effort-1} | None |
-| 2 | {task-2-summary} | {category-2} | {impact-2} | {effort-2} | Task 1 |
-| ... | ... | ... | ... | ... | ... |
-
----
-
-## Task Details
-
-### Task 1: {task-1-summary}
-
-**Category:** {category}  
-**Impact:** {quantified-impact}  
-**Effort:** {effort-estimate}  
-**Risk:** {High / Medium / Low}
-
-**Description:**
-{what-this-task-achieves}
-
-**Files to Modify:**
-- `{file-path-1}` — {reason}
-- `{file-path-2}` — {reason}
-
-**Baseline Metrics:**
-- LCP: {current-lcp} ms
-- Bundle size: {current-bundle-size} KB
-
-**Target Metrics:**
-- LCP: < {target-lcp} ms
-- Bundle size: < {target-bundle-size} KB
-
-**Acceptance Criteria:**
-- [ ] {criterion-1}
-- [ ] {criterion-2}
-
-**Performance Test Requirements:**
-- [ ] Re-run baseline capture after implementation
-- [ ] Verify LCP improvement of at least {improvement} ms
-- [ ] Ensure no regressions in other metrics
-
-**Dependencies:** {prerequisite-tasks}
-
-**Rollback Strategy:** {how-to-undo-if-needed}
-
----
-
-{... repeat for each task ...}
-
----
-
-## Deferred and Rejected Optimizations
-
-### Deferred for Future Review
-
-{For each DEFER or CONDITIONAL decision:}
-
-#### {optimization-name}
-
-**Performance Benefit:** {quantified-impact} ({percentage}% improvement)  
-**Decision:** {DEFERRED | CONDITIONAL}  
-**Reason:** {why deferred or what prerequisites are missing}
-
-**Impact Analysis:**
-- **Impact Scope:** {scope}
-- **Impact Severity:** {severity}
-- **Affected Workflows:** {list}
-- **Risk Factors:** {list}
-
-**Conditions for Reconsideration:**
-- {condition-1}
-- {condition-2}
-
-{If CONDITIONAL, list prerequisites:}
-**Prerequisites:**
-- {prerequisite-1}
-- {prerequisite-2}
-- **Estimated time to satisfy:** {estimate}
-
----
-
-### Rejected Optimizations
-
-{For each REJECT decision:}
-
-#### {optimization-name}
-
-**Performance Benefit:** {quantified-impact} ({percentage}% improvement)  
-**Decision:** REJECTED  
-**Reason:** {why rejected - explain risk/benefit analysis}
-
-**Impact Analysis:**
-- **Impact Scope:** {scope}
-- **Impact Severity:** {severity}
-- **Risk Factors:** {list}
-
-**Rationale:** {detailed explanation of why risk far outweighs benefit}
-
-**Alternative Approaches:** (if any)
-- {alternative-1}
-- {alternative-2}
-
----
-
-## Risk Assessment
-
-| Risk | Likelihood | Impact | Mitigation |
-|---|---|---|---|
-| {risk-1} | {likelihood} | {impact} | {mitigation-strategy} |
-| {risk-2} | {likelihood} | {impact} | {mitigation-strategy} |
-| ... | ... | ... | ... |
-
-**Common Risks:**
-- **Breaking changes:** Optimizations may introduce regressions. Mitigation: Comprehensive testing before merging.
-- **Performance measurement noise:** Baseline variability may obscure small improvements. Mitigation: Run multiple baseline iterations.
-- **Third-party library constraints:** Some optimizations may be blocked by library limitations. Mitigation: Evaluate alternative libraries.
-
----
-
-## Rollback Strategy
-
-If an optimization causes issues:
-
-1. **Immediate rollback:** Revert the commit and redeploy previous version
-2. **Root cause analysis:** Investigate what caused the issue
-3. **Revised approach:** Update the optimization plan and re-attempt with fixes
-4. **Re-baseline:** Capture new baseline to measure impact of rollback
-
----
-
-## Next Steps
-
-1. **Review this plan** with the team and adjust task sequencing if needed
-2. **Create Jira Epic and Tasks** — This skill will create these automatically
-3. **Implement tasks** in sequence using `/sdlc-workflow:implement-task {task-id}`
-4. **Re-baseline after each task** using `/sdlc-workflow:performance-baseline` to measure improvements
-5. **Final verification** using `/sdlc-workflow:performance-verify-optimization` to validate all targets met
-```
+Read the plan template from `plugins/sdlc-workflow/skills/performance/performance-plan.template.md` in the plugin cache and populate it with the calculated values from Steps 5-7.
 
 ### Step 7.3 – Calculate Expected Impact
 
@@ -756,7 +527,7 @@ See the full optimization plan in the comments below.
 
 ---
 
-_This Epic was AI-generated by [sdlc-workflow/performance-plan-optimization](https://github.com/mrizzi/sdlc-plugins) v{version}._
+_This Epic was AI-generated by sdlc-workflow/performance-plan-optimization v{version}._
 ```
 
 ### Step 8.2 – Create Epic via Jira
@@ -790,13 +561,20 @@ Prompt the user with the standard fallback flow (see `shared/jira-access-strateg
 > Choose (1/2/3):
 
 **If user chooses "1. Yes":**
+  
+⚠️ **Jira REST API fallback requires scripts/jira-client.py**
+
+This script is not included in the plugin. If Atlassian MCP is unavailable, you must:
+1. Use the Jira web UI to create issues manually, OR
+2. Install scripts/jira-client.py from the sdlc-plugins repository (if available)
+
 - Check CLAUDE.md for existing REST API credentials
 - If credentials exist: use them
 - If not: collect credentials, validate, and store
 - Create Epic via REST API:
   ```bash
   JIRA_SERVER_URL="{url}" JIRA_EMAIL="{email}" JIRA_API_TOKEN="{token}" \
-    cd <plugin-root> && python3 scripts/jira-client.py create_issue \
+    cd $(git rev-parse --show-toplevel) && python3 scripts/jira-client.py create_issue \
       --project {project-key} \
       --summary "{epic-summary}" \
       --description-md "{epic-description}" \
@@ -808,7 +586,7 @@ Prompt the user with the standard fallback flow (see `shared/jira-access-strateg
 - Skip Jira Epic creation
 - Continue with local plan file only
 - Inform user: "Optimization plan saved locally. You can create the Epic manually later."
-- Skip to Step 9 (plan document saved, no Jira operations)
+- Skip to Step 11 (plan document saved, no Jira operations)
 
 **If user chooses "3. Retry":**
 - Retry MCP operation once
@@ -843,17 +621,37 @@ Use the task-description-template.md structure, extending with performance-speci
 
 ## Baseline Metrics
 
+**If metric_type = "frontend" or "hybrid", include:**
+
 - **LCP (p95):** {current-lcp} ms
 - **FCP (p95):** {current-fcp} ms
 - **DOM Interactive (p95):** {current-domInteractive} ms
 - **Bundle Size:** {current-bundle-size} KB
 
+**If metric_type = "backend" or "hybrid", include:**
+
+- **Response Time (p95):** {current-response-p95} ms
+- **Response Time (p99):** {current-response-p99} ms
+- **Throughput:** {current-throughput} req/sec
+- **Error Rate:** {current-error-rate} %
+- **DB Query Time (p95):** {current-db-query-p95} ms
+
 ## Target Metrics
+
+**If metric_type = "frontend" or "hybrid", include:**
 
 - **LCP (p95):** < {target-lcp} ms
 - **FCP (p95):** < {target-fcp} ms
 - **DOM Interactive (p95):** < {target-domInteractive} ms
 - **Bundle Size:** < {target-bundle-size} KB
+
+**If metric_type = "backend" or "hybrid", include:**
+
+- **Response Time (p95):** < {target-response-p95} ms
+- **Response Time (p99):** < {target-response-p99} ms
+- **Throughput:** > {target-throughput} req/sec
+- **Error Rate:** < {target-error-rate} %
+- **DB Query Time (p95):** < {target-db-query-p95} ms
 
 ## Implementation Notes
 
@@ -940,7 +738,7 @@ labels=["ai-generated-jira", "performance-optimization", "product-catalog", "bac
 ```
 
 **If MCP fails:**
-- Use the same fallback flow as Epic creation (Step 7.2)
+- Use the same fallback flow as Epic creation (Step 8.2)
 - Create via REST API if user consents
 
 **Capture Task Key:**
@@ -981,7 +779,7 @@ jira.update_issue(
 
 ```bash
 JIRA_SERVER_URL="{url}" JIRA_EMAIL="{email}" JIRA_API_TOKEN="{token}" \
-  cd <plugin-root> && python3 scripts/jira-client.py update_issue {task-key} \
+  cd $(git rev-parse --show-toplevel) && python3 scripts/jira-client.py update_issue {task-key} \
     --fields-json '{"parent": {"key": "{epic-key}"}}'
 ```
 
@@ -991,7 +789,7 @@ Fall back to `Epic Link` custom field (Jira Software classic):
 
 ```bash
 JIRA_SERVER_URL="{url}" JIRA_EMAIL="{email}" JIRA_API_TOKEN="{token}" \
-  cd <plugin-root> && python3 scripts/jira-client.py update_issue {task-key} \
+  cd $(git rev-parse --show-toplevel) && python3 scripts/jira-client.py update_issue {task-key} \
     --fields-json '{"customfield_10014": "{epic-key}"}'
 ```
 
@@ -999,7 +797,7 @@ JIRA_SERVER_URL="{url}" JIRA_EMAIL="{email}" JIRA_API_TOKEN="{token}" \
 field ID for your instance with:
 ```bash
 JIRA_SERVER_URL="{url}" JIRA_EMAIL="{email}" JIRA_API_TOKEN="{token}" \
-  cd <plugin-root> && python3 scripts/jira-client.py get_fields | grep -i epic
+  cd $(git rev-parse --show-toplevel) && python3 scripts/jira-client.py get_fields | grep -i epic
 ```
 
 ### Step 9.4 – Link Tasks with Dependencies
@@ -1037,7 +835,7 @@ jira.add_comment(
 - Use REST API fallback:
   ```bash
   JIRA_SERVER_URL="{url}" JIRA_EMAIL="{email}" JIRA_API_TOKEN="{token}" \
-    cd <plugin-root> && python3 scripts/jira-client.py add_comment {epic-key} \
+    cd $(git rev-parse --show-toplevel) && python3 scripts/jira-client.py add_comment {epic-key} \
       --comment-md "{plan-content}"
   ```
 
@@ -1046,7 +844,7 @@ Append the skill footer to the comment:
 ```markdown
 ---
 
-This comment was AI-generated by [sdlc-workflow/performance-plan-optimization](https://github.com/mrizzi/sdlc-plugins) v{version}.
+This comment was AI-generated by sdlc-workflow/performance-plan-optimization v{version}.
 ```
 
 ## Step 11 – Output Summary
@@ -1108,7 +906,7 @@ If Jira Epic/Tasks were not created (user chose "No" in fallback), adjust the su
 - Task descriptions must include performance-specific sections (Baseline Metrics, Target Metrics, Performance Test Requirements, Cross-Functional Impact Assessment)
 - Plan document saved locally even if Jira operations fail
 - **Impact Analysis (Step 5) is mandatory** — always conduct cross-functional impact analysis before task grouping
-- **Use Serena MCP first** (Pattern 9) for code analysis, fallback to Grep only when Serena unavailable
+- **Use Serena MCP first** (Pattern 8) for code analysis, fallback to Grep only when Serena unavailable
 - **Document analysis method** — always record whether Serena MCP or Grep was used, with confidence level
 - **Filter by decision** — only RECOMMEND and RECOMMEND WITH CAUTION optimizations become Jira tasks
 - **If all optimizations deferred/rejected** — create Epic with summary, document deferred items in plan, add comment to Epic listing all deferred optimizations with rationale
