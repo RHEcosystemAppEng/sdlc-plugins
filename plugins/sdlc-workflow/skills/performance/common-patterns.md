@@ -2,6 +2,52 @@
 
 This document defines reusable patterns used across all performance skills to ensure consistency and reduce duplication.
 
+## Pattern 0: Plugin Root Resolution
+
+**Purpose:** Locate the installed sdlc-workflow plugin root directory at runtime
+
+**When to use:** Once per skill, before any operation that reads plugin files (scripts, templates, shared resources)
+
+**Used by:**
+- All skills that use Jira REST API fallback (Pattern 11)
+- Skills that read plugin templates or scripts
+
+**Procedure:**
+
+```bash
+# Resolve plugin root — works for any registry name and any version
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found in ~/.claude/plugins/cache/"
+  echo "   Ensure the plugin is installed and try again."
+  exit 1
+fi
+
+# $plugin_root is now set, e.g.: /home/user/.claude/plugins/cache/sdlc-plugins-local/sdlc-workflow/0.6.1/
+```
+
+**Why this works:**
+
+- Glob `cache/*/sdlc-workflow/*/` matches any registry name (sdlc-plugins-local, sdlc-plugins, marketplace names)
+- Matches any version number in the plugin cache
+- `sort -V | tail -1` selects the latest version if multiple are present
+- Uses `$HOME` for cross-platform compatibility
+- Validation ensures the directory exists before proceeding
+
+**Usage in subsequent commands:**
+
+```bash
+# Reference a template path (use agent Read tool on this path)
+template_path="${plugin_root}skills/performance/performance-config.template.md"
+
+# Execute plugin script
+python3 "$plugin_root/scripts/jira-client.py" <command>
+```
+
+---
+
 ## Pattern 1: Config Reading
 
 **Purpose:** Validate that `performance-config.md` exists before skill execution
@@ -60,38 +106,30 @@ Stop execution.
 **Procedure:**
 
 ```bash
-# Check for metadata frontmatter (v2 config)
-if config starts with "---\nmetadata:":
-  config_version = 2
-  extract metadata.baseline_captured (true | false)
-  extract metadata.baseline_timestamp (ISO timestamp | null)
-  extract metadata.baseline_commit_sha (git SHA | null)
-  extract metadata.backend_available (true | false)
-  extract metadata.last_updated (ISO timestamp)
-else:
-  # v1 config without metadata
-  config_version = 1
-  # Use defaults or fall back to alternative extraction methods
+# Read metadata from frontmatter
+extract metadata.baseline_captured (true | false)
+extract metadata.baseline_timestamp (ISO timestamp | null)
+extract metadata.baseline_commit_sha (git SHA | null)
+extract metadata.backend_available (true | false)
+extract metadata.last_updated (ISO timestamp)
 ```
 
 **Metadata Fields Reference:**
 
-| Field | Type | Description | Default (v1) |
-|---|---|---|---|
-| `version` | string | Config version identifier | "1.0" |
-| `created` | ISO timestamp | When config was first created | file mtime |
-| `last_updated` | ISO timestamp | When config was last modified | file mtime |
-| `config_schema_version` | integer | Schema version (1 or 2) | 1 |
-| `workflow_selected` | boolean | Whether workflow has been selected | true if Selected Workflow exists |
-| `baseline_captured` | boolean | Whether initial baseline was captured | Check if baseline report exists |
-| `baseline_timestamp` | ISO timestamp or null | When baseline was captured | null |
-| `baseline_commit_sha` | string or null | Git commit at baseline capture | null |
-| `backend_available` | boolean | Whether backend is configured and accessible | false |
-| `analysis_scope` | string | Determines which repositories are analyzed: "full-stack-monorepo" (same repo), "full-stack" (separate repos), "frontend-only", "backend-only" | "frontend-only" |
+| Field | Type | Description |
+|---|---|---|
+| `version` | string | Config version identifier |
+| `created` | ISO timestamp | When config was first created |
+| `last_updated` | ISO timestamp | When config was last modified |
+| `workflow_selected` | boolean | Whether workflow has been selected |
+| `baseline_captured` | boolean | Whether initial baseline was captured |
+| `baseline_timestamp` | ISO timestamp or null | When baseline was captured |
+| `baseline_commit_sha` | string or null | Git commit at baseline capture |
+| `backend_available` | boolean | Whether backend is configured and accessible |
+| `analysis_scope` | string | Determines which repositories are analyzed: "full-stack-monorepo" (same repo), "full-stack" (separate repos), "frontend-only", "backend-only" |
 
 **Error handling:**
 
-- If metadata is missing but expected (config_version = 1), offer auto-migration to v2
 - If metadata is malformed, log warning and use defaults
 
 ---
@@ -167,7 +205,7 @@ Comparing metrics across different modes produces invalid results.
 
 **Used by:**
 - performance-baseline (Step 8.1)
-- performance-analyze-module (Step 7.1)
+- performance-analyze-module (Steps 7.1-A/B)
 - performance-plan-optimization (Step 6.1)
 - performance-implement-optimization (Step 9.1)
 - performance-verify-optimization (Step 6.3)
@@ -178,13 +216,7 @@ Comparing metrics across different modes produces invalid results.
 # Read Target Directories section from config
 target_directories=$(grep -A 10 "## Target Directories" .claude/performance-config.md)
 
-# Extract directory paths
-baseline_dir=$(echo "$target_directories" | grep "baselines" | awk '{print $4}')
-analysis_dir=$(echo "$target_directories" | grep "analysis" | awk '{print $4}')
-plans_dir=$(echo "$target_directories" | grep "plans" | awk '{print $4}')
-verification_dir=$(echo "$target_directories" | grep "verification" | awk '{print $4}')
-
-# Standard paths (from template)
+# Standard directory paths
 baseline_dir=".claude/performance/baselines/"
 analysis_dir=".claude/performance/analysis/"
 plans_dir=".claude/performance/plans/"
@@ -211,94 +243,7 @@ mkdir -p "$baseline_dir" "$analysis_dir" "$plans_dir" "$verification_dir"
 
 ---
 
-## Pattern 5: Version Detection
-
-**Purpose:** Detect configuration schema version (v1 vs v2) and offer auto-migration
-
-**When to use:** Early in skill execution (typically Step 2)
-
-**Used by:**
-- performance-setup (Step 2)
-- performance-baseline (Step 2.2)
-- performance-analyze-module (Step 2.2)
-- performance-implement-optimization (Step 9.0.5)
-
-**Procedure:**
-
-```bash
-# Read first lines of config to check for metadata frontmatter
-config_header=$(head -n 20 .claude/performance-config.md)
-
-# Detect version
-if echo "$config_header" | grep -q "^---$"; then
-  # Check if metadata section exists
-  if echo "$config_header" | grep -q "metadata:"; then
-    # v2 config
-    config_version=2
-    schema_version=$(echo "$config_header" | grep "config_schema_version:" | awk '{print $2}')
-  else:
-    # Has frontmatter but no metadata - malformed
-    config_version=1
-  fi
-else:
-  # No frontmatter - v1 config
-  config_version=1
-fi
-
-# If v1, offer migration
-if [ "$config_version" -eq 1 ]; then
-  echo "ℹ️ Configuration upgrade available"
-  echo ""
-  echo "Your config is v1 (pre-metadata). Upgrade to v2 for:"
-  echo "- Baseline mode consistency enforcement"
-  echo "- Auto-update of optimization metrics"
-  echo "- Backend availability caching"
-  echo "- Baseline freshness tracking"
-  echo ""
-  echo "⚠️ IMPORTANT: V1→V2 auto-migration is not fully implemented."
-  echo "The migration script has incomplete transformations:"
-  echo "- Optimization Targets 3-column format"
-  echo "- Backend Available field insertion"
-  echo ""
-  echo "Manual migration required:"
-  echo "1. Backup: cp .claude/performance-config.md .claude/performance-config.md.v1.backup"
-  echo "2. Add metadata frontmatter (see performance-config.template.md)"
-  echo "3. Restructure Optimization Targets table to 6-column format"
-  echo "4. Add Backend Available and Last Validated fields"
-  echo ""
-  echo "Do NOT proceed with auto-migration. Migrate manually instead."
-  echo "Continue with v1 config? (yes/no)"
-  
-  read -p "> " upgrade_choice
-  
-  if [ "$upgrade_choice" = "yes" ]; then
-    echo "Continuing with v1 config (some features disabled)"
-  else:
-    echo "Migration cancelled. Please migrate manually or continue with v1."
-  fi
-fi
-```
-
-**Version differences:**
-
-| Feature | v1 Config | v2 Config |
-|---|---|---|
-| Metadata frontmatter | ❌ No | ✅ Yes |
-| Baseline mode storage | Only in baseline report | In config metadata |
-| Backend availability caching | Re-validated each time | Cached in metadata |
-| Config auto-update | ❌ No | ✅ Yes (baseline, implement) |
-| Baseline freshness check | ❌ No | ✅ Yes (commit SHA tracking) |
-| E2E test path storage | ❌ No | ✅ Yes (metadata) |
-| Optimization Targets format | 2-column (Target, Unit) | 3-column (Baseline, Current, Target) |
-
-**Error handling:**
-
-- If migration fails, continue with v1 (degraded mode warnings)
-- If metadata is malformed, treat as v1
-
----
-
-## Pattern 6: Baseline Report Reading
+## Pattern 5: Baseline Report Reading
 
 **Purpose:** Read baseline metrics from baseline-report.md
 
@@ -328,8 +273,10 @@ fcp_p95=$(echo "$report" | grep "FCP (p95)" | awk '{print $4}')
 tti_p95=$(echo "$report" | grep "DOM Interactive (p95)" | awk '{print $4}')
 total_load_p95=$(echo "$report" | grep "Total Load Time (p95)" | awk '{print $4}')
 
-# Extract capture mode from frontmatter
-capture_mode=$(echo "$report" | grep "capture_mode:" | awk '{print $2}')
+# Extract metadata from YAML frontmatter (between --- delimiters)
+frontmatter=$(echo "$report" | sed -n '/^---$/,/^---$/p' | sed '1d;$d')
+workflow_name=$(echo "$frontmatter" | grep "workflow:" | awk '{print $2}')
+capture_mode=$(echo "$frontmatter" | grep "capture_mode:" | awk '{print $2}')
 
 # Extract baseline timestamp
 baseline_timestamp=$(echo "$report" | grep "timestamp:" | awk '{print $2}')
@@ -363,7 +310,7 @@ commit_sha: {git-commit-sha}
 
 ---
 
-## Pattern 7: Workflow Validation
+## Pattern 6: Workflow Validation
 
 **Purpose:** Extract and validate Selected Workflow section from configuration
 
@@ -424,115 +371,7 @@ The following workflow has been selected for performance optimization:
 
 ---
 
-## Migration Pattern: V1 to V2 Config Upgrade
-
-**Purpose:** Upgrade v1 config (no metadata) to v2 config (with metadata frontmatter)
-
-**When to use:** When Pattern 5 (Version Detection) identifies v1 config and user agrees to upgrade
-
-**Procedure:**
-
-```bash
-# Backup original config
-cp .claude/performance-config.md .claude/performance-config.md.v1.backup
-
-# Read existing config
-config=$(cat .claude/performance-config.md)
-
-# Extract baseline mode from baseline report (if exists)
-baseline_mode="null"
-baseline_captured="false"
-baseline_commit_sha="null"
-baseline_timestamp="null"
-
-if [ -f ".claude/performance/baselines/baseline-report.md" ]; then
-  baseline_captured="true"
-  baseline_mode=$(grep "capture_mode:" .claude/performance/baselines/baseline-report.md | awk '{print $2}')
-  baseline_commit_sha=$(grep "commit_sha:" .claude/performance/baselines/baseline-report.md | awk '{print $2}')
-  baseline_timestamp=$(grep "timestamp:" .claude/performance/baselines/baseline-report.md | awk '{print $2}')
-fi
-
-# Check if workflow is selected
-workflow_selected="false"
-if grep -q "## Selected Workflow" .claude/performance-config.md; then
-  workflow_selected="true"
-fi
-
-# Check if backend is available
-backend_available="false"
-backend_path=$(grep "Backend Path" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-if [ -n "$backend_path" ] && [ -d "$backend_path" ]; then
-  backend_available="true"
-fi
-
-# Infer analysis_scope from backend_available
-analysis_scope="frontend-only"
-if [ "$backend_available" = "true" ]; then
-  # Check if monorepo (both frontend and backend in same directory)
-  frontend_path=$(grep "Frontend Path" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-  backend_path=$(grep "Backend Path" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-  
-  if [ -n "$frontend_path" ] && [ "$frontend_path" = "$backend_path" ]; then
-    analysis_scope="full-stack-monorepo"
-  else
-    analysis_scope="full-stack"
-  fi
-fi
-
-# Create metadata frontmatter
-current_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-file_mtime=$(stat -c %Y .claude/performance-config.md 2>/dev/null || stat -f %m .claude/performance-config.md)
-created_timestamp=$(date -u -d "@$file_mtime" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null || date -u -r $file_mtime +"%Y-%m-%dT%H:%M:%SZ")
-
-metadata="---
-metadata:
-  version: 1.0
-  created: ${created_timestamp}
-  last_updated: ${current_timestamp}
-  config_schema_version: 2
-  workflow_selected: ${workflow_selected}
-  baseline_captured: ${baseline_captured}
-  baseline_mode: ${baseline_mode}
-  baseline_timestamp: ${baseline_timestamp}
-  baseline_commit_sha: ${baseline_commit_sha}
-  backend_available: ${backend_available}
-  analysis_scope: \"${analysis_scope}\"
-  backend_endpoint_discovery_method: null
-  dev_command_approved: false
-  dev_command_hash: null
----
-"
-
-# Prepend metadata to config
-echo "$metadata" > .claude/performance-config.md.tmp
-echo "" >> .claude/performance-config.md.tmp
-cat .claude/performance-config.md >> .claude/performance-config.md.tmp
-mv .claude/performance-config.md.tmp .claude/performance-config.md
-
-# Update Optimization Targets section to 3-column format
-# (Implementation depends on sed/awk skills - simplified here)
-# Note: Optimization Targets transformation requires manual sed/awk - add columns: | Baseline (p95) | TBD | Latest Verified (p95) | TBD |
-
-# Add Backend Available field to Backend Configuration section
-# Note: Backend Configuration update requires adding row after Last Validated field
-
-echo "✅ Configuration upgraded to v2"
-echo "Backup saved to: .claude/performance-config.md.v1.backup"
-```
-
-**Migration checklist:**
-
-- [x] Create metadata frontmatter with defaults
-- [x] Extract baseline mode from existing baseline report (if exists)
-- [x] Validate backend path and set backend_available flag
-- [x] Check if workflow is selected (workflow_selected flag)
-- [x] Transform Optimization Targets to 3-column format (Baseline/Current/Target) - Note: Manual step required
-- [x] Add "Backend Available" row to Backend Configuration table - Note: Manual step required
-- [x] Backup original config to .v1.backup
-
----
-
-## Pattern 8: Dev Command Approval
+## Pattern 7: Dev Command Approval
 
 **Purpose:** Discover, present, and get user approval for dev mode commands before execution
 
@@ -567,7 +406,7 @@ if [ "$skip_to_verification" != "true" ]; then
   discovered_command=""
   doc_source=""
   
-  # Priority 1: package.json scripts
+  # Check package.json scripts
   if [ -f "package.json" ]; then
     dev_script=$(jq -r '.scripts.dev // .scripts.start // .scripts.serve // "null"' package.json)
     if [ "$dev_script" != "null" ]; then
@@ -576,106 +415,33 @@ if [ "$skip_to_verification" != "true" ]; then
     fi
   fi
   
-  # Priority 2: README.md / CONTRIBUTING.md
+  # If not found, prompt manually
   if [ -z "$discovered_command" ]; then
-    for readme in README.md CONTRIBUTING.md docs/development.md; do
-      if [ -f "$readme" ]; then
-        # Look for "Getting Started", "Development", "Running Locally" sections
-        # Extract command from code blocks (simplified - real implementation uses grep/sed)
-        discovered_command=$(grep -A 5 "Getting Started\|Development\|Running Locally" "$readme" | grep "npm run\|cargo run\|mvn spring-boot:run" | head -1)
-        if [ -n "$discovered_command" ]; then
-          doc_source="$readme"
-          break
-        fi
-      fi
-    done
-  fi
-  
-  # Priority 3: Makefile / justfile
-  if [ -z "$discovered_command" ]; then
-    for makefile in Makefile justfile; do
-      if [ -f "$makefile" ]; then
-        # Look for dev, start, run targets
-        discovered_command=$(grep "^dev:\|^start:\|^run:" "$makefile" | head -1 | sed 's/:.*//')
-        if [ -n "$discovered_command" ]; then
-          discovered_command="make $discovered_command"
-          doc_source="$makefile"
-          break
-        fi
-      fi
-    done
-  fi
-  
-  # Priority 4: Framework defaults
-  if [ -z "$discovered_command" ]; then
-    if [ -f "next.config.js" ] || [ -f "next.config.ts" ]; then
-      discovered_command="npm run dev"
-      doc_source="Next.js framework default"
-    elif [ -f "vite.config.ts" ] || [ -f "vite.config.js" ]; then
-      discovered_command="npm run dev"
-      doc_source="Vite framework default"
-    elif [ -f "Cargo.toml" ]; then
-      discovered_command="cargo run"
-      doc_source="Rust framework default"
-    elif [ -f "pom.xml" ]; then
-      discovered_command="mvn spring-boot:run"
-      doc_source="Spring Boot framework default"
-    elif [ -f "manage.py" ]; then
-      discovered_command="python manage.py runserver"
-      doc_source="Django framework default"
-    fi
-  fi
-  
-  # If still not found, prompt manually
-  if [ -z "$discovered_command" ]; then
-    echo "⚠️ Could not auto-discover dev command"
+    echo "⚠️ Could not auto-discover dev command from package.json"
     echo "Please enter the command to start your application:"
     read -p "> " discovered_command
     doc_source="Manual user input"
   fi
 fi
 
-# Step 3: Extract port number from command or config
+# Step 3: Extract port number (simple detection)
 port=""
 
-# From command flags
-if echo "$discovered_command" | grep -qE -- "--port|-p"; then
-  port=$(echo "$discovered_command" | grep -oE -- "--port[= ]([0-9]+)|-p[= ]([0-9]+)" | grep -oE "[0-9]+")
+# From .env file
+if [ -f ".env" ]; then
+  port=$(grep "^PORT=" .env | cut -d= -f2)
 fi
 
-# From .env files
-if [ -z "$port" ]; then
-  for envfile in .env .env.local .env.development; do
-    if [ -f "$envfile" ]; then
-      port=$(grep "^PORT=" "$envfile" | cut -d= -f2)
-      [ -n "$port" ] && break
-    fi
-  done
-fi
-
-# From framework config files
-if [ -z "$port" ]; then
-  if [ -f "vite.config.ts" ]; then
-    port=$(grep "port:" vite.config.ts | grep -oE "[0-9]+" | head -1)
-  elif [ -f "next.config.js" ]; then
-    port=$(grep "port:" next.config.js | grep -oE "[0-9]+" | head -1)
-  fi
-fi
-
-# Framework defaults
+# Framework default fallback
 if [ -z "$port" ]; then
   if [ -f "next.config.js" ] || [ -f "next.config.ts" ]; then
     port=3000
   elif [ -f "vite.config.ts" ] || [ -f "vite.config.js" ]; then
     port=5173
-  elif [ -f "Cargo.toml" ]; then
-    port=8080
-  elif [ -f "pom.xml" ]; then
-    port=8080
   elif [ -f "manage.py" ]; then
     port=8000
   else
-    port=3000  # Fallback default
+    port=3000  # Default
   fi
 fi
 
@@ -687,42 +453,42 @@ echo "Command: $discovered_command"
 echo "Source: $doc_source"
 echo "Port: $port"
 echo ""
-echo "What this command does:"
-echo "- Starts application in development mode"
-echo "- Runs on port $port (http://localhost:$port)"
+echo "What would you like to do?"
 echo ""
-echo "Security guarantees:"
-echo "- Runs in your local environment only"
-echo "- No credentials required"
-echo "- Standard development tooling"
+echo "1. Approve - Use this command as-is"
+echo "2. Modify - Make changes to the command"
+echo "3. Exit - Cancel and exit skill"
 echo ""
-echo "Additional instructions (optional):"
-echo "Enter modifications (e.g., \"AUTH_DISABLED=true npm run dev\") or press Enter to use as-is:"
-read -p "> " user_modifications
+read -p "Choose (1/2/3): " choice
 
-if [ -n "$user_modifications" ]; then
-  final_command="$user_modifications"
-else
-  final_command="$discovered_command"
-fi
-
-echo ""
-echo "Final command: $final_command"
-echo ""
-echo "Approve this command? (yes/no)"
-read -p "> " approval
-
-if [ "$approval" != "yes" ]; then
-  echo "❌ Command not approved. Please start your application manually and re-run this skill."
-  exit 1
-fi
+case $choice in
+  1)
+    final_command="$discovered_command"
+    echo "✅ Using command: $final_command"
+    ;;
+  2)
+    echo ""
+    echo "Enter the modified command:"
+    read -p "> " user_modifications
+    if [ -z "$user_modifications" ]; then
+      echo "❌ No command provided. Exiting."
+      exit 1
+    fi
+    final_command="$user_modifications"
+    echo "✅ Using command: $final_command"
+    ;;
+  3)
+    echo "❌ Command approval cancelled. Exiting skill."
+    exit 1
+    ;;
+  *)
+    echo "❌ Invalid choice. Please enter 1, 2, or 3."
+    exit 1
+    ;;
+esac
 
 # Step 5: Update config with approved command
 command_hash=$(echo -n "$final_command" | sha256sum | awk '{print $1}')
-current_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
-
-# Update Development Environment section
-# (sed/awk implementation omitted - replace table values)
 
 # Update metadata
 sed -i "s/dev_command_approved: false/dev_command_approved: true/" .claude/performance-config.md
@@ -730,23 +496,36 @@ sed -i "s/dev_command_hash: null/dev_command_hash: \"$command_hash\"/" .claude/p
 
 echo "✅ Dev command approved and saved to configuration"
 
-# Step 6: Display manual start instructions
+# Step 6: Start application and verify with retry logic
 echo ""
-echo "Please start your application manually:"
-echo "  $final_command"
-echo ""
-echo "Wait for successful start, then press Enter to continue..."
-read -p ""
+echo "ℹ️ Starting application: $final_command"
+echo "⏳ Waiting for application to respond on port $port..."
 
-# Step 7: Verify application is running
-echo "Verifying application is running on port $port..."
-if nc -z localhost $port 2>/dev/null; then
-  echo "✅ Application is running"
-else
-  echo "❌ Application not running on port $port"
-  echo "Please start your application and re-run this skill."
-  exit 1
-fi
+# Start in background
+$final_command &
+app_pid=$!
+
+# Verify with curl retry loop
+max_retries=30
+retry_delay=2
+
+for i in $(seq 1 $max_retries); do
+  if curl -s http://localhost:$port >/dev/null 2>&1; then
+    echo "✅ Application is running on port $port"
+    break
+  fi
+  
+  if [ $i -lt $max_retries ]; then
+    echo "   Attempt $i/$max_retries - waiting ${retry_delay}s..."
+    sleep $retry_delay
+  else
+    echo ""
+    echo "❌ Application failed to start after $((max_retries * retry_delay)) seconds"
+    echo "Please check application logs for errors."
+    kill $app_pid 2>/dev/null
+    exit 1
+  fi
+done
 ```
 
 **Change Detection:**
@@ -770,217 +549,98 @@ After approval, update `.claude/performance-config.md`:
 
 ---
 
-## Pattern 9: Code Intelligence Strategy (Serena-First with Grep Fallback)
+## Pattern 8: Code Intelligence Strategy (Serena-First with Grep Fallback)
 
 **Purpose:** Ensure robust code analysis by always trying Serena MCP tools first, with automatic Grep fallback
 
-**When to use:** All code analysis operations (symbol lookup, file search, schema extraction)
+**When to use:** **MANDATORY** for ALL code analysis operations including:
+- Symbol lookup (finding functions, classes, handlers)
+- File search and discovery
+- Schema extraction (struct/class definitions)
+- Reference counting (finding callers)
+- AST/semantic analysis
+- Any source code inspection or parsing
 
 **Used by:**
-- performance-analyze-module (Step 7.1-7.6 backend analysis)
-- performance-plan-optimization (reading analysis reports that document which method was used)
+- performance-baseline (Step 3.0 probe; Steps 3.1-A/B, 3.1.1-A/B, 3.5-A/B)
+- performance-analyze-module (Step 6.9 probe; Steps 7.1-A/B, 7.2-A/B, 7.3–7.6)
+- performance-implement-optimization (any code inspection during implementation)
 - Any future skills that inspect source code
 
 **Core Principle:**
 
 ```
-ALWAYS: Serena MCP (Preferred) → Grep (Fallback) → Document which was used
+GATE: One live Serena probe call at skill start sets serena_mode for the entire run.
+  serena_mode = live           → Follow Path A steps (Serena-only, no grep)
+  serena_mode = down           → Follow Path B steps (Grep, Serena probe errored)
+  serena_mode = not-configured → Follow Path B steps (no Serena instance in config)
 ```
 
 **Procedure:**
 
-### Step 1: Check Serena Availability
+### Step 1: Live Serena Probe
+
+Read `serena_instance` from the skill's config source (`performance-config.md` or `CLAUDE.md`):
 
 ```bash
-# Extract Serena instance name from config or CLAUDE.md
-serena_instance_name="backend-serena"  # From config
-
-# Construct MCP tool name
-mcp_tool_prefix="mcp__${serena_instance_name}__"
-
-# Test if Serena MCP is available at runtime
-# Use ToolSearch to check if tool exists
-serena_available=false
-
-if ToolSearch(query="select:${mcp_tool_prefix}get_symbols_overview"); then
-  serena_available=true
-  echo "✅ Serena MCP available: Using semantic code intelligence"
-else
-  serena_available=false
-  echo "ℹ️ Serena MCP unavailable: Falling back to Grep-based analysis"
-fi
+serena_instance=$(grep "Serena Instance" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
 ```
 
-### Step 2: Execute Analysis with Fallback
+**If `serena_instance` is non-empty and not "—":**
 
-For each code analysis operation, implement the fallback pattern:
+Call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`.
 
-**Pattern Template:**
+- **Response received (any result, including empty list):** `serena_mode = live`. Store the overview result for use in subsequent steps.
+- **Error response received:** `serena_mode = down`. Record exact error string.
 
-```python
-# Pseudo-code for illustration
-def analyze_code(operation_name, serena_params, grep_params):
-    result = None
-    method_used = None
-    confidence = None
-    
-    # FIRST CHOICE: Try Serena MCP
-    if serena_available:
-        try:
-            result = call_serena_mcp(**serena_params)
-            method_used = "Serena MCP"
-            confidence = "High"  # Semantic analysis
-            log_info(f"✅ {operation_name}: Serena MCP succeeded")
-        except ToolNotFoundError as e:
-            log_warning(f"⚠️ Serena MCP failed: {e}")
-            # Fall through to Grep fallback
-        except Exception as e:
-            log_warning(f"⚠️ Serena MCP error: {e}")
-            # Fall through to Grep fallback
-    
-    # FALLBACK STRATEGY: Use Grep if Serena unavailable or failed
-    if result is None:
-        try:
-            result = call_grep(**grep_params)
-            method_used = "Grep (Fallback)"
-            confidence = "Medium"  # Pattern matching only
-            log_info(f"ℹ️ {operation_name}: Grep fallback succeeded")
-        except Exception as e:
-            log_error(f"❌ Grep fallback failed: {e}")
-            method_used = "Failed"
-            confidence = "None"
-    
-    # ALWAYS DOCUMENT: Which method was used
-    return {
-        "result": result,
-        "method_used": method_used,
-        "confidence": confidence,
-        "limitations": get_limitations(method_used)
-    }
-```
+**If `serena_instance` is "—" or empty:** `serena_mode = not-configured`.
+
+> The probe call doubles as useful data — the overview of the project root is the starting map
+> for symbol discovery. Store and reuse it; do not discard it.
+
+---
+
+### Step 2-A: Code Analysis — Serena Path (`serena_mode = live`)
+
+> **Grep and shell-based symbol discovery are not available in this path.**
+> If an individual tool call errors on a specific file, mark that file
+> `analysis_status: error` and continue with remaining files. Do not switch to grep.
+
+Use the appropriate Serena tool for each operation:
+
+| Operation | Tool | Key Parameters |
+|---|---|---|
+| All functions in a file | `find_symbol` | `name_path_pattern="/"`, `include_body=true`, `include_kinds=[12]`, `max_matches=100` |
+| Callers of a function | `find_referencing_symbols` | `name_path=handler_name`, `relative_path=file` |
+| File/module overview | `get_symbols_overview` | `relative_path=file`, `depth=1` |
+| Named symbol search | `find_symbol` | `name_path_pattern=name`, `substring_matching=true` |
+
+**Batch over HTTP methods:** A single `find_symbol` call per file with `name_path_pattern="/"`
+and `include_body=true` returns all handler functions including their route decorators
+(`#[get]`, `#[post]`, etc.). Do not make separate calls per HTTP method.
+
+Set `discovery_method = "Serena MCP"` and `confidence = "high"` on all results.
+
+---
+
+### Step 2-B: Code Analysis — Grep Path (`serena_mode = down | not-configured`)
+
+> This path is followed only when Step 1 recorded `serena_mode = down` or `not-configured`.
+> Document the reason in generated reports.
+
+Use Grep and Read tools for symbol discovery. Apply framework-specific patterns defined in
+each skill's discovery step.
+
+Set `discovery_method = "Grep"` and `confidence = "medium"` on all results.
 
 ### Step 3: Document Method in Reports
 
 Always document which analysis method was used in generated reports:
+- Include "Analysis Method: Serena MCP (High Confidence)" or "Analysis Method: Grep (Fallback - Medium Confidence)"
+- Add confidence level to anti-pattern detection tables
+- If using Grep fallback, include limitations note
 
-**Example - Backend Analysis Section in Report:**
-
-```markdown
-## Backend Source Code Analysis
-
-**Backend Repository:** my-backend-service (Rust/Actix-Web)  
-**Analysis Method:** Serena MCP (High Confidence)  
-**Endpoints Analyzed:** 12 endpoints  
-
-### Detection Confidence
-
-| Anti-Pattern | Detection Method | Confidence | Notes |
-|---|---|---|---|
-| N+1 Queries | Serena MCP | High | Semantic analysis of loop+query patterns |
-| Over-Fetching | Serena MCP | High | Full struct definition extracted |
-| Unused Joins | Serena MCP | High | JOIN detection + field usage tracking |
-```
-
-**Example - Grep Fallback Documentation:**
-
-```markdown
-## Backend Source Code Analysis
-
-**Backend Repository:** my-backend-service (Rust/Actix-Web)  
-**Analysis Method:** Grep (Fallback - Serena MCP unavailable)  
-**Endpoints Analyzed:** 8 endpoints (4 not found with Grep)  
-**Confidence:** Medium (pattern matching only)
-
-⚠️ **Analysis Limitations (Grep Fallback Mode):**
-- Schema extraction: Best-effort parsing, may miss nested fields
-- N+1 detection: Proximity-based (10-line window), may miss service layers
-- Field usage tracking: Literal string matching, misses dynamic property access
-- **Recommendation:** Enable Serena MCP for comprehensive analysis
-
-### Detection Confidence
-
-| Anti-Pattern | Detection Method | Confidence | Notes |
-|---|---|---|---|
-| N+1 Queries | Grep proximity search | Medium | May miss patterns >10 lines apart |
-| Over-Fetching | Grep field search | Low-Medium | Cannot detect destructuring patterns |
-| Unused Joins | Grep JOIN pattern | Medium | May miss ORM-generated JOINs |
-```
-
-### Step 4: Specific Operation Examples
-
-#### Operation: Find Handler Function
-
-**Serena-First:**
-```rust
-// FIRST CHOICE: Serena MCP
-let handler = mcp__backend_serena__find_symbol(
-    name_path_pattern: ".*products.*handler",
-    relative_path: "src/handlers/",
-    include_body: false
-);
-
-// Returns: Full symbol metadata with file path, line numbers, signature
-```
-
-**Grep Fallback:**
-```bash
-# FALLBACK: Grep
-grep -r "#\[get(\"/api/v2/products\")" backend_path/src/ | \
-  grep -v "test" | \
-  head -1
-
-# Returns: filename:line:match (limited metadata)
-```
-
-#### Operation: Extract Response Schema
-
-**Serena-First:**
-```rust
-// FIRST CHOICE: Serena MCP
-let response_struct = mcp__backend_serena__find_symbol(
-    name_path_pattern: "ProductResponse",
-    include_body: true,
-    depth: 2  // Include nested structs
-);
-
-// Returns: Complete struct definition with all fields, types, nested objects
-```
-
-**Grep Fallback:**
-```bash
-# FALLBACK: Grep
-grep -A 50 "struct ProductResponse" backend_path/src/models/ | \
-  grep -E "^\s+\w+:" | \
-  awk '{print $1}' | \
-  tr -d ','
-
-# Returns: Field names only (no types, no nested resolution)
-```
-
-#### Operation: Detect N+1 Queries
-
-**Serena-First:**
-```rust
-// FIRST CHOICE: Serena MCP
-let handler_body = mcp__backend_serena__find_symbol(
-    name_path_pattern: "get_products_handler",
-    include_body: true
-);
-
-// Then analyze AST for loop constructs containing query calls
-// Can detect across service layer boundaries, track control flow
-```
-
-**Grep Fallback:**
-```bash
-# FALLBACK: Grep with proximity search
-grep -A 10 "for.*in\|\.iter()" handler_file | \
-  grep "query!\|fetch_one\|find_by_id"
-
-# Limited to 10-line window, cannot track control flow
-```
-
-### Step 5: Confidence Levels
+### Step 4: Confidence Levels
 
 **High Confidence (Serena MCP):**
 - Full AST/semantic analysis
@@ -1002,101 +662,19 @@ grep -A 10 "for.*in\|\.iter()" handler_file | \
 - May miss patterns split across many lines
 - False positives on pattern matches in comments/strings
 
-### Step 6: Error Handling Matrix
+### Step 5: Error Handling Matrix
 
-| Scenario | Serena Behavior | Grep Fallback | Final Action |
+| `serena_mode` | Individual call result | Action | Confidence |
 |---|---|---|---|
-| Serena available, operation succeeds | ✅ Use result | ⏭️ Skip | Report with High confidence |
-| Serena available, operation fails | ⚠️ Log error | ✅ Use Grep | Report with Medium confidence + note Serena failure |
-| Serena unavailable from start | ⏭️ Skip | ✅ Use Grep | Report with Medium confidence + note Serena unavailable |
-| Both fail | ❌ Operation failed | ❌ No fallback | Document limitation in report, mark as "Not Analyzed" |
-
-### Step 7: Configuration Validation
-
-**Check Serena instance configuration:**
-
-```bash
-# From CLAUDE.md Repository Registry
-if grep -q "Serena Instance" CLAUDE.md; then
-  serena_instance=$(grep "Serena Instance" CLAUDE.md | awk -F'|' '{print $4}' | xargs)
-  
-  if [ -n "$serena_instance" ] && [ "$serena_instance" != "—" ]; then
-    echo "✅ Serena configured: $serena_instance"
-    # Proceed with runtime availability check (Step 1)
-  else
-    echo "ℹ️ No Serena instance configured, using Grep-only mode"
-    serena_available=false
-  fi
-else
-  echo "ℹ️ CLAUDE.md has no Repository Registry, using Grep-only mode"
-  serena_available=false
-fi
-```
-
-### Step 8: Performance Optimization
-
-**Batch Serena calls when possible:**
-
-```python
-# GOOD: Batch symbol lookups
-symbols = mcp__serena__find_symbol(
-    name_path_pattern: "Product.*",  # Wildcard matches multiple symbols
-    depth: 1
-)
-
-# AVOID: Sequential individual calls
-for symbol_name in ["ProductResponse", "ProductDTO", "ProductEntity"]:
-    symbol = mcp__serena__find_symbol(name_path_pattern=symbol_name)
-```
-
-**Cache Serena results:**
-
-```python
-# Cache handler lookups for re-use
-handler_cache = {}
-
-def get_handler(endpoint_path):
-    if endpoint_path in handler_cache:
-        return handler_cache[endpoint_path]
-    
-    handler = mcp__serena__find_symbol(...)
-    handler_cache[endpoint_path] = handler
-    return handler
-```
-
-### Step 9: User Communication
-
-**Inform user of analysis mode:**
-
-```
-ℹ️ **Code Analysis Strategy**
-
-Backend Analysis Mode: Serena MCP (Semantic)
-- High-confidence anti-pattern detection
-- Accurate schema extraction
-- Cross-file reference tracking
-
-If Serena fails, automatic Grep fallback with medium confidence.
-```
-
-**If Grep fallback triggered:**
-
-```
-⚠️ **Serena MCP Unavailable - Using Grep Fallback**
-
-Analysis quality: Medium confidence (pattern matching)
-
-To enable high-confidence analysis:
-1. Verify Serena MCP server is running
-2. Check CLAUDE.md Repository Registry for Serena instance name
-3. Re-run this skill
-
-Analysis will proceed with Grep (some patterns may be missed).
-```
+| `live` | Call succeeds | Use result, continue in Path A | High |
+| `live` | Call errors on specific file | Mark file `analysis_status: error`, continue in Path A | High (partial) |
+| `down` | — | Use Path B (Grep) throughout | Medium |
+| `not-configured` | — | Use Path B (Grep) throughout | Medium |
+| `live` + all files errored | All calls errored | Document in report as "Not Analyzed" | N/A |
 
 ---
 
-## Pattern 10: Config Write Protection
+## Pattern 9: Config Write Protection
 
 **Purpose:** Prevent concurrent writes to `performance-config.md` from two simultaneous skill
 executions (e.g., two developers running baseline at the same time on the same machine, or a CI
@@ -1185,6 +763,389 @@ locked state until the 5-minute stale timeout.
 starting baseline at the same time). It does not prevent all races — a very short window between
 Step D's check and the write remains. For production CI environments, prefer serialising
 performance skill runs at the pipeline level.
+
+---
+
+## Pattern 10: API Profiling
+
+**Purpose:** Execute accurate HTTP benchmarking of backend API endpoints using a curl-loop percentile calculator, with cache effectiveness measurement.
+
+**When to use:**
+- Backend-only baseline capture (api-benchmark mode)
+- Module-level dynamic performance testing
+- Any scenario requiring accurate API latency percentiles (p50, p95, p99)
+
+**Used by:**
+- performance-baseline (Step 9.A — API Benchmark Mode for backend-only)
+- performance-analyze-module (Step 7.7 — Dynamic Performance Testing)
+
+**Prerequisites:**
+
+**For all callers:**
+- Backend service must be running on localhost
+- `curl` command must be available (for HTTP requests and timing)
+- `bc` command must be available (for cache improvement calculation)
+
+**For performance-analyze-module only:**
+- Test data manifest must exist at `.claude/performance/test-data/manifest.json`
+
+**For performance-baseline:**
+- Test data manifest is created by baseline itself (no prerequisite)
+- Working endpoints identified in Step 8.4.B9 verification
+
+**Dependencies:**
+- `curl` (HTTP requests and timing via `-w '%{time_total}'`)
+- `bc` (cache improvement percentage calculation)
+
+---
+
+### Step A – Check Prerequisites
+
+```bash
+# Check if backend running
+port=$(grep "| Port |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+
+if ! timeout 2 bash -c "</dev/tcp/localhost/$port" 2>/dev/null; then
+  echo "ℹ️ Backend not running. Skipping dynamic testing."
+  skip_dynamic=true
+  return
+fi
+
+# For performance-analyze-module: Check if test data manifest exists
+# (performance-baseline creates the manifest, so this check is skipped there)
+if [ "$CALLER_SKILL" = "performance-analyze-module" ]; then
+  if [ ! -f ".claude/performance/test-data/manifest.json" ]; then
+    echo "⚠️ Test data manifest not found."
+    echo "   Run /sdlc-workflow:performance-baseline first to discover test data."
+    skip_dynamic=true
+    return
+  fi
+fi
+
+# Verify curl is available
+if ! command -v curl &>/dev/null; then
+  echo "❌ curl not found. Cannot run dynamic API profiling."
+  skip_dynamic=true
+  return
+fi
+
+echo "ℹ️ curl found — proceeding with curl-loop API profiling"
+```
+
+**Error handling:**
+- Backend not running → Skip dynamic profiling, continue with static analysis only
+- curl unavailable → Skip dynamic profiling with clear error message
+
+**Note:** Error paths use `return` to exit early. Callers must invoke Pattern 10 logic inside a shell function context for `return` to work correctly. Example:
+```bash
+function run_api_profiling() {
+  # Apply Pattern 10 here
+  # return statements will exit this function, not the entire script
+}
+run_api_profiling
+```
+
+---
+
+### Step B – Execute Benchmark with Cache Measurement
+
+**Methodology:**
+1. **Cold cache (first request):** Single `curl` request measures worst-case latency
+2. **Warm cache (aggregate stats):** `iterations` curl requests collected into an array; p50/p95/p99 derived by sorting
+
+**Implementation:**
+
+```bash
+# Read test configuration
+iterations=$(grep "| Iterations |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+
+# Declare associative array outside loop
+declare -A dynamic_results
+
+# Use process substitution to avoid subshell scope loss
+while IFS='|' read -r scenario_name test_url; do
+  # Initialize cache_status for this iteration
+  cache_status=""
+
+  url="http://localhost:${port}${test_url}"
+
+  echo "Testing: $scenario_name ($url)"
+
+  # 1. First request (cache miss) - measures cold-cache worst-case latency
+  first_request_ms=$(curl -o /dev/null -s -w '%{time_total}\n' "$url" | \
+    awk '{printf "%.0f", $1 * 1000}')
+
+  if [ -z "$first_request_ms" ]; then
+    echo "  ⚠️ First request failed"
+    continue
+  fi
+
+  # 2. Subsequent requests (cache warm) - curl loop for percentile calculation
+  times=()
+  for i in $(seq 1 "$iterations"); do
+    t=$(curl -o /dev/null -s -w '%{time_total}' "$url" | awk '{printf "%.0f", $1 * 1000}')
+    [ -n "$t" ] && times+=("$t")
+  done
+
+  if [ "${#times[@]}" -eq 0 ]; then
+    echo "  ⚠️ All warm-cache requests failed"
+    continue
+  fi
+
+  # Sort times and compute percentiles via array index
+  sorted=($(printf '%s\n' "${times[@]}" | sort -n))
+  n=${#sorted[@]}
+  p50=${sorted[$((n * 50 / 100))]}
+  p95=${sorted[$((n * 95 / 100))]}
+  p99=${sorted[$((n * 99 / 100))]}
+  mean=$(printf '%s\n' "${times[@]}" | awk '{s+=$1} END {printf "%.0f", s/NR}')
+
+  # Validate output
+  if [ -z "$p95" ] || [ "$p95" = "0" ]; then
+    echo "  ⚠️ Failed to produce valid percentile stats"
+    continue
+  fi
+
+  # Cache effectiveness: first request vs subsequent mean
+  # Guard against division by zero
+  if [ -z "$first_request_ms" ] || [ "$first_request_ms" -eq 0 ]; then
+    cache_status="N/A"
+    cache_improvement="0"
+  else
+    cache_improvement=$(echo "scale=2; ($first_request_ms - $mean) / $first_request_ms * 100" | bc)
+  fi
+
+  # Classify cache effectiveness (only if not already N/A)
+  if [ "$cache_status" != "N/A" ]; then
+    if (( $(echo "$cache_improvement > 50" | bc -l) )); then
+      cache_status="Effective"
+    elif (( $(echo "$cache_improvement > 20" | bc -l) )); then
+      cache_status="Moderate"
+    else
+      cache_status="Minimal"
+    fi
+  fi
+
+  # Save results
+  dynamic_results["$scenario_name"]=$(cat <<JSON
+{
+  "test_url": "$test_url",
+  "iterations": $iterations,
+  "p50_ms": "$p50",
+  "p95_ms": "$p95",
+  "p99_ms": "$p99",
+  "mean_ms": "$mean",
+  "first_request_ms": $first_request_ms,
+  "subsequent_mean_ms": "$mean",
+  "cache_improvement_pct": "$cache_improvement",
+  "cache_status": "$cache_status"
+}
+JSON
+)
+
+  echo "  ✓ p50: ${p50}ms, p95: ${p95}ms, Cache: ${cache_improvement}% ($cache_status)"
+
+done < <(jq -r '.endpoints | to_entries[] | "\(.key)|\(.value.test_url)"' \
+  .claude/performance/test-data/manifest.json)
+
+# Save results to file (for cross-skill persistence)
+declare -p dynamic_results > .claude/performance/test-data/dynamic-results.sh
+```
+
+**Percentile calculation:**
+- Runs `iterations` sequential curl requests and collects response times into a bash array
+- Sorts the array numerically and selects values at the 50th, 95th, and 99th index positions
+- Mean is computed as the arithmetic average across all collected times
+
+---
+
+### Step C – Cache Effectiveness Classification
+
+**Formula:**
+```
+cache_improvement = (cold_latency - warm_mean) / cold_latency × 100%
+```
+
+**Classification thresholds:**
+- **Effective:** > 50% improvement (cache working well)
+- **Moderate:** 20-50% improvement (some caching benefit)
+- **Minimal:** < 20% improvement (cache ineffective or not used)
+- **N/A:** First request failed or zero latency
+
+**Example:**
+- Cold: 1180ms
+- Warm: 147ms
+- Improvement: (1180 - 147) / 1180 × 100 = 87.5% → "Effective"
+
+---
+
+### Step D – Result Storage
+
+**Result format (per endpoint):**
+```json
+{
+  "test_url": "/api/v2/analysis/component",
+  "iterations": 10,
+  "p50_ms": "140",
+  "p95_ms": "178",
+  "p99_ms": "180",
+  "mean_ms": "147",
+  "first_request_ms": 1180,
+  "subsequent_mean_ms": "147",
+  "cache_improvement_pct": "87.54",
+  "cache_status": "Effective"
+}
+```
+
+**Storage mechanism:**
+- **Associative array** (in-skill usage):
+  ```bash
+  declare -A dynamic_results
+  dynamic_results["$scenario_name"]="<json>"
+  ```
+- **Persisted file** (cross-skill sharing):
+  ```bash
+  declare -p dynamic_results > .claude/performance/test-data/dynamic-results.sh
+  ```
+
+**Reading results in subsequent steps:**
+```bash
+# Source the persisted results
+source .claude/performance/test-data/dynamic-results.sh
+
+# Extract metrics for a specific scenario
+result_json="${dynamic_results[$scenario_name]}"
+p95=$(echo "$result_json" | jq -r '.p95_ms')
+cache_status=$(echo "$result_json" | jq -r '.cache_status')
+```
+
+---
+
+### Error Handling
+
+**Service unavailable:**
+```bash
+if ! timeout 2 bash -c "</dev/tcp/localhost/$port" 2>/dev/null; then
+  echo "ℹ️ Backend not running. Skipping dynamic testing."
+  skip_dynamic=true
+  return
+fi
+```
+
+**Per-endpoint failures:**
+```bash
+if [ -z "$first_request_ms" ]; then
+  echo "  ⚠️ First request failed"
+  continue  # Skip this endpoint, continue with next
+fi
+
+if [ -z "$p95" ] || [ "$p95" = "0" ]; then
+  echo "  ⚠️ Failed to produce valid percentile stats"
+  continue
+fi
+```
+
+**Graceful degradation:**
+- Missing test data → Skip profiling, show instructions to run baseline first
+- Individual endpoint failure → Log warning, continue with remaining endpoints
+- Authentication errors → Note in report, suggest `AUTH_DISABLED=true`
+
+---
+
+## Pattern 11: Jira Access Strategy
+
+**Purpose:** Unified strategy for attempting Jira operations with MCP-first approach and REST API fallback
+
+**When to use:** Before any Jira operation (issue creation, updates, transitions, comments)
+
+**Used by:**
+- performance-plan-optimization (Steps 8-10)
+- performance-implement-optimization (Steps 2-4, 11-12)
+- performance-verify-optimization (Steps 1, 4, 17-18)
+
+**Procedure:**
+
+**Step 1: Determine plugin root directory (do this once at skill initialization)**
+
+**Apply:** [Pattern 0: Plugin Root Resolution](#pattern-0-plugin-root-resolution)
+
+This resolves `$plugin_root` to the installed plugin directory (e.g., `~/.claude/plugins/cache/sdlc-plugins-local/sdlc-workflow/0.6.1/`)
+
+**Step 2: For every Jira operation:**
+
+1. **Attempt MCP first** (preferred method using Atlassian MCP server)
+2. **If MCP fails, prompt user:**
+   ```
+   ❌ Atlassian MCP failed: {error_message}
+   
+   Would you like to use Jira REST API v3 fallback?
+   
+   Options:
+   1. Yes - Use REST API (requires credentials)
+   2. No - Skip this Jira operation
+   3. Retry - I'll fix MCP configuration and retry
+   
+   Choose (1/2/3):
+   ```
+
+3. **If "1. Yes":** Check CLAUDE.md for existing REST API credentials, collect if missing, then use Python client
+4. **If "2. No":** Skip the Jira operation and inform user
+5. **If "3. Retry":** Retry MCP once
+
+**REST API Equivalents:**
+
+Common Jira operations with REST API fallback commands (using $plugin_root from Step 1):
+
+- **Get issue:** 
+  ```bash
+  python3 "$plugin_root/scripts/jira-client.py" get_issue <id> --fields "*all"
+  ```
+
+- **Get user info:** 
+  ```bash
+  python3 "$plugin_root/scripts/jira-client.py" get_user_info
+  ```
+
+- **Assign issue:** 
+  ```bash
+  python3 "$plugin_root/scripts/jira-client.py" update_issue <id> --fields-json '{"assignee": {"id": "<accountId>"}}'
+  ```
+
+- **Transition issue:** 
+  ```bash
+  # First get transitions
+  python3 "$plugin_root/scripts/jira-client.py" get_transitions <id>
+  # Then transition (find ID for target status from above)
+  python3 "$plugin_root/scripts/jira-client.py" transition_issue <id> --transition-id <id>
+  ```
+
+- **Update fields:** 
+  ```bash
+  python3 "$plugin_root/scripts/jira-client.py" update_issue <id> --fields-json '<json>'
+  ```
+
+- **Add comment:** 
+  ```bash
+  python3 "$plugin_root/scripts/jira-client.py" add_comment <id> --comment-md "<text>"
+  ```
+
+- **Create issue:** 
+  ```bash
+  python3 "$plugin_root/scripts/jira-client.py" create_issue --project <key> --issue-type <id> --summary "<text>" --description-md "<text>"
+  ```
+
+**Error handling:**
+
+- If REST API also fails, report error and stop
+- Always inform user which method was used (MCP or REST API)
+- For missing credentials, prompt once and store in session for reuse
+
+**Important:**
+
+- REST API requires: `JIRA_SERVER_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN` environment variables
+- `$plugin_root` variable must be determined once at skill initialization (Step 1) and reused for all Jira operations
+- The plugin path is typically `~/.claude/plugins/sdlc-workflow` but may vary by installation
+- REST API fallback is only for Jira operations - never for code analysis or file operations
 
 ---
 

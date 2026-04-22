@@ -26,6 +26,25 @@ This skill extends the `/sdlc-workflow:verify-pr` workflow with performance-spec
 - Regression detection is handled in **both** performance-implement-optimization (at code time) and this skill (at review time via drift detection)
 - Baseline re-run serves a distinct purpose from implement-optimization's capture: it detects environmental drift between developer machine and current state
 
+**Apply:** [Execution Guardrails](../performance/execution-guardrails.template.md)
+
+### Blocking Steps (this skill)
+- Step 6 – Environmental drift detected (re-run baseline or proceed with warning)
+- Step 6.2 – Baseline mode mismatch (abort or proceed with documented discrepancy)
+
+### Completeness Requirements (this skill)
+- All review threads classified (frontend/backend/infra) before generating report
+- All CI failures analyzed (Steps 12a–12e) even if non-blocking
+- All acceptance criteria checked against actual metrics (none marked "assumed passing")
+- Complete verification report written to file before Step 16 (post to Jira)
+
+### Error Handling (this skill)
+- Missing baseline report → halt at Step 4 with remediation: run `performance-baseline`
+- Missing optimization result report → halt at Step 5 with remediation: run
+  `performance-implement-optimization`
+- CI failures → analyze and create sub-tasks (Step 12), but do NOT halt skill execution
+- Jira MCP unavailable → trigger REST fallback; do not halt unless REST also fails
+
 ## Step 0 – Validate Project Configuration
 
 Read the project's CLAUDE.md and verify that the following sections exist under `# Project Configuration`:
@@ -37,31 +56,11 @@ If missing, inform the user and stop execution.
 
 ## Step 0.5 – JIRA Access Initialization
 
-Before attempting any JIRA operations, determine the access method.
+**Apply:** [Pattern 11: Jira Access Strategy](../performance/common-patterns.md#pattern-11-jira-access-strategy)
 
-**For every JIRA operation:**
-1. **Attempt MCP first** (preferred method)
-2. **If MCP fails, always prompt user:**
-   ```
-   ❌ Atlassian MCP failed: {error_message}
-   
-   Would you like to use JIRA REST API v3 fallback?
-   
-   Options:
-   1. Yes - Use REST API (requires credentials)
-   2. No - Skip this JIRA operation
-   3. Retry - I'll fix MCP configuration and retry
-   
-   Choose (1/2/3):
-   ```
+Before attempting any Jira operations, use the MCP-first approach with REST API fallback strategy defined in Pattern 11.
 
-**REST API equivalents for this skill's operations:**
-- `jira.get_issue(id)` → `cd <plugin-root> && python3 scripts/jira-client.py get_issue <id> --fields "*all"`
-- `jira.create_issue(...)` → `cd <plugin-root> && python3 scripts/jira-client.py create_issue --project <key> --summary "<summary>" --description-md "<desc>" --issue-type Task --labels <labels>`
-- `jira.create_issue_link(...)` → `cd <plugin-root> && python3 scripts/jira-client.py create_link --inward <issue1> --outward <issue2> --link-type <type>`
-- `jira.add_comment(id, text)` → `cd <plugin-root> && python3 scripts/jira-client.py add_comment <id> --comment-md "<text>"`
-
-**Exception for Bash tool:** When using REST API fallback, this skill may use `bash -c "cd <plugin-root> && python3 scripts/jira-client.py <command>"` for JIRA operations only.
+⚠️ **Note:** Jira REST API fallback requires `scripts/jira-client.py` which is not included in the plugin. If Atlassian MCP is unavailable, use the Jira web UI to create issues manually.
 
 ## Comment Footnote
 
@@ -274,10 +273,12 @@ Read performance results from the optimization result report created by `perform
 
 Look for the report file in `.claude/performance/optimization-results/`:
 
-```bash
-# Find latest report for this task
-report_file=$(ls -t .claude/performance/optimization-results/${jira_key}-*.md 2>/dev/null | head -n 1)
-```
+Use the Glob tool to find the latest optimization result report:
+- Pattern: `.claude/performance/optimization-results/${jira_key}-*.md`
+- Sort by modification time (most recent first)
+- Select the first match
+
+Store the file path as `report_file`.
 
 **Step 5.2 – Read Report (Primary Method)**
 
@@ -292,9 +293,20 @@ If report file found:
    - `baseline_commit_sha` (baseline reference)
    - `capture_mode` (mode used for measurement)
    - `status` (should be "pending_verification")
-3. Extract from Performance Impact table:
-   - Baseline metrics (p95) for each Core Web Vital
+3. Read `metadata.metric_type` from `performance-config.md` to determine which metrics to extract
+
+4. Extract from Performance Impact table based on metric_type:
+
+**If metric_type = "frontend" or "hybrid":**
+   - Baseline metrics (p95) for each frontend metric (LCP, FCP, DOM Interactive, Total Load Time)
    - After Optimization metrics (p95)
+   - Delta calculations
+   - Target metrics
+   - Status per metric (Met/Partial/Regression)
+
+**If metric_type = "backend" or "hybrid":**
+   - Baseline metrics (p95) for each backend metric (Response Time p95/p99, Throughput, Error Rate)
+   - After Optimization metrics
    - Delta calculations
    - Target metrics
    - Status per metric (Met/Partial/Regression)
@@ -365,14 +377,21 @@ Read the **Repository** section from the Jira task description (parsed in Step 1
 Locate the plugin cache and copy the capture script:
 
 ```bash
-# Resolve plugin cache path (same as performance-baseline Step 8.1)
-plugin_cache="${HOME}/.claude/plugins/cache/sdlc-plugins-local/sdlc-workflow"
-plugin_version=$(ls "$plugin_cache" | sort -V | tail -n 1)
-template_path="${plugin_cache}/${plugin_version}/skills/performance/capture-baseline.template.mjs"
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found in ~/.claude/plugins/cache/"
+  echo "   Ensure the plugin is installed and try again."
+  exit 1
+fi
+
+template_path="${plugin_root}skills/performance/capture-baseline.template.mjs"
 
 if [ ! -f "$template_path" ]; then
   echo "❌ Capture script template not found at: $template_path"
-  echo "Plugin may be corrupted or not installed. Please reinstall the sdlc-workflow plugin."
+  echo "   Plugin may be corrupted. Please reinstall the sdlc-workflow plugin."
   exit 1
 fi
 
@@ -399,7 +418,13 @@ Run the capture script with mode-specific parameters:
 node /tmp/capture-baseline-verify.mjs --config {target-repo-path}/.claude/performance-config.md --port "$port" --mode cold-start
 ```
 
-Parse the JSON output to extract current metrics (LCP, FCP, DOM Interactive, Total Load Time, bundle size).
+Parse the output to extract current metrics based on metric_type:
+
+**If metric_type = "frontend" or "hybrid":**
+- Parse JSON output for LCP, FCP, DOM Interactive, Total Load Time, bundle size
+
+**If metric_type = "backend" or "hybrid":**
+- Parse benchmark-results-verify.json for Response Time (p50/p95/p99), Throughput, Error Rate
 
 ### Step 6.3 – Compare with Implementation Results
 
@@ -439,14 +464,31 @@ Use the performance metrics from either:
 - Step 5 (implementation results extracted from PR)
 - Step 6 (optional baseline re-run results)
 
+Read `metadata.metric_type` from configuration to determine which metrics to validate.
+
 Compare the **current** metrics against the **target** metrics from the Jira task (parsed in Step 1).
 
-For each target metric (LCP, FCP, DOM Interactive, bundle size):
+**If metric_type = "frontend" or "hybrid":**
+
+For each frontend target metric (LCP, FCP, DOM Interactive, bundle size):
 - **Baseline:** Starting value before optimization (from task)
 - **Current:** Measured value after optimization (from implementation phase or re-run)
 - **Target:** Goal value from task
 - **Improvement:** `baseline - current`
 - **Target met:** `current <= target`
+
+**If metric_type = "backend" or "hybrid":**
+
+For each backend target metric (Response Time p95/p99, Throughput, Error Rate):
+- **Baseline:** Starting value before optimization (from task)
+- **Current:** Measured value after optimization (from implementation phase or re-run)
+- **Target:** Goal value from task
+- **Improvement:** 
+  - For latency/error rate: `baseline - current` (lower is better)
+  - For throughput: `current - baseline` (higher is better)
+- **Target met:**
+  - For latency/error rate: `current <= target`
+  - For throughput: `current >= target`
 
 ### Step 7.1 – Calculate Achievement Status
 
@@ -463,43 +505,6 @@ Record the Target Validation result:
 - **PASS** — All targets met (Full Success)
 - **WARN** — Partial Success (> 20% improvement but targets not fully met)
 - **FAIL** — Insufficient Improvement or Regression
-
-### Step 7.3 – Update "Latest Verified" in Configuration (if PASS or WARN)
-
-When Target Validation is PASS or WARN (i.e., measurable improvement confirmed), update the
-`Latest Verified (p95)` column in `performance-config.md` to reflect the most recent verified
-metrics. This keeps the config current without requiring a manual baseline re-run on main.
-
-**Only update when:** Target Validation result is PASS or WARN.
-**Skip when:** Target Validation result is FAIL (no verified improvement to record).
-
-**Source of metrics (in priority order):**
-1. Drift detection re-run (Step 6) — most current and environment-verified
-2. Implementation results extracted in Step 5 — captured at implementation time
-
-**Procedure:**
-
-1. Read `performance-config.md` from the target repository.
-2. Locate the `## Optimization Targets` table.
-3. Update the `Latest Verified (p95)` column cells with current p95 values:
-   - LCP: `{latest-lcp-p95}` ms → convert to seconds: `{value / 1000}` s
-   - FCP: `{latest-fcp-p95}` ms → convert to seconds: `{value / 1000}` s
-   - DOM Interactive: `{latest-dom-p95}` ms → convert to seconds: `{value / 1000}` s
-   - Total Load Time: `{latest-total-p95}` ms → convert to seconds: `{value / 1000}` s
-4. Update the `Last Updated` column for each metric row with the current ISO timestamp.
-5. Update `metadata.last_updated` with the current timestamp.
-
-**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-10-config-write-protection)
-
-Read the full file, apply the table cell updates in memory, write the complete updated file back.
-Do NOT use sed/regex substitution — read the full file, update the cells in-memory, write back.
-
-**Log to user:**
-```
-✓ Latest Verified metrics updated in performance-config.md
-  LCP: {latest-lcp} ms  |  FCP: {latest-fcp} ms
-  DOM Interactive: {latest-dom} ms  |  Total Load Time: {latest-total} ms
-```
 
 ## Step 8 – Scope Containment
 
@@ -791,11 +796,25 @@ Map Overall Result to report status:
 
 - **PASS:** status = "verified"
 - **WARN (with partial success):** status = "verified_with_warnings"
-- **FAIL:** status = "pending_verification" (requires re-implementation)
+- **FAIL:** status = "verification_failed" (requires re-implementation)
 
-**Step 18.2 – Update Report Metadata**
+**Step 18.2 – Verify File Exists and Update Report Metadata**
 
-Read the report file found in Step 5.1 and update the metadata frontmatter:
+Before reading or writing, confirm the report file found in Step 5.1 still exists on disk:
+
+```bash
+ls "{report_file}" 2>/dev/null
+```
+
+If the file does **not** exist, log a warning and skip Steps 18.2–18.4:
+
+```
+⚠️ Optimization result report not found on disk (may have been moved or deleted):
+  File: {report_file}
+  Skipping report update — verification results recorded in Jira only.
+```
+
+Otherwise, read the report file and update the metadata frontmatter:
 
 ```yaml
 ---
@@ -839,6 +858,62 @@ Append a new section to the report file:
 ### Recommendations
 
 {recommendations-if-partial-or-fail}
+```
+
+**Step 18.3.5 – Update "Latest Verified" in Configuration (if PASS or WARN)**
+
+When the overall verification result is PASS or WARN (i.e., measurable improvement confirmed), update the
+`Latest Verified (p95)` column in `performance-config.md` to reflect the most recent verified
+metrics. This keeps the config current without requiring a manual baseline re-run on main.
+
+**Only update when:** overall_result is PASS or WARN.
+**Skip when:** overall_result is FAIL (no verified improvement to record).
+
+**Source of metrics (in priority order):**
+1. Drift detection re-run (Step 6) — most current and environment-verified
+2. Implementation results extracted in Step 5 — captured at implementation time
+
+**Procedure:**
+
+1. Read `performance-config.md` from the target repository.
+2. Read `metadata.metric_type` to determine which metrics to update.
+3. Locate the `## Optimization Targets` section (may have Frontend and/or Backend subsections).
+4. Update the `Latest Verified (p95)` column cells with current p95 values based on metric_type:
+
+**If metric_type = "frontend" or "hybrid":**
+   - LCP: `{latest-lcp-p95}` ms → convert to seconds: `{value / 1000}` s
+   - FCP: `{latest-fcp-p95}` ms → convert to seconds: `{value / 1000}` s
+   - DOM Interactive: `{latest-dom-p95}` ms → convert to seconds: `{value / 1000}` s
+   - Total Load Time: `{latest-total-p95}` ms → convert to seconds: `{value / 1000}` s
+
+**If metric_type = "backend" or "hybrid":**
+   - Response Time (p95): `{latest-resp-p95}` ms (no conversion)
+   - Response Time (p99): `{latest-resp-p99}` ms (no conversion)
+   - Throughput: `{latest-throughput}` req/sec (no conversion)
+   - Error Rate: `{latest-error-rate}` % (no conversion)
+
+5. Update the `Last Updated` column for each metric row with the current ISO timestamp.
+6. Update `metadata.last_updated` with the current timestamp.
+
+**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-9-config-write-protection)
+
+Read the full file, apply the table cell updates in memory, write the complete updated file back.
+Do NOT use sed/regex substitution — read the full file, update the cells in-memory, write back.
+
+**Log to user based on metric_type:**
+
+**If metric_type = "frontend" or "hybrid":**
+```
+✓ Latest Verified frontend metrics updated in performance-config.md
+  LCP: {latest-lcp} ms  |  FCP: {latest-fcp} ms
+  DOM Interactive: {latest-dom} ms  |  Total Load Time: {latest-total} ms
+```
+
+**If metric_type = "backend" or "hybrid":**
+```
+✓ Latest Verified backend metrics updated in performance-config.md
+  Response Time (p95): {latest-resp-p95} ms  |  Throughput: {latest-throughput} req/sec
+  Error Rate: {latest-error-rate} %
 ```
 
 **Step 18.4 – Log Report Update**

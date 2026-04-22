@@ -69,32 +69,28 @@ export JIRA_API_TOKEN="your-api-token"
 
 ```bash
 # Get issue
-cd <plugin-root> && \
-  python3 scripts/jira-client.py get_issue TC-123 --fields "summary,status,description"
+python3 "$plugin_root/scripts/jira-client.py" get_issue TC-123 --fields "summary,status,description"
 
 # Create issue
-cd <plugin-root> && \
-  python3 scripts/jira-client.py create_issue \
-    --project TC \
-    --summary "Issue summary" \
-    --description-md "Issue description in **markdown**" \
-    --issue-type Task \
-    --labels ai-generated-jira
+python3 "$plugin_root/scripts/jira-client.py" create_issue \
+  --project TC \
+  --summary "Issue summary" \
+  --description-md "Issue description in **markdown**" \
+  --issue-type Task \
+  --labels ai-generated-jira
 
 # Add comment
-cd <plugin-root> && \
-  python3 scripts/jira-client.py add_comment TC-123 \
-    --comment-md "Comment text in markdown"
+python3 "$plugin_root/scripts/jira-client.py" add_comment TC-123 \
+  --comment-md "Comment text in markdown"
 
 # Transition issue
-cd <plugin-root> && python3 scripts/jira-client.py transition_issue TC-123 --transition-id 31
+python3 "$plugin_root/scripts/jira-client.py" transition_issue TC-123 --transition-id 31
 
 # Create issue link
-cd <plugin-root> && \
-  python3 scripts/jira-client.py create_link \
-    --inward TC-123 \
-    --outward TC-456 \
-    --link-type Blocks
+python3 "$plugin_root/scripts/jira-client.py" create_link \
+  --inward TC-123 \
+  --outward TC-456 \
+  --link-type Blocks
 ```
 
 For full API reference, see `shared/jira-rest-fallback.md`.

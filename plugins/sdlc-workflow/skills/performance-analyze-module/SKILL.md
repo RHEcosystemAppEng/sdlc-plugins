@@ -17,6 +17,24 @@ You are an AI performance analysis assistant. You **inspect source code** to det
 - This skill does NOT modify source code files — only creates performance analysis artifacts
 - This skill requires Performance Analysis Configuration with a selected workflow and an existing baseline report
 
+**Apply:** [Execution Guardrails](../performance/execution-guardrails.template.md)
+
+### Blocking Steps (this skill)
+- Step 1 – Target repository path (if not provided as argument)
+
+### Completeness Requirements (this skill)
+- All anti-patterns checked (Steps 6.1–6.9), even if zero instances found for each
+- All discovered endpoints analyzed in Step 7 (none silently omitted)
+- All bundle sizes measured where stats are available
+- Complete analysis report written to file before Step 9 output summary
+
+### Error Handling (this skill)
+- Missing config → halt at Step 2 with remediation: run `performance-setup`
+- Missing selected workflow → halt at Step 2.1 with remediation: run `performance-baseline`
+- Missing baseline report → halt at Step 3 with remediation: run `performance-baseline`
+- Step 6.10 Serena probe failure → do NOT halt; record exact error, set
+  `serena_mode = down`, continue with Grep paths (Steps 7.x-B)
+
 ## Step 1 – Determine Target Repository
 
 If the user provided a repository path as an argument, use that as the target. Otherwise, use the current working directory.
@@ -94,7 +112,7 @@ Store all four values for use throughout Steps 6 and 7.
 
 ### Step 2.1 – Check for Selected Workflow
 
-**Apply:** [Common Pattern: Workflow Validation](../performance/common-patterns.md#pattern-7-workflow-validation)
+**Apply:** [Common Pattern: Workflow Validation](../performance/common-patterns.md#pattern-6-workflow-validation)
 
 **Specific actions for this skill:**
 - Extract workflow name, entry point, key screens for scope analysis
@@ -126,50 +144,40 @@ Extract frontend configuration from `## Frontend Repository Configuration` secti
 
 Store for use in module analysis and bundler-specific optimization detection.
 
-**Construct MCP tool name from Serena instance:**
+**Serena instance name from config:**
 
-If Serena instance name is extracted (e.g., `"my-backend-serena"`), construct the MCP tool name:
-```
-backend_mcp_tool = "mcp__" + serena_instance_name + "__find_symbol"
-```
+Store `serena_instance_name` for use in Step 6.10 probe and Step 7 Serena calls.
+All Step 7 Serena tool calls use `mcp__{serena_instance_name}__<tool>` directly.
 
-Example: If Serena instance = `"my-backend-serena"`, then `backend_mcp_tool = "mcp__my-backend-serena__find_symbol"`
+### Step 2.2.1 – Note on Serena Availability
 
-**Important:** In Step 7 instructions below, all references to `{backend_mcp_tool}` should use this constructed tool name instead of the literal placeholder.
+Serena availability is determined at runtime by a live probe in **Step 6.10**, immediately before
+backend analysis begins. The probe call (`get_symbols_overview`) sets `serena_mode` to one of:
 
-### Step 2.2.1 – Validate MCP Tool Availability (Runtime Check)
+- `live` — Serena responded; backend analysis uses Serena-only paths (Steps 7.x-A)
+- `down` — Serena errored; backend analysis uses Grep paths (Steps 7.x-B)
+- `not-configured` — no `serena_instance` in config; Grep paths used
 
-If Serena instance configured (`serena_instance_name` extracted above), validate that the MCP tool is actually available at runtime:
+**If `serena_instance` is not configured, display to user now (early warning):**
 
-**Test tool availability:**
-
-Use ToolSearch to check if the MCP tool exists:
-
-```
-ToolSearch(query="select:mcp__{serena_instance_name}__get_symbols_overview")
-```
-
-**If tool found and invocable:**
-- Set `backend_mcp_available = true`
-- Proceed with MCP-based backend analysis in Step 7
-
-**If ToolNotFoundError or tool not in results:**
-- Set `backend_mcp_available = false`
-- Log informative message to user:
-
-> ℹ️ **Backend MCP tool unavailable**
+> ℹ️ **Serena MCP not configured — backend analysis will use Grep**
 >
-> Serena instance "{serena_instance_name}" is configured but the MCP server appears offline or the tool is not available.
-> Falling back to Grep-based backend analysis (limited accuracy).
+> Backend analysis will use Grep-based pattern matching (medium confidence).
 >
-> **To enable full backend analysis:**
-> 1. Check MCP server is running
-> 2. Verify Serena instance name in CLAUDE.md Repository Registry
-> 3. Re-run this skill
+> **For higher accuracy:** Serena MCP provides semantic code intelligence with high-confidence
+> detection of N+1 query patterns, over-fetching via full schema extraction, and unused JOINs.
+>
+> **To enable:** Add Serena instance to CLAUDE.md Repository Registry and re-run this skill.
+>
+> Analysis will continue with Grep (some patterns may be missed).
 
-- Proceed with Grep-based fallback for all backend analysis in Step 7
+**If `serena_instance` is configured but probe fails at Step 6.10, display at that point:**
 
-**Rationale:** This runtime validation ensures graceful degradation if the MCP server is offline or misconfigured, rather than crashing during backend analysis.
+> ⚠️ **Serena MCP configured but unavailable** — falling back to Grep.
+>
+> Check MCP server is running and verify Serena instance name in CLAUDE.md.
+
+**If unavailable:** Proceed to Step 2.2.2 (Grep-based backend validation)
 
 **If `backend_available = false`:**
 
@@ -189,10 +197,11 @@ Display informative message to user:
 > ✗ Database N+1 query pattern detection
 > ✗ Backend caching opportunities
 >
-> **To enable full-stack analysis**, run:
+> **To enable full-stack analysis**, re-run:
 > ```
-> /sdlc-workflow:performance-setup --refresh-backend
+> /sdlc-workflow:performance-setup
 > ```
+> and configure backend repository when prompted.
 
 Store backend configuration and `backend_available` flag for use in Step 7.
 
@@ -200,34 +209,73 @@ Store backend configuration and `backend_available` flag for use in Step 7.
 
 ## Step 3 – Verify Baseline Report Exists
 
-Determine the baseline report location from the configuration file:
+Read `metadata.metric_type` from `performance-config.md` to determine which baseline file(s) to check.
 
-Look for the **Target Directories** section and extract the baseline directory path (e.g., `.claude/performance/baselines/`).
+Determine the baseline directory from the **Target Directories** section (e.g., `.claude/performance/baselines/`).
 
-Construct the baseline report filename: `baseline-report.md`
+**If metric_type = "frontend" or "hybrid":**
 
-Check if the file exists at `{baseline-directory}/baseline-report.md`.
+Check for frontend baseline: `{baseline-directory}/baseline-report.md`
 
 - **If baseline does not exist:** Inform the user:
-  > "Baseline report not found. Please run `/sdlc-workflow:performance-baseline` first to capture baseline metrics, then re-run this skill."
+  > "Frontend baseline report not found. Please run `/sdlc-workflow:performance-baseline` first to capture browser metrics, then re-run this skill."
   
   Stop execution.
 
-- **If baseline exists:** Proceed to Step 4.
+**If metric_type = "backend":**
+
+Check for backend baseline: `{baseline-directory}/benchmark-results.json`
+
+- **If baseline does not exist:** Inform the user:
+  > "Backend baseline not found. Please run `/sdlc-workflow:performance-baseline` first to capture API metrics via OHA, then re-run this skill."
   
-  **Note:** Baseline is captured using cold-start mode (direct URL navigation with cold cache). Analysis uses these cold-start metrics.
+  Stop execution.
+
+**If metric_type = "hybrid":**
+
+Check for BOTH `baseline-report.md` AND `benchmark-results.json`. Both must exist.
+
+- **If either is missing:** Inform the user which baseline(s) are missing and instruct to run `/sdlc-workflow:performance-baseline`.
+  
+  Stop execution.
+
+**If baseline(s) exist:** Proceed to Step 4.
+
+**Note:** 
+- Frontend baselines use cold-start mode (Playwright browser automation)
+- Backend baselines use api-benchmark mode (OHA HTTP load testing)
+- Hybrid mode captures both
 
 ## Step 4 – Read Baseline Data
 
-**Apply:** [Common Pattern: Baseline Report Reading](../performance/common-patterns.md#pattern-6-baseline-report-reading)
+Read `metadata.metric_type` from configuration to determine which baseline data to parse.
 
-**Specific data to extract:**
+**If metric_type = "frontend" or "hybrid":**
+
+**Apply:** [Common Pattern: Baseline Report Reading](../performance/common-patterns.md#pattern-5-baseline-report-reading)
+
+**Specific data to extract from baseline-report.md:**
 - **Per-scenario metrics**: LCP, FCP, DOM Interactive, Total Load Time (p50, p95, p99)
 - **Resource timing breakdown**: URLs, load duration, transfer size per resource
 - **Aggregate metrics**: Overall performance across all scenarios
-- **Capture mode**: For understanding measurement context
+- **Capture mode**: cold-start
 
-Store this data for anti-pattern detection in Steps 5 and 6.
+Store frontend baseline data for anti-pattern detection in Steps 5 and 6.
+
+**If metric_type = "backend" or "hybrid":**
+
+Parse `benchmark-results.json` for backend baseline data.
+
+**Specific data to extract:**
+- **Per-endpoint metrics**: Response time (p50, p95, p99), throughput (req/sec), error rate (%)
+- **Cache effectiveness**: Cold vs warm latency comparison
+- **Endpoints profiled**: List of API routes tested
+
+Store backend baseline data for anti-pattern detection in Step 7.
+
+**If metric_type = "hybrid":**
+
+Parse BOTH baseline-report.md AND benchmark-results.json. Store both frontend and backend baseline data for comprehensive analysis.
 
 ## Step 5 – Analyze Bundle Composition
 
@@ -272,7 +320,19 @@ If bundle stats are available, calculate the ratio of:
 
 If bundle stats are not available, estimate by examining import patterns in the workflow's route components (see Step 6.5 for unused code detection approach).
 
-## Step 6 – Detect Performance Anti-Patterns
+## Step 6 – Detect Performance Anti-Patterns (Frontend)
+
+**Scope Check:** Read `metadata.metric_type` from configuration.
+
+**If metric_type = "backend":**
+
+Log: "Skipping frontend analysis (backend-only mode configured)."
+
+Skip to Step 7 (Backend Source Code Analysis).
+
+**If metric_type = "frontend" or "hybrid":**
+
+Proceed with frontend anti-pattern detection below.
 
 > **Note on impact estimates:** Quantified impact figures in this section are
 > rough order-of-magnitude estimates based on heuristic constants, not measurements.
@@ -313,7 +373,7 @@ For each anti-pattern, search the codebase for indicators and report findings wi
 1. **Identify API calls in workflow components:**
    - Use Grep to search for `fetch(`, `axios.get(`, `useQuery(` in workflow route components
    - Extract API endpoint URLs from the search results
-   - For each endpoint, identify the response schema (check TypeScript interfaces, OpenAPI specs, or sample responses in baseline data)
+   - For each endpoint, identify the response schema (check TypeScript interfaces, OpenAPI specs, or backend handler types from Step 7.2)
 
 2. **Analyze field usage in components:**
    - For each API endpoint response schema, identify the fields returned
@@ -573,127 +633,97 @@ on separate lines may not cause forced reflow if they occur in different event l
 - Estimated initial bundle size reduction: `sum_of_eagerly_loaded_component_sizes`
 - Estimated FCP improvement: `size_reduction / (analysis_bandwidth_mbps * 125000)` (using configured bandwidth)
 
-## Step 7 – Backend Source Code Analysis (if backend_available)
+## Step 6.10 – Serena Availability Probe (Backend Analysis Gate)
+
+**If `backend_available = false`:** Skip Steps 6.10 and 7 entirely (frontend-only mode).
+
+**If `backend_available = true`:** Run the probe:
+
+```bash
+serena_instance=$(grep "Serena Instance" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+```
+
+**If `serena_instance` is non-empty and not "—":**
+
+Call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`.
+
+- **Response received (any result):** `serena_mode = live`. Store overview. Proceed to Step 7 using **-A** sub-steps.
+- **Error response:** `serena_mode = down`. Record exact error. Proceed to Step 7 using **-B** sub-steps.
+
+**If `serena_instance` is "—" or empty:** `serena_mode = not-configured`. Proceed to Step 7 using **-B** sub-steps.
+
+> `serena_mode` is set once here and applies to all of Steps 7.1 through 7.6.
+
+---
+
+## Step 7 – Backend Source Code Analysis
 
 **CRITICAL:** This step is MANDATORY for comprehensive over-fetching detection when backend is configured.
 
-**Apply:** [Common Pattern: Code Intelligence Strategy](../performance/common-patterns.md#pattern-9-code-intelligence-strategy-serena-first-with-grep-fallback)
+**Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
-**Check cached backend availability from Step 2.2:**
-
-- **If `backend_available = false`:** Skip this entire step (frontend-only mode, as indicated in Step 2.2 message)
-- **If `backend_available = true`:** Proceed with backend analysis using Serena-first strategy from Pattern 9
+(`serena_mode` was set in Step 6.10. Follow -A sub-steps when `serena_mode = live`, -B sub-steps otherwise.)
 
 For EACH API endpoint identified in Step 6.1 (Over-Fetching Detection):
 
-### Step 7.1 – Locate Backend Handler
+### Step 7.1-A – Locate Backend Handler via Serena (`serena_mode = live`)
 
-Find the backend handler function that serves this endpoint.
+> Grep is not available in this path.
 
-**Analysis Strategy:** Serena MCP (Preferred) → Grep (Fallback)
+Call:
 
-**FIRST CHOICE: Serena MCP** (if `backend_mcp_available = true`)
-
-Try to use `{backend_mcp_tool}` (constructed from Serena instance name) to search for route patterns:
-
-```python
-# Framework-specific route patterns
-route_patterns_by_framework = {
-    "Rust": r"#\[get\(.*{endpoint_path}.*\)\]|#\[post\(.*{endpoint_path}.*\)\]",
-    "Java": r"@GetMapping.*{endpoint_path}|@PostMapping.*{endpoint_path}",
-    "Python": r"@app\.(get|post)\(.*{endpoint_path}.*\)|@router\.(get|post)\(.*{endpoint_path}.*\)",
-    "Node": r"app\.(get|post)\(.*{endpoint_path}.*\)|router\.(get|post)\(.*{endpoint_path}.*\)"
-}
-
-# Use Serena to find handler
-try:
-    handler = mcp__{backend_serena_instance}__find_symbol(
-        name_path_pattern=route_patterns_by_framework[backend_framework],
-        relative_path="src/",
-        include_body=False
-    )
-    
-    if handler found:
-        method_used = "Serena MCP"
-        confidence = "High"
-        log: "✅ Handler located via Serena: {handler.file}:{handler.line}"
-    else:
-        # Fall through to Grep fallback
-        raise HandlerNotFoundError()
-        
-except (ToolNotFoundError, Exception) as e:
-    log: f"⚠️ Serena MCP failed for endpoint {endpoint_path}: {e}"
-    # Fall through to Grep fallback
+```
+mcp__{serena_instance}__find_symbol(
+    name_path_pattern="<endpoint_path_fragment>",
+    relative_path=".",
+    substring_matching=true,
+    include_body=true,
+    include_kinds=[12]
+)
 ```
 
-**FALLBACK STRATEGY: Grep** (if Serena unavailable or failed)
+Extract handler function name and file location. Set `confidence = "high"`.
 
-```bash
-# Grep search across backend source with framework-specific patterns
-case $backend_framework in
-  "Rust")
-    grep -rn "#\[get(\"${endpoint_path}\")\]" ${backend_path}/src/
-    grep -rn "#\[post(\"${endpoint_path}\")\]" ${backend_path}/src/
-    ;;
-  "Java")
-    grep -rn "@GetMapping.*${endpoint_path}" ${backend_path}/src/
-    grep -rn "@PostMapping.*${endpoint_path}" ${backend_path}/src/
-    ;;
-  "Python")
-    grep -rn "@app\.get.*${endpoint_path}" ${backend_path}/
-    grep -rn "@router\.post.*${endpoint_path}" ${backend_path}/
-    ;;
-  "Node")
-    grep -rn "app\.get.*${endpoint_path}" ${backend_path}/src/
-    grep -rn "router\.post.*${endpoint_path}" ${backend_path}/src/
-    ;;
-esac
+If not found: try a broader `name_path_pattern`. If still not found after two attempts:
+document "Handler for endpoint {endpoint_path} not found via Serena" in report limitations.
+Skip Step 7.2-A for this endpoint and continue with the next.
 
-# Parse results to extract handler file and approximate location
-if grep_results found:
-    method_used = "Grep (Fallback)"
-    confidence = "Medium"
-    log: "ℹ️ Handler located via Grep: {file}:{line} (approximate)"
-```
+---
 
-**If handler not found by BOTH methods:**
-- Document limitation: "Handler for endpoint {endpoint_path} not found. Tried: Serena MCP → Grep. Backend analysis skipped for this endpoint."
-- Add to limitations section in report
-- Continue with next endpoint
+### Step 7.1-B – Locate Backend Handler via Grep (`serena_mode = down | not-configured`)
 
-**Document method used:**
-Store which method located the handler (for reporting in Step 9):
-```
-endpoint_analysis[endpoint_path] = {
-    "handler_location": handler_file,
-    "detection_method": method_used,  # "Serena MCP" | "Grep (Fallback)"
-    "confidence": confidence  # "High" | "Medium"
-}
-```
+Search for handler by endpoint path fragment using Grep across `backend_path`.
+Extract handler function name and file location. Set `confidence = "medium"`.
 
-### Step 7.2 – Extract Backend Response Schema
+If handler not found: document limitation in report. Skip Step 7.2-B for this endpoint.
 
-Read the handler implementation to extract the complete response schema.
+---
 
-**If backend_mcp_available = true:**
-- Use `{backend_mcp_tool}` with `include_body=true` to read handler function
-- Identify response type from function signature:
-  - **Rust:** `async fn handler() -> Json<ProductResponse>`
-  - **Java:** `public ResponseEntity<ProductResponse> handler()`
-  - **Python:** `def handler() -> ProductResponse:`
-  - **Node:** Response object or TypeScript return type
-- Use `{backend_mcp_tool}` to read the response struct/class definition
-- Extract ALL fields recursively (including nested objects, arrays)
+### Step 7.2-A – Extract Backend Response Schema via Serena (`serena_mode = live`)
 
-**If backend_mcp_available = false:**
-- Use Read tool to read handler file
-- Parse response type manually from function signature
-- Search for response type definition in backend codebase
-- Extract fields (best-effort parsing)
+Call `mcp__{serena_instance}__find_symbol` with `include_body=true` on the handler function.
+
+Identify return type from function signature:
+- **Rust:** `async fn handler() -> Json<ProductResponse>`
+- **Java:** `public ResponseEntity<ProductResponse> handler()`
+- **Python:** `def handler() -> ProductResponse:`
+- **Node:** Response object or TypeScript return type
+
+Call `mcp__{serena_instance}__find_symbol` again to read the response struct/class definition.
+Extract ALL fields recursively (including nested objects, arrays).
+
+---
+
+### Step 7.2-B – Extract Backend Response Schema via Read (`serena_mode = down | not-configured`)
+
+Use the Read tool to read the handler file. Parse return type manually from function signature.
+Search for the response struct/class definition. Extract fields (best-effort parsing).
 
 **CRITICAL:** Do not skip backend schema extraction. Find the struct definition and extract all fields before concluding. If extraction fails after exhaustive search, document the search attempts and specific errors encountered, not generic "cannot confirm" statements.
 
-**Document complete response schema:**
+---
+
+**Document complete response schema (both paths):**
 ```
 Endpoint: GET /api/v2/products/:id
 Response Type: ProductResponse
@@ -716,8 +746,8 @@ Fields:
 
 **Detection approach:**
 
-1. **Read handler implementation** (using Serena or Read tool)
-   
+1. **Read handler implementation** (use `mcp__{serena_instance}__find_symbol` with `include_body=true` if `serena_mode = live`, otherwise use Read tool)
+
 2. **Search for query patterns inside loops:**
    - **Rust (sqlx):** 
      ```rust
@@ -759,8 +789,9 @@ Fields:
      ```
 
 3. **Count loop iterations:**
-   - Estimate from baseline data (e.g., if endpoint returns list of 10 items, loop runs 10 times)
-   - Or use static analysis to count array length if determinable
+   - Use static analysis of the handler code to identify the source of the iterated collection
+   - Check if the collection size is determinable from the query (e.g., fixed LIMIT clause, array length constant)
+   - If indeterminate, note it as "estimated N items" in the finding
 
 4. **Verify sequential execution:**
    - Check if queries are awaited inside loop (synchronous execution)
@@ -936,25 +967,6 @@ For each query with JOINs, extract:
 - **Join type** (INNER, LEFT, RIGHT, OUTER)
 - **Join condition** (ON clause or foreign key reference)
 
-**Examples:**
-
-```sql
--- Example 1: Explicit JOIN
-SELECT p.*, c.name FROM products p 
-LEFT JOIN categories c ON p.category_id = c.id
-
-Base table: products (alias: p)
-Joined tables: [categories (alias: c)]
-```
-
-```python
-# Example 2: ORM JOIN
-Product.objects.select_related('category', 'manufacturer').filter(...)
-
-Base table: Product
-Joined tables: [category, manufacturer]
-```
-
 #### 3. Check Field Usage from Joined Tables
 
 For each joined table, determine if ANY fields from that table are actually used:
@@ -1123,123 +1135,13 @@ Total impact = impact_per_request × N
 
 For each unused JOIN, suggest the appropriate fix:
 
-**For completely unused JOINs:**
-```
-Recommended Fix: Remove JOIN entirely
+**For completely unused JOINs:** Remove JOIN entirely
+**For filter-only JOINs:** Replace with subquery or EXISTS clause
+**For ORM eager loading:** Remove `.select_related()`, `.find_with_related()`, or `.join()` calls
 
-Before:
-SELECT p.* FROM products p 
-LEFT JOIN categories c ON p.category_id = c.id
+#### 7. Report in Analysis Document
 
-After:
-SELECT * FROM products
-```
-
-**For filter-only JOINs:**
-```
-Recommended Fix: Replace JOIN with subquery or EXISTS clause
-
-Before:
-SELECT p.* FROM products p
-INNER JOIN categories c ON p.category_id = c.id  
-WHERE c.active = true
-
-After:
-SELECT * FROM products 
-WHERE category_id IN (SELECT id FROM categories WHERE active = true)
-
-Or (better for PostgreSQL):
-SELECT * FROM products p
-WHERE EXISTS (SELECT 1 FROM categories c WHERE c.id = p.category_id AND c.active = true)
-```
-
-**For ORM eager loading (Django):**
-```
-Recommended Fix: Remove .select_related() or .prefetch_related()
-
-Before:
-Product.objects.select_related('category', 'manufacturer').all()
-
-After:
-Product.objects.all()
-```
-
-**For SeaORM eager loading:**
-```
-Recommended Fix: Remove .find_with_related() or .find_also_related()
-
-Before:
-Product::find()
-    .find_with_related(Category)
-    .all(&db)
-    .await?
-
-After:
-Product::find()
-    .all(&db)
-    .await?
-```
-
-**For SeaORM explicit JOINs:**
-```
-Recommended Fix: Remove .join() call
-
-Before:
-Product::find()
-    .join(JoinType::LeftJoin, product::Relation::Category.def())
-    .all(&db)
-    .await?
-
-After:
-Product::find()
-    .all(&db)
-    .await?
-```
-
-#### 7. Report Format
-
-Add to analysis report under "Backend Database Anti-Patterns" section:
-
-```markdown
-#### Unused Table Joins
-
-**Impact:** Database performs unnecessary join operations, wasting CPU and I/O resources.
-
-**Instances Found:** {count}
-
-**Severity:** {Critical/High/Medium/Low}
-
-**Estimated Impact:** {total_latency_saved}ms saved per request
-
----
-
-**Instance 1:**
-- **Endpoint:** {endpoint_path}
-- **Handler:** {handler_function}:{line_number}
-- **Query:**
-  ```sql
-  {full_query_with_unused_join_highlighted}
-  ```
-- **Unused Join:** `{joined_table}` (alias: `{alias}`)
-- **Reason:** No fields from `{joined_table}` accessed in SELECT, WHERE, or response schema
-- **Join Type:** {INNER/LEFT/RIGHT JOIN}
-- **Table Size:** {estimated_row_count} rows (if available from schema)
-- **Index Status:** {Indexed/Not Indexed} foreign key
-- **Estimated Overhead:** {overhead_ms}ms per query
-- **Call Frequency:** {single/N+1 with count} (from baseline data)
-- **Total Impact:** {total_impact}ms per request
-
-**Recommended Fix:**
-```sql
-{optimized_query_without_join}
-```
-
----
-
-{... repeat for each instance ...}
-
-**Total Estimated Impact:** {sum_of_all_impacts}ms reduction across all endpoints
-```
+Add findings to the analysis report template under "Backend Database Anti-Patterns" section with: endpoint, handler location, query, unused join details, estimated impact, and recommended fix.
 
 **Detection confidence levels:**
 - **High confidence:** Raw SQL with clear unused table, or ORM with no field accesses found
@@ -1247,6 +1149,126 @@ Add to analysis report under "Backend Database Anti-Patterns" section:
 - **Low confidence:** Dynamic queries where JOIN usage determined at runtime
 
 **Note:** For low confidence detections, flag for manual review rather than auto-suggesting removal.
+
+## Step 7.7 – Backend Dynamic Performance Testing
+
+**Purpose:** Validate static analysis findings with actual HTTP benchmarking when the backend is running.
+
+**Execution:** This step runs **automatically** when prerequisites are met. If any prerequisite is missing, it skips gracefully and continues with static analysis only.
+
+**Prerequisites:**
+- Backend service running on configured port
+- Test data manifest exists (generated by performance-baseline)
+- `curl` available (used for curl-loop percentile measurement)
+
+This step complements static analysis (Steps 7.1-7.6) with real runtime measurements.
+
+**Apply:** [Pattern 10: API Profiling](../performance/common-patterns.md#pattern-10-api-profiling)
+
+**Specific actions for this skill:**
+
+Wrap Pattern 10 in a shell function for this module's endpoints only:
+
+```bash
+function run_module_profiling() {
+  export CALLER_SKILL="performance-analyze-module"
+  
+  # Pattern 10 Step A - Check Prerequisites and Install OHA
+  # (Full code from common-patterns.md)
+  
+  # Pattern 10 Step B - Execute Benchmark with Cache Measurement
+  # (Full code from common-patterns.md)
+  
+  # Results are now available in dynamic_results associative array
+}
+
+run_module_profiling
+
+# If profiling was skipped, continue with static-only analysis
+if [ "$skip_dynamic" = "true" ]; then
+  echo "ℹ️ Module analysis will include static findings only."
+fi
+```
+
+**Using the results in report generation:**
+
+After Pattern 10 completes, the `dynamic_results` associative array contains benchmarking data for each endpoint.
+
+**Regression Detection (if metric_type = "backend" or "hybrid"):**
+
+Compare current metrics against baseline from `benchmark-results.json` (if it exists).
+
+Extract metrics and compare against baseline:
+
+```bash
+# Load baseline metrics if available
+baseline_file=".claude/performance/baselines/benchmark-results.json"
+if [ -f "$baseline_file" ]; then
+  has_baseline=true
+else
+  has_baseline=false
+fi
+
+# Example: Include dynamic metrics with regression detection in module analysis report
+for scenario in "${!dynamic_results[@]}"; do
+  result_json="${dynamic_results[$scenario]}"
+  
+  # Current metrics
+  p50=$(echo "$result_json" | jq -r '.p50_ms')
+  p95=$(echo "$result_json" | jq -r '.p95_ms')
+  p99=$(echo "$result_json" | jq -r '.p99_ms')
+  mean=$(echo "$result_json" | jq -r '.mean_ms')
+  cache_status=$(echo "$result_json" | jq -r '.cache_status')
+  cache_pct=$(echo "$result_json" | jq -r '.cache_improvement_pct')
+  
+  # Baseline comparison (if available)
+  if [ "$has_baseline" = "true" ]; then
+    baseline_p95=$(jq -r ".\"$scenario\".p95_ms // null" "$baseline_file")
+    baseline_p99=$(jq -r ".\"$scenario\".p99_ms // null" "$baseline_file")
+    baseline_throughput=$(jq -r ".\"$scenario\".throughput_rps // null" "$baseline_file")
+    baseline_error_rate=$(jq -r ".\"$scenario\".error_rate_pct // null" "$baseline_file")
+    
+    if [ "$baseline_p95" != "null" ]; then
+      # Calculate regression
+      p95_delta=$(echo "$p95 - $baseline_p95" | bc)
+      p95_delta_pct=$(echo "scale=1; ($p95_delta / $baseline_p95) * 100" | bc)
+      
+      # Regression thresholds for backend:
+      # - p95 response time: > 50ms AND > 10% = regression
+      # - Throughput: < -20% = regression
+      # - Error rate: > +1% (absolute) = regression
+      
+      if (( $(echo "$p95_delta > 50" | bc -l) )) && (( $(echo "$p95_delta_pct > 10" | bc -l) )); then
+        echo "⚠️  PERFORMANCE REGRESSION DETECTED: $scenario"
+        echo "  p95 response time increased by ${p95_delta}ms (${p95_delta_pct}%)"
+        echo "  Baseline: ${baseline_p95}ms → Current: ${p95}ms"
+      fi
+    fi
+  fi
+  
+  # Add to report:
+  # - Dynamic Performance Testing section with current metrics
+  # - Regression detection results (if baseline exists)
+  # - Cache Effectiveness analysis
+  # - Comparison with static estimates
+  
+  echo "Endpoint: $scenario"
+  echo "  p50: ${p50}ms, p95: ${p95}ms, p99: ${p99}ms"
+  echo "  Cache: $cache_status (${cache_pct}% improvement)"
+  
+  if [ "$has_baseline" = "true" ] && [ "$baseline_p95" != "null" ]; then
+    echo "  Baseline p95: ${baseline_p95}ms (delta: ${p95_delta}ms, ${p95_delta_pct}%)"
+  fi
+done
+```
+
+### Step 7.7.3 – Document Results for Report Generation
+
+Dynamic results are already stored in the associative array and saved to `dynamic-results.sh`.
+
+Report generation (Step 9.2) will source this file and create the Dynamic Performance Testing section.
+
+**Note:** Static analysis Step 7 produces unstructured markdown narrative (e.g., "Estimated Overhead: 100ms per query"). Automated parsing is not reliable. The report will include a comparison table populated from the dynamic_results array, with manual instructions for comparing against static estimates.
 
 ## Step 8 – Cross-Reference Over-Fetching (ENHANCED with Backend Schema)
 
@@ -1325,257 +1347,53 @@ Construct the report filename: `workflow-analysis-report.md`
 
 ### Step 9.2 – Report Structure
 
-The report must include the following sections:
+The report must include sections appropriate to the metric_type:
 
-```markdown
-# Performance Analysis Report
+Read the analysis report template from `plugins/sdlc-workflow/skills/performance/performance-analysis-report.template.md` in the plugin cache and populate it with the collected data from Steps 2-8.
 
-**Generated:** {iso-8601-timestamp}  
-**Workflow:** {workflow-name}  
-**Baseline Date:** {baseline-capture-date}
+**If metric_type = "frontend" or "hybrid":**
 
----
+Include sections:
+- Frontend Performance Summary (LCP, FCP, DOM Interactive, Total Load Time from baseline)
+- Frontend anti-patterns (blocking resources, long tasks, layout thrashing, etc.)
+- Bundle analysis and third-party libraries
 
-## Executive Summary
+**If metric_type = "backend" or "hybrid":**
 
-**Overall Performance Rating:** {rating} (Excellent / Good / Needs Improvement / Poor)
+Include sections:
+- Backend Performance Summary (Response Time p50/p95/p99, Throughput, Error Rate from benchmark-results.json)
+- Backend anti-patterns (N+1 queries, missing pagination, missing caching, over-fetching, unused JOINs)
+- Dynamic performance testing results (if Step 7.7 executed)
+- Regression detection results (if baseline exists)
 
-**Key Findings:**
-- {summary-bullet-1}
-- {summary-bullet-2}
-- {summary-bullet-3}
+**If metric_type = "hybrid":**
 
-**Top 3 Optimization Opportunities:**
-1. {opportunity-1} — Estimated impact: {impact-1}
-2. {opportunity-2} — Estimated impact: {impact-2}
-3. {opportunity-3} — Estimated impact: {impact-3}
-
----
-
-## Workflow Metrics
-
-| Metric | Current (p95) | Target | Status |
-|---|---|---|---|
-| LCP (Largest Contentful Paint) | {lcp-p95} ms | 2500 ms | {status} |
-| FCP (First Contentful Paint) | {fcp-p95} ms | 1800 ms | {status} |
-| DOM Interactive | {domInteractive-p95} ms | 3500 ms | {status} |
-| Total Load Time | {total-p95} ms | 4000 ms | {status} |
-
----
-
-## Bundle Composition
-
-**Total JavaScript Size:** {total-js-size} KB  
-**Third-Party Libraries:** {third-party-size} KB ({third-party-percentage}%)  
-**Application Code:** {application-code-size} KB ({application-code-percentage}%)
-
-**Top Third-Party Libraries by Size:**
-
-| Library | Size | Used In |
-|---|---|---|
-| {library-1} | {size-1} KB | {scenarios-1} |
-| {library-2} | {size-2} KB | {scenarios-2} |
-| ... | ... | ... |
-
----
-
-## Anti-Pattern Analysis
-
-### {Anti-Pattern-Name}
-
-**Severity:** {High / Medium / Low}  
-**Confidence:** {High (Serena MCP) / Medium (Grep — good pattern) / Low (Grep — requires manual verification)}  
-**Instances Found:** {count}  
-**Estimated Impact:** {quantified-impact}
-
-**Description:**
-{brief-explanation-of-anti-pattern}
-
-**Detected Instances:**
-
-1. **{file-path}:{line-number}**
-   ```{language}
-   {code-snippet}
-   ```
-   **Issue:** {specific-issue-description}
-   **Recommended Fix:** {actionable-recommendation}
-   **Verification Checklist:**
-   - [ ] {verification-step-1 from detection step}
-   - [ ] {verification-step-2 from detection step}
-
-{... repeat for each anti-pattern ...}
-
----
-
-## Backend Source Code Analysis
-
-**Note:** This section is included only if backend repository is configured (`backend_available = true`). Otherwise, omit this section entirely.
-
-**Backend Repository:** {backend-repo-name} ({backend-framework})  
-**Analysis Coverage:** {endpoints-analyzed} endpoints analyzed  
-**Serena Status:** {serena-instance-name or "Grep fallback"}
-
-### Backend Anti-Patterns Detected
-
-#### Database N+1 Queries
-
-**Severity:** {High / Medium / Low}  
-**Instances Found:** {count}  
-**Estimated Latency Impact:** {(n_queries - 1) * 10ms}
-
-**Detected Instances:**
-
-1. **{handler-file-path}:{line-number}**
-   ```{language}
-   {code-snippet-showing-loop-with-queries}
-   ```
-   **Issue:** {count} queries executed sequentially in loop  
-   **Recommended Fix:**
-   - **SQL:** Use batch query: `SELECT * FROM table WHERE id IN (...)`
-   - **SeaORM:** Use `.find()` with `filter(column.is_in(ids))` or `.find_with_related()` for eager loading
-   - **Diesel:** Use `.filter(id.eq_any(ids))` for batch query
-   - **JPA/Hibernate:** Use `@EntityGraph`, `JOIN FETCH` in JPQL, or `findAllById(ids)`
-   - **SQLAlchemy:** Use `.filter(Model.id.in_(ids))` for batch query
-   - **Django ORM:** Use `Model.objects.filter(id__in=ids)` or `.select_related()`
-
-{... repeat for each N+1 instance ...}
-
-#### Missing Pagination
-
-**Severity:** {High / Medium / Low}  
-**Instances Found:** {count}  
-**Estimated Payload Waste:** {(total_items - 20) * avg_item_size}
-
-**Detected Instances:**
-
-1. **Endpoint:** GET {endpoint-path}
-   **Handler:** {handler-file-path}  
-   **Issue:** Returns {item-count} items without pagination  
-   **Recommended Fix:** Add `page` and `limit` query parameters, implement `.limit()` and `.offset()` in query
-
-{... repeat for each pagination issue ...}
-
-#### Missing Caching
-
-**Severity:** {High / Medium / Low}  
-**Instances Found:** {count}  
-**Estimated Latency Reduction:** {operation_time × analysis_cache_hit_rate}
-
-**Detected Instances:**
-
-1. **Endpoint:** GET {endpoint-path}
-   **Handler:** {handler-file-path}  
-   **Issue:** {expensive-operation-description} on every request (no cache detected)  
-   **Data Change Frequency:** {static / slow-changing / fast-changing}  
-   **Recommended Fix:** Implement cache layer (Redis, in-memory) with appropriate TTL
-
-{... repeat for each caching issue ...}
-
-#### Inefficient Queries
-
-**Severity:** {High / Medium / Low}  
-**Instances Found:** {count}  
-**Estimated Impact:** 30-50% query time reduction
-
-**Detected Instances:**
-
-1. **Query:** {query-snippet}
-   **Handler:** {handler-file-path}:{line-number}  
-   **Issue:** SELECT * fetches {column-count} columns but only {used-count} used in response  
-   **Recommended Fix:** Specify exact columns: `SELECT id, name, price FROM products WHERE ...`
-
-{... repeat for each inefficient query ...}
-
-#### Unused Table Joins
-
-**Severity:** {Critical / High / Medium / Low}  
-**Instances Found:** {count}  
-**Estimated Impact:** {total_latency_saved}ms saved per request
-
-**Description:** Database queries that JOIN tables but never access fields from the joined tables, wasting database CPU, I/O, and memory resources.
-
-**Detected Instances:**
-
-1. **Endpoint:** {endpoint_method} {endpoint_path}
-   **Handler:** {handler-file-path}:{line-number}  
-   **Query:**
-   ```{language}
-   {full_query_with_highlighted_join}
-   ```
-   **Unused Join:** `{joined_table}` (alias: `{alias}`)  
-   **Reason:** No fields from `{joined_table}` accessed in SELECT, WHERE, or response schema  
-   **Join Type:** {INNER/LEFT/RIGHT JOIN}  
-   **Table Size:** {estimated_row_count} rows  
-   **Index Status:** {Indexed/Not Indexed} on foreign key  
-   **Estimated Overhead:** {overhead_ms}ms per query  
-   **Call Frequency:** {single/N+1 with count calls}  
-   **Total Impact:** {total_impact}ms per request  
-   **Recommended Fix:**
-   ```{language}
-   {optimized_query_without_unused_join}
-   ```
-
-{... repeat for each unused join instance ...}
-
-**Total Estimated Impact:** {sum_of_all_impacts}ms reduction across {count} endpoints
-
-### Cross-Repository Over-Fetching Analysis
-
-**Note:** This analysis cross-references backend response schemas with frontend field usage.
-
-#### Per-Endpoint Analysis
-
-##### Endpoint: GET {endpoint-path}
-
-**Backend Handler:** {handler-file-path}  
-**Response Type:** {ResponseStructName}  
-**Total Fields:** {total-field-count}  
-**Used by Frontend:** {used-field-count}  
-**Unused Fields:** {unused-field-list}  
-**Over-Fetching Percentage:** {waste-percentage}%  
-**Call Pattern:** {Single call / N+1 (count calls)}  
-**Payload Waste:** {waste-bytes} KB per request × {call-count if N+1} calls = {total-waste} KB  
-**Recommendation:** {Create specialized DTO / Use GraphQL / Field projection}
-
-{... repeat for each endpoint ...}
-
----
-
-## Recommended Optimizations
-
-**Note:** Optimizations are categorized by layer (Frontend / Backend / Integration) when backend analysis is available.
-
-Optimizations are prioritized by estimated impact (time or size savings).
-
-| Priority | Optimization | Estimated Impact | Effort |
-|---|---|---|---|
-| 1 | {optimization-1} | {impact-1} | {effort-1} |
-| 2 | {optimization-2} | {impact-2} | {effort-2} |
-| 3 | {optimization-3} | {impact-3} | {effort-3} |
-| ... | ... | ... | ... |
-
-**Effort Legend:**
-- **Low:** < 1 day of work
-- **Medium:** 1-3 days of work
-- **High:** > 3 days of work
-
----
-
-## Next Steps
-
-1. Review this report with the team and prioritize optimizations
-2. Create optimization plan and Jira Epic/Tasks using `/sdlc-workflow:performance-plan-optimization`
-3. After implementing optimizations, re-run `/sdlc-workflow:performance-baseline` to capture new baseline and measure improvements
-```
+Include BOTH frontend and backend sections above.
 
 ### Step 9.3 – Calculate Overall Performance Rating
 
-Based on the workflow metrics, assign an overall rating:
+Based on the workflow metrics and metric_type, assign an overall rating:
 
-- **Excellent:** All metrics within targets (LCP < 2500ms, FCP < 1800ms, DOM Interactive < 3500ms, Total < 4000ms)
+**If metric_type = "frontend" or "hybrid":**
+
+Compare frontend metrics against targets from Optimization Targets table:
+- **Excellent:** All metrics within targets (LCP < target, FCP < target, DOM Interactive < target, Total < target)
 - **Good:** 1-2 metrics slightly above targets (within 20% over)
 - **Needs Improvement:** 2-3 metrics above targets (> 20% over)
 - **Poor:** All metrics above targets or any metric > 50% over target
+
+**If metric_type = "backend" or "hybrid":**
+
+Compare backend metrics against targets from Optimization Targets table:
+- **Excellent:** All metrics within targets (Response Time p95 < target, Throughput > target, Error Rate < target)
+- **Good:** 1-2 metrics slightly outside targets (within 20%)
+- **Needs Improvement:** 2-3 metrics outside targets (> 20%)
+- **Poor:** All metrics outside targets or any metric > 50% deviation from target
+
+**If metric_type = "hybrid":**
+
+Calculate separate ratings for frontend and backend, then combine:
+- Overall = worst of (frontend_rating, backend_rating)
 
 ### Step 9.4 – Prioritize Optimizations
 
@@ -1609,14 +1427,23 @@ Report to the user:
 >
 > **Top Optimization:** {top-optimization} — Estimated impact: {impact}
 >
+> {dynamic-testing-summary-if-executed}
+>
 > {warnings-if-any}
 >
 > **Next Steps:**
 >
 > 1. Review the full analysis report
 > 2. Prioritize optimizations with your team
-> 3. Create Jira tasks for high-priority items
+> 3. Run `/sdlc-workflow:performance-plan-optimization` to create Jira Epic and tasks from this report
 > 4. After implementing optimizations, re-baseline to measure improvements
+
+Where `{dynamic-testing-summary-if-executed}` includes (if Step 7.7 was executed):
+
+> **Dynamic Testing Results:**
+> - Endpoints tested: {count}
+> - Effective caching: {count} endpoints
+> - Slow endpoints (>500ms): {count} endpoints
 
 Where `{warnings-if-any}` includes warnings for critical issues:
 

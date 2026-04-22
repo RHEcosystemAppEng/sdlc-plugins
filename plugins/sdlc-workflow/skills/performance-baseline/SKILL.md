@@ -11,9 +11,35 @@ You are an AI performance baseline assistant. When no workflow has been selected
 
 ## Guardrails
 
+### File Scope
 - This skill creates files in designated performance directories (`.claude/performance/baselines/`)
 - This skill does NOT modify source code files — only creates performance measurement artifacts
 - This skill requires Performance Analysis Configuration with a selected workflow
+
+### Execution Order — MANDATORY
+**Every step in this skill MUST be executed in the exact sequence defined in this document. No step may be reordered, merged with another step, or silently omitted.**
+
+- Steps are numbered to enforce a strict linear order: Step 1 → Step 2 → Step 2.0 → Step 2.0.5 → Step 2.1 → Step 2.2 → … → Step 11.
+- Sub-steps (e.g., Step 8.4.B4.1, Step 8.4.B4.2) must be completed in their defined sub-order before the parent step is considered done.
+- Conditional paths (e.g., "if backend-only, skip to Step 3") are the **only permitted deviations** from sequential order, and they are explicitly stated in the step text. Any step not applicable to the current execution path must still be **acknowledged** with a brief output note before moving on (see Output Rules below).
+
+### Step-Skip Policy
+- A step may be **conditionally skipped** only when the step itself contains an explicit conditional instruction (e.g., "This step runs ONLY if …", "skip if metadata.workflow_selected = true").
+- When a step is skipped due to a condition, output **must** include: `⏭ Step X skipped — <reason>` before proceeding to the next step.
+- A step may **never** be skipped to save time, reduce verbosity, or because the result seems obvious.
+
+**Never proceed silently.** If a step produces no data (e.g., no routes found), output must explicitly state that fact rather than moving on without comment.
+
+### Blocking Steps — CANNOT BE BYPASSED
+Steps that require user confirmation or user input (e.g., Step 4.4 – workflow selection, Step 8.3 – script review, Step 8.4.B4.3 – test data confirmation) are **hard blocking**. The skill must pause and wait for explicit user response before executing the next step. These steps may not be auto-answered, assumed, or skipped.
+
+### Completeness Enforcement
+- All outputs defined for a step (tables, summaries, file writes, console messages) must be produced **in full** before the step is marked complete.
+- Partial output (e.g., showing only a subset of discovered endpoints, truncating a table) is not permitted.
+- If a step's output would exceed reasonable length, summarise with counts and highlight key items — but the full artifact (file) must still be written completely.
+
+### Error Handling
+- If any mandatory step fails (e.g., config missing, script error, no functional endpoints), the skill must halt at that step, output a clear error message with the step number, and provide actionable remediation instructions. It must not silently skip to a later step.
 
 ## Step 1 – Determine Target Repository
 
@@ -49,7 +75,7 @@ Read config metadata.analysis_scope to determine workflow discovery method:
 
 ## Step 2.1 – Read Selected Workflow (If Already Selected)
 
-**Apply:** [Common Pattern: Workflow Validation](../performance/common-patterns.md#pattern-7-workflow-validation)
+**Apply:** [Common Pattern: Workflow Validation](../performance/common-patterns.md#pattern-6-workflow-validation)
 
 **Specific actions for this skill:**
 - Extract workflow name, entry point, key screens, complexity from Selected Workflow section
@@ -76,69 +102,166 @@ Read config metadata.analysis_scope to determine workflow discovery method:
 
 **Purpose:** Discover API endpoints from backend code, group them into workflows by resource/controller, and generate scenarios for static analysis.
 
-### Step 3.1 – Locate API Route Definitions
+### Step 3.0 – Serena Availability Probe
 
-Search backend codebase for API endpoint definitions using framework-specific patterns.
-
-**Read backend configuration from config:**
 ```bash
 backend_path=$(grep "Backend Path" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
 backend_framework=$(grep "Backend Framework" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
 serena_instance=$(grep "Serena Instance" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
 ```
 
-**Framework-specific search patterns:**
+**If `serena_instance` is non-empty and not "—":**
 
-| Framework | Pattern | Example |
-|---|---|---|
-| actix-web (Rust) | `#\[get\("`, `#\[post\("`, `web::scope` | `#[get("/api/v2/products")]` |
-| axum (Rust) | `Router::new\(\)`, `.route\("`, `get\(`, `post\(` | `.route("/api/v2/products", get(handler))` |
-| poem (Rust) | `#\[handler\]`, `.at\("`, `Route::new\(\)` | `.at("/api/v2/products", get(handler))` |
-| Spring Boot (Java) | `@RestController`, `@GetMapping`, `@PostMapping` | `@GetMapping("/api/v2/products")` |
-| FastAPI (Python) | `@app.get`, `@router.post`, `APIRouter` | `@app.get("/api/v2/products")` |
-| Express (Node) | `app.get\(`, `router.post\(`, `express.Router\(\)` | `app.get('/api/v2/products', ...)` |
+Call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`.
 
-**Discovery approach:**
+- **Response received (any result):** `serena_mode = live`. Store the overview. Proceed to **Step 3.1-A**.
+- **Error response:** `serena_mode = down`. Record exact error string. Proceed to **Step 3.1-B**.
 
-**If Serena is available (serena_instance != "none"):**
-1. Use `mcp__{serena_instance}__find_symbol` with pattern matching for framework decorators/macros
-2. Extract: HTTP method, path pattern, handler function name, file location
+**If `serena_instance` is "—" or empty:** `serena_mode = not-configured`. Proceed to **Step 3.1-B**.
 
-**If Serena is not available:**
-1. Use Grep to search for framework patterns in backend_path:
-   ```bash
-   # Example for Rust actix-web
-   grep -r "#\[get\(\|#\[post\(\|#\[put\(\|#\[delete\(" "$backend_path/src"
-   
-   # Example for Java Spring Boot
-   grep -r "@GetMapping\|@PostMapping\|@PutMapping\|@DeleteMapping" "$backend_path/src"
-   ```
-2. Parse results to extract: HTTP method, path, handler function
+> `serena_mode` is set once here and applies to all of Steps 3.1, 3.1.1, and 3.5.
 
-**Extract for each endpoint:**
-- HTTP method (GET, POST, PUT, DELETE, PATCH)
-- Path pattern (e.g., `/api/v2/products`, `/api/v2/products/{id}`)
+---
+
+### Step 3.1 – Locate API Route Definitions
+
+Search backend codebase for API endpoint definitions using framework-specific patterns.
+
+**Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
+
+(`serena_mode` was set in Step 3.0 and applies here.)
+
+---
+
+### Step 3.1-A – Locate API Route Definitions via Serena (`serena_mode = live`)
+
+> Grep and shell-based symbol discovery are not available in this path.
+
+For each endpoint module file identified under `backend_path`, call:
+
+```
+mcp__{serena_instance}__find_symbol(
+    name_path_pattern="/",
+    relative_path="<endpoint_module_file>",
+    include_body=true,
+    include_kinds=[12],
+    max_matches=100
+)
+```
+
+This single call per file returns all HTTP handler functions including their route decorators.
+From the response, extract for each handler:
+- HTTP method (from `#[get]`, `#[post]`, `@GetMapping`, `@app.get`, etc. in function body)
+- Path pattern (from decorator argument)
 - Handler function name
 - File location (absolute path)
 
-**Store endpoints in array for grouping in Step 3.2**
+If a `find_symbol` call errors on a specific file: mark that file `discovery_status: error`,
+continue with remaining files. Do not switch to grep.
+
+Set `discovery_method = "Serena MCP"` on all results. Proceed to **Step 3.1.1-A**.
+
+---
+
+### Step 3.1-B – Locate API Route Definitions via Grep (`serena_mode = down | not-configured`)
+
+**Run ONE grep per framework using `-A 3` context lines** so the decorator line and the
+`fn` / `async fn` handler name appear together in the same result block. This eliminates any
+need to run a second lookup or write a parsing script.
+
+**Framework-specific grep commands (use the one matching the detected framework):**
+
+| Framework | Grep command |
+|---|---|
+| actix-web (Rust) | `grep -rn --include="*.rs" -A 3 '#\[get\|#\[post\|#\[put\|#\[delete\|#\[patch' <backend_root>` |
+| axum (Rust) | `grep -rn --include="*.rs" -A 3 '\.route("' <backend_root>` |
+| poem (Rust) | `grep -rn --include="*.rs" -A 3 '\.at("' <backend_root>` |
+| Spring Boot (Java) | `grep -rn --include="*.java" -A 3 '@GetMapping\|@PostMapping\|@PutMapping\|@DeleteMapping' <backend_root>` |
+| FastAPI (Python) | `grep -rn --include="*.py" -A 3 '@app\.get\|@router\.\(get\|post\|put\|delete\)' <backend_root>` |
+| Express (Node) | `grep -rn --include="*.js" --include="*.ts" -A 3 'router\.\(get\|post\|put\|delete\)\|app\.\(get\|post\)' <backend_root>` |
+
+**Parse the grep output in-context — do NOT write a script to /tmp or any file.**
+Each result block gives you the decorator line (method + path) and the next 1–3 lines give
+you the handler function name. Read the blocks directly and fill the endpoint table row by row.
+
+If a result block does not contain a `fn` / `async fn` / `def` / `function` name within the
+3 context lines, use the filename + line number as the handler identifier (e.g., `line_42`).
+
+Set `discovery_method = "Grep"` on all results. Proceed to **Step 3.1.1-B**.
+
+---
+
+> **◆ File Coverage Self-Check — Step 3.1 (mandatory, applies to both -A and -B paths)**
+>
+> Before building the endpoint table, answer each question explicitly in your response:
+>
+> **Q1 — Files scanned:** List every source file you examined for endpoint definitions.
+>
+> **Q2 — Files skipped:** Did any file produce an error or get no results?
+> If yes, list each file and the reason (error, empty, test-only, etc.).
+>
+> **Q3 — Coverage gap check:** Use Glob to list all source files under `backend_root`
+> matching the framework extension (e.g., `**/*.rs`, `**/*.java`, `**/*.py`).
+> Compare that list against the files you already scanned.
+> Are there any files in the Glob result that are **absent from your scanned list**?
+>
+> **Q4 — Remediation:** If Q3 reveals unscanned files → scan them now using the same
+> Step 3.1-A or Step 3.1-B method before continuing. Do not skip them.
+>
+> Only proceed to the endpoint table once every source file is accounted for.
+
+---
+
+**Output all discovered endpoints as an in-context markdown table in your response — this table is
+the live endpoint registry for all subsequent steps. Do NOT write results to /tmp or shell
+variables. Counting, grouping, and validation in Steps 3.1.2–3.2.1 reference this table.**
+
+| # | HTTP Method | Path Pattern | Handler | File | Impact | Discovery Method |
+|---|---|---|---|---|---|---|
+| 1 | GET | /api/v2/... | handler_fn | src/... | low | Serena MCP / Grep |
 
 ### Step 3.1.1 – Validate Endpoint Safety (Impact Analysis)
 
-**For each discovered endpoint, apply impact analysis:**
+For each discovered endpoint, determine how many places reference the handler to classify impact.
 
-**If Serena is available:**
-1. Use `mcp__{serena_instance}__find_referencing_symbols` on the handler function
-2. Count number of references (callers)
-3. Classify impact:
-   - **Low impact:** < 5 references
-   - **Medium impact:** 5-10 references
-   - **High impact:** > 10 references
+**Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
-**If Serena is not available:**
-1. Use Grep to search for handler function name across codebase
-2. Count occurrences
-3. Classify impact using same thresholds
+(`serena_mode` was set in Step 3.0 and applies here.)
+
+---
+
+### Step 3.1.1-A – Validate Endpoint Safety via Serena (`serena_mode = live`)
+
+For each discovered endpoint handler, call:
+
+```
+mcp__{serena_instance}__find_referencing_symbols(
+    name_path="<handler_function_name>",
+    relative_path="<handler_file>"
+)
+```
+
+Count references returned. If a call errors on a specific handler: record
+`impact_method: "error"` for that handler and continue with remaining endpoints.
+
+---
+
+### Step 3.1.1-B – Validate Endpoint Safety via Grep (`serena_mode = down | not-configured`)
+
+For each discovered endpoint handler:
+
+```bash
+grep -r "$handler_function_name" "$backend_path" | wc -l
+```
+
+Count occurrences as reference count.
+
+---
+
+**Impact Classification (both paths):**
+- **Low impact:** < 5 references
+- **Medium impact:** 5–10 references
+- **High impact:** > 10 references
 
 **Store impact classification with each endpoint:**
 ```
@@ -148,14 +271,30 @@ endpoint {
   handler: "get_product_by_id"
   references: 12
   impact: "high"
+  impact_method: "Serena MCP" | "Grep" | "error"
 }
 ```
 
 **Warning to user:** High-impact endpoints will be flagged during workflow selection (Step 3.3).
 
+### Step 3.1.2 – Record Discovered Endpoint Count
+
+After Steps 3.1.1-A or 3.1.1-B complete, **count the rows in your in-context endpoint table**
+(the table you built in Step 3.1) and record the total. No shell command needed — count the
+table rows in your response.
+
+State this count explicitly:
+
+> `▶ Endpoint discovery complete — N endpoints found across all modules.`
+
+This count is the **source of truth** for the grouping integrity check in Step 3.2.1.
+Any grouping that does not account for all N endpoints is incomplete.
+
 ### Step 3.2 – Group Endpoints into Workflows
 
 Group discovered endpoints into logical workflows using resource-based grouping.
+
+**IMPORTANT:** Wait for the complete endpoint discovery from Step 3.1 to finish before grouping. Once all endpoints are discovered, group them into workflows and present **ALL workflows** to the user in Step 3.3. Do not filter, limit, or omit any workflows. Every endpoint from the backend source code must be assigned to at least one workflow, and all workflows must be displayed regardless of size or complexity.
 
 **Grouping strategies:**
 
@@ -215,9 +354,33 @@ For each workflow, calculate complexity based on endpoint count:
 - Complexity (Simple/Moderate/Complex)
 - Total reference count (sum of all endpoint references from Step 3.1.1)
 
+### Step 3.2.1 – Validate Grouping Completeness
+
+Before presenting workflows to the user, perform an **in-context count** (count table rows —
+no shell):
+
+1. Count the total endpoints in your in-context endpoint table from Step 3.1.2 → `N`
+2. Count how many endpoints appear across all workflow groups you built in Step 3.2 → `M`
+
+**If N == M:** Output confirmation and proceed to Step 3.3:
+
+> `✓ Grouping integrity check passed — N endpoints discovered, N endpoints grouped across W workflows.`
+
+**If N ≠ M:** Output a mismatch warning and redo Step 3.2 from scratch:
+
+> `⚠ Grouping mismatch — N endpoints discovered but M endpoints grouped. Re-running grouping.`
+
+Scan your endpoint table row-by-row and identify which rows have no workflow assignment.
+Re-run the Step 3.2 grouping logic in-context, placing every unassigned endpoint into an
+existing workflow or a new "Miscellaneous" workflow. Repeat Step 3.2.1 until N == M.
+
+**Do not proceed to Step 3.3 until the counts match exactly. No shell scripts for this check.**
+
 ### Step 3.3 – Present Workflows and Prompt Selection
 
-Display discovered backend workflows:
+**Display ALL discovered backend workflows** from Step 3.2 in a numbered table. 
+
+**CRITICAL: Do not filter, limit, or omit any workflows. Every workflow must be presented to the user.**
 
 ```
 ## Discovered Backend Workflows
@@ -226,7 +389,10 @@ Display discovered backend workflows:
 |---|---|---|---|---|---|
 | 1 | Product Management | GET /api/v2/products | GET /products, GET /products/{id}, POST /products | Moderate | Medium (23 refs) |
 | 2 | Order Management | GET /api/v2/orders | GET /orders, POST /orders, PUT /orders/{id} | Complex | High (45 refs) |
+| {{...ALL workflows from Step 3.2, numbered sequentially...}} |
 ```
+
+**Note:** Include single-endpoint workflows (Simple complexity) and all other workflows discovered during analysis. The table above is an example — your actual table should contain every workflow identified in Step 3.2.
 
 **Impact warnings:**
 If any workflow has high-impact endpoints (>10 total references):
@@ -282,30 +448,60 @@ def derive_scenario_name(method, path):
 
 For backend-only mode, modules represent handler functions or service classes.
 
-**If Serena is available:**
-1. Use `mcp__{serena_instance}__get_symbols_overview` on handler files
-2. Extract functions/methods related to selected workflow endpoints
+**Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
-**If Serena is not available:**
-1. Use Grep to find handler functions in endpoint file locations
-2. Extract function signatures
+(`serena_mode` was set in Step 3.0 and applies here.)
 
-**Result:** Module registry with handler functions as entries.
+---
 
-### Step 3.6 – Update Config with Backend Workflow Selection
+### Step 3.5-A – Discover Modules via Serena (`serena_mode = live`)
 
-Update `.claude/performance-config.md`:
+> Grep is not available in this path.
 
-1. **Performance Scenarios section:** Replace table with generated scenarios from Step 3.4
-2. **Module Registry section:** Replace table with discovered handlers from Step 3.5
-3. **Selected Workflow section:** Add selected workflow details
+For each handler file in the selected workflow, call:
 
-**Set metadata fields:**
-```yaml
-metadata:
-  workflow_selected: true
-  backend_endpoint_discovery_method: "serena" | "grep"
 ```
+mcp__{serena_instance}__get_symbols_overview(
+    relative_path="<handler_file>",
+    depth=1
+)
+```
+
+Extract functions/methods relevant to the selected workflow endpoints.
+Set `discovery_method = "Serena MCP"`.
+
+---
+
+### Step 3.5-B – Discover Modules via Grep (`serena_mode = down | not-configured`)
+
+For each handler file in the selected workflow:
+
+```bash
+grep -E "^(pub\s+)?async\s+fn|^fn|@handler|def\s+" "$endpoint_file" | head -20
+```
+
+Extract function signatures.
+Set `discovery_method = "Grep"`.
+
+---
+
+**Result:** Module registry with handler functions as entries. Document `discovery_method` used.
+
+### Step 3.6 – Stage Backend Config Changes (no file write)
+
+**Do NOT write to `.claude/performance-config.md` here.** Collect the following values
+in-context so they can be written in the single consolidated config write at Step 4.7:
+
+| Config Field | Value Source |
+|---|---|
+| Performance Scenarios | generated scenarios from Step 3.4 |
+| Module Registry | discovered handlers from Step 3.5 |
+| Selected Workflow | workflow details from Step 3.3 |
+| `metadata.workflow_selected` | `true` |
+| `metadata.backend_endpoint_discovery_method` | `"serena"` or `"grep"` (from Step 3.0) |
+
+State in your response:
+> `▶ Backend config changes staged — will be written in Step 4.7 consolidated write.`
 
 **Skip browser baseline capture:** For backend-only mode, Step 9 (Execute Baseline Capture) will be modified to generate static analysis report instead of browser metrics.
 
@@ -330,6 +526,32 @@ Use Glob to find likely router files:
 **/App.{ts,tsx,js,jsx}
 ```
 
+> **◆ Router File Coverage Self-Check — Step 4.1 (mandatory, applies regardless of Serena or Grep path)**
+>
+> Before proceeding to Step 4.2, answer each question explicitly in your response:
+>
+> **Q1 — Files found:** List every router/route configuration file the Glob returned.
+>
+> **Q2 — Framework coverage:** Does the set of files match the detected frontend framework?
+> For example:
+> - React Router → expect `routes.tsx`, `App.tsx` with `<Route>`, or a `router/index.ts`
+> - Vue Router → expect `src/router/index.ts` or `src/router/routes.ts`
+> - Next.js → expect a `pages/` or `app/` directory
+> - Angular → expect `*-routing.module.ts`
+>
+> If the expected files are absent, use an additional Glob or Grep to locate them now.
+>
+> **Q3 — Coverage gap check:** Are there route definitions that might live outside the
+> Glob patterns above? (e.g., inline `<Route>` in page components, nested routers,
+> dynamic imports, code-split route configs.) Use a targeted Grep to check:
+> ```
+> grep -rn "<Route\|createBrowserRouter\|createHashRouter\|RouterProvider" <frontend_root> --include="*.tsx" --include="*.jsx" --include="*.ts"
+> ```
+> Add any newly found files to the list before continuing.
+>
+> **Q4 — Remediation:** If Q2 or Q3 reveals unscanned router files → add them to the
+> router file list now. Do not proceed to Step 4.2 until all router files are identified.
+
 ### Step 4.2 – Extract Route Definitions **(Workflow Discovery Only — skip if metadata.workflow_selected = true)**
 
 For each router configuration file found:
@@ -339,17 +561,38 @@ For each router configuration file found:
 - Use `find_symbol` with `include_body=true` to read route arrays or objects
 
 **If Serena is not available:**
-- Use Read tool to examine router files
-- Use Grep to search for route path patterns:
+- Use Read tool to examine router files directly
+- Use Grep with **`-A 2` context lines** so the route path and component appear together
+  in one block — do NOT write a parsing script to `/tmp`:
   ```
-  path:\s*['"]([^'"]+)['"]
-  <Route\s+path=['"]([^'"]+)['"]
+  grep -rn -A 2 "path:" <frontend_root> --include="*.ts" --include="*.tsx" --include="*.js" --include="*.jsx"
+  grep -rn -A 2 "<Route" <frontend_root> --include="*.tsx" --include="*.jsx"
   ```
+- Parse the grep output **in-context**: each block gives you the `path=` / `path:` line and
+  the adjacent `component=` / `element=` line. Fill the route table row by row in your
+  response — do NOT write intermediate results to a file or shell variable.
 
 Extract for each route:
 - Route path (e.g., `/`, `/products/:id`, `/dashboard`)
 - Component name or file reference
 - Whether the route is lazy-loaded
+
+### Step 4.2.1 – Record Discovered Route Count
+
+After Step 4.2 completes, **output all discovered routes as an in-context markdown table in
+your response** (if not already done). Then count the rows in that table. No shell command
+needed — count the table rows in your response.
+
+State this count explicitly:
+
+> `▶ Route extraction complete — N routes found across all router configuration files.`
+
+This count is the **source of truth** for the grouping integrity check in Step 4.3.4.
+Any grouping that does not account for all N routes is incomplete.
+
+| # | Route Path | Component | File | Discovery Method |
+|---|---|---|---|---|
+| 1 | /products | ProductList | src/... | Serena MCP / Grep |
 
 ### Step 4.3 – Infer Workflows from Routes (Workflow Discovery Only)
 
@@ -370,6 +613,8 @@ path: src/
 If found, read the navigation component to identify top-level navigation items. These often represent primary workflows.
 
 #### Step 4.3.2 – Group Routes by Workflow
+
+**Important:** Discover and group ALL routes from the router configuration into workflows. Do not filter or limit the number of workflows discovered. Every route should be assigned to at least one workflow. Standalone routes (e.g., /search, /importers) that don't fit natural groupings should be presented as individual workflows.
 
 Apply these grouping strategies to infer workflows:
 
@@ -396,13 +641,23 @@ Examples:
 Examples:
 - `/documents/upload`, `/documents/scan`, `/documents/:id` → "Document Upload and Analysis" workflow
 
+**5. Standalone routes** — routes that don't fit into any of the above patterns:
+
+Examples:
+- `/search` → "Search" workflow (single route)
+- `/importers` → "Importer Management" workflow (single route)
+- `/licenses` → "License Catalog" workflow (single route)
+
+**Important:** Standalone routes should be presented as individual workflows with Simple complexity, even if they contain only one route. Do not omit these routes.
+
 #### Step 4.3.3 – Estimate Workflow Complexity
 
 For each inferred workflow:
 
 **Calculate complexity based on:**
 - Number of routes in workflow:
-  - 1-2 routes = Simple
+  - 1 route (standalone) = Simple
+  - 2 routes (list + detail) = Simple
   - 3-4 routes = Moderate  
   - 5+ routes = Complex
 - Number of components in workflow pages:
@@ -410,6 +665,8 @@ For each inferred workflow:
 - Presence of API calls:
   - Search for `useQuery`, `useMutation`, `fetch`, `axios` in workflow components
   - Estimate API call count
+
+**Note:** Standalone routes (single route workflows like /search, /importers) are classified as Simple complexity by default.
 
 **Extract for each workflow:**
 - Workflow name (descriptive, e.g., "Product Browse and Detail")
@@ -429,20 +686,42 @@ Inform the user:
 
 If no workflows found, skip to Step 4 with empty workflow list.
 
+#### Step 4.3.4 – Validate Grouping Completeness
+
+Before presenting workflows to the user, perform an **in-context count** (count table rows —
+no shell):
+
+1. Count the total routes in your in-context route table from Step 4.2.1 → `N`
+2. Count how many routes appear across all workflow groups you built in Steps 4.3.1–4.3.3 → `M`
+
+**If N == M:** Output confirmation and proceed to Step 4.4:
+
+> `✓ Grouping integrity check passed — N routes discovered, N routes grouped across W workflows.`
+
+**If N ≠ M:** Output a mismatch warning and redo Steps 4.3.1–4.3.3 from scratch:
+
+> `⚠ Grouping mismatch — N routes discovered but M routes grouped. Re-running grouping.`
+
+Scan your route table row-by-row and identify which rows have no workflow assignment.
+Re-run the Step 4.3 grouping logic in-context, placing every unassigned route into an existing
+workflow or a new standalone workflow. Repeat Step 4.3.4 until N == M.
+
+**Do not proceed to Step 4.4 until the counts match exactly. No shell scripts for this check.**
+
+**Do not proceed to Step 4.4 until the counts match exactly.**
+
 ### Step 4.4 – Present Workflows and Prompt Selection (Workflow Discovery Only)
 
 **This step only runs if metadata.workflow_selected = false** (determined in Step 2.0).
 
-
-Display discovered workflows:
-
+**Display ALL discovered workflows in a numbered table.** Do not filter, limit, or omit any workflows. Every workflow discovered in Step 4.3 must be presented to the user.
 
 ```
 ## Discovered Workflows
 
 | # | Workflow Name | Entry Point | Key Screens | Complexity |
 |---|---|---|---|---|
-| {{workflow entries}} |
+| {{workflow entries - ALL workflows from Step 4.3, numbered sequentially}} |
 ```
 
 **Guidance to user:**
@@ -520,51 +799,231 @@ For each lazy-loaded component in the workflow:
 
 **Result:** A table of modules corresponding to the selected workflow's pages.
 
-### Step 4.7 – Update Config with Workflow Selection (Workflow Discovery Only)
+### Step 4.7 – Consolidated Config Write *(runs for ALL scopes — never skip)*
 
-**This step only runs if metadata.workflow_selected = false** (determined in Step 2.0).
+**This is the single point where `.claude/performance-config.md` is written during the
+discovery phase.** It applies staged changes from Step 3.6 (backend) and/or Step 4.6
+(frontend) in one atomic write. Running once here eliminates redundant writes.
 
-After workflow selection, update the performance configuration file with the selected workflow, scenarios, and modules.
+**Applies to all scopes:**
+- `backend-only` — applies backend staged changes; frontend sections are left as-is
+- `frontend-only` — applies frontend staged changes; backend sections are left as-is
+- `full-stack` — applies both backend and frontend staged changes together
 
-Read `.claude/performance-config.md` from the target repository.
+---
 
-**Update sections:**
+**Step 4.7.1 – Read Current Config**
 
-1. **Performance Scenarios** — replace empty table with generated scenarios from Step 4.5
-2. **Module Registry** — replace empty table with discovered modules from Step 4.6
-3. **Selected Workflow** — replace empty section with selected workflow details from Step 4.4:
-   ```markdown
-   ## Selected Workflow
-   
-   | Property | Value |
-   |---|---|
-   | Workflow Name | {selected workflow name} |
-   | Entry Point | {entry point URL} |
-   | Key Screens | {comma-separated list of key screens} |
-   | Complexity | {complexity estimate} |
-   | Selected On | {current date in YYYY-MM-DD format} |
-   ```
+Read `.claude/performance-config.md` from the target repository. This is the base document
+that will be updated.
 
-4. **Metadata:**
-   - `workflow_selected`: true
-   - `last_updated`: {current-timestamp}
+**Step 4.7.2 – Apply Staged Changes**
 
-**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-10-config-write-protection)
+Apply ALL staged changes collected in-context from Steps 3.6 and/or 4.6:
 
-Write updated config back to file.
+| Section | Source | Apply when |
+|---|---|---|
+| Performance Scenarios | Step 3.4 scenarios | `backend-only` or `full-stack` |
+| Module Registry (backend) | Step 3.5 handlers | `backend-only` or `full-stack` |
+| Selected Workflow (backend) | Step 3.3 selection | `backend-only` or `full-stack` |
+| Performance Scenarios | Step 4.5 scenarios | `frontend-only` or `full-stack` |
+| Module Registry (frontend) | Step 4.6 modules | `frontend-only` or `full-stack` |
+| Selected Workflow (frontend) | Step 4.4 selection | `frontend-only` or `full-stack` |
 
-**Log to user:**
+**Selected Workflow block format (apply for whichever scope was discovered):**
+```markdown
+## Selected Workflow
+
+| Property | Value |
+|---|---|
+| Workflow Name | {selected workflow name} |
+| Entry Point | {entry point URL} |
+| Key Screens | {comma-separated list of key screens} |
+| Complexity | {complexity estimate} |
+| Selected On | {current date in YYYY-MM-DD format} |
 ```
-✓ Configuration updated with selected workflow: {workflow-name}
+
+**Metadata fields to set:**
+```yaml
+metadata:
+  workflow_selected: true
+  backend_endpoint_discovery_method: "serena" | "grep"   # backend-only or full-stack
+  last_updated: {current-timestamp}
+```
+
+**Step 4.7.3 – Write Config**
+
+**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-9-config-write-protection)
+
+Write the fully merged config back to `.claude/performance-config.md` in **one write
+operation**. Do not write partial sections or call Write more than once for this step.
+
+**Step 4.7.4 – Log Update**
+
+```
+✓ Configuration written — single consolidated write complete.
+  - Scope: {backend-only | frontend-only | full-stack}
   - Scenarios: {count} auto-populated
   - Modules: {count} discovered
+  - Workflow: {workflow-name}
 ```
 
-After this step, proceed to Step 4 (Verify Test Data Availability).
+After this step, proceed to Step 5 (Discover Test Data).
 
-## Step 5 – Verify Test Data Availability
+## Step 5 – Discover Test Data
 
 **Note:** This is the continuation point whether workflow was just selected (Step 4.7) or was already selected (Step 2.1).
+
+**Apply:** [Common Pattern: Metadata Extraction](../performance/common-patterns.md#pattern-2-metadata-extraction)
+
+Read `metadata.analysis_scope` from performance-config.md to determine discovery approach.
+
+### Step 5.0 – Check Analysis Scope
+
+```bash
+analysis_scope=$(grep "| analysis_scope |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+```
+
+**If `analysis_scope = "frontend-only"`:** Skip to Step 5.3 (frontend-only yes/no prompt)
+
+**If `analysis_scope` in ["backend-only", "full-stack", "full-stack-monorepo"]:** Proceed with backend test data discovery (Step 5.1)
+
+### Step 5.1 – Extract Workflow-Specific Scope
+
+**Purpose:** Determine which endpoints/modules belong to the selected workflow before discovering test data.
+
+**CRITICAL:** Discovery must be workflow-specific, not generic. If user selected "License Analysis", do NOT discover SBOM test data.
+
+```bash
+# Read selected workflow name from config
+workflow_name=$(awk '/## Selected Workflow/,/^## / {
+  if ($0 ~ /\| Workflow Name \|/ && $0 !~ /Property/) {
+    split($0, fields, "|")
+    gsub(/^[ \t]+|[ \t]+$/, "", fields[3])
+    print fields[3]
+    exit
+  }
+}' .claude/performance-config.md)
+
+# Extract workflow endpoint paths from Performance Scenarios table
+# (These are the endpoints we need test data for)
+# Using POSIX-compatible awk (works with mawk, nawk, gawk)
+workflow_endpoints=$(awk -F'|' '/## Performance Scenarios/,/^## / {
+  if ($0 ~ /^\| [a-z]/ && $0 !~ /Scenario Name/) {
+    gsub(/^[ \t]+|[ \t]+$/, "", $3)
+    print $3
+  }
+}' .claude/performance-config.md)
+
+# Extract handler locations from Module Registry table
+handler_locations=$(awk -F'|' '/## Module Registry/,/^## / {
+  if ($0 ~ /^\| [a-z]/ && $0 !~ /Module Name/) {
+    gsub(/^[ \t]+|[ \t]+$/, "", $3)
+    print $3
+  }
+}' .claude/performance-config.md)
+
+# Extract common module directory from handler locations
+# Example: modules/analysis/src/endpoints/mod.rs:44-67 → modules/analysis/src/endpoints/
+# Step 1: Remove line numbers
+# Step 2: Remove filename
+# Step 3: Take first unique directory (alphabetically)
+# NOTE: This takes the alphabetically first directory, not the longest common prefix.
+#       For handlers spanning modules/analysis/src/endpoints/ and modules/analysis/src/db/,
+#       this returns modules/analysis/src/db/ (alphabetically first).
+#       Low risk for single-workflow runs where all handlers are typically in one directory.
+workflow_module_path=$(echo "$handler_locations" | \
+  sed 's/:.*$//' | \
+  sed 's|/[^/]*$||' | \
+  sort -u | head -1)
+
+echo "ℹ️ Workflow: $workflow_name"
+echo "   Module path: $workflow_module_path"
+echo "   Endpoints: $(echo "$workflow_endpoints" | wc -l) endpoint(s)"
+```
+
+### Step 5.2 – Discover List Endpoints (Workflow-Scoped)
+
+**Purpose:** Find list/collection endpoints within the selected workflow's module directory to query for available test data IDs.
+
+**Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
+
+(`serena_mode` was set in Step 3.0 and applies here.)
+
+---
+
+### Step 5.2-A – Discover List Endpoints via Serena (`serena_mode = live`)
+
+> Grep is not available in this path.
+
+Call `mcp__{serena_instance}__find_symbol` scoped to the workflow module path:
+
+```
+mcp__{serena_instance}__find_symbol(
+    name_path_pattern=".*list.*|.*search.*|get_all",
+    relative_path="${workflow_module_path}",
+    include_body=false,
+    depth=1
+)
+```
+
+Look for handlers returning collection types (`Vec<T>`, `Page<T>`, `List<T>`).
+Extract GET endpoints without path parameters.
+Store as `list_endpoints` array. Set `discovery_method = "Serena MCP (workflow-scoped)"`.
+
+If the call errors: mark `discovery_status: error`, proceed to Step 6 with empty `list_endpoints`.
+
+---
+
+### Step 5.2-B – Discover List Endpoints via Grep (`serena_mode = down | not-configured`)
+
+```bash
+# Search for GET endpoints in workflow module (scoped to selected workflow)
+list_endpoints_str=$(grep -r "#\[get\(" ${workflow_module_path} | \
+  grep -v "/{" | \
+  grep -E "list|search|all")
+
+# Convert multiline string to array for iteration
+mapfile -t list_endpoints <<< "$list_endpoints_str"
+
+echo "ℹ️ Discovery scoped to: ${workflow_module_path}"
+echo "   Found ${#list_endpoints[@]} list endpoint candidate(s)"
+
+# Store discovery method for reporting
+discovery_method="Grep (workflow-scoped)"
+```
+
+**Validation:**
+
+After discovery, cross-reference discovered list endpoints with workflow endpoints:
+
+```bash
+# Ensure discovered endpoints are related to workflow endpoints
+# Example: If workflow has GET /api/v2/analysis/sbom/{id}, 
+#          discovered list endpoint should be /api/v2/analysis/sbom (no {id})
+
+# Strip HTTP method prefix from workflow_endpoints for comparison
+# (workflow_endpoints may be "GET /api/v2/analysis/component" or just "/api/v2/analysis/component")
+workflow_paths=$(echo "$workflow_endpoints" | sed 's/^[A-Z]* *//')
+
+for discovered in "${list_endpoints[@]}"; do
+  # Check if any workflow path starts with the discovered path
+  # (discovered = "/api/v2/analysis/sbom", workflow path = "/api/v2/analysis/sbom/{id}")
+  if ! echo "$workflow_paths" | grep -q "^${discovered}"; then
+    echo "⚠️ Warning: Discovered endpoint $discovered not in workflow scope"
+  fi
+done
+```
+
+**Note:** list_endpoints array is stored in shell context for use in Step 8.4.B4 (deferred discovery).
+
+Proceed to Step 6.
+
+### Step 5.3 – Frontend-Only Test Data Prompt
+
+**This step only runs if `analysis_scope = "frontend-only"`.**
+
+Preserve existing behavior for frontend-only analysis:
 
 Prompt the user to confirm test data availability:
 
@@ -584,7 +1043,7 @@ Stop execution.
 
 **If user responds "yes":**
 
-Proceed to Step 5.
+Proceed to Step 6.
 
 ## Step 6 – Select Baseline Capture Mode
 
@@ -613,20 +1072,30 @@ Baseline capture uses **cold-start mode**, which measures first-visit performanc
 
 Inform user and proceed to Step 6.2.
 
-### Step 6.2 – Configure Baseline Settings
+### Step 6.2 – Read Baseline Settings from Config
 
-**Prompt for baseline capture settings:**
+**Read baseline capture settings from performance-config.md:**
 
-> "Baseline Capture Settings:"
->
-> - **Iterations** (default: 10, minimum: 10 for meaningful p95 statistics)
-> - **Warmup runs** (default: 3)
->
-> **Note:** p95 statistics require at least 10 iterations to be distinct from the maximum value. 
-> Use 20+ iterations for stable inter-run comparisons.
+Extract from the **Baseline Capture Settings** section:
+- `iterations` value (should be ≥ 20, as configured by performance-setup)
+- `warmup_runs` value (default: 2)
 
-Store mode: `cold-start`
-Proceed to Step 6 (Check for Existing Baseline)
+**Validate iterations minimum:**
+
+If `iterations < 20`:
+  > ⚠️ **Warning: Insufficient iterations for valid p95 statistics**
+  >
+  > Configuration specifies {iterations} iterations, but minimum 20 required for meaningful p95.
+  > With n={iterations}, p95 equals the {calculated_position}th-highest value, statistically too close to the maximum.
+  >
+  > Update `.claude/performance-config.md` Baseline Capture Settings to use ≥ 20 iterations, or proceed with limited statistical validity.
+  >
+  > Continue anyway? (yes/no):
+
+If user chooses "no", stop execution and inform them to update the config.
+
+Store `mode = "cold-start"`
+Proceed to Step 7 (Check for Existing Baseline)
 
 ## Step 7 – Check for Existing Baseline
 
@@ -655,9 +1124,39 @@ Check if the file exists at `{baseline-directory}/baseline-report.md`.
 
   **If user chooses "1. Replace":**
   
-  Proceed to Step 7.
+  **Step 7.1 – Read Old Baseline for Comparison**
+  
+  Read the existing baseline report to extract old metrics for comparison:
+  
+  ```
+  old_baseline_content = Read({baseline-directory}/baseline-report.md)
+  ```
+  
+  Extract aggregate metrics from the **Aggregate Metrics** section of the old report:
+  - Old LCP p95: Look for line matching `| LCP | ... | ... | {value} |` and extract p95 value
+  - Old FCP p95: Extract similarly from FCP row
+  - Old DOM Interactive p95: Extract from DOM Interactive row
+  - Old Total Load Time p95: Extract from Total Load Time row
+  
+  Store these values as:
+  ```
+  old_metrics = {
+    lcp_p95: {extracted_value},
+    fcp_p95: {extracted_value},
+    domInteractive_p95: {extracted_value},
+    totalLoadTime_p95: {extracted_value}
+  }
+  ```
+  
+  These values will be used in Step 10.3 for the comparison section.
+  
+  Proceed to Step 8.
 
-- **If baseline does not exist:** Proceed to Step 7.
+- **If baseline does not exist:** 
+  
+  Set `old_metrics = null` (no comparison available).
+  
+  Proceed to Step 8.
 
 ## Step 8 – Prepare Capture Script
 
@@ -744,295 +1243,757 @@ Wait for user to type "continue", then proceed to Step 8.
 
 **If user responds "no":**
 
-Proceed directly to Step 7.4.
+Proceed directly to Step 8.3.5.
 
-### Step 8.4 – Dev Command Discovery and Approval
+### Step 8.3.5 – Pre-Discovery Application Startup Prompt
 
-**Purpose:** Auto-discover dev mode command, get user approval, and verify application is running before baseline capture.
+Before discovering dev commands, check if the application is already running.
 
-**This step is skipped for backend-only mode** (no browser automation required).
+Display the following prompt:
 
-**Apply:** [Common Pattern: Dev Command Approval](../performance/common-patterns.md#pattern-8-dev-command-approval)
+> **Development Environment Check**
+>
+> How would you like to proceed with application startup?
+>
+> 1. **Application already running** - I'll provide the URL(s) manually
+> 2. **Auto-discovery mode** - Discover and start commands automatically
+> 3. **Exit** - Cancel baseline capture
+>
+> Choose (1/2/3):
 
-**Specific actions for this skill:**
+**If user chooses "1" (Application already running):**
 
-#### Step 7.4.1 – Check if Dev Command Already Configured
+Read `metadata.analysis_scope` from config to determine which URLs to prompt for:
 
-Read config to check if dev command is already approved:
+**Case: `analysis_scope = "frontend-only"`**
 
+Prompt for frontend URL:
+
+> **Frontend URL:**
+>
+> Where is your frontend running?
+>
+> 1. Default (http://localhost:3000)
+> 2. Custom URL
+>
+> Choose (1/2):
+
+- If user chooses "1": use `http://localhost:3000`, port `3000`
+- If user chooses "2": prompt `Enter your frontend URL:` and validate format (must be http://localhost or http://127.0.0.1)
+
+Extract port from chosen URL and verify it's listening:
 ```bash
-if grep -q "## Development Environment" .claude/performance-config.md; then
-  dev_command=$(grep "Dev Command" .claude/performance-config.md | grep -v "TBD" | awk -F'|' '{print $3}' | xargs)
-  command_approved=$(grep "dev_command_approved:" .claude/performance-config.md | awk '{print $2}')
-  command_hash=$(grep "dev_command_hash:" .claude/performance-config.md | awk '{print $2}' | tr -d '"')
-  
-  if [ -n "$dev_command" ] && [ "$dev_command" != "TBD" ]; then
-    # Calculate current hash
-    current_hash=$(echo -n "$dev_command" | sha256sum | awk '{print $1}')
-    
-    # If command unchanged and already approved, skip discovery
-    if [ "$command_approved" = "true" ] && [ "$current_hash" = "$command_hash" ]; then
-      echo "ℹ️ Dev command already approved: $dev_command"
-      skip_discovery=true
-    fi
-  fi
-fi
+nc -z localhost {port} 2>/dev/null || (echo "" | timeout 2 telnet localhost {port} 2>&1 | grep -q "Connected")
 ```
 
-If `skip_discovery=true`, jump to Step 7.4.7 (Verify Application is Running).
+If port check fails:
+> ❌ Application not running on port {port}
+>
+> Please start your application and re-run this skill.
 
-#### Step 7.4.2 – Discover Dev Command
+Exit skill.
 
-Search for dev mode command in multiple sources (priority order):
+If port check succeeds:
+> ✅ Frontend is running on port {port}
 
-**1. package.json scripts:**
+Store `frontend_url` and `frontend_port`, then **skip directly to Step 9** (Execute Baseline Capture).
+
+Do NOT proceed to Step 8.4. Stop reading the skill here and jump to Step 9.
+
+---
+
+**Case: `analysis_scope = "backend-only"`**
+
+Prompt for backend URL:
+
+> **Backend URL:**
+>
+> Where is your backend running?
+>
+> 1. Default (http://localhost:8080)
+> 2. Custom URL
+>
+> Choose (1/2):
+
+- If user chooses "1": use `http://localhost:8080`, port `8080`
+- If user chooses "2": prompt `Enter your backend URL:` and validate format (must be http://localhost or http://127.0.0.1)
+
+Extract port from chosen URL and verify it's listening:
 ```bash
-if [ -f "package.json" ]; then
-  dev_script=$(jq -r '.scripts.dev // .scripts.start // .scripts.serve // "null"' package.json)
-  if [ "$dev_script" != "null" ]; then
-    discovered_command="npm run dev"
-    doc_source="package.json (scripts.dev)"
-  fi
-fi
+nc -z localhost {port} 2>/dev/null || (echo "" | timeout 2 telnet localhost {port} 2>&1 | grep -q "Connected")
 ```
 
-**2. README.md / CONTRIBUTING.md:**
-Look for "Getting Started", "Development", "Running Locally" sections:
+If port check fails:
+> ❌ Application not running on port {port}
+>
+> Please start your application and re-run this skill.
+
+Exit skill.
+
+If port check succeeds:
+> ✅ Backend is running on port {port}
+
+Store `backend_url` and `backend_port`, then **skip directly to Step 9** (Execute Baseline Capture).
+
+Do NOT proceed to Step 8.4. Stop reading the skill here and jump to Step 9.
+
+---
+
+**Case: `analysis_scope` in ["full-stack", "full-stack-monorepo"]**
+
+Prompt for backend URL first:
+
+> **Backend URL:**
+>
+> Where is your backend running?
+>
+> 1. Default (http://localhost:8080)
+> 2. Custom URL
+>
+> Choose (1/2):
+
+- If user chooses "1": use `http://localhost:8080`, port `8080`
+- If user chooses "2": prompt `Enter your backend URL:` and validate format (must be http://localhost or http://127.0.0.1)
+
+Extract port from chosen URL and verify it's listening:
 ```bash
-for readme in README.md CONTRIBUTING.md docs/development.md; do
-  if [ -f "$readme" ] && [ -z "$discovered_command" ]; then
-    # Extract commands from markdown code blocks
-    discovered_command=$(grep -A 5 "Getting Started\|Development\|Running Locally" "$readme" | grep "npm run\|yarn dev\|cargo run" | head -1 | sed 's/[$`]//')
-    if [ -n "$discovered_command" ]; then
-      doc_source="$readme"
-      break
-    fi
-  fi
-done
+nc -z localhost {port} 2>/dev/null || (echo "" | timeout 2 telnet localhost {port} 2>&1 | grep -q "Connected")
 ```
 
-**3. Makefile / justfile:**
+If port check fails:
+> ❌ Backend not running on port {port}
+>
+> Please start your backend and re-run this skill.
+
+Exit skill.
+
+If port check succeeds:
+> ✅ Backend is running on port {backend_port}
+
+Then prompt for frontend URL:
+
+> **Frontend URL:**
+>
+> Where is your frontend running?
+>
+> 1. Default (http://localhost:3000)
+> 2. Custom URL
+>
+> Choose (1/2):
+
+- If user chooses "1": use `http://localhost:3000`, port `3000`
+- If user chooses "2": prompt `Enter your frontend URL:` and validate format (must be http://localhost or http://127.0.0.1)
+
+Extract port from chosen URL and verify it's listening:
 ```bash
-for makefile in Makefile justfile; do
-  if [ -f "$makefile" ] && [ -z "$discovered_command" ]; then
-    target=$(grep "^dev:\|^start:\|^run:" "$makefile" | head -1 | sed 's/:.*//')
-    if [ -n "$target" ]; then
-      discovered_command="make $target"
-      doc_source="$makefile"
-      break
-    fi
-  fi
-done
+nc -z localhost {port} 2>/dev/null || (echo "" | timeout 2 telnet localhost {port} 2>&1 | grep -q "Connected")
 ```
 
-**4. Framework defaults:**
-```bash
-if [ -z "$discovered_command" ]; then
-  if [ -f "next.config.js" ] || [ -f "next.config.ts" ]; then
-    discovered_command="npm run dev"
-    doc_source="Next.js framework default"
-  elif [ -f "vite.config.ts" ] || [ -f "vite.config.js" ]; then
-    discovered_command="npm run dev"
-    doc_source="Vite framework default"
-  elif [ -f "Cargo.toml" ]; then
-    discovered_command="cargo run"
-    doc_source="Rust framework default"
-  elif [ -f "pom.xml" ]; then
-    discovered_command="mvn spring-boot:run"
-    doc_source="Spring Boot framework default"
-  elif [ -f "manage.py" ]; then
-    discovered_command="python manage.py runserver"
-    doc_source="Django framework default"
-  fi
-fi
-```
+If port check fails:
+> ❌ Frontend not running on port {port}
+>
+> Please start your frontend and re-run this skill.
 
-**If no command found:**
-```bash
-if [ -z "$discovered_command" ]; then
-  echo "⚠️ Could not auto-discover dev command from package.json, README, Makefile, or framework conventions."
-  echo "Please enter the command to start your application:"
-  read -p "> " discovered_command
-  doc_source="Manual user input"
-fi
-```
+Exit skill.
 
-#### Step 7.4.4 – Extract Port Number
+If port check succeeds:
+> ✅ Frontend is running on port {frontend_port}
 
-Extract port from multiple sources (priority order):
+Store both URLs and ports, then **skip directly to Step 9** (Execute Baseline Capture).
 
-**1. Command flags:**
-```bash
-if echo "$discovered_command" | grep -qE -- "--port|-p"; then
-  port=$(echo "$discovered_command" | grep -oE -- "--port[= ]([0-9]+)|-p[= ]([0-9]+)" | grep -oE "[0-9]+")
-fi
-```
+Do NOT proceed to Step 8.4. Stop reading the skill here and jump to Step 9.
 
-**2. Environment files:**
-```bash
-if [ -z "$port" ]; then
-  for envfile in .env .env.local .env.development; do
-    if [ -f "$envfile" ]; then
-      port=$(grep "^PORT=" "$envfile" | cut -d= -f2)
-      [ -n "$port" ] && break
-    fi
-  done
-fi
-```
+---
 
-**3. Config files:**
-```bash
-if [ -z "$port" ]; then
-  if [ -f "vite.config.ts" ]; then
-    port=$(grep "port:" vite.config.ts | grep -oE "[0-9]+" | head -1)
-  elif [ -f "next.config.js" ]; then
-    port=$(grep "port:" next.config.js | grep -oE "[0-9]+" | head -1)
-  fi
-fi
-```
+**If user chooses "2" (Auto-discovery mode):**
 
-**4. Framework defaults:**
-```bash
-if [ -z "$port" ]; then
-  if [ -f "next.config.js" ] || [ -f "next.config.ts" ]; then
-    port=3000
-  elif [ -f "vite.config.ts" ] || [ -f "vite.config.js" ]; then
-    port=5173
-  elif [ -f "Cargo.toml" ]; then
-    port=8080
-  elif [ -f "pom.xml" ]; then
-    port=8080
-  elif [ -f "manage.py" ]; then
-    port=8000
-  else
-    port=3000
-  fi
-fi
-```
+Proceed to Step 8.4 (Dev Command Discovery based on analysis scope).
 
-#### Step 7.4.5 – Explain and Prompt for Approval
+---
+
+**If user chooses "3" (Exit):**
+
+Display:
+> Baseline capture cancelled.
+
+Stop execution.
+
+### Step 8.4 – Conditional Dev Command Discovery (Auto-Discovery Mode Only)
+
+**This step only runs if user chose "2" (Auto-discovery mode) in Step 8.3.5.**
+
+Read `metadata.analysis_scope` from config to determine which commands to discover:
+
+- `"frontend-only"` → Discover frontend command only (Case 1)
+- `"backend-only"` → Discover backend command only (Case 2)
+- `"full-stack"` or `"full-stack-monorepo"` → Discover backend THEN frontend with startup delay (Case 3)
+
+---
+
+#### Case 1: Frontend-Only Discovery (`analysis_scope = "frontend-only"`)
+
+**Step 8.4.F1 – Check if Frontend Command Already Configured**
+
+Read `performance-config.md`. If the Development Environment table shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.F3 (Start Frontend).
+
+**Step 8.4.F2 – Discover, Approve, and Save Command**
+
+**Part A – Command Discovery (first-match-wins, use Read/Glob tool in `frontend_path`):**
+
+| Priority | Source | What to extract |
+|---|---|---|
+| 1 | `package.json` | `.scripts.dev` / `.scripts["start:dev"]` / `.scripts.start` → `"npm run dev"` (or `"npm run start"`) |
+| 2 | `README.md` / `CONTRIBUTING.md` / `docs/development.md` | First `npm run` or `yarn` line under a "Getting Started" / "Development" / "Running Locally" heading |
+| 3 | `Makefile` / `justfile` | First target named `dev`, `start`, or `run` → `make {target}` |
+| 4 | Framework config file presence | `rsbuild.config.{ts,js}` or `next.config.{js,ts}` or `vite.config.{ts,js}` → `"npm run dev"` |
+| 5 | None found | Ask user: "What command starts the frontend?" (set `doc_source = "Manual user input"`) |
+
+**Part B – Port Discovery (first-match-wins):**
+
+| Priority | Source | How to check |
+|---|---|---|
+| 1 | `--port=N` or `-p N` flag in the discovered command string | Parse the command string |
+| 2 | `.env` / `.env.local` / `.env.development` | Read file → `PORT=N` |
+| 3 | Framework config file → `port:` field | Read `rsbuild.config.ts` / `vite.config.ts` / `next.config.js` |
+| 4 | Framework default | `rsbuild` or `next` → 3000, `vite` → 5173, other → 3000 |
+
+**Part C – Approval:**
 
 Display to user:
 
-> ℹ️ **Development Mode Command Discovered**
+> **Frontend command discovered:**
 >
-> **Command:** `{discovered_command}`
+> - **Command:** `{discovered_command}`
+> - **Source:** {doc_source}
+> - **Port:** {port}
 >
-> **Source:** {doc_source}
->
-> **Port:** {port}
->
-> **What this command does:**
-> - Starts application in development mode
-> - Runs on port {port} (http://localhost:{port})
->
-> **Security guarantees:**
-> - Runs in your local environment only
-> - No credentials required
-> - Standard development tooling
->
-> **Documentation reference:** {doc_source}
->
-> **Additional instructions (optional):**
-> Enter modifications (e.g., "AUTH_DISABLED=true npm run dev") or press Enter to use as-is:
+> Reply **"approve"**, **"modify: {new command}"**, or **"exit"**.
 
-Read user input:
-```bash
-read -p "> " user_modifications
+- `approve` → use `discovered_command` as `final_command`
+- `modify: {cmd}` → use provided command as `final_command`; re-derive port if `--port` flag is present in the new command
+- `exit` → stop and inform user baseline capture was cancelled
 
-if [ -n "$user_modifications" ]; then
-  final_command="$user_modifications"
-else
-  final_command="$discovered_command"
-fi
-```
+**Part D – Save to Config:**
 
-Display final command and request approval:
-> **Final command:** `{final_command}`
->
-> Approve this command? (yes/no)
+Compute hash:
 
 ```bash
-read -p "> " approval
-
-if [ "$approval" != "yes" ]; then
-  echo "❌ Command not approved. Please start your application manually."
-  echo "After starting your application, re-run this skill."
-  exit 1
-fi
+echo -n "{final_command}" | sha256sum | awk '{print $1}'
 ```
 
-#### Step 7.4.6 – Update Config with Approved Command
+Update the Development Environment table in `performance-config.md`:
 
-Calculate SHA-256 hash for change detection:
+| Field | Value |
+|---|---|
+| Dev Command | `{final_command}` |
+| Documentation Source | `{doc_source}` |
+| Port | `{port}` |
+| Command Approved | `true` |
+| Last Validated | `{current UTC timestamp}` |
+
+Set metadata fields: `dev_command_approved: true`, `dev_command_hash: "{computed hash}"`.
+
+> ✅ Frontend command approved and saved to configuration
+
+---
+
+**Step 8.4.F3 – Start Frontend and Verify**
+
+Start the frontend in the background:
+
 ```bash
-command_hash=$(echo -n "$final_command" | sha256sum | awk '{print $1}')
-current_timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+# Use run_in_background: true
+cd {frontend_path} && {final_command}
 ```
 
-Update Development Environment section in config:
+Check if the server is up:
+
 ```bash
-# Update table values in Development Environment section
-sed -i "/## Development Environment/,/^##/ s/| Dev Command | TBD |/| Dev Command | $final_command |/" .claude/performance-config.md
-sed -i "/## Development Environment/,/^##/ s/| Documentation Source | TBD |/| Documentation Source | $doc_source |/" .claude/performance-config.md
-sed -i "/## Development Environment/,/^##/ s/| Port | TBD |/| Port | $port |/" .claude/performance-config.md
-sed -i "/## Development Environment/,/^##/ s/| Command Approved | false |/| Command Approved | true |/" .claude/performance-config.md
-sed -i "/## Development Environment/,/^##/ s/| Last Validated | - |/| Last Validated | $current_timestamp |/" .claude/performance-config.md
+nc -z localhost {port} || curl -sf --head http://localhost:{port}
 ```
 
-Update metadata:
-```bash
-sed -i "s/dev_command_approved: false/dev_command_approved: true/" .claude/performance-config.md
-sed -i "s/dev_command_hash: null/dev_command_hash: \"$command_hash\"/" .claude/performance-config.md
-```
+Retry every 2 seconds for up to 60 seconds total.
 
-Echo success:
-> ✅ Dev command approved and saved to configuration
+If not up after 60 seconds:
 
-#### Step 7.4.7 – Verify Application is Running
+> Server did not start within 60 seconds. Reply **"wait"** to extend by 30 seconds, or **"abort"** to cancel.
 
-Display manual start instructions:
+If "wait": extend timeout by 30 seconds and continue checking. If "abort": stop execution.
 
-> **Please start your application manually:**
+On success:
+
+> ✅ Frontend is running on port {port}
+
+Proceed to Step 9.
+
+---
+
+#### Case 2: Backend-Only Discovery (`analysis_scope = "backend-only"`)
+
+**Step 8.4.B1 – Check if Backend Command Already Configured**
+
+Read `performance-config.md`. If the Development Environment table shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.B3 (Start Backend).
+
+---
+
+**Step 8.4.B2 – Discover, Approve, and Save Command**
+
+**Part A – Command Discovery (first-match-wins, use Read/Glob tool in `backend_path`):**
+
+| Priority | Source | What to extract |
+|---|---|---|
+| 1 | `README.md` / `CONTRIBUTING.md` / `docs/development.md` | First `cargo run`, `mvn`, `gradlew`, `python manage.py`, `uvicorn`, or `npm run start` line under a "Getting Started" / "Development" / "Running Locally" heading |
+| 2 | `Cargo.toml` `[[bin]]` sections | 1 binary → `cargo run --bin {name}`; multiple → prefer binary whose name matches the repo directory name; if still ambiguous, ask user to choose |
+| 3 | `pom.xml` | `mvnw` present → `./mvnw spring-boot:run`; absent → `mvn spring-boot:run` |
+| 4 | `build.gradle` | `./gradlew bootRun` |
+| 5 | `manage.py` | `python manage.py runserver` |
+| 6 | `pyproject.toml` containing `fastapi` or `uvicorn` | `uvicorn app.main:app --reload` |
+| 7 | `package.json` `.scripts.start` or `.scripts.server` | `npm run start` |
+| 8 | None found | Ask user: "What command starts the backend?" (set `doc_source = "Manual user input"`) |
+
+**Part B – Port Discovery (first-match-wins):**
+
+| Priority | Source | How to check |
+|---|---|---|
+| 1 | `--port=N`, `-p N`, or `--bind` flag in the discovered command | Parse the command string |
+| 2 | `.env` / `.env.local` | Read file → `PORT=N` |
+| 3 | Framework config file → port field | `src/main/resources/application.properties` → `server.port=N`; `settings.py` → `PORT = N` |
+| 4 | Framework default | Rust=8080, Spring/Gradle=8080, Django=8000, FastAPI=8000, Node=3001, other=8080 |
+
+**Part C – Approval:**
+
+Display to user:
+
+> **Backend command discovered:**
 >
-> ```
-> {final_command}
-> ```
+> - **Command:** `{discovered_command}`
+> - **Source:** {doc_source}
+> - **Port:** {port}
 >
-> Wait for successful start (watch for "ready", "listening", or similar message), then press Enter to continue...
+> Reply **"approve"**, **"modify: {new command}"**, or **"exit"**.
+
+- `approve` → use `discovered_command` as `final_command`
+- `modify: {cmd}` → use provided command as `final_command`; re-derive port if `--port` flag is present in the new command
+- `exit` → stop and inform user baseline capture was cancelled
+
+**Part D – Save to Config:**
+
+Compute hash:
 
 ```bash
-read -p ""
+echo -n "{final_command}" | sha256sum | awk '{print $1}'
 ```
 
-Verify port is listening:
+Update the Development Environment table in `performance-config.md`:
+
+| Field | Value |
+|---|---|
+| Dev Command | `{final_command}` |
+| Documentation Source | `{doc_source}` |
+| Port | `{port}` |
+| Command Approved | `true` |
+| Last Validated | `{current UTC timestamp}` |
+
+Set metadata fields: `dev_command_approved: true`, `dev_command_hash: "{computed hash}"`.
+
+> ✅ Backend command approved and saved to configuration
+
+---
+
+**Step 8.4.B3 – Start Backend and Verify**
+
+Start the backend in the background:
+
 ```bash
-echo "Verifying application is running on port $port..."
-
-if nc -z localhost $port 2>/dev/null || (echo "" | telnet localhost $port 2>&1 | grep -q "Connected"); then
-  echo "✅ Application is running on port $port"
-else
-  echo "❌ Application not running on port $port"
-  echo ""
-  echo "Please:"
-  echo "1. Start your application: $final_command"
-  echo "2. Wait for it to fully start"
-  echo "3. Re-run this skill"
-  exit 1
-fi
+# Use run_in_background: true
+cd {backend_path} && {final_command}
 ```
 
-Proceed to Step 8.
+Check if the server is up:
+
+```bash
+nc -z localhost {port} || curl -sf --head http://localhost:{port}
+```
+
+Retry every 2 seconds for up to 60 seconds total.
+
+If not up after 60 seconds:
+
+> Server did not start within 60 seconds. Reply **"wait"** to extend by 30 seconds, or **"abort"** to cancel.
+
+If "wait": extend timeout by 30 seconds and continue checking. If "abort": stop execution.
+
+On success:
+
+> ✅ Backend is running on port {port}
+
+**Step 8.4.B4 – Query, Verify, and Confirm Test Data**
+
+**Guard condition:** If `.claude/performance/test-data/manifest.json` already exists from Step 5, skip to B4.2 (Verify).
+
+**B4.1 – Discover list endpoints and generate manifest:**
+
+**Apply:** [Common Pattern: Code Intelligence Strategy](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
+
+**Find:** GET endpoints in `workflow_module_path` that have no path parameters (list/search endpoints — e.g. `/api/v2/products` not `/api/v2/products/{id}`).
+**Store:** array of endpoint paths in `list_endpoints`. Store which method was used as `discovery_method`.
+
+Read `workflow_module_path` from the Module Registry in `performance-config.md` (handler file paths → strip filename and line number → common directory).
+
+Generate manifest with a single Shell block:
+
+```bash
+mkdir -p .claude/performance/test-data
+
+entries_json="{}"
+for endpoint in "${list_endpoints[@]}"; do
+  response=$(curl -sf --max-time 10 -H "Accept: application/json" \
+    "http://localhost:${port}${endpoint}")
+  sample_id=$(echo "$response" | jq -r '
+    if type == "array" then .[0]
+    else (.items // .data // .results // .content // [])[0]
+    end | .id // .uuid // ._id // empty' | head -1)
+  test_url=$(echo "$endpoint" | sed "s|{[^}]*}|${sample_id}|g")
+  entries_json=$(echo "$entries_json" | jq \
+    --arg k "$endpoint" --arg url "$test_url" --arg id "$sample_id" \
+    '. + {($k): {endpoint_path: $k, test_url: $url, parameters: {id: $id}}}')
+done
+
+jq -n \
+  --argjson e "$entries_json" \
+  --argjson port "$port" \
+  --arg method "$discovery_method" \
+  '{generated_at: (now | todate), backend_port: $port, discovery_method: $method, endpoints: $e}' \
+  > .claude/performance/test-data/manifest.json
+```
+
+**B4.2 – Verify endpoints and display results:**
+
+**Purpose:** Execute real HTTP requests to all discovered endpoints and display results as agent text (not bash echo, which collapses in the UI).
+
+For each endpoint in manifest, run:
+
+```bash
+curl -sf -w "\nHTTP:%{http_code}\nTIME:%{time_total}" \
+  http://localhost:{port}{test_url}
+```
+
+Collect: status code, response time (seconds), and sample data (first item or truncated JSON up to 120 chars).
+
+Then output a markdown table as agent text:
+
+| Endpoint | Status | Time | Sample |
+|---|---|---|---|
+| /api/v2/products | 200 OK | 0.12s | {count: 42, sample: {id: "abc", ...}} |
+| /api/v2/orders | SLOW | 6.3s | {count: 10, sample: {id: "xyz", ...}} |
+
+**Slow/timeout endpoints** (>5s or no response within 10s) → mark **SLOW** or **TIMEOUT** and highlight at top as optimization candidates.
+**Auth errors** (401/403) → mark **AUTH ERROR** and note: "Ensure `AUTH_DISABLED=true` in dev command."
+**Not found** (404) → mark **NOT FOUND**.
+**Zero functional endpoints** → display error and stop.
+
+**B4.3 – Confirm:**
+
+> **Test data verification complete.**
+>
+> Reply **"yes"** to proceed with baseline capture, **"edit"** to modify the manifest manually, or **"abort"** to cancel.
+
+- `yes` → proceed to Step 9
+- `edit` → display path `.claude/performance/test-data/manifest.json`; wait for user to reply "done", then re-run B4.2–B4.3 once
+- `abort` → stop execution
+
+Proceed to Step 9.
+
+---
+
+#### Case 3: Full-Stack Discovery (`analysis_scope` in ["full-stack", "full-stack-monorepo"])
+
+**Sequential execution: Backend first, then Frontend.**
+
+**Phase 1: Backend Discovery**
+
+Execute Steps 8.4.B1 through 8.4.B4 from Case 2 using `backend_path`.
+
+**Note:** Step 8.4.B4 (query backend and confirm test data) runs in this phase.
+
+After Step 8.4.B4:
+
+> ✅ Backend is running on port {backend_port}
+
+**Phase 2: Backend Initialization Delay**
+
+Wait 5 seconds for the backend to fully initialise before starting the frontend.
+
+**Note:** Backend was already verified as running in Step 8.4.B3. This delay ensures the backend is ready to handle API requests before the frontend starts.
+
+**Phase 3: Frontend Discovery**
+
+Execute Steps 8.4.F1 through 8.4.F3 from Case 1 using `frontend_path`.
+
+After Step 8.4.F3:
+
+> ✅ Frontend is running on port {frontend_port}
+> ✅ Backend is running on port {backend_port}
+
+Proceed to Step 9.
 
 ## Step 9 – Execute Baseline Capture
 
+Read `metadata.analysis_scope` from config to determine capture method:
+
+- **If `analysis_scope = "backend-only"`:** Apply Pattern 10 for API benchmarking (Step 9.A below) → skip to Step 10
+
+- **If `analysis_scope = "frontend-only"`:** Proceed to Step 9.1 (browser-based capture) → skip to Step 10
+
+- **If `analysis_scope = "full-stack"` or `"full-stack-monorepo"`:** Execute dual baseline capture (Step 9.B below) → skip to Step 10
+
+**Note:** Full-stack modes capture BOTH frontend (Playwright) and backend (OHA) metrics for comprehensive cross-layer analysis.
+
+---
+
+### Step 9.A – API Benchmark Mode (Backend-Only)
+
+**Apply:** [Pattern 10: API Profiling](../performance/common-patterns.md#pattern-10-api-profiling)
+
+Wrap Pattern 10 in a shell function and generate JSON output for baseline report.
+
+```bash
+function run_backend_baseline() {
+  export CALLER_SKILL="performance-baseline"
+  
+  # Extract port and iterations from config
+  port=$(grep "| Port |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+  iterations=$(grep "| Iterations |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+  
+  # Pattern 10 Step A - Check Prerequisites and Install OHA
+  # (Full code from common-patterns.md - see Pattern 10 Step A)
+  
+  # Pattern 10 Step B - Execute Benchmark with Cache Measurement  
+  # (Full code from common-patterns.md - see Pattern 10 Step B)
+  
+  # After benchmarking completes, generate baseline JSON
+  echo "Generating baseline report..."
+  
+  results_json="{"
+  results_json+="\"scenarios\": ["
+  
+  first=true
+  for scenario in "${!dynamic_results[@]}"; do
+    result="${dynamic_results[$scenario]}"
+    
+    [ "$first" = true ] && first=false || results_json+=","
+    
+    p50=$(echo "$result" | jq -r '.p50_ms')
+    p95=$(echo "$result" | jq -r '.p95_ms')
+    p99=$(echo "$result" | jq -r '.p99_ms')
+    mean=$(echo "$result" | jq -r '.mean_ms')
+    test_url=$(echo "$result" | jq -r '.test_url')
+    first_req=$(echo "$result" | jq -r '.first_request_ms')
+    cache_pct=$(echo "$result" | jq -r '.cache_improvement_pct')
+    cache_stat=$(echo "$result" | jq -r '.cache_status')
+    
+    results_json+=$(cat <<JSON
+{
+  "name": "$scenario",
+  "url": "$test_url",
+  "metrics": {
+    "responseTime": {
+      "mean": $mean,
+      "p50": $p50,
+      "p95": $p95,
+      "p99": $p99
+    }
+  },
+  "cache": {
+    "first_request_ms": $first_req,
+    "warm_mean_ms": $mean,
+    "improvement_pct": $cache_pct,
+    "status": "$cache_stat"
+  }
+}
+JSON
+)
+  done
+  
+  results_json+="],"
+  
+  # Calculate aggregate statistics
+  declare -a all_p50 all_p95 all_p99 all_mean
+  for scenario in "${!dynamic_results[@]}"; do
+    result="${dynamic_results[$scenario]}"
+    all_p50+=($(echo "$result" | jq -r '.p50_ms'))
+    all_p95+=($(echo "$result" | jq -r '.p95_ms'))
+    all_p99+=($(echo "$result" | jq -r '.p99_ms'))
+    all_mean+=($(echo "$result" | jq -r '.mean_ms'))
+  done
+  
+  agg_p50=$(printf '%s\n' "${all_p50[@]}" | awk '{sum+=$1} END {printf "%.2f", sum/NR}')
+  agg_p95=$(printf '%s\n' "${all_p95[@]}" | awk '{sum+=$1} END {printf "%.2f", sum/NR}')
+  agg_p99=$(printf '%s\n' "${all_p99[@]}" | awk '{sum+=$1} END {printf "%.2f", sum/NR}')
+  agg_mean=$(printf '%s\n' "${all_mean[@]}" | awk '{sum+=$1} END {printf "%.2f", sum/NR}')
+  
+  results_json+=$(cat <<JSON
+"aggregate": {
+  "responseTime": {
+    "mean": $agg_mean,
+    "p50": $agg_p50,
+    "p95": $agg_p95,
+    "p99": $agg_p99
+  }
+},
+"config": {
+  "iterations": $iterations,
+  "warmupRuns": 2,
+  "mode": "api-benchmark"
+}
+}
+JSON
+)
+  
+  # Write JSON to file
+  mkdir -p .claude/performance/baselines
+  echo "$results_json" | jq '.' > .claude/performance/baselines/benchmark-results.json
+  
+  echo "✅ Baseline captured: ${#dynamic_results[@]} endpoint(s)"
+  echo "   Results: .claude/performance/baselines/benchmark-results.json"
+}
+
+run_backend_baseline
+
+# Check if profiling was skipped
+if [ "$skip_dynamic" = "true" ]; then
+  echo "⚠️ Cannot generate backend baseline without dynamic profiling."
+  echo "   Please ensure backend is running and retry."
+  exit 1
+fi
+```
+
+After Step 9.A completes, proceed to Step 10 (baseline report generation).
+
+---
+
+### Step 9.B – Dual Baseline Capture (Full-Stack Mode)
+
+**This step ONLY runs if `analysis_scope` is "full-stack" or "full-stack-monorepo".**
+
+**Purpose:** Capture BOTH frontend (browser metrics via Playwright) AND backend (API metrics via OHA) baselines for comprehensive cross-layer performance analysis.
+
+#### Step 9.B.1 – Frontend Baseline Capture (Playwright)
+
+Execute Steps 9.1-9.3 (Playwright browser automation) as documented below.
+
+**Output:** Save frontend results to intermediate file `{baseline-directory}/baseline-report-frontend.json`
+
+**Note:** This is the same Playwright capture used in frontend-only mode, but we save to a temporary file instead of generating the final report immediately.
+
+#### Step 9.B.2 – Backend Baseline Capture (OHA)
+
+Execute Step 9.A (OHA API Profiling) to benchmark backend endpoints.
+
+**Output:** Save backend results to `{baseline-directory}/benchmark-results.json`
+
+**Note:** Both frontend and backend baselines use the same port and test data from config.
+
+#### Step 9.B.3 – Merge Baseline Reports
+
+Combine frontend and backend metrics into a single hybrid baseline report:
+
+1. **Read frontend metrics:**
+   ```bash
+   frontend_lcp_p95=$(jq -r '.aggregate.lcp.p95' {baseline-directory}/baseline-report-frontend.json)
+   frontend_fcp_p95=$(jq -r '.aggregate.fcp.p95' {baseline-directory}/baseline-report-frontend.json)
+   # ... extract other frontend metrics ...
+   ```
+
+2. **Read backend metrics:**
+   ```bash
+   backend_resp_p95=$(jq -r '.aggregate.response_time.p95' {baseline-directory}/benchmark-results.json)
+   backend_throughput=$(jq -r '.aggregate.throughput' {baseline-directory}/benchmark-results.json)
+   # ... extract other backend metrics ...
+   ```
+
+3. **Generate hybrid baseline report:**
+   
+   Use `baseline-report.template.md` with `capture_mode = "hybrid"` to generate the final report at `{baseline-directory}/baseline-report.md`.
+   
+   Include BOTH:
+   - **Frontend Performance Metrics section** (LCP, FCP, DOM Interactive, Total Load Time)
+   - **Backend API Performance Metrics section** (Response Time, Throughput, Error Rate, Cache Effectiveness)
+
+4. **Update performance-config.md metadata:**
+   ```yaml
+   metadata:
+     baseline_captured: true
+     baseline_mode: "hybrid"
+     baseline_timestamp: {current-timestamp}
+     baseline_commit_sha: {git-commit-sha}
+   ```
+
+5. **Preserve both baseline files for downstream skills:**
+   
+   Keep both `baseline-report.md` (hybrid report for humans) and `benchmark-results.json` (raw backend data for skills) in the baseline directory.
+   
+   Downstream skills will read:
+   - `baseline-report.md` → for frontend metrics
+   - `benchmark-results.json` → for backend metrics
+
+After Step 9.B completes, proceed to Step 10 (baseline report generation is already done in 9.B.3).
+
+---
+
 ### Step 9.1 – Construct Command
+
+**Auto-detect Config Path:**
+
+The capture script can be run from any subdirectory within the repository. Auto-detect the config by walking up the directory tree (like `git` finds `.git/`):
+
+```bash
+config_path=""
+current_dir=$(pwd)
+max_depth=5  # Prevent infinite loop
+
+for i in $(seq 0 $max_depth); do
+  if [ $i -eq 0 ]; then
+    check_path=".claude/performance-config.md"
+  else
+    check_path=$(printf '../%.0s' $(seq 1 $i)).claude/performance-config.md
+  fi
+  
+  if [ -f "$check_path" ]; then
+    config_path="$check_path"
+    config_dir=$(dirname "$(cd "$(dirname "$check_path")" && pwd)")
+    echo "✅ Found config at: $check_path"
+    echo "   Repository root: $config_dir"
+    break
+  fi
+done
+
+if [ -z "$config_path" ]; then
+  echo "❌ Could not find .claude/performance-config.md"
+  echo ""
+  echo "Searched from: $current_dir"
+  echo "Looked in: current directory and up to $max_depth parent directories"
+  echo ""
+  echo "This usually means:"
+  echo "  • You haven't run /sdlc-workflow:performance-setup yet"
+  echo "  • You're in the wrong repository"
+  echo ""
+  echo "Please run /sdlc-workflow:performance-setup first, then try again."
+  exit 1
+fi
+```
+
+**Why auto-detection:**
+- ✅ Works from any subdirectory (e.g., `client/src/`, `docs/`)
+- ✅ No trial-and-error with paths
+- ✅ Familiar UX pattern (git, npm, cargo all do this)
+- ✅ Clear error message if config doesn't exist
 
 Build the command to execute the capture script based on the selected mode from Step 6:
 
 **If mode = `cold-start`:**
 ```
-node {baseline-directory}/capture-baseline.mjs --config {path-to-performance-config.md} --port {port} --mode cold-start
+node {baseline-directory}/capture-baseline.mjs --config "$config_path" --port {port} --mode cold-start
 ```
 
 Note: The script will read the Performance Scenarios table from the config and measure all configured scenarios. The workflow selection is used for filtering during report generation (Step 8).
@@ -1142,7 +2103,7 @@ The script outputs JSON to stdout with the following structure:
     ...
   },
   "config": {
-    "iterations": 5,
+    "iterations": 20,
     "warmupRuns": 2
   }
 }
@@ -1248,7 +2209,23 @@ Replace `{{waterfall-ascii-chart}}` with the concatenated set of per-scenario wa
 
 **Comparison with Previous Baseline:**
 
-If this is a re-baseline (an existing baseline was replaced), include a comparison section showing the delta between old and new metrics. Otherwise, replace `{{comparison-section}}` with:
+If this is a re-baseline (an existing baseline was replaced), use the `old_metrics` values from Step 7.1 to generate a comparison table showing the delta between old and new metrics:
+
+```markdown
+## Comparison with Previous Baseline
+
+| Metric | Old p95 | New p95 | Delta | Change |
+|--------|---------|---------|-------|--------|
+| LCP | {old_metrics.lcp_p95}ms | {new_lcp_p95}ms | {delta}ms | {percentage}% |
+| FCP | {old_metrics.fcp_p95}ms | {new_fcp_p95}ms | {delta}ms | {percentage}% |
+| DOM Interactive | {old_metrics.domInteractive_p95}ms | {new_domInteractive_p95}ms | {delta}ms | {percentage}% |
+| Total Load Time | {old_metrics.totalLoadTime_p95}ms | {new_totalLoadTime_p95}ms | {delta}ms | {percentage}% |
+```
+
+Calculate delta as `new_value - old_value` and percentage as `((new_value - old_value) / old_value) * 100`.
+Use ↑ emoji for regressions (positive delta) and ↓ emoji for improvements (negative delta).
+
+If `old_metrics = null` (initial baseline), replace `{{comparison-section}}` with:
 
 ```markdown
 _This is the initial baseline. Future re-baselines will show comparison here._
@@ -1302,9 +2279,9 @@ metadata:
 
 **Step 10.5.3 – Update Optimization Targets (If First Baseline)**
 
-Check if the Optimization Targets table has "TBD" in the Baseline (p95) column:
+Check the metadata from the config (read in Step 10.5.1) to determine if this is the first baseline:
 
-**If Baseline column = "TBD" (first baseline):**
+**If `metadata.baseline_captured: false` or field doesn't exist (first baseline):**
 
 Update the Optimization Targets section:
 
@@ -1320,7 +2297,7 @@ Update the Optimization Targets section:
 - Keep **Target** column unchanged (from setup)
 - Set **Last Updated** = current timestamp
 
-**If Baseline column already has values (re-baseline):**
+**If `metadata.baseline_captured: true` (re-baseline):**
 
 - Leave Baseline column unchanged (baseline is immutable)
 - Update Latest Verified (p95) column with new p95 metrics (this is a re-baseline after changes)
@@ -1328,7 +2305,7 @@ Update the Optimization Targets section:
 
 **Step 10.5.4 – Write Updated Configuration**
 
-**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-10-config-write-protection)
+**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-9-config-write-protection)
 
 Write the updated configuration back to `.claude/performance-config.md`.
 
@@ -1381,10 +2358,18 @@ Where `{threshold-warnings}` includes warnings for metrics exceeding targets (if
 
 ## Important Rules
 
+### Execution Integrity
+- **Never skip a step** — every step defined above must execute in order, or be explicitly acknowledged as conditionally skipped with a reason output.
+- **Never produce partial output** — every defined output (table, summary, file, console message) for a step must be produced completely before moving to the next step.
+- **Never auto-answer a blocking prompt** — steps that require user confirmation must pause and wait for an explicit user response.
+- **Always announce each step** before executing it using the format: `▶ Step X – <name>`
+- **Always confirm step completion** after executing it, including a brief summary of what was produced and what step comes next.
+
+### File and Scope Rules
 - Never modify source code files — only create performance measurement artifacts
 - Always verify selected workflow exists before proceeding
 - Always prompt for test data availability before capturing baseline
-- If script execution fails, provide actionable error messages with clear remediation steps
+- If script execution fails, provide actionable error messages with remediation steps — do not silently continue
 - Ensure all URLs are localhost-only for security
 - Filter scenarios to include only those in the selected workflow
 - Generate waterfall visualization using ASCII art for every scenario — no external dependencies
