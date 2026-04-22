@@ -3,7 +3,6 @@ metadata:
   version: 1.0
   created: {{timestamp}}
   last_updated: {{timestamp}}
-  config_schema_version: 2
   workflow_selected: false
   baseline_captured: false
   baseline_mode: null
@@ -14,6 +13,9 @@ metadata:
   backend_endpoint_discovery_method: null
   dev_command_approved: false
   dev_command_hash: null
+  serena_status: null
+  serena_instance: "none"
+  metric_type: null
 ---
 
 # Performance Analysis Configuration
@@ -65,16 +67,32 @@ Determines how performance metrics are captured.
 
 ## Optimization Targets
 
-Core Web Vitals thresholds to achieve after optimization.
+Performance thresholds to achieve after optimization. The metrics shown depend on the analysis scope configured during setup.
 
 **Status:** Baseline values not yet captured
 
+### Frontend Metrics
+
+Core Web Vitals thresholds for browser performance (populated when analysis_scope includes frontend).
+
 | Metric | Baseline (p95) | Latest Verified (p95) | Target | Unit | Last Updated |
 |---|---|---|---|---|---|
-| LCP (Largest Contentful Paint) | TBD | TBD | 2.5 | seconds | - |
-| FCP (First Contentful Paint) | TBD | TBD | 1.8 | seconds | - |
-| DOM Interactive | TBD | TBD | 3.5 | seconds | - |
-| Total Load Time | TBD | TBD | 4.0 | seconds | - |
+| LCP (Largest Contentful Paint) | {{lcp-baseline}} | {{lcp-latest}} | {{lcp-target}} | seconds | {{lcp-updated}} |
+| FCP (First Contentful Paint) | {{fcp-baseline}} | {{fcp-latest}} | {{fcp-target}} | seconds | {{fcp-updated}} |
+| DOM Interactive | {{dom-baseline}} | {{dom-latest}} | {{dom-target}} | seconds | {{dom-updated}} |
+| Total Load Time | {{total-baseline}} | {{total-latest}} | {{total-target}} | seconds | {{total-updated}} |
+
+### Backend Metrics
+
+API performance thresholds for backend endpoints (populated when analysis_scope includes backend).
+
+| Metric | Baseline (p95) | Latest Verified (p95) | Target | Unit | Last Updated |
+|---|---|---|---|---|---|
+| Response Time (p95) | {{resp-p95-baseline}} | {{resp-p95-latest}} | {{resp-p95-target}} | milliseconds | {{resp-p95-updated}} |
+| Response Time (p99) | {{resp-p99-baseline}} | {{resp-p99-latest}} | {{resp-p99-target}} | milliseconds | {{resp-p99-updated}} |
+| Throughput | {{throughput-baseline}} | {{throughput-latest}} | {{throughput-target}} | req/sec | {{throughput-updated}} |
+| Error Rate | {{error-baseline}} | {{error-latest}} | {{error-target}} | % | {{error-updated}} |
+| Database Query Time (p95) | {{db-baseline}} | {{db-latest}} | {{db-target}} | milliseconds | {{db-updated}} |
 
 **Columns explained:**
 - **Baseline (p95):** Initial value from first baseline capture (never changes)
@@ -82,7 +100,11 @@ Core Web Vitals thresholds to achieve after optimization.
 - **Target:** Goal to achieve (can be adjusted based on requirements)
 - **Last Updated:** Timestamp of last metric update
 
-**Note:** Baseline values will be auto-filled after first `/sdlc-workflow:performance-baseline` run. Latest Verified values track the current state on main branch - re-run baseline after merging each optimization PR to measure cumulative progress. Target values follow Google's Core Web Vitals "Good" thresholds.
+**Note:** Baseline values will be auto-filled after first `/sdlc-workflow:performance-baseline` run. Latest Verified values track the current state on main branch - re-run baseline after merging each optimization PR to measure cumulative progress.
+
+**Target value guidelines:**
+- **Frontend targets** follow Google's Core Web Vitals "Good" thresholds
+- **Backend targets** are configurable based on your SLA requirements
 
 ## Module Registry
 
@@ -124,7 +146,7 @@ This section tracks the repositories involved in performance analysis based on t
 - **frontend-only:** Frontend repository only → Frontend analysis (bundle, browser metrics, component rendering, API usage patterns)
 - **backend-only:** Backend repository only → Backend analysis (API endpoints, database queries, caching, pagination, response schemas)
 
-**Note:** Repository configuration can be updated by re-running `/sdlc-workflow:performance-setup --refresh-backend` or edited manually.
+**Note:** Repository configuration can be edited manually if needed.
 
 ## Analysis Scope
 
@@ -163,13 +185,15 @@ Adjust these to match your environment for more accurate estimates.
 
 | Assumption | Value | Unit | Description |
 |---|---|---|---|
-| Average Bandwidth | 5 | Mbps | Network bandwidth for bundle size impact calculation |
+| Average Bandwidth | 5 | Mbps | Network bandwidth for bundle size impact calculation (frontend) |
 | API Latency (average) | 100 | ms | Baseline API round-trip time for N+1 impact calculation |
-| Layout Reflow Cost | 5 | ms | CPU time per forced reflow operation |
+| Layout Reflow Cost | 5 | ms | CPU time per forced reflow operation (frontend) |
 | Cache Hit Rate | 0.8 | ratio (0.0–1.0) | Proportion of API requests expected to be served from cache |
+| DB Query Base Latency | 10 | ms | Per-query database overhead for N+1 query impact estimation (backend) |
+| Concurrent Connection Limit | 100 | connections | Maximum concurrent requests the backend can handle (backend) |
 
 **Note:** Impact estimates derived from these constants are order-of-magnitude approximations.
-Always verify with browser profiling tools before committing to an optimization.
+For frontend optimizations, verify with browser profiling tools. For backend optimizations, verify with load testing and database profiling tools before committing.
 
 ## Selected Workflow
 
