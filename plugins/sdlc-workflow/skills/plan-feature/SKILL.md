@@ -643,6 +643,10 @@ jira.edit_issue(
 Preserve any existing labels on the feature issue — append `workflow:feature-branch` to
 the current label list rather than replacing it.
 
+After creating each task, post a description digest comment following the protocol
+in `shared/description-digest-protocol.md`. This enables implement-task to detect
+whether the task description was modified between planning and implementation.
+
 ### 6b – Create issue links
 
 After **all** tasks are created (so all Jira keys are known), create two kinds of links:
