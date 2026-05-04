@@ -640,9 +640,29 @@ jira.edit_issue(
 Preserve any existing labels on the feature issue — append `workflow:feature-branch` to
 the current label list rather than replacing it.
 
-After creating each task, post a description digest comment following the protocol
-in `shared/description-digest-protocol.md`. This enables implement-task to detect
-whether the task description was modified between planning and implementation.
+Immediately after creating each task (before creating issue links or other comments), you **must** post a description digest comment on the created issue. Compute a SHA-256 hash of the description you wrote, then post a standalone ADF comment with this exact format:
+
+```json
+{
+  "type": "doc",
+  "version": 1,
+  "content": [
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "[sdlc-workflow] Description digest: sha256:<hex-digest>"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Replace `<hex-digest>` with the lowercase 64-character SHA-256 hex digest. Strip leading/trailing whitespace from the description before hashing. Do not append the Comment Footnote to this comment — it must be a standalone comment separate from any other comments.
+
+See `shared/description-digest-protocol.md` for the full protocol specification including consumer verification behavior.
 
 ### 6b – Create issue links
 
