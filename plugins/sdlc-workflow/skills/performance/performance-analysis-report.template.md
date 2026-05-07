@@ -72,6 +72,10 @@
    **Verification Checklist:**
    - [ ] {verification-step-1 from detection step}
    - [ ] {verification-step-2 from detection step}
+   **Validation Status:** {Confirmed / Confirmed (Low Confidence) / Downgraded}
+   **Confidence:** {High / Medium / Low} — {reason chain: "Detection: X, Evidence: Y, Risk: Z => Final: result"}
+   **Severity:** {Critical / High / Medium / Low}
+   **Timeline:** {< 1 hour / 1-4 hours / 0.5-1 day / 1-3 days / 3-5 days / > 5 days}
 
 {... repeat for each anti-pattern ...}
 
@@ -211,10 +215,12 @@
 
 **Query Ledger:**
 
-| # | Query | Source | Depth | Loop Mult. | Effective Count |
-|---|---|---|---|---|---|
-| {n} | {description} | {file:line} | {depth} | {multiplier} | {effective} |
-| **Total** | | | | | **{total_queries}** |
+| # | Query | Source | Depth | Loop Mult. | Cond? | Cache? | Effective Count |
+|---|---|---|---|---|---|---|---|
+| {n} | {description} | {file:line} | {depth} | {multiplier} | | | {effective} |
+| **Total (all)** | | | | | | | **{total}** |
+| **Total (warm)** | | | | | | | **{warm_total}** |
+| **Total (cold)** | | | | | | | **{cold_total}** |
 
 **Estimated Total DB Latency:** {total_queries * analysis_db_latency_ms}ms  
 
@@ -324,6 +330,37 @@ results multiple times.
 
 ---
 
+#### Cache Effectiveness Analysis
+
+**Severity:** {High / Medium / Low}
+**Instances Found:** {count}
+**Estimated Impact:** Fixing bypass queries is a prerequisite for {improvement}ms cache benefit
+
+**Note:** Requires baseline cache data from Step 4. If no baseline exists, record:
+"No baseline data; run `/sdlc-workflow:performance-baseline` first."
+
+**Description:** Endpoints where an application-level cache exists but provides minimal
+improvement because cache-bypass queries dominate warm-cache response time.
+
+**Detected Instances:**
+
+1. **Endpoint:** {method} {path}
+   **Cache Type:** {description}
+   **Baseline Improvement:** {improvement_pct}% ({cold_ms}ms → {warm_ms}ms)
+   **Query Breakdown:**
+   | Category | Queries | Estimated Latency |
+   |---|---|---|
+   | Cache-gated (cold only) | {count} | {latency}ms |
+   | Cache-bypass (every request) | {count} | {latency}ms |
+   | **Total** | **{total}** | **{total_latency}ms** |
+   **Bypass Dominance:** {bypass_pct}% of queries fire regardless of cache state
+   **Blocking Findings:** {finding_names_and_ids}
+   **Recommendation:** {actionable_recommendation}
+
+{... repeat for each instance ...}
+
+---
+
 ### Cross-Repository Over-Fetching Analysis
 
 **Note:** This analysis cross-references backend response schemas with frontend field usage.
@@ -427,23 +464,76 @@ this detects waste at the HTTP API boundary — where the backend serves fields 
 
 ---
 
+## Finding Validation Summary
+
+**Validation Step:** Step 9.1 re-verified all findings against source code before report generation.
+
+| # | Finding | Anti-Pattern | Step | Disposition | Confidence | Severity | Timeline | Notes |
+|---|---|---|---|---|---|---|---|---|
+| F1 | {description} | {type} | {step} | {Confirmed / Confirmed (Low Confidence) / Downgraded} | {High / Medium / Low} | {Critical / High / Medium / Low} | {estimate} | {reason chain or correction notes} |
+| ... | ... | ... | ... | ... | ... | ... | ... | ... |
+
+**Validation Statistics:**
+- Findings submitted: {total}
+- Confirmed: {confirmed} ({pct}%)
+- Confirmed (Low Confidence): {low_conf} ({pct}%)
+- Downgraded: {downgraded} ({pct}%)
+- Discarded: {discarded} ({pct}%)
+
+{if discarded > 0}
+
+### Discarded Findings (Audit Trail)
+
+| # | Original Claim | Step | File:Line | Discard Reason |
+|---|---|---|---|---|
+| {id} | {original-description} | {step} | {file}:{line} | {FAILED: code not found / FAILED: pattern mismatch — {details}} |
+
+{end if}
+
+---
+
 ## Recommended Optimizations
 
 **Note:** Optimizations are categorized by layer (Frontend / Backend / Integration) when backend analysis is available.
 
-Optimizations are prioritized by estimated impact (time or size savings).
+Tactical optimizations are prioritized by estimated impact (time or size savings) and ordered
+so that prerequisite fixes appear before the optimizations that depend on them.
+Strategic optimizations are listed separately and represent architectural changes that set
+the long-term performance ceiling.
 
-| Priority | Optimization | Estimated Impact | Effort |
-|---|---|---|---|
-| 1 | {optimization-1} | {impact-1} | {effort-1} |
-| 2 | {optimization-2} | {impact-2} | {effort-2} |
-| 3 | {optimization-3} | {impact-3} | {effort-3} |
-| ... | ... | ... | ... |
+### Tactical Optimizations
+
+| Priority | Optimization | Confidence | Severity | Timeline | Prerequisite | Estimated Impact | Effort |
+|---|---|---|---|---|---|---|---|
+| 1 | {optimization-1} | {confidence-1} | {severity-1} | {timeline-1} | {prerequisite-1 or —} | {impact-1} | {effort-1} |
+| 2 | {optimization-2} | {confidence-2} | {severity-2} | {timeline-2} | {prerequisite-2 or —} | {impact-2} | {effort-2} |
+| 3 | {optimization-3} | {confidence-3} | {severity-3} | {timeline-3} | {prerequisite-3 or —} | {impact-3} | {effort-3} |
+| ... | ... | ... | ... | ... | ... | ... | ... |
+
+### Strategic / Architectural Optimizations
+
+> These changes define the long-term performance ceiling. They require more coordination
+> but are the only path to guaranteeing target SLAs at production dataset sizes.
+
+| Priority | Optimization | Confidence | Severity | Timeline | Prerequisite | Estimated Impact | Effort |
+|---|---|---|---|---|---|---|---|
+| S1 | {optimization} | {confidence} | {severity} | {timeline} | {prerequisite or —} | {impact} | {effort} |
+| ... | ... | ... | ... | ... | ... | ... | ... |
+
+{if no strategic optimizations: "No strategic/architectural optimizations identified — tactical fixes are sufficient to reach target SLAs."}
 
 **Effort Legend:**
 - **Low:** < 1 day of work
 - **Medium:** 1-3 days of work
 - **High:** > 3 days of work
+
+**Timeline Legend (per-finding implementation estimate):**
+- **< 1 hour:** Single-line or config change
+- **1–4 hours:** Single-file straightforward refactor
+- **0.5–1 day:** Multi-file change within one module
+- **1–3 days:** Cross-module refactor or new service method
+- **3–5 days:** Architectural change or new infrastructure
+- **> 5 days:** Major restructuring
 
 ---
 
