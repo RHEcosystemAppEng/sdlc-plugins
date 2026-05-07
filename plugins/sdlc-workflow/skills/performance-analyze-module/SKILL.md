@@ -25,8 +25,11 @@ You are an AI performance analysis assistant. You **inspect source code** to det
 ### Completeness Requirements (this skill)
 - All anti-patterns checked (Steps 6.1–6.9), even if zero instances found for each
 - All discovered endpoints analyzed in Step 7 (none silently omitted)
+- All backend sub-steps executed when `backend_available = true`: Steps 7.3–7.6.6 and 7.7 (each must produce findings or an explicit "No instances detected" / "Skipped — {reason}" entry)
 - All bundle sizes measured where stats are available
-- Complete analysis report written to file before Step 9 output summary
+- Complete analysis report written to file before Step 10 output summary
+- **Self-verification (Step 9.0) must pass before report is written** — no steps may be silently skipped
+- **Finding validation (Step 9.1) must pass before report is written** — no unverified findings may enter the report
 
 ### Error Handling (this skill)
 - Missing config → halt at Step 2 with remediation: run `performance-setup`
@@ -422,6 +425,11 @@ field is absent from frontend usage.
    - Check if the loop uses `await` (sequential) vs `Promise.all` (parallel)
    - Flag sequential loops with > 5 iterations as high severity
 
+3. **Check for missing `staleTime` on query hooks (React Query / TanStack Query):**
+   - For each `useQuery` or `useQueries` call in the workflow components, check whether `staleTime` is configured
+   - Absent `staleTime` defaults to `0` (immediately stale), causing a background refetch on every component mount or remount — this compounds with N+1 patterns since each navigation re-fires all queries
+   - Flag `useQuery`/`useQueries` calls without `staleTime` as severity **Medium** with the note: "Default staleTime: 0 causes refetch on every mount"
+
 **Severity classification:**
 - **High:** Loop with > 10 iterations calling API sequentially
 - **Medium:** Loop with 5-10 iterations calling API sequentially
@@ -561,6 +569,7 @@ service-layer indirection and Redux/saga chains.
      - Synchronous loops over large datasets (e.g., `.forEach` on arrays with > 1000 items)
      - JSON parsing of large payloads (e.g., `JSON.parse` of > 100KB strings)
      - DOM manipulation in loops (e.g., `document.createElement` inside loops)
+     - Spread inside `.reduce()` callbacks: patterns like `[...prev,`, `[...prev.slice()`, or `[...arrayWithout` create a new array copy per iteration, resulting in O(n²) memory allocations. Flag when the source array is derived from an API response of unknown size.
 
 **Severity classification:**
 - **High:** Long task > 200ms, or multiple tasks > 100ms
@@ -799,12 +808,32 @@ Fields:
 
 4. **Verify sequential execution:**
    - Check if queries are awaited inside loop (synchronous execution)
-   - vs. parallelized (Promise.all, async batch queries)
+   - vs. parallelized execution. The following patterns are NOT sequential N+1:
+
+   **JavaScript/TypeScript:** `Promise.all([...])`, `Promise.allSettled([...])`
+
+   **Rust async (NOT sequential — do NOT classify as N+1):**
+   - `tokio::try_join!(a, b)` / `tokio::join!(a, b, c)` — concurrent
+   - `futures::future::join_all(futures)` — concurrent collection
+   - `stream::iter(...).map(...).buffer_unordered(n)` — concurrent up to n
+   - `stream::iter(...).then(...).buffered(n)` — ordered concurrent up to n
+   - `.for_each_concurrent(limit, |item| async {...})` — concurrent
+   - `FuturesUnordered::new()` — unordered concurrent set
+
+   **Java:** `CompletableFuture.allOf(...)`, `ExecutorService.invokeAll(...)`, parallel streams (`.parallelStream()`)
+
+   **Python:** `asyncio.gather(...)`, `asyncio.wait(...)`, `ThreadPoolExecutor.map(...)`
+
+   **Partial mitigation:** When the outer loop is sequential (e.g., `for item in items { ... .await }`) but inner calls within each iteration use one of the above patterns, classify as:
+   - **Severity:** N+1 (outer loop severity applies as normal)
+   - **Mitigation note:** "Partial — inner calls within each iteration are already concurrent via {pattern}. The outer sequential loop still adds N × wall-clock time."
+   - Do NOT double-count the inner concurrent calls in the query ledger
 
 **Severity classification:**
-- **High:** > 10 queries in loop, sequential execution
-- **Medium:** 5-10 queries in loop, sequential execution
-- **Low:** < 5 queries in loop, or parallelized execution
+- **High:** > 10 sequential queries in loop
+- **Medium:** 5-10 sequential queries in loop
+- **Low:** < 5 sequential queries in loop, or loop body uses `buffer_unordered`/`try_join` (partial mitigation)
+- **None / Not N+1:** Entire iteration body is wrapped in a concurrent combinator (`Promise.all`, `join_all`, `buffer_unordered` replacing the loop) — do not report as a finding
 
 **Quantified impact:**
 - Estimated latency impact: `(n_queries - 1) * analysis_db_latency_ms`
@@ -1201,6 +1230,93 @@ If `find_symbol` returns no results, retry once with `substring_matching=true`. 
    - Unused JOINs (same logic as Step 7.6.1)
    - SELECT * patterns (same logic as Step 7.6)
    - Missing caching (same logic as Step 7.5)
+6a. **Detect cache-guarded code paths:**
+
+   Scan the callee's body for the **get-or-compute pattern**: a lookup on a shared data
+   structure with an early return on hit, followed by a computation path (miss) that ends
+   with an insert back into the same structure.
+
+   **6a-A. Serena path (`serena_mode = live`):**
+
+   1. Identify the get-or-compute pattern structurally:
+      - Look for a field access on `self` or a passed reference (e.g., `self.graph_cache`,
+        `self.inner.graph_cache`) followed by `.get(key)` with an early return on `Some`/hit.
+      - Locate the corresponding `.insert(key, value)`, `.put(key, value)`, `.set(key, value)`,
+        or `.store(key, value)` later in the same function body (miss path).
+
+   2. Resolve the field's concrete type by chaining struct lookups:
+      - Identify the struct type of `self` (from the `impl` block containing the callee).
+      - Use `mcp__{serena_instance}__find_symbol(name_path_pattern="StructName", include_body=true)`
+        to read the struct definition and locate the field (e.g., `graph_cache`).
+      - If the field access is chained (e.g., `self.inner.graph_cache`): first resolve the
+        type of `inner` from the parent struct, then find the `graph_cache` field on that
+        intermediate type. Repeat for each chaining level.
+      - Once the field's declared type is known, use
+        `mcp__{serena_instance}__find_declaration(relative_path=file, regex="(TypeName)")` if
+        the type is a project-local alias or wrapper, to resolve it to its concrete definition.
+
+   3. Confirm it is a cache (not a deduplication set or lookup table):
+      - **Classify as cache** if ANY of the following are true:
+        - Type name contains `Cache`, `Lru`, `Ttl`, `Memoize`, or `Cached`
+        - Type has methods indicating eviction/capacity: `capacity()`, `set_ttl()`,
+          `evict()`, `size_used()`, `len()` alongside `insert()`
+        - Type is a known cache crate: `quick_cache`, `moka`, `cached`, `lru`,
+          `mini_moka`, `stretto`, `caffeine`, `redis`, `memcached`
+      - **Classify as NOT a cache** (skip) if:
+        - Type is `HashSet` or the field is named `visited`, `seen`, `processed`,
+          `dedup`, or similar deduplication terminology
+        - Type is a plain `HashMap` with no capacity/eviction API AND the field name
+          does not contain `cache` (case-insensitive)
+      - **Ambiguous:** If the type is a plain `HashMap`/`DashMap` but the field name
+        contains `cache` (e.g., `self.result_cache`): classify as cache with
+        `confidence: medium` and add note: "Plain HashMap used as cache — no eviction
+        policy detected. Verify manually."
+
+   4. Set `confidence = "high"` for confirmed cache types.
+
+   **6a-B. Grep path (`serena_mode = down | not-configured`):**
+
+   1. Scan for lexical cache-check patterns (expanded list):
+      - **Rust:** `cache.get(`, `graph_cache.get(`, `_cache.get(`, `.cache.get(`
+      - **Java:** `.getIfPresent(`, `cache.get(`, `@Cacheable`, `cacheManager.getCache(`
+      - **Python:** `cache.get(`, `@lru_cache`, `@cached`, `@cache`
+      - **Node:** `cache.get(`, `redis.get(`, `lru.get(`
+
+   2. If a lexical match is found, apply the structural heuristic to reduce false positives:
+      - Verify the function body contains BOTH a get (with early return) AND a write-back
+        (`.insert(`, `.put(`, `.set(`, or `.store(`) into the same variable/field
+      - Check the field/variable name: if it contains `visited`, `seen`, `processed`, `dedup`,
+        classify as NOT a cache and skip
+      - If the field name contains `cache` (case-insensitive): classify as cache
+
+   3. Set `confidence = "medium"` for grep-detected caches. Add note in report:
+      "Cache detected via pattern matching — Serena MCP recommended for type-level
+      confirmation."
+
+   **6a-common. Actions after cache confirmation (both paths):**
+
+   - If a cache is confirmed:
+     - Record the cache-hit path in the call graph with annotation:
+       `← cached (0 queries on hit)`
+     - **Trace into the cache-miss path** (the code after the early return / in the
+       `else` branch). Apply the same call-graph tracing rules, continuing up to 2
+       additional depth levels beyond the cache check, stopping when a DB call
+       (query/execute) or external service boundary is reached. This ensures the
+       expensive miss-path query (e.g., a raw SQL with multiple JOINs) is captured
+       without tracing into library internals.
+       - Apply all anti-pattern checks (sub-step 6) to the miss path
+       - Add all queries found in the miss path to `query_ledger` with
+         `cache_gated: true`
+       - Annotate each with: "Cold cache only — amortized after first load"
+     - Record the cache-miss path cost separately in the call graph:
+       `← cached (hit: 0 queries / miss: K queries — see cold-cache ledger)`
+   - **If the callee is inside a sequential loop** (detected by loop context from parent):
+     - Flag as: "Sequential cache-miss loading — on cold cache, each iteration
+       blocks on DB"
+     - Add a standalone query ledger entry:
+       `Cold cache load: {queries_per_miss} × K queries (K = loop iteration count)`
+       with annotation: "One-time cost, amortized across subsequent cached requests"
+
 7. **Detect conditional query parameters (Memo/Option pattern):**
    - Scan the callee's function signature for parameters of type `Memo<T>`, `Option<T>`, or
      equivalent lazy-load wrappers
@@ -1291,13 +1407,23 @@ GET /v3/sbom/{id}/advisory
 
 **Query Ledger (table format, for report):**
 
-| # | Query | Source | Depth | Loop Mult. | Cond? | Effective Count |
-|---|---|---|---|---|---|---|
-| 1 | {description} | {file:line} | {depth} | {multiplier} | | {effective} |
-| **Total** | | | | | | **{total_queries}** |
+| # | Query | Source | Depth | Loop Mult. | Cond? | Cache? | Effective Count |
+|---|---|---|---|---|---|---|---|
+| 1 | {description} | {file:line} | {depth} | {multiplier} | | | {effective} |
+| **Total (all requests)** | | | | | | | **{total}** |
+| **Total (warm cache)** | | | | | | | **{warm_total}** |
+| **Total (cold cache)** | | | | | | | **{cold_total}** |
 
 **†** Conditional query — fires only when caller passes `Memo::NotProvided` / `None`.
 See Conditional Query Patterns section for caller analysis. Mark with `†` in the `Cond?` column.
+
+**‡** Cache-gated query — fires only on cache miss (cold cache). Mark with `‡` in the `Cache?` column.
+Queries WITHOUT `‡` fire on every request regardless of cache state (cache-bypass queries).
+
+**Warm-cache vs cold-cache totals:** The "warm cache" total excludes `‡`-marked queries.
+The difference between warm and cold totals quantifies the one-time cold-cache penalty.
+If warm-cache total is still high, cache-bypass queries dominate response time and
+must be fixed before the cache delivers meaningful improvement.
 
 **Multiplier propagation:** For each query in the ledger, walk the `call_graph` from handler root to the query's source symbol. If any edge on the path is inside a loop, multiply the query count by the loop's iteration count. The effective count for a query is:
 ```
@@ -1305,6 +1431,8 @@ effective_count = product(loop_multipliers on path from root to query)
 ```
 
 **Estimated total DB latency:** `total_queries * analysis_db_latency_ms` (using configured DB Query Base Latency)
+
+**Zero-result propagation check:** After building the query ledger, identify queries that load entities keyed on IDs collected from a preceding query's result set (e.g., bulk fetches using `PgFunc::any(ids)`, `WHERE id IN (?)`). If the preceding query can return zero results, check whether the downstream bulk fetch is guarded (e.g., `if ids.is_empty() { return Ok(vec![]) }`) or fires unconditionally. Unconditional bulk fetches on potentially-empty ID sets add round-trips that return zero rows — flag as wasted computation with severity **Medium** and the note: "Fires even when preceding query returns no results."
 
 ---
 
@@ -1493,6 +1621,68 @@ detection.
 duplication (e.g., two different endpoints sharing CTEs) is out of scope — it would be caught
 if both handlers are analyzed for the same workflow.
 
+### Step 7.6.6 – Cache Effectiveness Analysis
+
+**Purpose:** Cross-reference cache effectiveness data from the baseline (Step 4) with
+the query ledger (Step 7.6.2) to identify endpoints where an application-level cache exists
+but provides minimal improvement because cache-bypass queries dominate response time.
+
+**Prerequisites:**
+- Query ledger from Step 7.6.2 with `cache_gated` annotations (from sub-step 6a)
+- Baseline cache data from Step 4
+
+**Guard condition:** Only apply this step to endpoints that have a confirmed cache-hit
+path — either detected in Step 7.6.2 sub-step 6a (cache-guarded code path found) or
+identified in Step 7.5 (existing cache usage detected). If an endpoint has NO cache at all,
+skip it here — the missing cache is already reported by Step 7.5.
+
+**Detection approach:**
+
+**For each endpoint with a confirmed cache AND baseline cache data:**
+
+1. **Extract cache improvement from baseline:**
+   - Read `cache.improvement_pct` and `cache.status` from `benchmark-results.json`
+   - If baseline data is not available for this endpoint (e.g., baseline not yet captured):
+     record "No baseline data — run `/sdlc-workflow:performance-baseline` to measure
+     cache effectiveness" and skip to the next endpoint
+
+2. **Partition the query ledger into cache-gated vs cache-bypass queries:**
+   - Cache-gated queries: marked with `cache_gated: true` (fires only on cold cache)
+   - Cache-bypass queries: all other queries in the ledger (fires on every request)
+   - Calculate: `warm_cache_queries = sum(effective_count for cache-bypass queries)`
+   - Calculate: `total_queries = sum(effective_count for all queries)`
+
+3. **Determine if cache-bypass queries dominate:**
+   - If `total_queries == 0`: skip (no queries found — unlikely but guard against division by zero)
+   - Calculate: `bypass_ratio = warm_cache_queries / total_queries`
+   - If `bypass_ratio > 0.5`: cache-bypass queries dominate — the cache avoids
+     less than half of the endpoint's total query cost
+
+4. **Identify blocking findings:**
+   - List each cache-bypass query and trace it back to the anti-pattern finding
+     that produces it (e.g., "N+1 Instance 5: collect_package per-node external resolution")
+   - These findings MUST be fixed before the cache can deliver meaningful improvement
+
+**Severity classification:**
+- **High:** Cache exists, baseline improvement < 20%, bypass_ratio > 0.5,
+  and endpoint p95 > optimization target
+- **Medium:** Cache exists, baseline improvement < 20%, bypass_ratio 0.25–0.5
+- **Low:** Cache exists, baseline improvement 20–50% (partial benefit)
+- **N/A:** No cache detected (reported by Step 7.5 instead)
+
+**Report format per finding:**
+```
+Endpoint: {method} {path}
+Cache Type: {description — e.g., "In-memory LRU graph cache"}
+Baseline Cache Improvement: {improvement_pct}% ({cold_ms}ms → {warm_ms}ms)
+Cache-Gated Queries: {count} ({cache_gated_latency}ms) — avoided on warm cache
+Cache-Bypass Queries: {count} ({bypass_latency}ms) — fire on EVERY request
+Bypass Dominance: {bypass_pct}% of total queries fire regardless of cache
+Blocking Findings: {list of N+1/anti-pattern findings that produce bypass queries}
+Recommendation: Fix {blocking_finding_names} BEFORE investing in cache improvements.
+  Current cache saves only {improvement_pct}% because bypass queries dominate.
+```
+
 ## Step 7.7 – Backend Dynamic Performance Testing
 
 **Purpose:** Validate static analysis findings with actual HTTP benchmarking when the backend is running.
@@ -1609,7 +1799,7 @@ done
 
 Dynamic results are already stored in the associative array and saved to `dynamic-results.sh`.
 
-Report generation (Step 9.2) will source this file and create the Dynamic Performance Testing section.
+Report generation (Step 9.3) will source this file and create the Dynamic Performance Testing section.
 
 **Note:** Static analysis Step 7 produces unstructured markdown narrative (e.g., "Estimated Overhead: 100ms per query"). Automated parsing is not reliable. The report will include a comparison table populated from the dynamic_results array, with manual instructions for comparing against static estimates.
 
@@ -1759,17 +1949,263 @@ Recommendation: Create lightweight /v3/advisory/summary endpoint returning only
 
 Create a comprehensive analysis report at `{analysis-directory}/workflow-analysis-report.md`.
 
-### Step 9.1 – Determine Analysis Report Location
+### Step 9.0 – Pre-Report Completeness Verification
+
+**Purpose:** Verify that ALL analysis steps were executed (or explicitly skipped with a documented reason) before generating the report. This prevents silently omitting checks due to context loss, early termination, or oversight.
+
+**This step is MANDATORY and must not be skipped.**
+
+**Procedure:** Walk through the checklist below. For each step, verify that either (a) findings were recorded, (b) "No instances detected" was recorded, or (c) a skip reason was documented. If any step is missing all three, **stop and complete it before proceeding to Step 9.1.**
+
+#### Frontend Analysis Checklist (skip entire section if `metric_type = "backend"`)
+
+| Step | Check | Status |
+|---|---|---|
+| 5.1 | Bundle stats located (or noted unavailable) | ☐ |
+| 5.2 | Third-party libraries identified | ☐ |
+| 5.3 | Module-specific vs shared code ratio calculated | ☐ |
+| 6.1 | Over-Fetching Detection completed | ☐ |
+| 6.2 | N+1 Query Detection completed (including staleTime check) | ☐ |
+| 6.3 | Waterfall Loading Detection completed | ☐ |
+| 6.4 | Render-Blocking Resources Detection completed | ☐ |
+| 6.5 | Unused Code Detection completed | ☐ |
+| 6.6 | Expensive Re-Render Detection completed | ☐ |
+| 6.7 | Long Task Detection completed (including spread-in-reduce) | ☐ |
+| 6.8 | Layout Thrashing Detection completed | ☐ |
+| 6.9 | Missing Lazy Loading Detection completed | ☐ |
+
+#### Backend Analysis Checklist (skip entire section if `backend_available = false` or `metric_type = "frontend"`)
+
+| Step | Check | Status |
+|---|---|---|
+| 6.10 | Serena Availability Probe executed, `serena_mode` set | ☐ |
+| 7.1 | Backend handler located for EACH endpoint from Step 6.1 | ☐ |
+| 7.2 | Backend response schema extracted for EACH endpoint | ☐ |
+| 7.3 | Backend N+1 Query Detection completed | ☐ |
+| 7.4 | Missing Pagination Detection completed | ☐ |
+| 7.5 | Missing Caching Detection completed | ☐ |
+| 7.6 | Inefficient Query Detection (SELECT *, unused columns) completed | ☐ |
+| 7.6.1 | Unused Table Join Detection completed | ☐ |
+| 7.6.2 | Deep Service Chain Analysis completed (call graph + query ledger built) | ☐ |
+| 7.6.3 | Wasted Computation Detection completed (handler field usage vs return type) | ☐ |
+| 7.6.4 | Missing Index Detection completed (migration files scanned for index coverage) | ☐ |
+| 7.6.5 | Inter-Query Duplication Detection completed (shared CTEs/subqueries checked) | ☐ |
+| 7.6.6 | Cache Effectiveness Analysis completed (bypass dominance checked against baseline, or skipped if no cache detected) | ☐ |
+| 7.7 | Dynamic Testing executed OR skip reason documented (e.g., backend not running, curl unavailable) | ☐ |
+
+#### Cross-Reference Checklist (skip if `backend_available = false`)
+
+| Step | Check | Status |
+|---|---|---|
+| 8 A-E | Cross-reference over-fetching completed for ALL endpoints | ☐ |
+| 8.F | Cross-layer computation waste detection completed OR skip reason documented | ☐ |
+
+#### Verification Actions
+
+1. **Review the checklist above.** For each ☐ that cannot be marked as done:
+   - If the step was accidentally skipped: **go back and execute it now** before proceeding
+   - If the step was legitimately skipped (prerequisites not met, feature not applicable): record the skip reason in the report under that step's section (e.g., "Step 7.7 skipped — backend service not running on configured port")
+
+2. **Confirm no endpoints were silently dropped.** Compare the list of endpoints discovered in Step 6.1 against the endpoints analyzed in Steps 7.1–7.6.5 and Step 8. Every endpoint must appear in both lists or have a documented reason for exclusion.
+
+3. **Confirm query ledger completeness.** If Step 7.6.2 produced a query ledger, verify that Steps 7.6.3, 7.6.4, 7.6.5, and 7.6.6 consumed it. These steps depend on the ledger and must not be skipped when it exists.
+
+**Only proceed to Step 9.1 when all applicable checklist items are verified.**
+
+### Step 9.1 – Finding Validation and Self-Check
+
+**Purpose:** Re-examine every finding from Steps 5–8 by going back to source code evidence, verifying that the reported code actually exists and matches the claimed pattern, checking for known false-positive scenarios, and assigning per-instance confidence, severity, and implementation timeline. Discard or downgrade findings that fail validation. This step prevents hallucinated, stale, or misleading findings from entering the report.
+
+**This step is MANDATORY and must not be skipped.**
+
+**Procedure:** Process ALL findings collected from Steps 5–8 that have at least one detected instance. For each anti-pattern type that reported zero instances ("No instances detected"), skip validation for that type.
+
+#### Step 9.1-A – Build Findings Inventory
+
+Construct an in-context table listing every finding instance from Steps 5–8:
+
+| # | Anti-Pattern | Step | File:Line | Detection Method | Original Confidence | Original Severity |
+|---|---|---|---|---|---|---|
+| F1 | {type} | {step-number} | {file}:{line} | {Serena/Grep/Inference} | {High/Medium/Low} | {Critical/High/Medium/Low} |
+| F2 | ... | ... | ... | ... | ... | ... |
+
+Assign each finding a unique ID (F1, F2, ...) that will be used through the remainder of this step and in the report.
+
+#### Step 9.1-B – Source Code Re-Verification
+
+**For EACH finding in the inventory:**
+
+1. **Re-read the source file at the reported location.** Use the same tool that was used in the detection step (Serena `find_symbol` with `include_body=true` if `serena_mode = live`, otherwise Read tool). Read enough context to verify the finding (the reported line plus at least 10 lines before and after).
+
+2. **Apply the existence check:**
+   - Does the file still exist at the reported path?
+   - Does the code at the reported line number match the snippet stored for this finding?
+   - If the line number is off (file was not modified, so this indicates an earlier recording error), search within ±20 lines for the pattern. If found at a different line, update the line number and continue. If not found, mark the finding as **FAILED: code not found**.
+
+3. **Apply the pattern match check:**
+   - Does the code actually exhibit the anti-pattern as claimed?
+   - For N+1 queries: Is there actually a query inside a loop? Is the loop actually iterating (not a single-item collection)?
+   - For over-fetching: Are the fields marked "unused" truly not accessed? Re-check destructuring, prop drilling, and dynamic access patterns.
+   - For unused JOINs: Is the joined table's data really not used in SELECT, WHERE, response mapping, or downstream callers?
+   - For missing caching: Is there really no cache layer? Check for caching at other layers (middleware, proxy, CDN) that the detection step may have missed.
+   - For missing pagination: Does the endpoint truly return unbounded results, or is pagination handled by a framework middleware?
+   - For wasted computation: Are the "unused" fields really unused, or accessed via serialization, logging, or audit?
+   - If the pattern does not match the claim, mark the finding as **FAILED: pattern mismatch** with the specific discrepancy.
+
+#### Step 9.1-C – False-Positive Risk Assessment
+
+**For EACH finding that passed Step 9.1-B**, evaluate against known false-positive patterns:
+
+| Anti-Pattern | False-Positive Risk Factors |
+|---|---|
+| Over-Fetching (6.1, 8) | Field used via spread (`...data`), passed to third-party library, used in test/debug mode only, accessed via computed property name |
+| N+1 Queries (6.2, 7.3) | Loop body uses `Promise.all` or batch variant; loop iterates over a fixed small set (< 3 items); query result is cached across iterations |
+| Waterfall Loading (6.3) | Resources have cache headers and are warm on navigation; dependency chain is unavoidable (auth token needed before API call) |
+| Render-Blocking (6.4) | Resource is critical CSS intentionally inlined; script is a polyfill that must run before app code |
+| Unused Code (6.5) | Code used via dynamic import, reflection, or string-based registration; code is in a shared library used by other apps |
+| Expensive Re-Renders (6.6) | Component is a leaf node with trivial render cost; memoization exists at a parent level |
+| Long Tasks (6.7) | Code is in a Web Worker (off-main-thread); operation runs once at app startup, not during user interaction |
+| Layout Thrashing (6.8) | Read and write are in separate animation frames (`requestAnimationFrame`); browser batches the operations |
+| Missing Lazy Loading (6.9) | Component is above the fold (visible on initial load); route chunk is small (< 5 KB) |
+| Backend N+1 (7.3) | Query is inside a conditional branch that rarely executes; collection is bounded by a LIMIT clause |
+| Missing Pagination (7.4) | Table has a known small cardinality (< 50 rows in production); endpoint is admin-only with negligible traffic |
+| Missing Caching (7.5) | Data is user-specific and not cacheable; data changes on every request (real-time feed) |
+| Inefficient Queries (7.6) | ORM requires SELECT * for correct deserialization; columns are needed for computed fields not visible in response |
+| Unused JOINs (7.6.1) | JOIN is for filtering (WHERE clause references joined table); JOIN is for ordering (ORDER BY uses joined column); fields are accessed via ORM relationship lazy-loading |
+| Wasted Computation (7.6.3) | Service method is shared with other endpoints that use all fields; unused fields are cheap (no DB queries) |
+| Conditional Queries (7.6.2) | Caller always passes the pre-loaded variant at runtime; function is called once (no loop multiplier) |
+| SQL Duplication (7.6.5) | Database query planner deduplicates identical CTEs automatically; duplicate runs are in separate transactions intentionally |
+| Missing Indexes (7.6.4) | Table is small enough that sequential scan is faster than index lookup; column has low cardinality making index ineffective |
+| Cache Effectiveness (7.6.6) | Bypass queries are cheap (< 1ms each); cache improvement was measured against the wrong baseline |
+| Cross-Layer Waste (8.F) | Frontend will use the fields in a future feature (known roadmap item); fields are needed for SEO/meta tags not visible in component render |
+
+**For each finding**, check whether any risk factors from the table above apply:
+- If the risk factor can be resolved by re-reading the code (e.g., "check for destructuring"): do so now and record the result
+- If the risk factor cannot be resolved by static analysis (e.g., "table cardinality in production"): note it as an unresolvable risk and factor it into the confidence score (Step 9.1-D)
+
+#### Step 9.1-D – Assign Per-Instance Confidence Score
+
+**For EACH finding that passed Step 9.1-B**, compute a per-instance confidence score.
+
+**Confidence = min(Detection Method Confidence, Evidence Strength) adjusted by False-Positive Risk**
+
+**1. Detection Method Confidence** (from the existing three-tier system):
+
+| Method | Base Confidence |
+|---|---|
+| Serena semantic analysis with `include_body=true` | High |
+| Raw SQL with clear textual evidence | High |
+| Grep pattern match with strong structural context | Medium |
+| Complex ORM where field usage is ambiguous | Medium |
+| Depth-0 chain analysis | Medium |
+| Dynamic queries, runtime-determined patterns | Low |
+| Grep at depth > 0 in call chain | Low |
+| Control flow ambiguity (conditional branches) | Low |
+
+**2. Evidence Strength** (from Step 9.1-B re-verification):
+
+| Evidence | Strength |
+|---|---|
+| Code re-read confirmed the exact pattern at the reported line | High |
+| Code re-read confirmed the pattern but at a different line number | Medium |
+| Code re-read confirmed the file exists but pattern is ambiguous | Low |
+
+**3. False-Positive Risk Adjustment** (from Step 9.1-C):
+
+| Risk Level | Adjustment |
+|---|---|
+| No false-positive risk factors apply | No change |
+| 1 risk factor applies but was resolved by re-reading code (confirmed not false positive) | No change |
+| 1 risk factor applies and could not be resolved by static analysis | Downgrade one level (High → Medium, Medium → Low) |
+| 2+ unresolvable risk factors apply | Downgrade to Low |
+
+**Final Confidence Assignment:**
+
+- **High**: Detection method = High, evidence = High, no unresolvable risk factors
+- **Medium**: Any component is Medium, or one unresolvable risk factor downgraded a High
+- **Low**: Any component is Low, or multiple unresolvable risk factors
+
+Record the final confidence and the reason chain: `"Detection: {X}, Evidence: {Y}, Risk: {Z} ⇒ Final: {result}"`.
+
+#### Step 9.1-E – Assign Per-Instance Severity
+
+Each detection step already defines severity rubrics (e.g., "> 50% unused fields = High"). Apply those rubrics to the specific instance using the actual quantified values from the detection step:
+
+1. Re-read the anti-pattern type's severity classification from the detection step
+2. Evaluate the instance's actual metrics against the thresholds
+3. Assign the severity level: Critical, High, Medium, or Low
+
+If the finding's quantified impact changed during re-verification (e.g., re-reading revealed fewer unused fields than initially counted), recalculate severity using the corrected values.
+
+#### Step 9.1-F – Assign Per-Instance Implementation Timeline
+
+For each validated finding, estimate implementation effort:
+
+| Timeline | Criteria | Examples |
+|---|---|---|
+| **< 1 hour** | Single-line change, configuration toggle, attribute addition | Add `async`/`defer` to a script tag; add an existing database index to a migration |
+| **1–4 hours** | Single-file change, straightforward refactor, parameter addition | Add `staleTime` to a `useQuery` call; add `.select()` to narrow query columns; wrap component in `React.memo` |
+| **0.5–1 day** | Multi-file change within one module, moderate refactor | Batch N+1 queries with `WHERE id IN (...)`; add pagination to an endpoint; implement `React.lazy` for a route |
+| **1–3 days** | Cross-module refactor, new service method, API change | Create specialized DTO to eliminate over-fetching; extract service method for field projection; implement caching layer |
+| **3–5 days** | Architectural change, new infrastructure, cross-team coordination | Bundle splitting strategy; replace third-party library; redesign endpoint schema; add Redis caching tier |
+| **> 5 days** | Major restructuring, new system component | Migrate to GraphQL; re-architect data loading pipeline; implement materialized views |
+
+Base the estimate on:
+- Number of files that must be changed
+- Whether existing tests must be updated or new tests written
+- Whether the fix requires API contract changes (breaking vs. non-breaking)
+- Whether the fix requires infrastructure changes (new dependencies, configuration)
+
+#### Step 9.1-G – Validation Verdict and Disposition
+
+**For EACH finding**, assign a disposition:
+
+| Disposition | Criteria | Action |
+|---|---|---|
+| **Confirmed** | Passed source re-verification (9.1-B), no unresolvable false-positive risks, confidence ≥ Medium | Include in report with full details |
+| **Confirmed (Low Confidence)** | Passed source re-verification, but confidence = Low due to detection method or unresolvable risk factors | Include in report with explicit "Low Confidence — requires manual verification" flag |
+| **Downgraded** | Passed source re-verification, but quantified impact was corrected downward during re-verification (e.g., fewer unused fields than originally counted, lower loop iteration count) | Include in report with corrected values; update severity if thresholds change |
+| **Discarded** | Failed source re-verification (code not found, pattern mismatch), OR failed multiple false-positive checks with high confidence that the finding is invalid | **Exclude from report entirely** |
+
+#### Step 9.1-H – Produce Validation Summary
+
+Construct a validation summary table:
+
+| Finding | Anti-Pattern | Disposition | Confidence | Severity | Timeline | Reason |
+|---|---|---|---|---|---|---|
+| F1 | {type} | Confirmed | High | High | 1–3 days | Code verified, Serena detection, no risk factors |
+| F2 | {type} | Downgraded | Medium | Medium | 0.5–1 day | Field count corrected: 8 → 5 unused fields |
+| F3 | {type} | Discarded | — | — | — | Code at line 142 no longer matches; function was refactored |
+| F4 | {type} | Confirmed (Low Confidence) | Low | Medium | 1–4 hours | Grep-based detection at depth 2; runtime cardinality unknown |
+
+**Validation statistics (include in report):**
+- Findings submitted for validation: {total_count}
+- Confirmed: {confirmed_count} ({confirmed_pct}%)
+- Confirmed (Low Confidence): {low_confidence_count} ({low_confidence_pct}%)
+- Downgraded: {downgraded_count} ({downgraded_pct}%)
+- Discarded: {discarded_count} ({discarded_pct}%)
+
+**If discarded_count > 0:** Log each discarded finding with its ID, original claim, and discard reason. This audit trail ensures transparency.
+
+**If confirmed_count + low_confidence_count + downgraded_count = 0:** All findings were discarded. Proceed to Step 9.2 and generate a report noting that no validated findings remain.
+
+**Carry forward:** Only Confirmed, Confirmed (Low Confidence), and Downgraded findings proceed to Steps 9.2–9.6. Discarded findings do not appear in the report except in the Finding Validation Summary.
+
+**Only proceed to Step 9.2 when all findings have been assigned a disposition.**
+
+### Step 9.2 – Determine Analysis Report Location
 
 Read the **Target Directories** section from performance-config.md and extract the analysis directory path (e.g., `.claude/performance/analysis/`).
 
 Construct the report filename: `workflow-analysis-report.md`
 
-### Step 9.2 – Report Structure
+### Step 9.3 – Report Structure
 
 The report must include sections appropriate to the metric_type:
 
-Read the analysis report template from `plugins/sdlc-workflow/skills/performance/performance-analysis-report.template.md` in the plugin cache and populate it with the collected data from Steps 2-8.
+Read the analysis report template from `plugins/sdlc-workflow/skills/performance/performance-analysis-report.template.md` in the plugin cache and populate it with the collected data from Steps 2–8.
+
+**Important:** Only findings with disposition Confirmed, Confirmed (Low Confidence), or Downgraded from Step 9.1 may be populated into anti-pattern sections. Discarded findings are excluded from all sections except the Finding Validation Summary. Each anti-pattern instance must include its per-instance confidence, severity, and implementation timeline from Step 9.1.
 
 **If metric_type = "frontend" or "hybrid":**
 
@@ -1787,6 +2223,7 @@ Include sections:
 - Wasted computation findings (from Step 7.6.3)
 - Conditional query pattern findings (from Step 7.6.2 extended — Memo/Option detection)
 - Inter-query SQL duplication findings (from Step 7.6.5)
+- Cache effectiveness analysis with bypass dominance findings (from Step 7.6.6)
 - Missing database index findings (from Step 7.6.4)
 - Cross-layer computation waste findings (from Step 8.F, only when analysis_scope is full-stack)
 - Dynamic performance testing results (if Step 7.7 executed)
@@ -1796,7 +2233,7 @@ Include sections:
 
 Include BOTH frontend and backend sections above.
 
-### Step 9.3 – Calculate Overall Performance Rating
+### Step 9.4 – Calculate Overall Performance Rating
 
 Based on the workflow metrics and metric_type, assign an overall rating:
 
@@ -1821,20 +2258,64 @@ Compare backend metrics against targets from Optimization Targets table:
 Calculate separate ratings for frontend and backend, then combine:
 - Overall = worst of (frontend_rating, backend_rating)
 
-### Step 9.4 – Prioritize Optimizations
+### Step 9.5 – Prioritize Optimizations
 
-Sort all detected anti-patterns by estimated impact (time or size savings) descending.
+Sort all validated findings (from Step 9.1, dispositions: Confirmed, Confirmed (Low Confidence), Downgraded) by estimated impact (time or size savings) descending.
 
 **Impact estimation using query ledger data:** When the deep service chain analysis (Step 7.6.2) has produced a query ledger, use the total estimated queries per endpoint as the primary impact metric for backend optimizations. An endpoint with 73 total queries (accounting for loop multipliers) should rank higher than one with 3 surface-level N+1 instances.
+
+**Cache-bypass priority adjustment:** When Step 7.6.6 identifies cache-bypass queries that
+dominate an endpoint's warm-cache response time, the findings producing those bypass queries
+must be prioritized ABOVE cache-related optimizations for that endpoint. Rationale: adding
+or improving a cache delivers no benefit while bypass queries dominate.
+
+**Prioritized optimization table format:**
+
+| Priority | Optimization | Confidence | Severity | Timeline | Prerequisite | Estimated Impact | Effort |
+|---|---|---|---|---|---|---|---|
+| 1 | Fix collect_package N+1 | High | High | 1–3 days | — | Eliminate 601 bypass queries | Medium |
+| 2 | Cache ranking results | Medium | Medium | 1–3 days | Fix #1 first | Reduce repeat requests 120s→<100ms | Medium |
+
+- **Confidence** and **Severity** come from Step 9.1-D and 9.1-E respectively
+- **Timeline** comes from Step 9.1-F (per-finding implementation estimate)
+- **Prerequisite** notes dependencies (e.g., cache-bypass findings must be fixed before cache improvements); use "—" when none
+
+**Prerequisite column rules (mandatory):**
+- The `Prerequisite` column MUST be populated for every row — use "—" for optimizations with no prerequisites
+- Use "Fix #N first" for optimizations that will deliver no measurable benefit until another fix is applied (e.g., caching an endpoint that still times out due to N+1)
+- When ordering the table, prerequisite fixes MUST appear before the optimizations that depend on them, regardless of raw impact score
 
 Assign effort estimates based on:
 - **Low effort:** Configuration changes, adding `async`/`defer` attributes, removing unused imports, adding indexes
 - **Medium effort:** Refactoring API calls, adding memoization, implementing lazy loading, batching N+1 queries
 - **High effort:** Bundle splitting, architecture changes, replacing third-party libraries, creating new service methods
 
-Generate the prioritized optimization table with the top 10 recommendations.
+Generate the tactical prioritized optimization table with the top 10 recommendations.
 
-### Step 9.5 – Write Report to File
+**Tactical vs Strategic classification (mandatory when applicable):**
+
+After the tactical optimization table, classify each remaining optimization as Strategic if it meets ANY of the following criteria:
+- Requires a materialized view, denormalized table, or computed column
+- Requires a background job or event-driven pre-computation
+- Requires changing the data model or ingestion pipeline
+- Is the only fix that reaches the target SLA regardless of dataset size (i.e., tactical fixes reduce cost but don't eliminate the scaling bottleneck)
+
+If any Strategic optimizations are identified, add a separate table:
+
+**Strategic / Architectural Optimizations**
+
+> These changes define the long-term performance ceiling. They require more coordination
+> but are the only path to guaranteeing target SLAs at production dataset sizes.
+
+| Priority | Optimization | Confidence | Severity | Timeline | Prerequisite | Estimated Impact | Effort |
+|---|---|---|---|---|---|---|---|
+| S1 | {optimization} | {confidence} | {severity} | {timeline} | {prerequisite} | {impact} | {effort} |
+
+Use `S1`, `S2`, ... numbering for strategic items to distinguish them from tactical priorities.
+
+For each strategic optimization, add a note explaining WHY it is strategic: what scaling limit the tactical fixes cannot address, and what production dataset size triggers the ceiling.
+
+### Step 9.6 – Write Report to File
 
 Write the generated report to `{analysis-directory}/workflow-analysis-report.md`.
 
@@ -1854,6 +2335,8 @@ Report to the user:
 > - {finding-3}
 >
 > **Top Optimization:** {top-optimization} — Estimated impact: {impact}
+>
+> **Validation:** {confirmed_count} confirmed, {downgraded_count} downgraded, {discarded_count} discarded
 >
 > {dynamic-testing-summary-if-executed}
 >
@@ -1893,3 +2376,4 @@ Where `{warnings-if-any}` includes warnings for critical issues:
 - **Backend schema extraction is mandatory when backend_available = true:** Always search for struct/class definitions and extract all fields. Do not write "Cannot confirm without schema" without documenting exhaustive search attempts and specific failures
 - **Unused table join detection (Step 7.6.1) is required for backend analysis:** When analyzing backend queries, always check for JOIN operations and verify that fields from joined tables are actually used in SELECT clauses, WHERE conditions, handler logic, or response schemas. Flag joins where no fields are accessed as optimization opportunities
 - **Backend-only mode analysis:** When `analysis_scope = "backend-only"`, skip all frontend anti-pattern detection steps (Steps 5-6) and focus exclusively on backend analysis (Step 7). No browser metrics will be available in backend-only mode
+- **Finding validation is mandatory:** Every finding must pass source re-verification (Step 9.1) before inclusion in the report. Discarded findings are logged with their discard reason but excluded from all report sections except the Finding Validation Summary
