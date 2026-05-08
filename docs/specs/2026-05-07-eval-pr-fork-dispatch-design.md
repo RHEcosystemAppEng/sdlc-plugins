@@ -43,8 +43,7 @@ Fork PR opened
 │  eval-pr.yml (pull_request)  │  No secrets needed
 │  1. Checkout                 │
 │  2. Discover changed skills  │
-│  3. Upload artifact          │
-│     (skills, PR#, SHA, author)│
+│  3. Upload artifact (skills)  │
 └──────────────┬───────────────┘
                │ workflow_run (completed)
                ▼
@@ -52,9 +51,10 @@ Fork PR opened
 │  eval-pr-run.yml (workflow_run)      │  Base repo context — secrets available
 │                                      │
 │  Job 1: discover                     │
-│  - Download artifact                 │
+│  - Download artifact (skills only)    │
+│  - Resolve PR identity via GitHub API│
 │  - Check collaborator permission     │
-│  - Output: trusted, skills, PR#, SHA │
+│  - Output: trusted, skills, PR#     │
 │                                      │
 │  Job 2: gate                         │
 │  - Runs ONLY if trusted != true      │
@@ -102,16 +102,15 @@ Reduced from `contents: read` + `pull-requests: write` — this workflow no long
 
 1. **Checkout** — `actions/checkout@v4` with `fetch-depth: 0`
 2. **Discover changed skills** — existing logic, unchanged (git diff against PR base, map to eval suites)
-3. **Write metadata file** — write `eval-pr-metadata.json` with PR context:
+3. **Write metadata file** — write `eval-pr-metadata.json` with discovered skills:
 
 ```json
 {
-  "skills": "skill1,skill2",
-  "pr_number": 90,
-  "head_sha": "abc123def",
-  "author": "username"
+  "skills": "skill1,skill2"
 }
 ```
+
+The artifact carries only the discovery result. PR identity (number, author) is derived from the GitHub API in Stage 2 to prevent spoofing via artifact poisoning.
 
 4. **Upload artifact** — `actions/upload-artifact@v4` with name `eval-pr-metadata`, containing the `eval-pr-metadata.json` file.
 
@@ -159,33 +158,34 @@ Downloads the artifact and determines trust level. Skips early if the triggering
     github-token: ${{ secrets.GITHUB_TOKEN }}
 ```
 
-3. **Parse metadata and check trust** via `actions/github-script@v7`:
+3. **Validate skills and resolve PR identity** via `actions/github-script@v7`:
+   - Validate `skills` format against `^[a-z0-9-]+(,[a-z0-9-]+)*$` (artifact is untrusted)
+   - Resolve PR number and author from GitHub API via `listPullRequestsAssociatedWithCommit` using `workflow_run.head_sha`, filtered to open PRs targeting `main`
+   - Check collaborator permission level for the API-derived author
 
 ```javascript
-const metadata = JSON.parse(fs.readFileSync('eval-pr-metadata.json', 'utf8'));
-
-let trusted = false;
-try {
-  const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
-    owner: context.repo.owner,
-    repo: context.repo.repo,
-    username: metadata.author
-  });
-  trusted = ['admin', 'write'].includes(data.permission);
-} catch (e) {
-  // Non-collaborators may 404 — treat as untrusted
-  trusted = false;
-}
+const headSha = context.payload.workflow_run.head_sha;
+const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+  owner: context.repo.owner, repo: context.repo.repo, commit_sha: headSha
+});
+const pr = prs.filter(p => p.state === 'open' && p.base.ref === 'main')[0];
+const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
+  owner: context.repo.owner, repo: context.repo.repo, username: pr.user.login
+});
+const trusted = ['admin', 'write'].includes(data.permission);
 ```
 
-4. **Set outputs**: `skills`, `pr_number`, `head_sha`, `author`, `trusted`
+4. **Set outputs**: `skills`, `pr_number`, `author`, `trusted`
 
 ### Job 2: gate
 
 ```yaml
 gate:
   needs: discover
-  if: needs.discover.outputs.trusted != 'true' && needs.discover.outputs.skills != ''
+  if: >-
+    needs.discover.result == 'success' &&
+    needs.discover.outputs.trusted != 'true' &&
+    needs.discover.outputs.skills != ''
   runs-on: ubuntu-latest
   environment: eval-protected
   steps:
@@ -201,6 +201,7 @@ run-evals:
   needs: [discover, gate]
   if: >-
     !cancelled() &&
+    needs.discover.result == 'success' &&
     needs.discover.outputs.skills != '' &&
     (needs.discover.outputs.trusted == 'true' || needs.gate.result == 'success')
   runs-on: ubuntu-latest
@@ -250,6 +251,8 @@ All other PR authors. Their eval runs require a reviewer to click "Approve" in t
 ### Security Properties
 
 - The `workflow_run` workflow executes on the base repository's default branch — a fork PR cannot modify the workflow definition or trust logic
+- PR identity (number, author) is derived from the GitHub API via `listPullRequestsAssociatedWithCommit`, not from the artifact — prevents spoofing via artifact poisoning
+- The artifact carries only the `skills` CSV, validated against an allowlist regex — it has no influence on PR routing or trust decisions
 - The collaborator permission check uses GitHub's API, not a file in the repo — it cannot be manipulated by a PR
 - Once approved, the workflow does execute skill files from the PR with access to secrets via environment variables — this is inherent to the use case (evaluating skills requires running them)
 - The `dontAsk` permission mode with explicit `--allowedTools` limits Claude Code's capabilities, but a malicious skill could still read environment variables via the Bash tool
