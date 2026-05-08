@@ -39,20 +39,23 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            // listPullRequestsAssociatedWithCommit returns empty for fork PRs
+            // because the commit lives in the fork's repo, not the base repo's
+            // commit graph. Use pulls.list filtered by base branch instead.
             const headSha = context.payload.workflow_run.head_sha;
-            const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
+            const { data: prs } = await github.rest.pulls.list({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              commit_sha: headSha
+              state: 'open',
+              base: 'main',
+              per_page: 100
             });
 
-            const openToMain = prs.filter(p => p.state === 'open' && p.base.ref === 'main');
-            if (openToMain.length === 0) {
+            const pr = prs.find(p => p.head.sha === headSha);
+            if (!pr) {
               core.setFailed(`No open PR targeting main found for commit ${headSha}`);
               return;
             }
-
-            const pr = openToMain[0];
             core.setOutput('pr_number', pr.number.toString());
             core.setOutput('base_sha', pr.base.sha);
             core.setOutput('author', pr.user.login);
