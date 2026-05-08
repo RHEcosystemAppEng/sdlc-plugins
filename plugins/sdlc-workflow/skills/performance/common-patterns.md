@@ -2,6 +2,12 @@
 
 This document defines reusable patterns used across all performance skills to ensure consistency and reduce duplication.
 
+## Config Schema Reference
+
+The authoritative schema for `performance-config.json` is defined in `scripts/perf-config.py`, constant `DEFAULT_CONFIG` (lines 32–118). All skills MUST use `perf-config.py get/set` subcommands for field access — never read or write the JSON file directly.
+
+---
+
 ## Pattern 0: Plugin Root Resolution
 
 **Purpose:** Locate the installed sdlc-workflow plugin root directory at runtime
@@ -39,18 +45,19 @@ fi
 **Usage in subsequent commands:**
 
 ```bash
-# Reference a template path (use agent Read tool on this path)
-template_path="${plugin_root}skills/performance/performance-config.template.md"
-
-# Execute plugin script
+# Execute plugin scripts
+python3 "$plugin_root/scripts/perf-config.py" <subcommand>
 python3 "$plugin_root/scripts/jira-client.py" <command>
+
+# Reference a template path (use agent Read tool on this path)
+template_path="${plugin_root}skills/performance/baseline-report.template.md"
 ```
 
 ---
 
 ## Pattern 1: Config Reading
 
-**Purpose:** Validate that `performance-config.md` exists before skill execution
+**Purpose:** Validate that `performance-config.json` exists before skill execution
 
 **When to use:** All skills (typically Step 2)
 
@@ -65,15 +72,9 @@ python3 "$plugin_root/scripts/jira-client.py" <command>
 **Procedure:**
 
 ```bash
-# Check for performance configuration
-if [ ! -f ".claude/performance-config.md" ]; then
-  echo "Performance Analysis Configuration not found."
-  echo "Please run /sdlc-workflow:performance-setup first."
-  exit 1
-fi
-
-# Read configuration
-config=$(cat .claude/performance-config.md)
+# Validate performance configuration exists and is valid JSON
+python3 "$plugin_root/scripts/perf-config.py" validate
+# Exits with error if config missing or invalid
 ```
 
 **Error handling:**
@@ -93,7 +94,7 @@ Stop execution.
 
 ## Pattern 2: Metadata Extraction
 
-**Purpose:** Read metadata fields from performance-config.md frontmatter
+**Purpose:** Read metadata fields from performance-config.json frontmatter
 
 
 **Used by:**
@@ -213,14 +214,11 @@ Comparing metrics across different modes produces invalid results.
 **Procedure:**
 
 ```bash
-# Read Target Directories section from config
-target_directories=$(grep -A 10 "## Target Directories" .claude/performance-config.md)
-
-# Standard directory paths
-baseline_dir=".claude/performance/baselines/"
-analysis_dir=".claude/performance/analysis/"
-plans_dir=".claude/performance/plans/"
-verification_dir=".claude/performance/verification/"
+# Read directory paths from JSON config
+baseline_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.baselines)
+analysis_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.analysis)
+plans_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.plans)
+verification_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.verification)
 
 # Ensure directories exist
 mkdir -p "$baseline_dir" "$analysis_dir" "$plans_dir" "$verification_dir"
@@ -325,27 +323,19 @@ commit_sha: {git-commit-sha}
 **Procedure:**
 
 ```bash
-# Check for Selected Workflow section
-if ! grep -q "## Selected Workflow" .claude/performance-config.md; then
+# Verify workflow is selected
+workflow_selected=$(python3 "$plugin_root/scripts/perf-config.py" get metadata.workflow_selected)
+if [ "$workflow_selected" != "true" ]; then
   echo "No workflow selected for optimization."
-  echo "Please run /sdlc-workflow:performance-setup first to select a workflow."
+  echo "Please run /sdlc-workflow:performance-baseline first to select a workflow."
   exit 1
 fi
 
 # Extract workflow details
-workflow_section=$(grep -A 20 "## Selected Workflow" .claude/performance-config.md)
-
-workflow_name=$(echo "$workflow_section" | grep "Workflow Name" | awk -F'|' '{print $3}' | xargs)
-entry_point=$(echo "$workflow_section" | grep "Entry Point" | awk -F'|' '{print $3}' | xargs)
-key_screens=$(echo "$workflow_section" | grep "Key Screens" | awk -F'|' '{print $3}' | xargs)
-complexity=$(echo "$workflow_section" | grep "Complexity" | awk -F'|' '{print $3}' | xargs)
-selected_on=$(echo "$workflow_section" | grep "Selected On" | awk -F'|' '{print $3}' | xargs)
-
-# Store for later use
-export WORKFLOW_NAME="$workflow_name"
-export ENTRY_POINT="$entry_point"
-export KEY_SCREENS="$key_screens"
-export COMPLEXITY="$complexity"
+workflow_name=$(python3 "$plugin_root/scripts/perf-config.py" get workflow.name)
+entry_point=$(python3 "$plugin_root/scripts/perf-config.py" get workflow.entry_point)
+key_screens=$(python3 "$plugin_root/scripts/perf-config.py" get workflow.key_screens)
+complexity=$(python3 "$plugin_root/scripts/perf-config.py" get workflow.complexity)
 ```
 
 **Selected Workflow Table Format:**
@@ -386,10 +376,10 @@ The following workflow has been selected for performance optimization:
 
 ```bash
 # Step 1: Check if dev command already configured
-if grep -q "## Development Environment" .claude/performance-config.md; then
-  dev_command=$(grep "Dev Command" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-  command_approved=$(grep "dev_command_approved:" .claude/performance-config.md | awk '{print $2}')
-  command_hash=$(grep "dev_command_hash:" .claude/performance-config.md | awk '{print $2}' | tr -d '"')
+dev_command=$(python3 "$plugin_root/scripts/perf-config.py" get dev_environment.command)
+command_approved=$(python3 "$plugin_root/scripts/perf-config.py" get dev_environment.command_approved)
+if [ "$dev_command" != "null" ]; then
+  command_hash=$(python3 "$plugin_root/scripts/perf-config.py" get metadata.dev_command_hash)
   
   # Calculate current hash
   current_hash=$(echo -n "$dev_command" | sha256sum | awk '{print $1}')
@@ -490,9 +480,9 @@ esac
 # Step 5: Update config with approved command
 command_hash=$(echo -n "$final_command" | sha256sum | awk '{print $1}')
 
-# Update metadata
-sed -i "s/dev_command_approved: false/dev_command_approved: true/" .claude/performance-config.md
-sed -i "s/dev_command_hash: null/dev_command_hash: \"$command_hash\"/" .claude/performance-config.md
+# Update config with approved command and hash
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.command_approved true
+python3 "$plugin_root/scripts/perf-config.py" set metadata.dev_command_hash "$command_hash"
 
 echo "✅ Dev command approved and saved to configuration"
 
@@ -543,7 +533,7 @@ Dev commands are hashed using SHA-256 to detect changes:
 
 **Configuration Updates:**
 
-After approval, update `.claude/performance-config.md`:
+After approval, update `.claude/performance-config.json`:
 1. Development Environment table: Dev Command, Documentation Source, Port, Last Validated
 2. Metadata: `dev_command_approved: true`, `dev_command_hash: "{sha256}"`
 
@@ -580,10 +570,10 @@ GATE: One live Serena probe call at skill start sets serena_mode for the entire 
 
 ### Step 1: Live Serena Probe
 
-Read `serena_instance` from the skill's config source (`performance-config.md` or `CLAUDE.md`):
+Read `serena_instance` from the skill's config source (`performance-config.json` or `CLAUDE.md`):
 
 ```bash
-serena_instance=$(grep "Serena Instance" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+serena_instance=$(python3 "$plugin_root/scripts/perf-config.py" get repositories.backend.serena_instance)
 ```
 
 **If `serena_instance` is non-empty and not "—":**
@@ -676,381 +666,78 @@ Always document which analysis method was used in generated reports:
 
 ---
 
-## Pattern 9: Config Write Protection
+## Pattern 9: Config Write Protection — REMOVED
 
-**Purpose:** Prevent concurrent writes to `performance-config.md` from two simultaneous skill
-executions (e.g., two developers running baseline at the same time on the same machine, or a CI
-run overlapping a local run).
-
-**When to use:** Immediately before writing `performance-config.md` in any skill that modifies it.
-
-**Used by:**
-- performance-setup (Step 7 — write config)
-- performance-baseline (Step 3.10 — workflow update; Step 9.6 — baseline metadata update)
-- performance-implement-optimization (Step 9.5 — result report; if config updated)
-
-**Mechanism:** Optimistic lockfile using a sentinel file. Because skills are executed by an AI
-agent using file-read and file-write tool calls (not a continuous bash process), POSIX `flock` is
-ineffective. Instead, use a repo-scoped sentinel file and mtime-based change detection.
-
-**Procedure:**
-
-### Step A – Acquire lock
-
-1. Determine the lock file path (scoped to the repository to avoid cross-project conflicts):
-   ```
-   lock_file = "{target-repo-path}/.claude/performance-config.lock"
-   ```
-
-2. Check whether the lock file exists:
-   - If it exists, read its contents (should contain `{skill-name} {ISO-timestamp} {pid}`).
-   - If the lock is older than **5 minutes**, consider it stale and proceed (previous skill likely crashed).
-   - If the lock is fresh (< 5 minutes old), inform the user:
-     > ⚠️ **Config file locked**
-     >
-     > Another performance skill appears to be running:
-     > `{lock-file-contents}`
-     >
-     > If no other skill is running, delete the lock file and retry:
-     > ```
-     > rm {target-repo-path}/.claude/performance-config.lock
-     > ```
-     >
-     > Waiting 30 seconds before retrying…
-   - Wait 30 seconds and re-check once. If still locked, stop execution.
-
-3. Create the lock file with:
-   ```
-   {skill-name} {ISO-8601-timestamp} {random 6-digit token}
-   ```
-   Write the lock file before reading or modifying the config.
-
-### Step B – Read config, record mtime
-
-Read `performance-config.md` and note its last-modified timestamp (using `git log -1 --format="%ai" -- .claude/performance-config.md` or file stat).
-
-### Step C – Modify config
-
-Apply the intended changes to the in-memory config content.
-
-### Step D – Verify config unchanged before writing
-
-Before writing, re-read the file's current last-modified timestamp.
-
-If the timestamp has changed since Step B, another process has written the file concurrently:
-> ⚠️ **Config was modified by another process between read and write.**
->
-> Please re-run this skill to pick up the latest configuration.
-
-Delete the lock file and stop execution.
-
-If unchanged, write the updated config.
-
-### Step E – Release lock
-
-Delete the lock file:
-```
-rm {target-repo-path}/.claude/performance-config.lock
-```
-
-Always release the lock — even if the write fails. Failing to release leaves the repo in a
-locked state until the 5-minute stale timeout.
-
-**Error handling:**
-
-- If the write itself fails (permissions, disk full), delete the lock file, inform user, and stop.
-- If the skill is interrupted before Step E, the lock will expire automatically after 5 minutes.
-
-**Note:** This pattern protects against the most common concurrency scenario (two developers
-starting baseline at the same time). It does not prevent all races — a very short window between
-Step D's check and the write remains. For production CI environments, prefer serialising
-performance skill runs at the pipeline level.
+Config writes use `perf-config.py set` / `set-json` which performs atomic writes via
+`tempfile.NamedTemporaryFile` + `os.rename` (atomic on POSIX). No lockfile or mtime
+checking required. For production CI environments, serialise performance skill runs at
+the pipeline level.
 
 ---
 
 ## Pattern 10: API Profiling
 
-**Purpose:** Execute accurate HTTP benchmarking of backend API endpoints using a curl-loop percentile calculator, with cache effectiveness measurement.
+**Purpose:** Execute accurate HTTP benchmarking of backend API endpoints with percentile calculation and cache effectiveness measurement.
 
 **When to use:**
 - Backend-only baseline capture (api-benchmark mode)
 - Module-level dynamic performance testing
 - Any scenario requiring accurate API latency percentiles (p50, p95, p99)
 
+**Implementation:** `scripts/perf-benchmark.sh` (extracted script — replaces inline bash)
+
 **Used by:**
 - performance-baseline (Step 9.A — API Benchmark Mode for backend-only)
 - performance-analyze-module (Step 7.7 — Dynamic Performance Testing)
 
 **Prerequisites:**
-
-**For all callers:**
 - Backend service must be running on localhost
-- `curl` command must be available (for HTTP requests and timing)
-- `bc` command must be available (for cache improvement calculation)
+- `curl` and `jq` must be available (verified by script at startup)
+- Test data manifest at `.claude/performance/test-data/manifest.json` (created by baseline)
 
-**For performance-analyze-module only:**
-- Test data manifest must exist at `.claude/performance/test-data/manifest.json`
-
-**For performance-baseline:**
-- Test data manifest is created by baseline itself (no prerequisite)
-- Working endpoints identified in Step 8.4.B9 verification
-
-**Dependencies:**
-- `curl` (HTTP requests and timing via `-w '%{time_total}'`)
-- `bc` (cache improvement percentage calculation)
-
----
-
-### Step A – Check Prerequisites
+**Execution:**
 
 ```bash
-# Check if backend running
-port=$(grep "| Port |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-
-if ! timeout 2 bash -c "</dev/tcp/localhost/$port" 2>/dev/null; then
-  echo "ℹ️ Backend not running. Skipping dynamic testing."
-  skip_dynamic=true
-  return
-fi
-
-# For performance-analyze-module: Check if test data manifest exists
-# (performance-baseline creates the manifest, so this check is skipped there)
-if [ "$CALLER_SKILL" = "performance-analyze-module" ]; then
-  if [ ! -f ".claude/performance/test-data/manifest.json" ]; then
-    echo "⚠️ Test data manifest not found."
-    echo "   Run /sdlc-workflow:performance-baseline first to discover test data."
-    skip_dynamic=true
-    return
-  fi
-fi
-
-# Verify curl is available
-if ! command -v curl &>/dev/null; then
-  echo "❌ curl not found. Cannot run dynamic API profiling."
-  skip_dynamic=true
-  return
-fi
-
-echo "ℹ️ curl found — proceeding with curl-loop API profiling"
+"$plugin_root/scripts/perf-benchmark.sh" \
+  --port "$port" \
+  --iterations "$iterations" \
+  --manifest .claude/performance/test-data/manifest.json \
+  --output .claude/performance/baselines/benchmark-results.json
 ```
 
-**Error handling:**
-- Backend not running → Skip dynamic profiling, continue with static analysis only
-- curl unavailable → Skip dynamic profiling with clear error message
+The script handles all benchmarking logic: curl loops, percentile calculation (nearest-rank method),
+cache effectiveness measurement, and JSON output via `jq`. See `perf-benchmark.sh --help` for details.
 
-**Note:** Error paths use `return` to exit early. Callers must invoke Pattern 10 logic inside a shell function context for `return` to work correctly. Example:
-```bash
-function run_api_profiling() {
-  # Apply Pattern 10 here
-  # return statements will exit this function, not the entire script
-}
-run_api_profiling
-```
+**Manifest schema:** `{ "endpoints": { "<path>": { "test_url": "<url>", "parameters": { "id": "<sample>" } } } }`
 
----
-
-### Step B – Execute Benchmark with Cache Measurement
-
-**Methodology:**
-1. **Cold cache (first request):** Single `curl` request measures worst-case latency
-2. **Warm cache (aggregate stats):** `iterations` curl requests collected into an array; p50/p95/p99 derived by sorting
-
-**Implementation:**
-
-```bash
-# Read test configuration
-iterations=$(grep "| Iterations |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-
-# Declare associative array outside loop
-declare -A dynamic_results
-
-# Use process substitution to avoid subshell scope loss
-while IFS='|' read -r scenario_name test_url; do
-  # Initialize cache_status for this iteration
-  cache_status=""
-
-  url="http://localhost:${port}${test_url}"
-
-  echo "Testing: $scenario_name ($url)"
-
-  # 1. First request (cache miss) - measures cold-cache worst-case latency
-  first_request_ms=$(curl -o /dev/null -s -w '%{time_total}\n' "$url" | \
-    awk '{printf "%.0f", $1 * 1000}')
-
-  if [ -z "$first_request_ms" ]; then
-    echo "  ⚠️ First request failed"
-    continue
-  fi
-
-  # 2. Subsequent requests (cache warm) - curl loop for percentile calculation
-  times=()
-  for i in $(seq 1 "$iterations"); do
-    t=$(curl -o /dev/null -s -w '%{time_total}' "$url" | awk '{printf "%.0f", $1 * 1000}')
-    [ -n "$t" ] && times+=("$t")
-  done
-
-  if [ "${#times[@]}" -eq 0 ]; then
-    echo "  ⚠️ All warm-cache requests failed"
-    continue
-  fi
-
-  # Sort times and compute percentiles via array index
-  sorted=($(printf '%s\n' "${times[@]}" | sort -n))
-  n=${#sorted[@]}
-  p50=${sorted[$((n * 50 / 100))]}
-  p95=${sorted[$((n * 95 / 100))]}
-  p99=${sorted[$((n * 99 / 100))]}
-  mean=$(printf '%s\n' "${times[@]}" | awk '{s+=$1} END {printf "%.0f", s/NR}')
-
-  # Validate output
-  if [ -z "$p95" ] || [ "$p95" = "0" ]; then
-    echo "  ⚠️ Failed to produce valid percentile stats"
-    continue
-  fi
-
-  # Cache effectiveness: first request vs subsequent mean
-  # Guard against division by zero
-  if [ -z "$first_request_ms" ] || [ "$first_request_ms" -eq 0 ]; then
-    cache_status="N/A"
-    cache_improvement="0"
-  else
-    cache_improvement=$(echo "scale=2; ($first_request_ms - $mean) / $first_request_ms * 100" | bc)
-  fi
-
-  # Classify cache effectiveness (only if not already N/A)
-  if [ "$cache_status" != "N/A" ]; then
-    if (( $(echo "$cache_improvement > 50" | bc -l) )); then
-      cache_status="Effective"
-    elif (( $(echo "$cache_improvement > 20" | bc -l) )); then
-      cache_status="Moderate"
-    else
-      cache_status="Minimal"
-    fi
-  fi
-
-  # Save results
-  dynamic_results["$scenario_name"]=$(cat <<JSON
-{
-  "test_url": "$test_url",
-  "iterations": $iterations,
-  "p50_ms": "$p50",
-  "p95_ms": "$p95",
-  "p99_ms": "$p99",
-  "mean_ms": "$mean",
-  "first_request_ms": $first_request_ms,
-  "subsequent_mean_ms": "$mean",
-  "cache_improvement_pct": "$cache_improvement",
-  "cache_status": "$cache_status"
-}
-JSON
-)
-
-  echo "  ✓ p50: ${p50}ms, p95: ${p95}ms, Cache: ${cache_improvement}% ($cache_status)"
-
-done < <(jq -r '.endpoints | to_entries[] | "\(.key)|\(.value.test_url)"' \
-  .claude/performance/test-data/manifest.json)
-
-# Save results to file (for cross-skill persistence)
-declare -p dynamic_results > .claude/performance/test-data/dynamic-results.sh
-```
-
-**Percentile calculation:**
-- Runs `iterations` sequential curl requests and collects response times into a bash array
-- Sorts the array numerically and selects values at the 50th, 95th, and 99th index positions
-- Mean is computed as the arithmetic average across all collected times
-
----
-
-### Step C – Cache Effectiveness Classification
-
-**Formula:**
-```
-cache_improvement = (cold_latency - warm_mean) / cold_latency × 100%
-```
-
-**Classification thresholds:**
-- **Effective:** > 50% improvement (cache working well)
-- **Moderate:** 20-50% improvement (some caching benefit)
-- **Minimal:** < 20% improvement (cache ineffective or not used)
-- **N/A:** First request failed or zero latency
-
-**Example:**
-- Cold: 1180ms
-- Warm: 147ms
-- Improvement: (1180 - 147) / 1180 × 100 = 87.5% → "Effective"
-
----
-
-### Step D – Result Storage
-
-**Result format (per endpoint):**
+**Output schema (per endpoint):**
 ```json
 {
-  "test_url": "/api/v2/analysis/component",
-  "iterations": 10,
-  "p50_ms": "140",
-  "p95_ms": "178",
-  "p99_ms": "180",
-  "mean_ms": "147",
-  "first_request_ms": 1180,
-  "subsequent_mean_ms": "147",
-  "cache_improvement_pct": "87.54",
+  "test_url": "/api/v2/products",
+  "iterations": 20,
+  "samples_collected": 20,
+  "p50_ms": 45,
+  "p95_ms": 120,
+  "p99_ms": 250,
+  "mean_ms": 68,
+  "first_request_ms": 850,
+  "subsequent_mean_ms": 68,
+  "cache_improvement_pct": "92.00",
   "cache_status": "Effective"
 }
 ```
 
-**Storage mechanism:**
-- **Associative array** (in-skill usage):
-  ```bash
-  declare -A dynamic_results
-  dynamic_results["$scenario_name"]="<json>"
-  ```
-- **Persisted file** (cross-skill sharing):
-  ```bash
-  declare -p dynamic_results > .claude/performance/test-data/dynamic-results.sh
-  ```
+**Cache Effectiveness Classification:**
+- **Effective:** > 50% improvement (cold vs warm mean)
+- **Moderate:** 20-50% improvement
+- **Minimal:** < 20% improvement
+- **N/A:** First request failed or zero latency
 
-**Reading results in subsequent steps:**
-```bash
-# Source the persisted results
-source .claude/performance/test-data/dynamic-results.sh
-
-# Extract metrics for a specific scenario
-result_json="${dynamic_results[$scenario_name]}"
-p95=$(echo "$result_json" | jq -r '.p95_ms')
-cache_status=$(echo "$result_json" | jq -r '.cache_status')
-```
-
----
-
-### Error Handling
-
-**Service unavailable:**
-```bash
-if ! timeout 2 bash -c "</dev/tcp/localhost/$port" 2>/dev/null; then
-  echo "ℹ️ Backend not running. Skipping dynamic testing."
-  skip_dynamic=true
-  return
-fi
-```
-
-**Per-endpoint failures:**
-```bash
-if [ -z "$first_request_ms" ]; then
-  echo "  ⚠️ First request failed"
-  continue  # Skip this endpoint, continue with next
-fi
-
-if [ -z "$p95" ] || [ "$p95" = "0" ]; then
-  echo "  ⚠️ Failed to produce valid percentile stats"
-  continue
-fi
-```
-
-**Graceful degradation:**
-- Missing test data → Skip profiling, show instructions to run baseline first
-- Individual endpoint failure → Log warning, continue with remaining endpoints
-- Authentication errors → Note in report, suggest `AUTH_DISABLED=true`
+**Error Handling:**
+- Backend not running → Script exits with error (caller should check exit code)
+- Missing `curl` or `jq` → Script exits with clear error message
+- Individual endpoint failure → Logged, skipped, counted in `summary.failed_count`
+- Authentication errors (401/403) → Endpoint marked failed, suggest `AUTH_DISABLED=true`
 
 ---
 
@@ -1169,7 +856,7 @@ The pattern maintains three data structures during traversal:
 2. **`visited`** — set of `(file, symbol_name)` pairs to prevent infinite recursion on circular calls
 3. **`query_ledger`** — list of `{description, depth, loop_multiplier, source_file, source_symbol}` entries for total query counting
 
-**Configurable depth:** `analysis_chain_depth` (default: 3, read from Analysis Assumptions in `performance-config.md`).
+**Configurable depth:** `analysis_chain_depth` (default: 3, read from Analysis Assumptions in `performance-config.json`).
 
 ---
 
@@ -1312,7 +999,7 @@ For each query Q in query_ledger:
     Q.effective_count = effective_multiplier
 
 total_queries = sum(Q.effective_count for all Q in query_ledger)
-estimated_db_latency = total_queries * analysis_db_latency_ms  # from Analysis Assumptions in performance-config.md, default 10ms
+estimated_db_latency = total_queries * analysis_db_latency_ms  # from Analysis Assumptions in performance-config.json, default 10ms
 ```
 
 **Loop iteration estimation heuristics:**
@@ -1396,6 +1083,62 @@ Do not create a pattern when:
 4. Test end-to-end workflow with updated pattern
 
 **Pattern versioning:**
+
+## Pattern 13: Discovery Result Integrity
+
+**Purpose:** Prevent silent data loss when tool output (grep, Serena, shell) is filtered, grouped, or summarized into an in-context table. Any post-processing that reduces the result set must be auditable.
+
+**When to use:** Every time a discovery step produces results that feed into a downstream table, registry, or count — including endpoint discovery, symbol search, file listing, and anti-pattern detection.
+
+**Used by:**
+- performance-baseline (Steps 3.1-A, 3.1-B, 3.1.2)
+- performance-analyze-module (Steps 6.1, 7.1-A, 7.1-B)
+
+**The problem this prevents:** A raw grep returns N results. A secondary keyword filter (e.g., `grep -i "sbom\|advisory"`) is piped after it to narrow down to specific resources. Endpoints whose paths don't contain those keywords are silently dropped. The table is built from the filtered output, so downstream count checks (Step 3.1.2, Step 3.2.1) pass against the wrong baseline.
+
+**Rules:**
+
+1. **Record raw count immediately.** After every discovery tool call (grep, `find_symbol`, shell command), state the raw result count in your response before doing anything else with the output:
+
+   > `▶ Raw result count: N items returned by {tool/command}`
+
+2. **No secondary keyword filters on discovery output.** Never pipe discovery results through a second grep, `awk`, or any filter that selects a subset by content. If you need to categorize or narrow results, do so in-context when building the table — row by row — so that every raw result is either (a) added to the table or (b) explicitly excluded with a reason.
+
+3. **Reconcile raw count against table rows.** After building the in-context table, compare:
+   - `R` = raw result count from Rule 1
+   - `T` = table row count
+
+   **If R == T:** Proceed.
+
+   **If R > T:** Some results were lost. List each missing result and either:
+   - Add it to the table, OR
+   - Document why it was excluded (duplicate, test-only, non-endpoint, etc.)
+
+   **If R < T:** Results were duplicated. Deduplicate the table.
+
+   Do not proceed to downstream steps until R and T are reconciled.
+
+4. **Categorization belongs in the grouping step, not the discovery step.** Discovery produces the complete, unfiltered inventory. Grouping (e.g., Step 3.2) assigns categories. These are separate steps — do not collapse them.
+
+**Anti-pattern examples (do NOT do these):**
+
+```bash
+# BAD: secondary filter silently drops non-matching endpoints
+grep -rn '#\[get\|#\[post' src/ | grep -i "sbom\|advisory"
+
+# BAD: awk/sed selecting only certain paths
+grep -rn '@GetMapping' src/ | awk '/product|order/'
+```
+
+**Correct approach:**
+
+```bash
+# GOOD: unfiltered discovery
+grep -rn '#\[get\|#\[post' src/
+# Then: build table from ALL results in-context, categorize during grouping step
+```
+
+---
 
 Patterns are not formally versioned. Breaking changes to patterns should be avoided. If a breaking change is necessary:
 1. Create a new pattern (Pattern N+1)

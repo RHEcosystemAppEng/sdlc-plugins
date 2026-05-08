@@ -7,7 +7,7 @@ argument-hint: "[target-repository-path]"
 
 # performance-baseline skill
 
-You are an AI performance baseline assistant. When no workflow has been selected yet, you discover user workflows from the codebase (by reading router configuration and inferring user journeys), prompt the user to select a target workflow, and auto-populate the Performance Scenarios and Module Registry in `performance-config.md`. Once a workflow is selected, you verify test data availability, execute browser automation to measure page load times and resource loading, and generate a baseline report for comparison during optimization.
+You are an AI performance baseline assistant. When no workflow has been selected yet, you discover user workflows from the codebase (by reading router configuration and inferring user journeys), prompt the user to select a target workflow, and auto-populate the Performance Scenarios and Module Registry in `performance-config.json`. Once a workflow is selected, you verify test data availability, execute browser automation to measure page load times and resource loading, and generate a baseline report for comparison during optimization.
 
 ## Guardrails
 
@@ -41,6 +41,10 @@ Steps that require user confirmation or user input (e.g., Step 4.4 – workflow 
 ### Error Handling
 - If any mandatory step fails (e.g., config missing, script error, no functional endpoints), the skill must halt at that step, output a clear error message with the step number, and provide actionable remediation instructions. It must not silently skip to a later step.
 
+### Plugin Root Resolution
+
+Every bash block in this skill that calls `perf-config.py` or references `$plugin_root` must begin with the Pattern 0 inline resolution. See [Pattern 0](../performance/common-patterns.md#pattern-0-plugin-root-resolution). The first occurrence (Step 3.0) shows the full block; subsequent blocks include an abbreviated form with the same comment marker.
+
 ## Step 1 – Determine Target Repository
 
 If the user provided a repository path as an argument, use that as the target. Otherwise, use the current working directory.
@@ -55,11 +59,17 @@ Verify the target directory exists and contains a frontend application (check fo
 - Verify config exists, stop if missing
 - Read configuration file for baseline settings
 
+**Initialize tracking variables (always, regardless of path):**
+- `stored_mode = null`
+- `baseline_already_captured = false`
+
+These defaults apply when Step 2.2 does not execute (first-run path where workflow_selected = false).
+
 ## Step 2.0 – Check if Workflow Selection Required
 
 Read config metadata.workflow_selected:
 
-- **If false:** Workflow not yet selected, proceed to Step 3 (workflow discovery)
+- **If false:** Workflow not yet selected, proceed to Step 2.0.5 (Check Analysis Scope)
 - **If true:** Workflow already selected, skip workflow discovery and proceed to Step 2.1 (read selected workflow)
 
 **Note:** Setup skill creates minimal config with workflow_selected = false. Baseline skill discovers workflows and sets workflow_selected = true after user selection.
@@ -105,9 +115,19 @@ Read config metadata.analysis_scope to determine workflow discovery method:
 ### Step 3.0 – Serena Availability Probe
 
 ```bash
-backend_path=$(grep "Backend Path" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-backend_framework=$(grep "Backend Framework" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-serena_instance=$(grep "Serena Instance" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found in ~/.claude/plugins/cache/"
+  echo "   Ensure the plugin is installed and try again."
+  exit 1
+fi
+
+backend_path=$(python3 "$plugin_root/scripts/perf-config.py" get repositories.backend.path)
+backend_framework=$(python3 "$plugin_root/scripts/perf-config.py" get repositories.backend.framework)
+serena_instance=$(python3 "$plugin_root/scripts/perf-config.py" get repositories.backend.serena_instance)
 ```
 
 **If `serena_instance` is non-empty and not "—":**
@@ -129,11 +149,13 @@ Search backend codebase for API endpoint definitions using framework-specific pa
 
 **Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
-(`serena_mode` was set in Step 3.0 and applies here.)
+(`serena_mode` was set in Step 3.0 or Step 5.0.5 and applies here.)
 
 ---
 
 ### Step 3.1-A – Locate API Route Definitions via Serena (`serena_mode = live`)
+
+**Apply:** [Common Pattern: Discovery Result Integrity — Pattern 13](../performance/common-patterns.md#pattern-13-discovery-result-integrity)
 
 > Grep and shell-based symbol discovery are not available in this path.
 
@@ -164,6 +186,8 @@ Set `discovery_method = "Serena MCP"` on all results. Proceed to **Step 3.1.1-A*
 ---
 
 ### Step 3.1-B – Locate API Route Definitions via Grep (`serena_mode = down | not-configured`)
+
+**Apply:** [Common Pattern: Discovery Result Integrity — Pattern 13](../performance/common-patterns.md#pattern-13-discovery-result-integrity)
 
 **Run ONE grep per framework using `-A 3` context lines** so the decorator line and the
 `fn` / `async fn` handler name appear together in the same result block. This eliminates any
@@ -208,7 +232,15 @@ Set `discovery_method = "Grep"` on all results. Proceed to **Step 3.1.1-B**.
 > **Q4 — Remediation:** If Q3 reveals unscanned files → scan them now using the same
 > Step 3.1-A or Step 3.1-B method before continuing. Do not skip them.
 >
-> Only proceed to the endpoint table once every source file is accounted for.
+> **Q5 — Raw count reconciliation ([Pattern 13](../performance/common-patterns.md#pattern-13-discovery-result-integrity)):**
+> Compare the raw result count you recorded immediately after the discovery tool call
+> against the number of rows in your endpoint table. If they differ, list every result
+> from the raw output that is missing from the table and either add it or document
+> why it was excluded. **Do not apply secondary keyword filters** (e.g., `grep -i "keyword"`)
+> to narrow discovery output — categorization happens in Step 3.2 (grouping), not here.
+>
+> Only proceed to the endpoint table once every source file is accounted for
+> and raw-count reconciliation passes.
 
 ---
 
@@ -226,7 +258,7 @@ For each discovered endpoint, determine how many places reference the handler to
 
 **Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
-(`serena_mode` was set in Step 3.0 and applies here.)
+(`serena_mode` was set in Step 3.0 or Step 5.0.5 and applies here.)
 
 ---
 
@@ -311,17 +343,17 @@ Example:
 
 **Resource extraction algorithm:**
 ```python
+import re
+
 def extract_resource(path):
-    # Remove API version prefix
     path_parts = path.split('/')
     
-    # Filter out: empty strings, 'api', version numbers, parameter placeholders
+    # Filter out: empty strings, 'api', version prefixes (v1, v2, ..., v99), parameter placeholders
     resource_parts = [
         part for part in path_parts 
-        if part and part not in ['api', 'v1', 'v2', 'v3'] and not part.startswith('{')
+        if part and part != 'api' and not re.match(r'^v\d+$', part) and not part.startswith('{')
     ]
     
-    # Return first meaningful part
     return resource_parts[0] if resource_parts else None
 ```
 
@@ -376,6 +408,12 @@ existing workflow or a new "Miscellaneous" workflow. Repeat Step 3.2.1 until N =
 
 **Do not proceed to Step 3.3 until the counts match exactly. No shell scripts for this check.**
 
+**Retry limit:** If counts do not match after 2 re-runs of the grouping logic, prompt the user:
+
+> Endpoint grouping mismatch persists ({N} discovered vs {M} grouped). Some endpoints may be dynamically registered.
+> (1) Manually assign missing endpoints
+> (2) Proceed with current grouping (acknowledge coverage gap)
+
 ### Step 3.3 – Present Workflows and Prompt Selection
 
 **Display ALL discovered backend workflows** from Step 3.2 in a numbered table. 
@@ -412,6 +450,8 @@ If any workflow has high-impact endpoints (>10 total references):
 
 **Capture selection:**
 - Store the selected workflow's details
+
+> **Note:** This configuration supports one workflow at a time. Selecting a different workflow later will replace the current baseline data. Back up `.claude/performance/baselines/` before switching workflows.
 
 ### Step 3.4 – Auto-Populate Scenarios from Selected Workflow
 
@@ -450,7 +490,7 @@ For backend-only mode, modules represent handler functions or service classes.
 
 **Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
-(`serena_mode` was set in Step 3.0 and applies here.)
+(`serena_mode` was set in Step 3.0 or Step 5.0.5 and applies here.)
 
 ---
 
@@ -489,7 +529,7 @@ Set `discovery_method = "Grep"`.
 
 ### Step 3.6 – Stage Backend Config Changes (no file write)
 
-**Do NOT write to `.claude/performance-config.md` here.** Collect the following values
+**Do NOT write to `.claude/performance-config.json` here.** Collect the following values
 in-context so they can be written in the single consolidated config write at Step 4.7:
 
 | Config Field | Value Source |
@@ -682,7 +722,7 @@ Inform the user:
 > - Routes are dynamically generated
 > - The router configuration uses complex patterns
 >
-> "You will need to manually populate scenarios in `.claude/performance-config.md`."
+> "You will need to manually populate scenarios in `.claude/performance-config.json`."
 
 If no workflows found, skip to Step 4 with empty workflow list.
 
@@ -709,6 +749,12 @@ workflow or a new standalone workflow. Repeat Step 4.3.4 until N == M.
 **Do not proceed to Step 4.4 until the counts match exactly. No shell scripts for this check.**
 
 **Do not proceed to Step 4.4 until the counts match exactly.**
+
+**Retry limit:** If counts do not match after 2 re-runs, prompt the user:
+
+> Route grouping mismatch persists ({N} discovered vs {M} grouped). Some routes may be dynamically generated or aliased.
+> (1) Manually specify missing routes
+> (2) Proceed with current grouping (acknowledge coverage gap)
 
 ### Step 4.4 – Present Workflows and Prompt Selection (Workflow Discovery Only)
 
@@ -740,6 +786,8 @@ workflow or a new standalone workflow. Repeat Step 4.3.4 until N == M.
 
 **Capture selection:**
 - Store the selected workflow's details (name, entry point, key screens, complexity)
+
+> **Note:** This configuration supports one workflow at a time. Selecting a different workflow later will replace the current baseline data. Back up `.claude/performance/baselines/` before switching workflows.
 
 ### Step 4.5 – Auto-Populate Scenarios from Selected Workflow (Workflow Discovery Only)
 
@@ -801,67 +849,45 @@ For each lazy-loaded component in the workflow:
 
 ### Step 4.7 – Consolidated Config Write *(runs for ALL scopes — never skip)*
 
-**This is the single point where `.claude/performance-config.md` is written during the
+**This is the single point where `.claude/performance-config.json` is written during the
 discovery phase.** It applies staged changes from Step 3.6 (backend) and/or Step 4.6
-(frontend) in one atomic write. Running once here eliminates redundant writes.
+(frontend). Each `perf-config.py` call performs an atomic write.
 
-**Applies to all scopes:**
-- `backend-only` — applies backend staged changes; frontend sections are left as-is
-- `frontend-only` — applies frontend staged changes; backend sections are left as-is
-- `full-stack` — applies both backend and frontend staged changes together
+Write all staged changes from workflow discovery to config:
 
----
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
 
-**Step 4.7.1 – Read Current Config**
+# Write scenarios (JSON array built in-context from Steps 3.4 / 4.5)
+python3 "$plugin_root/scripts/perf-config.py" set-json scenarios "$scenarios_json"
 
-Read `.claude/performance-config.md` from the target repository. This is the base document
-that will be updated.
+# Write modules (JSON array built in-context from Steps 3.5 / 4.6)
+python3 "$plugin_root/scripts/perf-config.py" set-json modules "$modules_json"
 
-**Step 4.7.2 – Apply Staged Changes**
+# Write selected workflow (JSON object from Steps 3.3 / 4.4)
+python3 "$plugin_root/scripts/perf-config.py" set-json workflow "$workflow_json"
 
-Apply ALL staged changes collected in-context from Steps 3.6 and/or 4.6:
-
-| Section | Source | Apply when |
-|---|---|---|
-| Performance Scenarios | Step 3.4 scenarios | `backend-only` or `full-stack` |
-| Module Registry (backend) | Step 3.5 handlers | `backend-only` or `full-stack` |
-| Selected Workflow (backend) | Step 3.3 selection | `backend-only` or `full-stack` |
-| Performance Scenarios | Step 4.5 scenarios | `frontend-only` or `full-stack` |
-| Module Registry (frontend) | Step 4.6 modules | `frontend-only` or `full-stack` |
-| Selected Workflow (frontend) | Step 4.4 selection | `frontend-only` or `full-stack` |
-
-**Selected Workflow block format (apply for whichever scope was discovered):**
-```markdown
-## Selected Workflow
-
-| Property | Value |
-|---|---|
-| Workflow Name | {selected workflow name} |
-| Entry Point | {entry point URL} |
-| Key Screens | {comma-separated list of key screens} |
-| Complexity | {complexity estimate} |
-| Selected On | {current date in YYYY-MM-DD format} |
+# Update metadata
+python3 "$plugin_root/scripts/perf-config.py" set metadata.workflow_selected true
+python3 "$plugin_root/scripts/perf-config.py" set metadata.backend_endpoint_discovery_method "$discovery_method"
 ```
 
-**Metadata fields to set:**
-```yaml
-metadata:
-  workflow_selected: true
-  backend_endpoint_discovery_method: "serena" | "grep"   # backend-only or full-stack
-  last_updated: {current-timestamp}
-```
+**Variable formats:**
 
-**Step 4.7.3 – Write Config**
+- `$scenarios_json`: `[{"name": "products-list", "url": "/api/v2/products", "description": "List all products"}, ...]`
+- `$modules_json`: `[{"name": "product-handler", "entry_point": "src/handlers/products.rs:10-45", "description": "Product CRUD handler", "discovery_method": "Serena MCP"}, ...]`
+- `$workflow_json`: `{"name": "Product Management", "entry_point": "/api/v2/products", "key_screens": ["/products", "/products/{id}"], "complexity": "Moderate", "selected_on": "2026-05-07"}`
+- `$discovery_method`: `"serena"` or `"grep"`
 
-**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-9-config-write-protection)
-
-Write the fully merged config back to `.claude/performance-config.md` in **one write
-operation**. Do not write partial sections or call Write more than once for this step.
-
-**Step 4.7.4 – Log Update**
+**Log Update:**
 
 ```
-✓ Configuration written — single consolidated write complete.
+✓ Configuration written.
   - Scope: {backend-only | frontend-only | full-stack}
   - Scenarios: {count} auto-populated
   - Modules: {count} discovered
@@ -876,17 +902,50 @@ After this step, proceed to Step 5 (Discover Test Data).
 
 **Apply:** [Common Pattern: Metadata Extraction](../performance/common-patterns.md#pattern-2-metadata-extraction)
 
-Read `metadata.analysis_scope` from performance-config.md to determine discovery approach.
+Read `metadata.analysis_scope` from performance-config.json to determine discovery approach.
 
 ### Step 5.0 – Check Analysis Scope
 
 ```bash
-analysis_scope=$(grep "| analysis_scope |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+analysis_scope=$(python3 "$plugin_root/scripts/perf-config.py" get metadata.analysis_scope)
 ```
 
 **If `analysis_scope = "frontend-only"`:** Skip to Step 5.3 (frontend-only yes/no prompt)
 
-**If `analysis_scope` in ["backend-only", "full-stack", "full-stack-monorepo"]:** Proceed with backend test data discovery (Step 5.1)
+**If `analysis_scope` in ["backend-only", "full-stack", "full-stack-monorepo"]:** Proceed with Step 5.0.5
+
+### Step 5.0.5 – Serena Availability Probe (if not already set)
+
+Ensure `serena_mode` is defined before Step 5.2 regardless of which discovery path was taken.
+
+**If `analysis_scope = "frontend-only"`:** Set `serena_mode = "not-applicable"`. Skip Steps 5.1 and 5.2 entirely — proceed directly to Step 5.3.
+
+**If `analysis_scope = "backend-only"` AND `serena_mode` was set in Step 3.0:** No action. Proceed to Step 5.1.
+
+**If `analysis_scope` is "full-stack" or "full-stack-monorepo" AND `serena_mode` was NOT set in Step 3.0:**
+
+Run the Serena probe:
+
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+serena_instance=$(python3 "$plugin_root/scripts/perf-config.py" get repositories.backend.serena_instance)
+```
+
+- If `serena_instance` is non-empty and not "—": call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`. Response → `serena_mode = live`. Error → `serena_mode = down`.
+- If empty or "—": `serena_mode = not-configured`.
 
 ### Step 5.1 – Extract Workflow-Specific Scope
 
@@ -895,47 +954,22 @@ analysis_scope=$(grep "| analysis_scope |" .claude/performance-config.md | awk -
 **CRITICAL:** Discovery must be workflow-specific, not generic. If user selected "License Analysis", do NOT discover SBOM test data.
 
 ```bash
-# Read selected workflow name from config
-workflow_name=$(awk '/## Selected Workflow/,/^## / {
-  if ($0 ~ /\| Workflow Name \|/ && $0 !~ /Property/) {
-    split($0, fields, "|")
-    gsub(/^[ \t]+|[ \t]+$/, "", fields[3])
-    print fields[3]
-    exit
-  }
-}' .claude/performance-config.md)
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
 
-# Extract workflow endpoint paths from Performance Scenarios table
-# (These are the endpoints we need test data for)
-# Using POSIX-compatible awk (works with mawk, nawk, gawk)
-workflow_endpoints=$(awk -F'|' '/## Performance Scenarios/,/^## / {
-  if ($0 ~ /^\| [a-z]/ && $0 !~ /Scenario Name/) {
-    gsub(/^[ \t]+|[ \t]+$/, "", $3)
-    print $3
-  }
-}' .claude/performance-config.md)
+# Read workflow and scenario data from JSON config
+workflow_name=$(python3 "$plugin_root/scripts/perf-config.py" get workflow.name)
 
-# Extract handler locations from Module Registry table
-handler_locations=$(awk -F'|' '/## Module Registry/,/^## / {
-  if ($0 ~ /^\| [a-z]/ && $0 !~ /Module Name/) {
-    gsub(/^[ \t]+|[ \t]+$/, "", $3)
-    print $3
-  }
-}' .claude/performance-config.md)
+# Extract endpoint URLs from scenarios array
+workflow_endpoints=$(python3 "$plugin_root/scripts/perf-config.py" get-section scenarios | \
+  jq -r '.[].url')
 
-# Extract common module directory from handler locations
-# Example: modules/analysis/src/endpoints/mod.rs:44-67 → modules/analysis/src/endpoints/
-# Step 1: Remove line numbers
-# Step 2: Remove filename
-# Step 3: Take first unique directory (alphabetically)
-# NOTE: This takes the alphabetically first directory, not the longest common prefix.
-#       For handlers spanning modules/analysis/src/endpoints/ and modules/analysis/src/db/,
-#       this returns modules/analysis/src/db/ (alphabetically first).
-#       Low risk for single-workflow runs where all handlers are typically in one directory.
-workflow_module_path=$(echo "$handler_locations" | \
-  sed 's/:.*$//' | \
-  sed 's|/[^/]*$||' | \
-  sort -u | head -1)
+# Resolve module directory (picks directory with most handlers)
+workflow_module_path=$(python3 "$plugin_root/scripts/perf-config.py" resolve-module-path)
 
 echo "ℹ️ Workflow: $workflow_name"
 echo "   Module path: $workflow_module_path"
@@ -948,7 +982,7 @@ echo "   Endpoints: $(echo "$workflow_endpoints" | wc -l) endpoint(s)"
 
 **Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
-(`serena_mode` was set in Step 3.0 and applies here.)
+(`serena_mode` was set in Step 3.0 or Step 5.0.5 and applies here.)
 
 ---
 
@@ -1023,11 +1057,25 @@ Proceed to Step 6.
 
 **This step only runs if `analysis_scope = "frontend-only"`.**
 
-Preserve existing behavior for frontend-only analysis:
+Preserve existing behavior for frontend-only analysis.
+
+**Read workflow name from config (required because Step 5.1 is skipped for frontend-only):**
+
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+workflow_name=$(python3 "$plugin_root/scripts/perf-config.py" get workflow.name)
+echo "ℹ️ Workflow: $workflow_name"
+```
 
 Prompt the user to confirm test data availability:
 
-> "Does the application have test data loaded for workflow **{workflow name}**? (yes/no)"
+> "Does the application have test data loaded for workflow **${workflow_name}**? (yes/no)"
 >
 > "Test data ensures consistent baseline measurements and avoids noise from empty-state UI."
 
@@ -1052,14 +1100,14 @@ Proceed to Step 6.
 **Apply:** [Common Pattern: Mode Consistency Enforcement](../performance/common-patterns.md#pattern-3-mode-consistency-enforcement)
 
 **Specific actions for this skill:**
-- Read `stored_mode` from Step 2.2 metadata extraction
+- Read `stored_mode` (set in Step 2.2 if workflow was already selected, or `null` if this is a first run)
 - If `stored_mode` is not null (baseline previously captured):
   - Inform user of stored mode and consistency requirement
   - Offer: use stored mode | reset baseline | cancel
-  - If user chooses stored mode, skip Step 5.1-5.3 (mode selection)
-  - If user chooses reset, continue to Step 5.1 (new mode selection)
+  - If user chooses stored mode, skip Step 6.1-6.2 (mode selection)
+  - If user chooses reset, continue to Step 6.1 (new mode selection)
   - If user chooses cancel, stop execution
-- If `stored_mode` is null (first baseline), proceed to Step 5.1
+- If `stored_mode` is null (first baseline), proceed to Step 6.1
 
 ### Step 6.1 – Mode Selection
 
@@ -1074,7 +1122,7 @@ Inform user and proceed to Step 6.2.
 
 ### Step 6.2 – Read Baseline Settings from Config
 
-**Read baseline capture settings from performance-config.md:**
+**Read baseline capture settings from performance-config.json:**
 
 Extract from the **Baseline Capture Settings** section:
 - `iterations` value (should be ≥ 20, as configured by performance-setup)
@@ -1088,7 +1136,7 @@ If `iterations < 20`:
   > Configuration specifies {iterations} iterations, but minimum 20 required for meaningful p95.
   > With n={iterations}, p95 equals the {calculated_position}th-highest value, statistically too close to the maximum.
   >
-  > Update `.claude/performance-config.md` Baseline Capture Settings to use ≥ 20 iterations, or proceed with limited statistical validity.
+  > Update `.claude/performance-config.json` Baseline Capture Settings to use ≥ 20 iterations, or proceed with limited statistical validity.
   >
   > Continue anyway? (yes/no):
 
@@ -1165,7 +1213,7 @@ Check if the file exists at `{baseline-directory}/baseline-report.md`.
 The capture script template is located in the plugin cache:
 
 ```
-{plugin-cache}/sdlc-workflow/{version}/skills/performance/capture-baseline.template.mjs
+template_path="${plugin_root}skills/performance/capture-baseline.template.mjs"
 ```
 
 Use the Read tool to verify the template exists at this path. If not found, inform the user:
@@ -1173,6 +1221,36 @@ Use the Read tool to verify the template exists at this path. If not found, info
 > "Capture script template not found in plugin cache. This may indicate a corrupted plugin installation. Please reinstall the sdlc-workflow plugin."
 
 Stop execution.
+
+### Step 8.1.5 – Verify Playwright Installation
+
+**Runs only if `analysis_scope` ≠ "backend-only".**
+
+Verify both the npm package and the Chromium browser binary:
+
+```bash
+# Step 1: Check @playwright/test package
+node -e "require('@playwright/test')" 2>&1
+if [ $? -ne 0 ]; then
+  echo "❌ @playwright/test package not installed."
+  echo "   Run: npm install -D @playwright/test"
+  exit 1
+fi
+
+# Step 2: Check Chromium browser binary via ms-playwright cache
+# Linux: ~/.cache/ms-playwright, macOS: ~/Library/Caches/ms-playwright
+CHROMIUM_DIR="${HOME}/.cache/ms-playwright"
+[ ! -d "$CHROMIUM_DIR" ] && CHROMIUM_DIR="${HOME}/Library/Caches/ms-playwright"
+if [ ! -d "$CHROMIUM_DIR" ] || [ -z "$(ls -A "$CHROMIUM_DIR"/chromium* 2>/dev/null)" ]; then
+  echo "❌ Chromium browser binary not installed."
+  echo "   Run: npx playwright install chromium"
+  exit 1
+fi
+
+echo "✅ Playwright and Chromium verified."
+```
+
+**Do NOT proceed to Step 8.2 until both checks pass.**
 
 ### Step 8.2 – Copy Template to Target Directory
 
@@ -1182,14 +1260,21 @@ Read the **Target Directories** section and extract the baseline directory path.
 
 Copy the template file to the target directory:
 
-```
-cp {plugin-cache}/.../capture-baseline.template.mjs {baseline-directory}/capture-baseline.mjs
-```
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
 
-Make the script executable:
+template_path="${plugin_root}skills/performance/capture-baseline.template.mjs"
+if [ ! -f "$template_path" ]; then
+  echo "❌ Capture script template not found at: $template_path"; exit 1
+fi
 
-```
-chmod +x {baseline-directory}/capture-baseline.mjs
+cp "$template_path" "{baseline-directory}/capture-baseline.mjs"
+chmod +x "{baseline-directory}/capture-baseline.mjs"
 ```
 
 ### Step 8.3 – Explain Script and Prompt User Review
@@ -1206,7 +1291,7 @@ Display the following message:
 > ```
 >
 > **What this script does:**
-> - Reads performance scenarios from `.claude/performance-config.md`
+> - Reads performance scenarios from `.claude/performance-config.json`
 > - Launches a headless Chromium browser in your local environment
 > - Navigates to localhost URLs specified in the configuration
 > - **Waits for complete page lifecycle:**
@@ -1434,7 +1519,7 @@ Read `metadata.analysis_scope` from config to determine which commands to discov
 
 **Step 8.4.F1 – Check if Frontend Command Already Configured**
 
-Read `performance-config.md`. If the Development Environment table shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.F3 (Start Frontend).
+Read `performance-config.json`. If the Development Environment table shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.F3 (Start Frontend).
 
 **Step 8.4.F2 – Discover, Approve, and Save Command**
 
@@ -1483,7 +1568,7 @@ Compute hash:
 echo -n "{final_command}" | sha256sum | awk '{print $1}'
 ```
 
-Update the Development Environment table in `performance-config.md`:
+Update the Development Environment table in `performance-config.json`:
 
 | Field | Value |
 |---|---|
@@ -1493,7 +1578,22 @@ Update the Development Environment table in `performance-config.md`:
 | Command Approved | `true` |
 | Last Validated | `{current UTC timestamp}` |
 
-Set metadata fields: `dev_command_approved: true`, `dev_command_hash: "{computed hash}"`.
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.command "$final_command"
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.source "$doc_source"
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.port "$port"
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.command_approved true
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.last_validated "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+python3 "$plugin_root/scripts/perf-config.py" set metadata.dev_command_approved true
+python3 "$plugin_root/scripts/perf-config.py" set metadata.dev_command_hash "$command_hash"
+```
 
 > ✅ Frontend command approved and saved to configuration
 
@@ -1534,7 +1634,7 @@ Proceed to Step 9.
 
 **Step 8.4.B1 – Check if Backend Command Already Configured**
 
-Read `performance-config.md`. If the Development Environment table shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.B3 (Start Backend).
+Read `performance-config.json`. If the Development Environment table shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.B3 (Start Backend).
 
 ---
 
@@ -1588,7 +1688,7 @@ Compute hash:
 echo -n "{final_command}" | sha256sum | awk '{print $1}'
 ```
 
-Update the Development Environment table in `performance-config.md`:
+Update the Development Environment table in `performance-config.json`:
 
 | Field | Value |
 |---|---|
@@ -1598,7 +1698,22 @@ Update the Development Environment table in `performance-config.md`:
 | Command Approved | `true` |
 | Last Validated | `{current UTC timestamp}` |
 
-Set metadata fields: `dev_command_approved: true`, `dev_command_hash: "{computed hash}"`.
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.command "$final_command"
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.source "$doc_source"
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.port "$port"
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.command_approved true
+python3 "$plugin_root/scripts/perf-config.py" set dev_environment.last_validated "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+python3 "$plugin_root/scripts/perf-config.py" set metadata.dev_command_approved true
+python3 "$plugin_root/scripts/perf-config.py" set metadata.dev_command_hash "$command_hash"
+```
 
 > ✅ Backend command approved and saved to configuration
 
@@ -1633,7 +1748,7 @@ On success:
 
 **Step 8.4.B4 – Query, Verify, and Confirm Test Data**
 
-**Guard condition:** If `.claude/performance/test-data/manifest.json` already exists from Step 5, skip to B4.2 (Verify).
+**Guard condition:** If `.claude/performance/test-data/manifest.json` already exists (from a previous baseline run or manual setup), skip to B4.2 (Verify).
 
 **B4.1 – Discover list endpoints and generate manifest:**
 
@@ -1642,7 +1757,7 @@ On success:
 **Find:** GET endpoints in `workflow_module_path` that have no path parameters (list/search endpoints — e.g. `/api/v2/products` not `/api/v2/products/{id}`).
 **Store:** array of endpoint paths in `list_endpoints`. Store which method was used as `discovery_method`.
 
-Read `workflow_module_path` from the Module Registry in `performance-config.md` (handler file paths → strip filename and line number → common directory).
+Read `workflow_module_path` from the Module Registry in `performance-config.json` (handler file paths → strip filename and line number → common directory).
 
 Generate manifest with a single Shell block:
 
@@ -1670,6 +1785,8 @@ jq -n \
   '{generated_at: (now | todate), backend_port: $port, discovery_method: $method, endpoints: $e}' \
   > .claude/performance/test-data/manifest.json
 ```
+
+**Timeout guidance:** Replace `--max-time 10` with `--connect-timeout 3 --max-time 5` on each curl call. This reduces both the TCP handshake timeout and the total transfer timeout per endpoint. If an endpoint times out, record it as `status: "timeout"` and continue with remaining endpoints.
 
 **B4.2 – Verify endpoints and display results:**
 
@@ -1759,115 +1876,36 @@ Read `metadata.analysis_scope` from config to determine capture method:
 
 **Apply:** [Pattern 10: API Profiling](../performance/common-patterns.md#pattern-10-api-profiling)
 
-Wrap Pattern 10 in a shell function and generate JSON output for baseline report.
+Execute Pattern 10 via `perf-benchmark.sh` to benchmark backend endpoints and write results.
 
 ```bash
-function run_backend_baseline() {
-  export CALLER_SKILL="performance-baseline"
-  
-  # Extract port and iterations from config
-  port=$(grep "| Port |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-  iterations=$(grep "| Iterations |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
-  
-  # Pattern 10 Step A - Check Prerequisites (curl and bc)
-  # (Full code from common-patterns.md - see Pattern 10 Step A)
-  
-  # Pattern 10 Step B - Execute Benchmark with Cache Measurement  
-  # (Full code from common-patterns.md - see Pattern 10 Step B)
-  
-  # After benchmarking completes, generate baseline JSON
-  echo "Generating baseline report..."
-  
-  results_json="{"
-  results_json+="\"scenarios\": ["
-  
-  first=true
-  for scenario in "${!dynamic_results[@]}"; do
-    result="${dynamic_results[$scenario]}"
-    
-    [ "$first" = true ] && first=false || results_json+=","
-    
-    p50=$(echo "$result" | jq -r '.p50_ms')
-    p95=$(echo "$result" | jq -r '.p95_ms')
-    p99=$(echo "$result" | jq -r '.p99_ms')
-    mean=$(echo "$result" | jq -r '.mean_ms')
-    test_url=$(echo "$result" | jq -r '.test_url')
-    first_req=$(echo "$result" | jq -r '.first_request_ms')
-    cache_pct=$(echo "$result" | jq -r '.cache_improvement_pct')
-    cache_stat=$(echo "$result" | jq -r '.cache_status')
-    
-    results_json+=$(cat <<JSON
-{
-  "name": "$scenario",
-  "url": "$test_url",
-  "metrics": {
-    "responseTime": {
-      "mean": $mean,
-      "p50": $p50,
-      "p95": $p95,
-      "p99": $p99
-    }
-  },
-  "cache": {
-    "first_request_ms": $first_req,
-    "warm_mean_ms": $mean,
-    "improvement_pct": $cache_pct,
-    "status": "$cache_stat"
-  }
-}
-JSON
-)
-  done
-  
-  results_json+="],"
-  
-  # Calculate aggregate statistics
-  declare -a all_p50 all_p95 all_p99 all_mean
-  for scenario in "${!dynamic_results[@]}"; do
-    result="${dynamic_results[$scenario]}"
-    all_p50+=($(echo "$result" | jq -r '.p50_ms'))
-    all_p95+=($(echo "$result" | jq -r '.p95_ms'))
-    all_p99+=($(echo "$result" | jq -r '.p99_ms'))
-    all_mean+=($(echo "$result" | jq -r '.mean_ms'))
-  done
-  
-  agg_p50=$(printf '%s\n' "${all_p50[@]}" | awk '{sum+=$1} END {printf "%.2f", sum/NR}')
-  agg_p95=$(printf '%s\n' "${all_p95[@]}" | awk '{sum+=$1} END {printf "%.2f", sum/NR}')
-  agg_p99=$(printf '%s\n' "${all_p99[@]}" | awk '{sum+=$1} END {printf "%.2f", sum/NR}')
-  agg_mean=$(printf '%s\n' "${all_mean[@]}" | awk '{sum+=$1} END {printf "%.2f", sum/NR}')
-  
-  results_json+=$(cat <<JSON
-"aggregate": {
-  "responseTime": {
-    "mean": $agg_mean,
-    "p50": $agg_p50,
-    "p95": $agg_p95,
-    "p99": $agg_p99
-  }
-},
-"config": {
-  "iterations": $iterations,
-  "warmupRuns": 2,
-  "mode": "api-benchmark"
-}
-}
-JSON
-)
-  
-  # Write JSON to file
-  mkdir -p .claude/performance/baselines
-  echo "$results_json" | jq '.' > .claude/performance/baselines/benchmark-results.json
-  
-  echo "✅ Baseline captured: ${#dynamic_results[@]} endpoint(s)"
-  echo "   Results: .claude/performance/baselines/benchmark-results.json"
-}
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
 
-run_backend_baseline
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found in ~/.claude/plugins/cache/"
+  echo "   Ensure the plugin is installed and try again."
+  exit 1
+fi
 
-# Check if profiling was skipped
-if [ "$skip_dynamic" = "true" ]; then
-  echo "⚠️ Cannot generate backend baseline without dynamic profiling."
-  echo "   Please ensure backend is running and retry."
+# Read config values
+port=$(python3 "$plugin_root/scripts/perf-config.py" get dev_environment.port)
+iterations=$(python3 "$plugin_root/scripts/perf-config.py" get baseline_settings.iterations)
+
+# Read baseline directory from config (respect custom paths)
+baseline_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.baselines)
+
+# Execute Pattern 10: API Profiling via perf-benchmark.sh
+"$plugin_root/scripts/perf-benchmark.sh" \
+  --port "$port" \
+  --iterations "$iterations" \
+  --manifest .claude/performance/test-data/manifest.json \
+  --output "${baseline_dir}/benchmark-results.json"
+
+if [ $? -ne 0 ]; then
+  echo "❌ Backend benchmarking failed. Ensure the backend is running on port $port"
+  echo "   and test data manifest exists at .claude/performance/test-data/manifest.json"
   exit 1
 fi
 ```
@@ -1882,6 +1920,19 @@ After Step 9.A completes, proceed to Step 10 (baseline report generation).
 
 **Purpose:** Capture BOTH frontend (browser metrics via Playwright) AND backend (API metrics via curl/bc) baselines for comprehensive cross-layer performance analysis.
 
+#### Step 9.B.0 – Pre-flight Check for Dual Capture
+
+Before launching either capture, verify all prerequisites:
+
+1. Read `dev_environment.port` from config
+2. Verify backend is still running: `curl -sf --connect-timeout 3 --max-time 5 http://localhost:${port}/`
+3. Check for test data manifest at `.claude/performance/test-data/manifest.json`
+   - **If manifest exists:** proceed to Step 9.B.1
+   - **If manifest does not exist** (user chose "application already running" in Step 8.3.5, skipping Step 8.4.B4): prompt the user to provide API endpoint paths, then generate the manifest via the same endpoint discovery and curl verification logic as Step 8.4.B4 before proceeding
+4. Read `baseline_settings.iterations` from config
+
+**Do NOT proceed to Step 9.B.1 until all prerequisites are confirmed.**
+
 #### Step 9.B.1 – Frontend Baseline Capture (Playwright)
 
 Execute Steps 9.1-9.3 (Playwright browser automation) as documented below.
@@ -1890,13 +1941,11 @@ Execute Steps 9.1-9.3 (Playwright browser automation) as documented below.
 
 **Note:** This is the same Playwright capture used in frontend-only mode, but we save to a temporary file instead of generating the final report immediately.
 
-#### Step 9.B.2 – Backend Baseline Capture (curl/bc)
+#### Step 9.B.2 – Backend Baseline Capture
 
-Execute Step 9.A (curl/bc API Profiling) to benchmark backend endpoints.
+Context was established in Step 9.B.0. Execute Pattern 10 via `perf-benchmark.sh` (same invocation as Step 9.A) using the port, iterations, and manifest from Step 9.B.0.
 
-**Output:** Save backend results to `{baseline-directory}/benchmark-results.json`
-
-**Note:** Both frontend and backend baselines use the same port and test data from config.
+**Output:** `{baseline-directory}/benchmark-results.json`
 
 #### Step 9.B.3 – Merge Baseline Reports
 
@@ -1924,7 +1973,7 @@ Combine frontend and backend metrics into a single hybrid baseline report:
    - **Frontend Performance Metrics section** (LCP, FCP, DOM Interactive, Total Load Time)
    - **Backend API Performance Metrics section** (Response Time, Throughput, Error Rate, Cache Effectiveness)
 
-4. **Update performance-config.md metadata:**
+4. **Update performance-config.json metadata:**
    ```yaml
    metadata:
      baseline_captured: true
@@ -1958,9 +2007,9 @@ max_depth=5  # Prevent infinite loop
 
 for i in $(seq 0 $max_depth); do
   if [ $i -eq 0 ]; then
-    check_path=".claude/performance-config.md"
+    check_path=".claude/performance-config.json"
   else
-    check_path=$(printf '../%.0s' $(seq 1 $i)).claude/performance-config.md
+    check_path=$(printf '../%.0s' $(seq 1 $i)).claude/performance-config.json
   fi
   
   if [ -f "$check_path" ]; then
@@ -1973,7 +2022,7 @@ for i in $(seq 0 $max_depth); do
 done
 
 if [ -z "$config_path" ]; then
-  echo "❌ Could not find .claude/performance-config.md"
+  echo "❌ Could not find .claude/performance-config.json"
   echo ""
   echo "Searched from: $current_dir"
   echo "Looked in: current directory and up to $max_depth parent directories"
@@ -2000,7 +2049,7 @@ Build the command to execute the capture script based on the selected mode from 
 node {baseline-directory}/capture-baseline.mjs --config "$config_path" --port {port} --mode cold-start
 ```
 
-Note: The script will read the Performance Scenarios table from the config and measure all configured scenarios. The workflow selection is used for filtering during report generation (Step 8).
+Note: The script will read the Performance Scenarios table from the config and measure all configured scenarios. The workflow selection is used for filtering during report generation (Step 10).
 
 ### Step 9.2 – Execute Script and Handle Errors
 
@@ -2017,7 +2066,7 @@ Execute the command using the Bash tool.
    >
    > "The script could not connect to the application. Please ensure:"
    > - Your application is running locally (e.g., `npm run dev`)
-   > - The URLs in performance-config.md are correct
+   > - The URLs in performance-config.json are correct
    > - The port numbers match your running application
    >
    > "Start your application and re-run this skill."
@@ -2050,11 +2099,11 @@ Execute the command using the Bash tool.
    Inform the user:
    > "❌ **Invalid URLs in configuration**"
    >
-   > "The URLs in performance-config.md are invalid or not localhost URLs. Please review the Performance Scenarios table and ensure all URLs:"
+   > "The URLs in performance-config.json are invalid or not localhost URLs. Please review the Performance Scenarios table and ensure all URLs:"
    > - Start with `/` (relative paths) or `http://localhost` or `http://127.0.0.1`
    > - Include port numbers if needed (e.g., `/products` → `http://localhost:3000/products`)
    >
-   > "Edit `.claude/performance-config.md` and re-run this skill."
+   > "Edit `.claude/performance-config.json` and re-run this skill."
    
    Stop execution.
 
@@ -2113,7 +2162,7 @@ The script outputs JSON to stdout with the following structure:
 }
 ```
 
-Parse this JSON output and store it for use in Step 8.
+Parse this JSON output and store it for use in Step 10.
 
 ## Step 10 – Generate Baseline Report
 
@@ -2139,9 +2188,9 @@ If no scenarios match, inform the user:
 >
 > "The selected workflow's Key Screens do not match any configured Performance Scenarios. This may happen if:"
 > - The workflow was selected before scenarios were configured
-> - The scenario URLs in performance-config.md don't match the workflow's routes
+> - The scenario URLs in performance-config.json don't match the workflow's routes
 >
-> "Please review `.claude/performance-config.md` and ensure the Performance Scenarios table includes the workflow's Key Screens."
+> "Please review `.claude/performance-config.json` and ensure the Performance Scenarios table includes the workflow's Key Screens."
 
 Stop execution.
 
@@ -2245,87 +2294,75 @@ Write the generated report to the baseline directory:
 
 ### Step 10.5 – Update Configuration with Baseline Data
 
-After generating the baseline report, update the performance-config.md with baseline metadata and metrics:
+After generating the baseline report, update performance-config.json with baseline metadata and metrics using `perf-config.py`:
 
-**Step 10.5.1 – Read Current Configuration**
-
-Read `.claude/performance-config.md` from the target repository.
-
-**Step 10.5.2 – Update Metadata Section**
-
-Capture the current git commit SHA with error handling:
+**Step 10.5.1 – Update Metadata**
 
 ```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
 baseline_commit_sha=$(git rev-parse HEAD 2>/dev/null || echo "unknown")
 
 if [ "$baseline_commit_sha" = "unknown" ]; then
-  log warning:
-  > ⚠️ **Not a git repository or git command unavailable**
-  >
-  > Baseline commit SHA set to "unknown" - freshness checks will be skipped
-  > in performance-implement-optimization.
-  >
-  > To enable freshness checks, initialize a git repository: `git init`
+  echo "⚠️ Not a git repository — baseline commit SHA set to 'unknown', freshness checks will be skipped."
 fi
+
+python3 "$plugin_root/scripts/perf-config.py" set metadata.baseline_captured true
+python3 "$plugin_root/scripts/perf-config.py" set metadata.baseline_mode "$mode"
+python3 "$plugin_root/scripts/perf-config.py" set metadata.baseline_timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+python3 "$plugin_root/scripts/perf-config.py" set metadata.baseline_commit_sha "$baseline_commit_sha"
 ```
 
-Update the metadata frontmatter with:
+**Step 10.5.2 – Update Optimization Targets with p95 Values**
 
-```yaml
-metadata:
-  # ... existing fields ...
-  last_updated: {current-timestamp}
-  baseline_captured: true
-  baseline_mode: {selected-mode from Step 5}
-  baseline_timestamp: {current-timestamp}
-  baseline_commit_sha: {baseline_commit_sha}  # Will be "unknown" if git unavailable
+Read `metadata.baseline_captured` from the config **before** the updates above were applied (was it already `true`?).
+
+**If first baseline** (was `false` before this run) — set both baseline and latest to the captured p95 values:
+
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+# Frontend metrics (if metric_type is "frontend" or "hybrid")
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.frontend.lcp.baseline "$lcp_p95"
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.frontend.lcp.latest "$lcp_p95"
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.frontend.fcp.baseline "$fcp_p95"
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.frontend.fcp.latest "$fcp_p95"
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.frontend.dom_interactive.baseline "$dom_p95"
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.frontend.dom_interactive.latest "$dom_p95"
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.frontend.total_load_time.baseline "$total_p95"
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.frontend.total_load_time.latest "$total_p95"
+
+# Backend metrics (if metric_type is "backend" or "hybrid")
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.backend.response_time_p95.baseline "$resp_p95"
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.backend.response_time_p95.latest "$resp_p95"
+# ... repeat for response_time_p99, throughput, error_rate, db_query_time_p95
 ```
 
-**Step 10.5.3 – Update Optimization Targets (If First Baseline)**
+**If re-baseline** (was already `true`) — leave baseline unchanged, update only latest:
 
-Check the metadata from the config (read in Step 10.5.1) to determine if this is the first baseline:
+```bash
+python3 "$plugin_root/scripts/perf-config.py" set optimization_targets.frontend.lcp.latest "$lcp_p95"
+# ... repeat for each metric in the applicable scope
+```
 
-**If `metadata.baseline_captured: false` or field doesn't exist (first baseline):**
-
-Update the Optimization Targets section:
-
-| Metric | Baseline (p95) | Latest Verified (p95) | Target | Unit | Last Updated |
-|---|---|---|---|---|---|
-| LCP | **{lcp-p95 from aggregate}** | **{lcp-p95}** | {target} | seconds | **{timestamp}** |
-| FCP | **{fcp-p95}** | **{fcp-p95}** | {target} | seconds | **{timestamp}** |
-| DOM Interactive | **{domInteractive-p95}** | **{domInteractive-p95}** | {target} | seconds | **{timestamp}** |
-| Total Load Time | **{total-p95}** | **{total-p95}** | {target} | seconds | **{timestamp}** |
-
-- Populate **Baseline (p95)** column with p95 metrics from aggregate JSON output
-- Set **Latest Verified (p95)** column = Baseline (p95) (initial values match)
-- Keep **Target** column unchanged (from setup)
-- Set **Last Updated** = current timestamp
-
-**If `metadata.baseline_captured: true` (re-baseline):**
-
-- Leave Baseline column unchanged (baseline is immutable)
-- Update Latest Verified (p95) column with new p95 metrics (this is a re-baseline after changes)
-- Update Last Updated column with current timestamp
-
-**Step 10.5.4 – Write Updated Configuration**
-
-**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-9-config-write-protection)
-
-Write the updated configuration back to `.claude/performance-config.md`.
-
-**Step 10.5.5 – Log Configuration Update**
-
-Log to user:
+**Step 10.5.3 – Log Update**
 
 ```
 ✓ Configuration auto-updated:
-  - Baseline mode: {selected-mode}
+  - Baseline mode: {mode}
   - Baseline metrics captured (p95)
   - Commit SHA: {baseline_commit_sha}
-  - Last updated: {timestamp}
 ```
-
-**Note:** This step ensures the configuration is kept in sync with the baseline report, enabling downstream skills to read baseline mode and validate freshness.
 
 ## Step 11 – Output Summary
 

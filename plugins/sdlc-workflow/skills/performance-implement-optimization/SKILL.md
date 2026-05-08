@@ -37,6 +37,10 @@ You are an AI performance optimization implementation assistant. You execute per
   with Read/Grep/Glob paths (Step 5-B)
 - Jira MCP unavailable → trigger REST fallback; do not halt unless REST also fails
 
+### Plugin Root Resolution
+
+Every bash block in this skill that calls `perf-config.py`, `jira-client.py`, or references `$plugin_root` must begin with the Pattern 0 inline resolution. See [Pattern 0](../performance/common-patterns.md#pattern-0-plugin-root-resolution). Each bash block runs in an isolated subprocess — variables do not persist between blocks.
+
 ## Relationship to implement-task
 
 This skill extends the `/sdlc-workflow:implement-task` workflow with performance-specific steps. The core implementation flow (Jira task parsing, code inspection, modification, commit, PR creation) follows implement-task exactly. The extensions are:
@@ -71,6 +75,13 @@ Before attempting any Jira operations (Steps 2, 3, 4, 11, 12), use the MCP-first
 Use Jira REST API to fetch the task:
 
 ```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
 JIRA_SERVER_URL="{url}" JIRA_EMAIL="{email}" JIRA_API_TOKEN="{token}" \
   python3 "$plugin_root/scripts/jira-client.py" get_issue {task-id} --fields "*all"
 ```
@@ -93,6 +104,8 @@ Parse the structured description expecting these sections:
 - **Performance Test Requirements** — How to verify performance improvement
 
 Extract and store all sections for use in later steps.
+
+**Extract and store the Jira issue key:** The `jira_key` variable is the Jira issue ID passed as the skill argument (e.g., `TC-4129`). This variable is used throughout the skill for filenames, reports, and Jira updates. Every bash block that references `${jira_key}` must set it at the top of the block (e.g., `jira_key="TC-4129"` — the agent fills in the actual key).
 
 ## Step 3 – Verify Dependencies
 
@@ -127,7 +140,7 @@ Read `serena_instance` from the **target repository's** `CLAUDE.md`:
 ```bash
 serena_instance=$(grep -A5 "Repository Registry" CLAUDE.md \
   | grep -v "^|---|" | grep "^|" \
-  | awk -F'|' 'NR==2{print $4}' | xargs)
+  | awk -F'|' 'NR==2{gsub(/^[ \t]+|[ \t]+$/, "", $4); print $4}')
 ```
 
 **If `serena_instance` is non-empty and not "—":**
@@ -224,7 +237,16 @@ Follow the same code modification principles as implement-task:
 
 ## Step 8 – Run Functional Tests
 
-Try `npm test`. If tests fail, fix and re-run. If no tests configured, prompt:
+Read `metadata.analysis_scope` and `repositories.backend.framework` from config to determine the test command.
+
+**Test command by scope and framework:**
+- **If analysis_scope includes frontend** (frontend-only, full-stack, full-stack-monorepo): try `npm test`
+- **If backend framework is Node.js-based** (express, fastify, nest, koa): try `npm test`
+- **If backend framework is "spring-boot" or "quarkus":** try `./gradlew test` if `gradlew` exists, else `mvn test`
+- **If backend framework is "flask", "django", or "fastapi":** try `pytest`
+- **If backend framework is "actix-web", "axum", or "rocket":** try `cargo test`
+
+If the detected test command fails, fix and re-run. If no tests configured or framework not recognized, prompt:
 
 > Does this project have tests? (1) Yes - provide test command (2) No - skip to manual verification
 
@@ -243,7 +265,7 @@ Read `metadata.baseline_commit_sha` from config. If workflow files changed since
 Re-run the performance baseline capture for scenarios affected by this optimization.
 
 **Determine affected scenarios and metric type:**
-- Read `.claude/performance-config.md` from the target repository
+- Read `.claude/performance-config.json` from the target repository
 - **Apply:** [Common Pattern: Workflow Validation](../performance/common-patterns.md#pattern-6-workflow-validation)
 - Read `metadata.metric_type` to determine capture method
 - Filter scenarios to those in the selected workflow
@@ -287,16 +309,25 @@ Re-run the performance baseline capture for scenarios affected by this optimizat
      exit 1
    fi
    
-   cp "$template_path" "{baseline-directory}/capture-baseline-current.mjs"
-   chmod +x "{baseline-directory}/capture-baseline-current.mjs"
+   baseline_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.baselines)
+   
+   cp "$template_path" "${baseline_dir}/capture-baseline-current.mjs"
+   chmod +x "${baseline_dir}/capture-baseline-current.mjs"
    ```
    
-   **Note:** Uses `{baseline-directory}` instead of `/tmp` for consistency with baseline skill and to preserve the script used for each optimization run (audit trail).
+   **Note:** Uses the baseline directory from `directories.baselines` config instead of `/tmp` for consistency with baseline skill and to preserve the script used for each optimization run (audit trail).
 
 2. Extract the application port from configuration:
    ```bash
+   # Resolve plugin root (Pattern 0: Plugin Root Resolution)
+   plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+     | sort -V | tail -1)
+   if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+     echo "❌ sdlc-workflow plugin not found"; exit 1
+   fi
+   
    # Read port stored by performance-baseline (Step 7.4) in Development Environment section
-   port=$(grep "| Port |" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+   port=$(python3 "$plugin_root/scripts/perf-config.py" get dev_environment.port)
    
    if [ -z "$port" ] || [ "$port" = "TBD" ]; then
      echo "❌ Application port not configured."
@@ -307,8 +338,18 @@ Re-run the performance baseline capture for scenarios affected by this optimizat
 
 3. Run the capture script:
    ```bash
-   node "{baseline-directory}/capture-baseline-current.mjs" \
-     --config "{path-to-performance-config.md}" \
+   # Resolve plugin root (Pattern 0: Plugin Root Resolution)
+   plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+     | sort -V | tail -1)
+   if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+     echo "❌ sdlc-workflow plugin not found"; exit 1
+   fi
+   
+   baseline_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.baselines)
+   port=$(python3 "$plugin_root/scripts/perf-config.py" get dev_environment.port)
+   
+   node "${baseline_dir}/capture-baseline-current.mjs" \
+     --config .claude/performance-config.json \
      --port "$port" \
      --mode cold-start
    ```
@@ -461,6 +502,7 @@ If any metric is worse than the baseline value **beyond noise tolerance** (see S
 Write a regression report to preserve diagnostic information:
 
 ```bash
+jira_key="{jira-key}"
 timestamp=$(date -u +"%Y-%m-%dT%H-%M-%S")
 regression_file=".claude/performance/optimization-results/${jira_key}-regression-${timestamp}.md"
 mkdir -p .claude/performance/optimization-results
@@ -517,7 +559,9 @@ modified files so the developer can inspect them with `git stash show -p` or rec
 `git stash pop`.
 
 ```bash
-git stash push -m "perf-regression-stash: {jira-key} at {timestamp}"
+jira_key="{jira-key}"
+timestamp=$(date -u +"%Y-%m-%dT%H-%M-%S")
+git stash push -m "perf-regression-stash: ${jira_key} at ${timestamp}"
 ```
 
 Inform user:
@@ -551,6 +595,7 @@ b
 Create timestamped report filename:
 
 ```bash
+jira_key="{jira-key}"
 timestamp=$(date -u +"%Y-%m-%dT%H-%M-%S")
 report_file=".claude/performance/optimization-results/${jira_key}-${timestamp}.md"
 ```
@@ -797,6 +842,13 @@ This comment was AI-generated by [sdlc-workflow/performance-implement-optimizati
 Transition the task:
 
 ```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
 # Get available transitions for the task
 JIRA_SERVER_URL="{url}" JIRA_EMAIL="{email}" JIRA_API_TOKEN="{token}" \
   python3 "$plugin_root/scripts/jira-client.py" get_transitions {task-id}

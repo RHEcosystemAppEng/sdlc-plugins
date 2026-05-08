@@ -549,7 +549,7 @@ Runs ONLY if backend detected or provided:
 5. Collect baseline capture settings (iterations, warmup runs, metrics)
 6. Collect optimization targets (LCP, FCP, DOM Interactive, Total Load Time)
 7. Initialize metadata section with `workflow_selected: false`
-8. Generate minimal `.claude/performance-config.md` with:
+8. Generate minimal `.claude/performance-config.json` with:
    - Backend configured
    - Baseline settings configured
    - Optimization targets configured
@@ -559,7 +559,7 @@ Runs ONLY if backend detected or provided:
 9. Validate configuration and output summary
 
 **Output:**
-- Minimal `.claude/performance-config.md` created in target repository with:
+- Minimal `.claude/performance-config.json` created in target repository with:
   - Backend Repository Configuration (configured upfront)
   - Baseline Capture Settings (configured)
   - Optimization Targets (configured)

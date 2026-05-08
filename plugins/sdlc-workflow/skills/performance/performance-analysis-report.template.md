@@ -492,6 +492,34 @@ this detects waste at the HTTP API boundary — where the backend serves fields 
 
 ---
 
+## Candidates for Manual Review (Low Confidence)
+
+> Findings below were detected via grep-based pattern matching without semantic analysis.
+> They have a high false-positive rate and require manual verification with browser DevTools
+> or runtime profiling before investing optimization effort.
+
+### Over-Fetching (Grep-Based)
+
+{if over-fetching grep findings exist}
+
+| # | Endpoint | Unused Fields (Estimated) | Response Size | Confidence | Verification |
+|---|---|---|---|---|---|
+| {n} | {endpoint} | {field_list} | {size} | Low | Requires destructuring/prop-drilling review |
+
+{else: "No grep-based over-fetching candidates detected."}
+
+### Layout Thrashing (Grep-Based)
+
+{if layout thrashing grep findings exist}
+
+| # | File:Line | Pattern | Loop Context | Confidence | Verification |
+|---|---|---|---|---|---|
+| {n} | {file}:{line} | {read} → {write} | {loop_info} | Low | Requires Chrome DevTools Performance profiling |
+
+{else: "No grep-based layout thrashing candidates detected."}
+
+---
+
 ## Recommended Optimizations
 
 **Note:** Optimizations are categorized by layer (Frontend / Backend / Integration) when backend analysis is available.
