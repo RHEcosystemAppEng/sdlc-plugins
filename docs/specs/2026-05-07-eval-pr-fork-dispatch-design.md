@@ -50,10 +50,12 @@ Fork PR opened
 │  eval-pr-run.yml (workflow_run)      │  Base repo context — secrets available
 │                                      │
 │  Job 1: discover                     │
+│  - Set pending commit status on PR   │
 │  - Resolve PR identity via GitHub API│
 │  - Checkout PR merge commit          │
 │  - Discover skills via git diff      │
 │  - Check collaborator permission     │
+│  - Update status if awaiting approval│
 │  - Output: trusted, skills, PR#     │
 │                                      │
 │  Job 2: gate                         │
@@ -66,6 +68,9 @@ Fork PR opened
 │  - Authenticate GCP                  │
 │  - Run evals                         │
 │  - Post PR review                    │
+│                                      │
+│  Job 4: report-status                │
+│  - Set final commit status (pass/fail)│
 └──────────────────────────────────────┘
 ```
 
@@ -200,6 +205,20 @@ run-evals:
 4. **Run PR evals** — existing step, moved from `eval-pr.yml`. Uses `needs.discover.outputs.skills` instead of the inline discovery output.
 
 5. **Post eval results review** — existing step, moved from `eval-pr.yml`. Uses `needs.discover.outputs.pr_number` instead of `context.issue.number` (which is unavailable in `workflow_run` context).
+
+### Job 4: report-status
+
+Sets a final commit status on the PR's head SHA via the Commit Status API. Runs after all other jobs complete (`always()` + `needs.discover.result == 'success'`).
+
+This is necessary because `workflow_run` workflows run in the default branch context and don't appear as status checks on the PR page. Without explicit commit statuses, PR authors and reviewers have no visibility that evals are pending, waiting for approval, running, or complete.
+
+Status transitions:
+- **pending** — set immediately when the discover job starts ("Eval run in progress...")
+- **pending** — updated if the author is untrusted ("Waiting for approval in eval-protected environment")
+- **success** — eval run completed, results posted as PR review
+- **failure** — approval rejected, or eval run failed
+
+All statuses use the same `context: 'Eval PR Run'` so GitHub updates the existing status rather than creating duplicates.
 
 ## Trust Model
 
