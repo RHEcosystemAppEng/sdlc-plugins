@@ -268,18 +268,18 @@ jobs:
   report-status:
     name: Report Status
     needs: [discover, gate, run-evals]
-    if: >-
-      always() &&
-      needs.discover.result == 'success'
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Set final commit status
         env:
+          DISCOVER_RESULT: ${{ needs.discover.result }}
           EVALS_RESULT: ${{ needs.run-evals.result }}
           GATE_RESULT: ${{ needs.gate.result }}
         uses: actions/github-script@v7
         with:
           script: |
+            const discoverResult = process.env.DISCOVER_RESULT;
             const evalsResult = process.env.EVALS_RESULT;
             const gateResult = process.env.GATE_RESULT;
 
@@ -287,6 +287,9 @@ jobs:
             if (evalsResult === 'success') {
               state = 'success';
               description = 'Eval run completed — results posted as PR review';
+            } else if (discoverResult !== 'success') {
+              state = 'failure';
+              description = 'Eval run failed — could not resolve PR context';
             } else if (gateResult === 'failure') {
               state = 'failure';
               description = 'Approval was rejected in eval-protected environment';
