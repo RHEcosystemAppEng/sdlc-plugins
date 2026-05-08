@@ -31,7 +31,7 @@ A trust check auto-approves eval runs for repository collaborators with write ac
 | Trust threshold | `admin` or `write` | Collaborators with write access can already push to the repo directly — granting them secret access in CI adds no new attack surface |
 | Untrusted gate | Protected environment | GitHub's built-in approval mechanism — reviewers click "Approve" in the Actions UI |
 | PR coverage | All PRs (fork and non-fork) | Single code path avoids duplicate logic and ensures consistent behavior |
-| Artifact naming | `eval-pr-metadata` (fixed name) | Artifacts are scoped to workflow runs — concurrent PRs each get their own run ID, no collision |
+| Data flow | No artifact — Stage 2 derives everything | Artifact is attacker-controlled (fork PR can modify Stage 1 workflow). Stage 2 derives PR identity from GitHub API and skills from git diff on the checked-out merge commit |
 
 ## Architecture
 
@@ -40,10 +40,9 @@ Fork PR opened
     │
     ▼
 ┌──────────────────────────────┐
-│  eval-pr.yml (pull_request)  │  No secrets needed
-│  1. Checkout                 │
-│  2. Discover changed skills  │
-│  3. Upload artifact (skills)  │
+│  eval-pr.yml (pull_request)  │  Path-filtered gate only
+│  No work — just triggers     │
+│  workflow_run on completion  │
 └──────────────┬───────────────┘
                │ workflow_run (completed)
                ▼
@@ -51,8 +50,9 @@ Fork PR opened
 │  eval-pr-run.yml (workflow_run)      │  Base repo context — secrets available
 │                                      │
 │  Job 1: discover                     │
-│  - Download artifact (skills only)    │
 │  - Resolve PR identity via GitHub API│
+│  - Checkout PR merge commit          │
+│  - Discover skills via git diff      │
 │  - Check collaborator permission     │
 │  - Output: trusted, skills, PR#     │
 │                                      │
@@ -73,7 +73,7 @@ Fork PR opened
 
 ### Changes from Current
 
-The workflow is stripped to discovery and artifact upload only. All secret-dependent steps are removed: GCP authentication, Claude Code installation, eval execution, and review posting.
+The workflow is reduced to a minimal path-filtered trigger. All logic is removed — no checkout, no discovery, no artifact. Its sole purpose is to act as a gate: GitHub's path filter ensures it only runs when skill or eval files change, and its completion triggers Stage 2 via `workflow_run`.
 
 ### Trigger
 
@@ -89,32 +89,9 @@ on:
       - '.github/workflows/eval-pr.yml'
 ```
 
-### Permissions
-
-```yaml
-permissions:
-  contents: read
-```
-
-Reduced from `contents: read` + `pull-requests: write` — this workflow no longer posts reviews.
-
 ### Steps
 
-1. **Checkout** — `actions/checkout@v4` with `fetch-depth: 0`
-2. **Discover changed skills** — existing logic, unchanged (git diff against PR base, map to eval suites)
-3. **Write metadata file** — write `eval-pr-metadata.json` with discovered skills:
-
-```json
-{
-  "skills": "skill1,skill2"
-}
-```
-
-The artifact carries only the discovery result. PR identity (number, author) is derived from the GitHub API in Stage 2 to prevent spoofing via artifact poisoning.
-
-4. **Upload artifact** — `actions/upload-artifact@v4` with name `eval-pr-metadata`, containing the `eval-pr-metadata.json` file.
-
-The artifact is uploaded even when `skills` is empty so Stage 2 can detect the no-op cleanly.
+Single no-op step. The workflow just needs to complete successfully to trigger Stage 2.
 
 ## Workflow 2: eval-pr-run.yml (new)
 
@@ -127,7 +104,7 @@ on:
     types: [completed]
 ```
 
-No path filtering — `workflow_run` does not support it. The `completed` type fires on both success and failure, so the `discover` job checks `github.event.workflow_run.conclusion == 'success'` before proceeding. If the triggering workflow found no changed skills, the `run-evals` job skips via its `if` condition.
+No path filtering — `workflow_run` does not support it. The `completed` type fires on both success and failure, so the `discover` job checks `github.event.workflow_run.conclusion == 'success'` before proceeding.
 
 ### Permissions
 
@@ -135,33 +112,18 @@ No path filtering — `workflow_run` does not support it. The `completed` type f
 permissions:
   contents: read
   pull-requests: write
-  actions: read
 ```
-
-`actions: read` is needed to download artifacts from the triggering run.
 
 ### Job 1: discover
 
-Downloads the artifact and determines trust level. Skips early if the triggering workflow failed.
+Resolves PR identity from the GitHub API, checks out the PR merge commit, discovers changed skills via git diff, and determines trust level. Skips early if the triggering workflow failed. No data from the triggering workflow is used — everything is derived independently.
 
 **Steps:**
 
-1. **Check triggering workflow conclusion** — exit early if `github.event.workflow_run.conclusion != 'success'`
-
-2. **Download artifact** from triggering run:
-
-```yaml
-- uses: actions/download-artifact@v4
-  with:
-    name: eval-pr-metadata
-    run-id: ${{ github.event.workflow_run.id }}
-    github-token: ${{ secrets.GITHUB_TOKEN }}
-```
-
-3. **Validate skills and resolve PR identity** via `actions/github-script@v7`:
-   - Validate `skills` format against `^[a-z0-9-]+(,[a-z0-9-]+)*$` (artifact is untrusted)
-   - Resolve PR number and author from GitHub API via `listPullRequestsAssociatedWithCommit` using `workflow_run.head_sha`, filtered to open PRs targeting `main`
-   - Check collaborator permission level for the API-derived author
+1. **Resolve PR identity and check trust** via `actions/github-script@v7`:
+   - Find PR via `listPullRequestsAssociatedWithCommit` using `workflow_run.head_sha`, filtered to open PRs targeting `main`
+   - Check collaborator permission level for the PR author
+   - Output `pr_number`, `base_sha`, `author`, `trusted`
 
 ```javascript
 const headSha = context.payload.workflow_run.head_sha;
@@ -174,6 +136,10 @@ const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
 });
 const trusted = ['admin', 'write'].includes(data.permission);
 ```
+
+2. **Checkout PR merge commit** — `actions/checkout@v4` with `ref: refs/pull/<pr_number>/merge` and `fetch-depth: 0`
+
+3. **Discover changed skills** — git diff against `base_sha`, same logic as the original `eval-pr.yml` discovery step (map changed files to eval suites)
 
 4. **Set outputs**: `skills`, `pr_number`, `author`, `trusted`
 
@@ -251,8 +217,7 @@ All other PR authors. Their eval runs require a reviewer to click "Approve" in t
 ### Security Properties
 
 - The `workflow_run` workflow executes on the base repository's default branch — a fork PR cannot modify the workflow definition or trust logic
-- PR identity (number, author) is derived from the GitHub API via `listPullRequestsAssociatedWithCommit`, not from the artifact — prevents spoofing via artifact poisoning
-- The artifact carries only the `skills` CSV, validated against an allowlist regex — it has no influence on PR routing or trust decisions
+- No data passes from Stage 1 to Stage 2 — there is no artifact. Stage 2 derives everything independently: PR identity from the GitHub API, skills from git diff on the checked-out merge commit. This eliminates artifact poisoning as an attack vector entirely.
 - The collaborator permission check uses GitHub's API, not a file in the repo — it cannot be manipulated by a PR
 - Once approved, the workflow does execute skill files from the PR with access to secrets via environment variables — this is inherent to the use case (evaluating skills requires running them)
 - The `dontAsk` permission mode with explicit `--allowedTools` limits Claude Code's capabilities, but a malicious skill could still read environment variables via the Bash tool
@@ -286,7 +251,7 @@ Create a protected environment in the repository:
 
 | File | Change |
 |------|--------|
-| `.github/workflows/eval-pr.yml` | Strip to discovery + artifact upload only |
+| `.github/workflows/eval-pr.yml` | Reduce to minimal path-filtered trigger (no discovery, no artifact) |
 | `.github/workflows/eval-pr-run.yml` | New workflow: trust check, gate, eval execution, review posting |
 | `docs/specs/2026-04-21-eval-skills-ci-workflow-design.md` | Add reference to this spec |
 
