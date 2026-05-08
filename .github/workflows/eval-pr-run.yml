@@ -22,6 +22,7 @@ permissions:
   contents: read
   pull-requests: write
   actions: read
+  statuses: write
 
 jobs:
   discover:
@@ -34,6 +35,20 @@ jobs:
       author: ${{ steps.pr.outputs.author }}
       trusted: ${{ steps.pr.outputs.trusted }}
     steps:
+      - name: Set pending commit status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.payload.workflow_run.head_sha,
+              state: 'pending',
+              description: 'Eval run in progress...',
+              context: 'Eval PR Run',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
+
       - name: Resolve PR identity and check trust
         id: pr
         uses: actions/github-script@v7
@@ -108,6 +123,21 @@ jobs:
 
           echo "skills=${skills}" >> "$GITHUB_OUTPUT"
           echo "Discovered changed skills with evals: ${skills:-none}"
+
+      - name: Update status for approval gate
+        if: steps.pr.outputs.trusted != 'true' && steps.pr.outputs.pr_number != ''
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.payload.workflow_run.head_sha,
+              state: 'pending',
+              description: 'Waiting for approval in eval-protected environment',
+              context: 'Eval PR Run',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
 
   gate:
     name: Approval Gate
@@ -234,3 +264,43 @@ jobs:
                 body
               });
             }
+
+  report-status:
+    name: Report Status
+    needs: [discover, gate, run-evals]
+    if: >-
+      always() &&
+      needs.discover.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set final commit status
+        env:
+          EVALS_RESULT: ${{ needs.run-evals.result }}
+          GATE_RESULT: ${{ needs.gate.result }}
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const evalsResult = process.env.EVALS_RESULT;
+            const gateResult = process.env.GATE_RESULT;
+
+            let state, description;
+            if (evalsResult === 'success') {
+              state = 'success';
+              description = 'Eval run completed — results posted as PR review';
+            } else if (gateResult === 'failure') {
+              state = 'failure';
+              description = 'Approval was rejected in eval-protected environment';
+            } else {
+              state = 'failure';
+              description = 'Eval run failed — check workflow logs';
+            }
+
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.payload.workflow_run.head_sha,
+              state,
+              description,
+              context: 'Eval PR Run',
+              target_url: `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
