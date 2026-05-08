@@ -7,11 +7,11 @@ argument-hint: "[target-repository-path]"
 
 # performance-setup skill
 
-You are an AI performance setup assistant. You initialize the performance analysis infrastructure for a frontend application: creating the required directories, configuring baseline capture settings, configuring the backend repository (if any), and creating a minimal `performance-config.md` with empty workflow, scenarios, and module sections. Workflow discovery and selection happen in `performance-baseline`, not here.
+You are an AI performance setup assistant. You initialize the performance analysis infrastructure for a frontend application: creating the required directories, configuring baseline capture settings, configuring the backend repository (if any), and creating a minimal `performance-config.json` with empty workflow, scenarios, and module sections. Workflow discovery and selection happen in `performance-baseline`, not here.
 
 ## Guardrails
 
-- This skill creates ONE file: `.claude/performance-config.md` in the target repository
+- This skill creates ONE file: `.claude/performance-config.json` in the target repository
 - This skill is **idempotent** — running it multiple times on an already-configured repository offers to update or skip
 - This skill does NOT modify source code — only creates/updates the performance configuration file
 
@@ -21,12 +21,12 @@ You are an AI performance setup assistant. You initialize the performance analys
 - Step 0.5 – Architecture selection (monorepo vs separate repos)
 - Step 1.2 – Repository architecture validation result
 - Step 3 – Backend/frontend path confirmation
-- Step 4.4 – Frontend framework selection
+- Step 1.3 – Backend framework configuration
 - Step 6 – Optimization targets confirmation
 
 ### Completeness Requirements (this skill)
 - All 5 performance directories created and confirmed
-- All config sections populated (workflow, module registry, scenarios, targets)
+- All infrastructure config sections populated (repositories, optimization targets, baseline settings, dev environment)
 - All paths validated against filesystem before writing config
 - Idempotent update path: user presented with diff of changes before overwrite
 
@@ -35,9 +35,13 @@ You are an AI performance setup assistant. You initialize the performance analys
 - Path validation failure → halt at Step 3; do not write config with unvalidated paths
 - Config write failure → halt at Step 7 with file system error details
 
+### Plugin Root Resolution
+
+Every bash block in this skill that calls `perf-config.py` or references `$plugin_root` must begin with the Pattern 0 inline resolution. See [Pattern 0](../performance/common-patterns.md#pattern-0-plugin-root-resolution).
+
 ## Step 0 – Detect Existing Configuration
 
-Check if `.claude/performance-config.md` already exists in the target repository.
+Check if `.claude/performance-config.json` already exists in the target repository.
 
 - **If exists:** Inform the user:
   > "Performance Analysis Configuration already exists. Would you like to update it or skip setup?"
@@ -101,6 +105,22 @@ Returns:
 - `detected_framework`: string (e.g., "Next.js", "Vite", "Rsbuild", "Webpack", "Unknown Node.js")
 - `confidence`: string ("high" if 3+ indicators, "medium" if 2, "low" if 1)
 
+**Derive bundler from detected framework:**
+
+After `detect_frontend_patterns` returns, set `bundler` using this mapping:
+
+| Detected Framework | Default Bundler |
+|---|---|
+| Next.js | webpack |
+| Vite | vite |
+| Rsbuild | rsbuild |
+| Webpack | webpack |
+| Angular | webpack |
+| Create React App | webpack |
+| Unknown Node.js | unknown |
+
+If the detected framework is itself a bundler (Vite, Webpack, Rsbuild), use it directly as the bundler value.
+
 **Backend Detection (`detect_backend_patterns`):**
 
 Check for any of these indicators (require at least 1 strong indicator to confirm backend):
@@ -118,7 +138,9 @@ Returns:
 
 ### Step 1.2 – Validate Repository Architecture Choice
 
-Execute validation based on user's choice from Step 0.5:
+Execute validation based on user's choice from Step 0.5.
+
+**After frontend detection runs:** Using the mapping table from Step 1.1, assign `bundler` from `detected_framework` (e.g., `bundler="webpack"` for Next.js, `bundler="vite"` for Vite). Store this value for use in Step 6 (`--bundler "$bundler"`). If no frontend is detected, leave `bundler` unset.
 
 **Choice 1: Full-stack/monorepo**
 
@@ -320,6 +342,8 @@ Read `analysis_scope` from Step 1.2 to determine which metrics to configure.
 - Iterations (default: 20, minimum: 20 for statistically valid p95)
 - Warmup runs (default: 2)
 
+**Note:** Default is 20 iterations for statistically meaningful p95. For initial exploration during setup, 10 is acceptable — the baseline skill will validate and warn if < 20.
+
 **Why 20 iterations minimum:**
 - p95 percentile with n=10 samples is the 9th-highest value — statistically identical to the maximum
 - Minimum 20 iterations required for p95 to be meaningfully distinct from p99
@@ -406,100 +430,59 @@ metadata:
 
 ## Step 6 – Generate Configuration File
 
-Read the template from `plugins/sdlc-workflow/skills/performance/performance-config.template.md` in the plugin cache.
+Using the values collected in Steps 0-5, create the performance configuration via `perf-config.py init`:
 
-**Generate minimal configuration with:**
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
 
-1. **Metadata frontmatter** — inject metadata from Step 6 (replaces {{timestamp}} placeholders and {{backend_available}})
-2. **Performance Scenarios section** — **LEAVE EMPTY** with note: "Will be populated by performance-baseline after workflow selection"
-3. **Baseline Capture Settings section** — populated with values from Step 5
-4. **Target Directories section** — standard directories
-5. **Optimization Targets section** — populated with targets from Step 4 based on analysis_scope:
+python3 "$plugin_root/scripts/perf-config.py" init \
+  --analysis-scope "$analysis_scope" \
+  --frontend-path "$frontend_path" \
+  --frontend-framework "$frontend_framework" \
+  --frontend-name "$frontend_repo_name" \
+  --bundler "$bundler" \
+  --backend-path "$backend_path" \
+  --backend-framework "$backend_framework" \
+  --backend-name "$backend_repo_name" \
+  --api-base-path "$api_base_path" \
+  --serena-instance "$serena_instance" \
+  --serena-status "$serena_status" \
+  --lcp-target "$lcp_target" \
+  --fcp-target "$fcp_target" \
+  --dom-target "$dom_target" \
+  --total-target "$total_target" \
+  --iterations "$iterations" \
+  --warmup-runs "$warmup_runs"
+```
 
-   **If metric_type = "frontend":**
-   
-   Populate frontend metrics placeholders in the template:
-   - {{lcp-baseline}}: empty
-   - {{lcp-latest}}: empty
-   - {{lcp-target}}: {lcp-target from Step 4}
-   - {{lcp-updated}}: "-"
-   - (repeat for fcp, dom, total)
-   
-   Leave backend metrics section empty or remove it from generated config.
-   
-   **If metric_type = "backend":**
-   
-   Populate backend metrics placeholders in the template:
-   - {{resp-p95-baseline}}: empty
-   - {{resp-p95-latest}}: empty
-   - {{resp-p95-target}}: {response-time-p95-target from Step 4}
-   - {{resp-p95-updated}}: "-"
-   - (repeat for resp-p99, throughput, error-rate, db-query-time)
-   
-   Leave frontend metrics section empty or remove it from generated config.
-   
-   **If metric_type = "hybrid":**
-   
-   Populate BOTH frontend and backend metrics placeholders in the template with values from Step 4.
-   
-   **Note:** Empty baseline and latest cells indicate baseline not yet captured. The baseline skill uses `metadata.baseline_captured: false` to detect this state.
+**Omit arguments that were not collected** (e.g., if `analysis_scope = "frontend-only"`, omit `--backend-path`, `--backend-framework`, etc.). The script uses sensible defaults for omitted values.
 
-6. **Analysis Assumptions section** — Configurable constants used by performance-analyze-module:
+**If config already exists** (idempotent update path from Step 0), add `--force` to overwrite.
 
-   | Assumption | Variable | Default |
-   |---|---|---|
-   | Average Bandwidth | `analysis_bandwidth_mbps` | 5 |
-   | API Latency (average) | `analysis_api_latency_ms` | 100 |
-   | Reflow Cost (per operation) | `analysis_reflow_cost_ms` | 5 |
-   | Cache Hit Rate | `analysis_cache_hit_rate` | 0.8 |
-   | Chain Analysis Depth | `analysis_chain_depth` | 3 |
-   | DB Query Base Latency | `analysis_db_latency_ms` | 10 |
+Verify the configuration was created successfully:
 
-7. **Module Registry section** — **LEAVE EMPTY** with note: "Will be populated by performance-baseline after workflow selection"
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
 
-8. **Frontend Repository section** — populated based on analysis scope:
-   - If analysis_scope is "full-stack-monorepo":
-     - Repository Name: Extract from CLAUDE.md Registry or use directory name
-     - Repository Path: Same as backend_path (monorepo)
-     - Framework: Detected frontend framework from Step 1.1
-     - Bundler: Auto-detect from config files (vite.config.ts → Vite, next.config.js → Next.js/Webpack, rsbuild.config.ts → Rsbuild)
-   
-   - If analysis_scope is "full-stack" (separate repos):
-     - Repository Name: Extract from CLAUDE.md Registry or use directory name from frontend_path
-     - Repository Path: frontend_path
-     - Framework: Detected frontend framework from Step 1.1
-     - Bundler: Auto-detect from config files
-   
-   - If analysis_scope is "frontend-only":
-     - Repository Name: Extract from CLAUDE.md or directory name
-     - Repository Path: target_repo
-     - Framework: Detected or user-provided from Step 1.2
-     - Bundler: Auto-detect or user-provided
-   
-   - If analysis_scope is "backend-only":
-     - Use placeholders: "Not configured" for all fields
+python3 "$plugin_root/scripts/perf-config.py" validate
+```
 
-9. **Backend Repository Configuration section** — populated with backend values from Step 2:
-   - If backend configured (full-stack-monorepo, full-stack, or backend-only):
-     - Repository Name: from Registry or path
-     - Repository Path: backend_path
-     - Framework: from Step 1.3 (detected or user-provided)
-     - Serena Instance: from Registry or "none"
-     - API Base Path: from Step 1.3 or default "/api/v2"
-     - Backend Available: true/false from Step 2
-     - Last Validated: timestamp from Step 2
-   
-   - If not configured (frontend-only):
-     - Use "Not configured" placeholders
-     - Backend Available: false
-     - Last Validated: "-"
-10. **Selected Workflow section** — **LEAVE EMPTY** with note: "No workflow selected yet. Run `/sdlc-workflow:performance-baseline` to discover and select a workflow."
-
-**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-9-config-write-protection)
-
-Write the generated configuration to `.claude/performance-config.md` in the target repository.
-
-**Important:** Do NOT populate Performance Scenarios, Module Registry, or Selected Workflow sections. The baseline skill will discover workflows and populate these sections.
+The generated config:
+- Sets `workflow_selected: false` — baseline skill will set to true after workflow selection
+- Leaves `scenarios`, `modules`, and `workflow` sections empty — populated by baseline skill
+- Sets optimization targets based on analysis scope (frontend, backend, or both)
+- Sets analysis assumptions to defaults (configurable later)
+- Creates standard target directory paths
 
 ## Step 7 – Validate Configuration
 
@@ -519,7 +502,7 @@ Report to the user:
 > ✅ **Performance Analysis Configuration created!**
 >
 > **Repository Architecture:** {Full-stack monorepo | Separate repositories | Frontend-only | Backend-only}
-> **Configuration saved to:** `.claude/performance-config.md`
+> **Configuration saved to:** `.claude/performance-config.json`
 >
 > **Frontend Analysis:** {Enabled (framework-name, bundler) | Disabled}
 > **Backend Analysis:** {Enabled (framework-name) | Disabled}
@@ -565,6 +548,8 @@ Display:
 
 No recommendation needed - Serena is fully configured.
 
+> **Single-workflow mode:** Selecting a different workflow in `performance-baseline` will replace the current workflow and baseline data. Back up `.claude/performance/baselines/` before switching workflows.
+
 Continue with standard Next Steps output:
 
 > **Next Steps:**
@@ -585,7 +570,7 @@ Continue with standard Next Steps output:
 
 ## Important Rules
 
-- Never modify source code — only create/update the `.claude/performance-config.md` file
+- Never modify source code — only create/update the `.claude/performance-config.json` file
 - Setup skill creates **infrastructure only** — directories, settings, targets, backend config
 - Do NOT populate Performance Scenarios, Module Registry, or Selected Workflow sections — these will be populated by baseline skill
 - Set metadata.workflow_selected = false — baseline skill will set to true after workflow selection

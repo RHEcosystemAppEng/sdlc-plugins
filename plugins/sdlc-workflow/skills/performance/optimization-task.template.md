@@ -73,7 +73,7 @@ Reference actual file paths and symbol names found during repository analysis.>
 
 ## Verification Commands
 - `<command>` — <expected outcome>
-- `node capture-baseline.mjs --config .claude/performance-config.md` — Should show improved metrics for target scenario
+- `node capture-baseline.mjs --config .claude/performance-config.json` — Should show improved metrics for target scenario
 
 ## Documentation Updates
 - `path/to/doc.md` — <what content to add or revise>

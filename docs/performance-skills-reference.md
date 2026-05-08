@@ -8,7 +8,7 @@ Quick reference for all performance optimization skills.
 
 | # | Skill | Purpose | Key Action |
 |---|---|---|---|
-| 1 | performance-setup | Initialize infrastructure (dirs, settings, backend) | Creates minimal `.claude/performance-config.md` (no workflow) |
+| 1 | performance-setup | Initialize infrastructure (dirs, settings, backend) | Creates minimal `.claude/performance-config.json` (no workflow) |
 | 2 | performance-baseline | **Discover workflows**, select workflow, capture metrics | Workflow selection + Playwright automation → `baseline-report.md` + config update |
 | 3 | performance-analyze-module | Detect anti-patterns | **Inspects source code** → `workflow-analysis-report.md` |
 | 4 | performance-plan-optimization | Create Jira tasks | **Reads analysis report** → Jira Epic/Tasks |
@@ -25,7 +25,7 @@ Quick reference for all performance optimization skills.
 
 | Input | Output |
 |---|---|
-| Target repository path (optional) | Minimal `.claude/performance-config.md` (no workflow selected) |
+| Target repository path (optional) | Minimal `.claude/performance-config.json` (no workflow selected) |
 | User responses (backend config, baseline settings, targets) | Target directories created |
 
 **What it does:**
