@@ -121,16 +121,19 @@ Resolves PR identity from the GitHub API, checks out the PR merge commit, discov
 **Steps:**
 
 1. **Resolve PR identity and check trust** via `actions/github-script@v7`:
-   - Find PR via `listPullRequestsAssociatedWithCommit` using `workflow_run.head_sha`, filtered to open PRs targeting `main`
+   - Find PR via `pulls.list` filtered by `base: 'main'`, matched by `head.sha == workflow_run.head_sha`
    - Check collaborator permission level for the PR author
    - Output `pr_number`, `base_sha`, `author`, `trusted`
 
+Note: `listPullRequestsAssociatedWithCommit` does not work for fork PRs because the commit lives in the fork's repository, not the base repo's commit graph. `pulls.list` with SHA matching is the reliable alternative.
+
 ```javascript
 const headSha = context.payload.workflow_run.head_sha;
-const { data: prs } = await github.rest.repos.listPullRequestsAssociatedWithCommit({
-  owner: context.repo.owner, repo: context.repo.repo, commit_sha: headSha
+const { data: prs } = await github.rest.pulls.list({
+  owner: context.repo.owner, repo: context.repo.repo,
+  state: 'open', base: 'main', per_page: 100
 });
-const pr = prs.filter(p => p.state === 'open' && p.base.ref === 'main')[0];
+const pr = prs.find(p => p.head.sha === headSha);
 const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
   owner: context.repo.owner, repo: context.repo.repo, username: pr.user.login
 });
