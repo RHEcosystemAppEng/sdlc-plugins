@@ -208,7 +208,7 @@ run-evals:
 
 ### Job 4: report-status
 
-Sets a final commit status on the PR's head SHA via the Commit Status API. Runs after all other jobs complete (`always()` + `needs.discover.result == 'success'`).
+Sets a final commit status on the PR's head SHA via the Commit Status API. Runs unconditionally (`always()`) after all other jobs complete so a pending status is never left unresolved — including when the discover job itself fails.
 
 This is necessary because `workflow_run` workflows run in the default branch context and don't appear as status checks on the PR page. Without explicit commit statuses, PR authors and reviewers have no visibility that evals are pending, waiting for approval, running, or complete.
 
@@ -216,7 +216,7 @@ Status transitions:
 - **pending** — set immediately when the discover job starts ("Eval run in progress...")
 - **pending** — updated if the author is untrusted ("Waiting for approval in eval-protected environment")
 - **success** — eval run completed, results posted as PR review
-- **failure** — approval rejected, or eval run failed
+- **failure** — discover failed (could not resolve PR context), approval rejected, or eval run failed
 
 All statuses use the same `context: 'Eval PR Run'` so GitHub updates the existing status rather than creating duplicates.
 
