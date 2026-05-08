@@ -38,13 +38,17 @@ You are an AI performance analysis assistant. You **inspect source code** to det
 - Step 6.10 Serena probe failure → do NOT halt; record exact error, set
   `serena_mode = down`, continue with Grep paths (Steps 7.x-B)
 
+### Plugin Root Resolution
+
+Every bash block in this skill that calls `perf-config.py` or references `$plugin_root` must begin with the Pattern 0 inline resolution. See [Pattern 0](../performance/common-patterns.md#pattern-0-plugin-root-resolution).
+
 ## Step 1 – Determine Target Repository
 
 If the user provided a repository path as an argument, use that as the target. Otherwise, use the current working directory.
 
 **Validate repository type based on analysis scope:**
 
-1. **Check if performance-config.md exists:**
+1. **Check if performance-config.json exists:**
    - If exists: Read `metadata.analysis_scope` field
    - If not exists: Skip validation (setup hasn't run yet, proceed to Step 2)
 
@@ -87,17 +91,28 @@ If the user provided a repository path as an argument, use that as the target. O
 
 ### Step 2.0 – Read Analysis Assumptions
 
-Read the `## Analysis Assumptions` section from `performance-config.md` and extract the
+Read `analysis_assumptions` from `performance-config.json` and extract the
 constants used in impact calculations:
 
-| Config field | Variable | Default (if section missing) |
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+assumptions=$(python3 "$plugin_root/scripts/perf-config.py" get-section analysis_assumptions)
+```
+
+| JSON field | Variable | Default (if key missing) |
 |---|---|---|
-| Average Bandwidth | `analysis_bandwidth_mbps` | 5 |
-| API Latency (average) | `analysis_api_latency_ms` | 100 |
-| Layout Reflow Cost | `analysis_reflow_cost_ms` | 5 |
-| Cache Hit Rate | `analysis_cache_hit_rate` | 0.8 |
-| Chain Analysis Depth | `analysis_chain_depth` | 3 |
-| DB Query Base Latency | `analysis_db_latency_ms` | 10 |
+| `bandwidth_mbps` | `analysis_bandwidth_mbps` | 5 |
+| `api_latency_ms` | `analysis_api_latency_ms` | 100 |
+| `reflow_cost_ms` | `analysis_reflow_cost_ms` | 5 |
+| `cache_hit_rate` | `analysis_cache_hit_rate` | 0.8 |
+| `chain_depth` | `analysis_chain_depth` | 3 |
+| `db_latency_ms` | `analysis_db_latency_ms` | 10 |
 
 **Validation:**
 - `analysis_bandwidth_mbps` must be > 0
@@ -108,11 +123,11 @@ constants used in impact calculations:
 - `analysis_db_latency_ms` must be > 0
 
 If any value fails validation, use the default and log a warning:
-> ⚠️ Invalid value for `{field}` in Analysis Assumptions — using default ({default})
+> ⚠️ Invalid value for `{field}` in analysis_assumptions — using default ({default})
 
-If the `## Analysis Assumptions` section is absent (e.g., pre-existing config), use all defaults
+If the `analysis_assumptions` key is absent (e.g., pre-existing config), use all defaults
 and log:
-> ℹ️ Analysis Assumptions section not found in config — using built-in defaults.
+> ℹ️ analysis_assumptions not found in config — using built-in defaults.
 > Run `/sdlc-workflow:performance-setup` to add configurable assumptions to your config.
 
 Store all values for use throughout Steps 6 and 7.
@@ -134,20 +149,37 @@ Store all values for use throughout Steps 6 and 7.
 
 **If `backend_available = true`:**
 
-Extract backend configuration from `### Backend Repository` section (under `## Repository Configuration`):
-- Backend repo name
-- Backend path
-- Backend framework
-- Serena instance name
-- API base path
+Read backend configuration from the JSON config:
+
+```bash
+# Pattern 0: Plugin Root Resolution (see Step 2.0 for full version)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+python3 "$plugin_root/scripts/perf-config.py" get repositories.backend
+```
+
+Extract: `name`, `path`, `framework`, `serena_instance`, `api_base_path`.
 
 **If frontend is included (`analysis_scope` in ["full-stack", "full-stack-monorepo", "frontend-only"]):**
 
-Extract frontend configuration from `### Frontend Repository` section (under `## Repository Configuration`):
-- Frontend repo name
-- Frontend path
-- Frontend framework
-- Bundler
+Read frontend configuration from the JSON config:
+
+```bash
+# Pattern 0: Plugin Root Resolution (see Step 2.0 for full version)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+python3 "$plugin_root/scripts/perf-config.py" get repositories.frontend
+```
+
+Extract: `name`, `path`, `framework`, `bundler`.
 
 Store for use in module analysis and bundler-specific optimization detection.
 
@@ -216,7 +248,7 @@ Store backend configuration and `backend_available` flag for use in Step 7.
 
 ## Step 3 – Verify Baseline Report Exists
 
-Read `metadata.metric_type` from `performance-config.md` to determine which baseline file(s) to check.
+Read `metadata.metric_type` from `performance-config.json` to determine which baseline file(s) to check.
 
 Determine the baseline directory from the **Target Directories** section (e.g., `.claude/performance/baselines/`).
 
@@ -247,6 +279,8 @@ Check for BOTH `baseline-report.md` AND `benchmark-results.json`. Both must exis
   Stop execution.
 
 **If baseline(s) exist:** Proceed to Step 4.
+
+**Consistency check:** Verify that the workflow in the baseline matches the current `workflow.name` in `performance-config.json`. If they differ, analysis may be examining code paths that don't correspond to the current baseline metrics.
 
 **Note:** 
 - Frontend baselines use cold-start mode (Playwright browser automation)
@@ -370,6 +404,8 @@ Proceed with frontend anti-pattern detection below.
 For each anti-pattern, search the codebase for indicators and report findings with severity classification and quantified impact.
 
 ### Step 6.1 – Over-Fetching Detection
+
+**Apply:** [Common Pattern: Discovery Result Integrity — Pattern 13](../performance/common-patterns.md#pattern-13-discovery-result-integrity) — record raw result count from each grep call and build the endpoint list from the unfiltered output.
 
 > ⚠️ **Detection Limitation:** This grep-based analysis cannot detect destructuring patterns (`const { field } = data`), dynamic property access (`data[key]`), or fields used in child components after prop drilling. Treat results as leads for manual review, not definitive over-fetching evidence.
 
@@ -653,7 +689,14 @@ on separate lines may not cause forced reflow if they occur in different event l
 **If `backend_available = true`:** Run the probe:
 
 ```bash
-serena_instance=$(grep "Serena Instance" .claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+# Pattern 0: Plugin Root Resolution (see Step 2.0 for full version)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+serena_instance=$(python3 "$plugin_root/scripts/perf-config.py" get repositories.backend.serena_instance)
 ```
 
 **If `serena_instance` is non-empty and not "—":**
@@ -678,6 +721,8 @@ Call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`.
 (`serena_mode` was set in Step 6.10. Follow -A sub-steps when `serena_mode = live`, -B sub-steps otherwise.)
 
 For EACH API endpoint identified in Step 6.1 (Over-Fetching Detection):
+
+**Apply:** [Common Pattern: Discovery Result Integrity — Pattern 13](../performance/common-patterns.md#pattern-13-discovery-result-integrity) — record raw result counts from each Serena/Grep call and reconcile against the endpoint table before proceeding.
 
 ### Step 7.1-A – Locate Backend Handler via Serena (`serena_mode = live`)
 
@@ -1189,7 +1234,7 @@ Add findings to the analysis report template under "Backend Database Anti-Patter
 
 **Apply:** [Common Pattern: Call Chain Analysis Strategy — Pattern 12](../performance/common-patterns.md#pattern-12-call-chain-analysis-strategy)
 
-**Configurable depth:** `analysis_chain_depth` (default: 3). Read from `## Analysis Assumptions` section in `performance-config.md` if present; otherwise use default.
+**Configurable depth:** `analysis_chain_depth` (default: 3). Already read in Step 2.0 from `analysis_assumptions.chain_depth` in `performance-config.json`; use that stored value here.
 
 **For EACH handler analyzed in Steps 7.1-7.6:**
 
@@ -2006,7 +2051,7 @@ Create a comprehensive analysis report at `{analysis-directory}/workflow-analysi
    - If the step was accidentally skipped: **go back and execute it now** before proceeding
    - If the step was legitimately skipped (prerequisites not met, feature not applicable): record the skip reason in the report under that step's section (e.g., "Step 7.7 skipped — backend service not running on configured port")
 
-2. **Confirm no endpoints were silently dropped.** Compare the list of endpoints discovered in Step 6.1 against the endpoints analyzed in Steps 7.1–7.6.5 and Step 8. Every endpoint must appear in both lists or have a documented reason for exclusion.
+2. **Confirm no endpoints were silently dropped ([Pattern 13](../performance/common-patterns.md#pattern-13-discovery-result-integrity)).** Compare the raw result counts recorded at each discovery tool call against the endpoints in the endpoint table, then compare the endpoint table against the endpoints analyzed in Steps 7.1–7.6.5 and Step 8. Every endpoint must appear in both lists or have a documented reason for exclusion. If any raw-count-to-table mismatch was not reconciled earlier, reconcile it now before proceeding.
 
 3. **Confirm query ledger completeness.** If Step 7.6.2 produced a query ledger, verify that Steps 7.6.3, 7.6.4, 7.6.5, and 7.6.6 consumed it. These steps depend on the ledger and must not be skipped when it exists.
 
@@ -2195,7 +2240,7 @@ Construct a validation summary table:
 
 ### Step 9.2 – Determine Analysis Report Location
 
-Read the **Target Directories** section from performance-config.md and extract the analysis directory path (e.g., `.claude/performance/analysis/`).
+Read the **Target Directories** section from performance-config.json and extract the analysis directory path (e.g., `.claude/performance/analysis/`).
 
 Construct the report filename: `workflow-analysis-report.md`
 
@@ -2372,7 +2417,7 @@ Where `{warnings-if-any}` includes warnings for critical issues:
 - If an anti-pattern detection step finds zero instances, include it in the report with "No instances detected" rather than omitting it
 - Use Serena instance from Code Intelligence configuration (with Grep/Glob fallback if not available)
 - Generate report even if some anti-pattern detection steps fail — document failed steps in the report
-- Save report to directory specified in performance-config.md, never to the repository root
+- Save report to directory specified in performance-config.json, never to the repository root
 - **Backend schema extraction is mandatory when backend_available = true:** Always search for struct/class definitions and extract all fields. Do not write "Cannot confirm without schema" without documenting exhaustive search attempts and specific failures
 - **Unused table join detection (Step 7.6.1) is required for backend analysis:** When analyzing backend queries, always check for JOIN operations and verify that fields from joined tables are actually used in SELECT clauses, WHERE conditions, handler logic, or response schemas. Flag joins where no fields are accessed as optimization opportunities
 - **Backend-only mode analysis:** When `analysis_scope = "backend-only"`, skip all frontend anti-pattern detection steps (Steps 5-6) and focus exclusively on backend analysis (Step 7). No browser metrics will be available in backend-only mode

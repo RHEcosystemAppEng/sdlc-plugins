@@ -40,7 +40,7 @@ You are an AI optimization planning assistant. You generate a structured optimiz
 
 If the user provided a repository path as an argument, use that as the target. Otherwise, use the current working directory.
 
-Verify repository type matches the `metadata.analysis_scope` setting in `.claude/performance-config.md`.
+Verify repository type matches the `metadata.analysis_scope` setting in `.claude/performance-config.json`.
 
 ## Step 2 – Verify Performance Configuration Exists
 
@@ -64,7 +64,7 @@ Verify repository type matches the `metadata.analysis_scope` setting in `.claude
 
 ## Step 4 – Read and Parse Analysis Report
 
-Read `metadata.metric_type` from `performance-config.md` to determine which anti-pattern sections to parse.
+Read `metadata.metric_type` from `performance-config.json` to determine which anti-pattern sections to parse.
 
 Read the analysis report at `{analysis-directory}/workflow-analysis-report.md`.
 
@@ -143,6 +143,10 @@ Store this data for use in Steps 5, 6, 7, and 8.
 
 Before grouping optimizations into tasks, analyze the potential impact of each optimization on other functionalities in the application. This step ensures performance improvements don't break existing features or degrade user experience in other workflows.
 
+**Scaling strategy for large reports:**
+
+If the analysis report contains more than 15 findings, perform full cross-functional analysis on the top 10 by estimated impact. For remaining findings, note: "Cross-functional impact not analyzed (lower priority). Manual review recommended before implementation." Include all findings in the plan but mark unanalyzed ones with reduced confidence.
+
 **Apply:** [Common Pattern: Code Intelligence Strategy](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
 **Key Principle:** Always use Serena MCP first for code analysis, with Grep as fallback strategy.
@@ -166,7 +170,7 @@ For each optimization with scope ≥ Low (not Isolated):
 
 **Count affected workflows:**
 - Search for workflow entry points (route components, page components) that import affected code
-- Cross-reference with workflows defined in performance-config.md
+- Cross-reference with workflows defined in performance-config.json
 - Count distinct workflows using the affected code
 
 **Classify impact severity:**
@@ -447,7 +451,7 @@ Create the optimization plan document at `{plans-directory}/optimization-plan.md
 
 ### Step 7.1 – Determine Plan Location
 
-Read the **Target Directories** section from performance-config.md and extract the plans directory path (e.g., `.claude/performance/plans/`).
+Read the **Target Directories** section from performance-config.json and extract the plans directory path (e.g., `.claude/performance/plans/`).
 
 Construct the plan filename: `optimization-plan.md`
 
@@ -457,7 +461,11 @@ Read the plan template from `plugins/sdlc-workflow/skills/performance/performanc
 
 ### Step 7.3 – Calculate Expected Impact
 
-For each metric (LCP, FCP, DOM Interactive, bundle size):
+For each applicable metric based on `metric_type`:
+- **If metric_type = "frontend" or "hybrid":** LCP, FCP, DOM Interactive, bundle size
+- **If metric_type = "backend" or "hybrid":** Response Time (p95), Throughput, Error Rate
+
+For each metric:
 - Sum the estimated improvements from all optimizations
 - Calculate percentage reduction: `(improvement / current) * 100`
 - Ensure estimates are conservative (use lower bound of impact range)
@@ -499,10 +507,17 @@ Performance Optimization: {workflow-name}
 This Epic tracks performance optimization work for the {workflow-name} workflow. Optimizations are grouped into {task-count} tasks with an estimated total effort of {total-effort-days} days.
 
 **Expected Impact:**
+
+**If metric_type = "frontend" or "hybrid", include:**
 - LCP improvement: {lcp-improvement} ms ({lcp-percentage}% reduction)
 - FCP improvement: {fcp-improvement} ms ({fcp-percentage}% reduction)
 - DOM Interactive improvement: {domInteractive-improvement} ms ({domInteractive-percentage}% reduction)
 - Bundle size reduction: {bundle-size-reduction} KB
+
+**If metric_type = "backend" or "hybrid", include:**
+- Response Time (p95) improvement: {resp-p95-improvement} ms ({resp-p95-percentage}% reduction)
+- Throughput improvement: {throughput-improvement} req/sec ({throughput-percentage}% increase)
+- Error Rate reduction: {error-rate-reduction}%
 
 ## Risk Profile
 
@@ -569,11 +584,7 @@ Prompt the user with the standard fallback flow (see `shared/jira-access-strateg
 
 **If user chooses "1. Yes":**
   
-⚠️ **Jira REST API fallback requires scripts/jira-client.py**
-
-This script is not included in the plugin. If Atlassian MCP is unavailable, you must:
-1. Use the Jira web UI to create issues manually, OR
-2. Install scripts/jira-client.py from the sdlc-plugins repository (if available)
+**Apply:** [Pattern 11: Jira Access Strategy](../performance/common-patterns.md#pattern-11-jira-access-strategy)
 
 - Check CLAUDE.md for existing REST API credentials
 - If credentials exist: use them
@@ -862,9 +873,16 @@ Report to the user:
 >
 > **Workflow:** {workflow-name}  
 > **Expected Impact:**
+>
+> **If metric_type = "frontend" or "hybrid":**
 > - LCP improvement: {lcp-improvement} ms ({lcp-percentage}% reduction)
 > - FCP improvement: {fcp-improvement} ms ({fcp-percentage}% reduction)
 > - Bundle size reduction: {bundle-size-reduction} KB
+>
+> **If metric_type = "backend" or "hybrid":**
+> - Response Time (p95) improvement: {resp-p95-improvement} ms ({resp-p95-percentage}% reduction)
+> - Throughput improvement: {throughput-improvement} req/sec ({throughput-percentage}% increase)
+> - Error Rate reduction: {error-rate-reduction}%
 >
 > **Optimization Plan:** `.claude/performance/plans/optimization-plan.md`
 >

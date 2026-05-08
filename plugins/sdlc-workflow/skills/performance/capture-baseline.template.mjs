@@ -6,7 +6,7 @@
  * This script automates performance metric collection using Playwright browser automation.
  *
  * WHAT IT DOES:
- * - Reads performance scenarios from a local configuration file (.claude/performance-config.md)
+ * - Reads performance scenarios from a local configuration file (.claude/performance-config.json)
  * - Launches a headless Chromium browser in your local environment
  * - Navigates to localhost URLs (with port numbers) specified in the configuration
  * - Collects standard browser performance metrics using Web APIs:
@@ -32,7 +32,7 @@
  * - Query strings are stripped from resource URLs before output (prevents token leakage)
  *
  * USAGE:
- *   node capture-baseline.mjs --config path/to/performance-config.md [--port 3000]
+ *   node capture-baseline.mjs --config path/to/performance-config.json [--port 3000]
  *
  * The --port argument is optional if URLs in the config already include port numbers.
  */
@@ -49,52 +49,30 @@ let portOverride;
 let captureMode;
 
 /**
- * Parse performance configuration from markdown file
- * Extracts scenarios table from the Performance Scenarios section
+ * Parse performance configuration from JSON file
  */
 async function parseConfig(configPath) {
   const content = await readFile(configPath, 'utf-8');
-
-  // Extract Performance Scenarios section
-  const scenariosMatch = content.match(/## Performance Scenarios[\s\S]*?\n\n([\s\S]*?)(?=\n##|$)/);
-  if (!scenariosMatch) {
-    throw new Error('Performance Scenarios section not found in configuration');
+  let config;
+  try {
+    config = JSON.parse(content);
+  } catch (e) {
+    throw new Error(`Invalid JSON in config file ${configPath}: ${e.message}`);
   }
 
-  const sectionContent = scenariosMatch[1];
-  const lines = sectionContent.split('\n');
-
-  // Filter to only actual table rows:
-  // - First non-whitespace character is |
-  // - Contains at least 4 | characters (for | name | path | description | format)
-  const tableLines = lines.filter(line => {
-    const trimmed = line.trim();
-    return trimmed.startsWith('|') && (trimmed.match(/\|/g) || []).length >= 4;
-  });
-
-  if (tableLines.length < 2) {
-    throw new Error('Performance Scenarios table not found or incomplete (need at least header + separator rows)');
+  const scenariosRaw = config.scenarios || [];
+  if (!Array.isArray(scenariosRaw) || scenariosRaw.length === 0) {
+    throw new Error('No scenarios found in config. Run /sdlc-workflow:performance-discover-workflow first.');
   }
 
-  // Skip header row (index 0) and separator row (index 1), parse data rows
-  const scenarios = [];
-  for (let i = 2; i < tableLines.length; i++) {
-    const cells = tableLines[i].split('|').map(cell => cell.trim()).filter(Boolean);
-    if (cells.length >= 3) {
-      scenarios.push({
-        name: cells[0],
-        path: cells[1],
-        description: cells[2]
-      });
-    }
-  }
+  const scenarios = scenariosRaw.map(s => ({
+    name: s.name,
+    path: s.url,
+    description: s.description || ''
+  }));
 
-  // Extract baseline capture settings with bounds
-  const settingsMatch = content.match(/## Baseline Capture Settings[\s\S]*?\| Iterations \| (\d+)/);
-  const warmupMatch = content.match(/## Baseline Capture Settings[\s\S]*?\| Warmup Runs \| (\d+)/);
-
-  const iterationsRaw = settingsMatch ? parseInt(settingsMatch[1], 10) : 20;
-  const warmupRaw = warmupMatch ? parseInt(warmupMatch[1], 10) : 2;
+  const iterationsRaw = config.baseline_settings?.iterations ?? 20;
+  const warmupRaw = config.baseline_settings?.warmup_runs ?? 2;
 
   // Bound iterations to prevent DoS (max 50 iterations, 10 warmup runs)
   const iterations = Math.min(Math.max(iterationsRaw, 1), 50);
@@ -500,7 +478,7 @@ async function validateAndRun() {
     console.error('Usage: node capture-baseline.mjs --config <path> [--port <port>] [--mode cold-start]');
     console.error('');
     console.error('Example:');
-    console.error('  node capture-baseline.mjs --config .claude/performance-config.md --port 3000');
+    console.error('  node capture-baseline.mjs --config .claude/performance-config.json --port 3000');
     console.error('');
     console.error('Prerequisites:');
     console.error('  - Node.js >= 16');

@@ -60,7 +60,7 @@ If missing, inform the user and stop execution.
 
 Before attempting any Jira operations, use the MCP-first approach with REST API fallback strategy defined in Pattern 11.
 
-⚠️ **Note:** Jira REST API fallback requires `scripts/jira-client.py` which is not included in the plugin. If Atlassian MCP is unavailable, use the Jira web UI to create issues manually.
+**Note:** Jira REST API fallback uses `scripts/jira-client.py` (shipped with this plugin). If Atlassian MCP is unavailable, the REST API fallback will be offered automatically via Pattern 11.
 
 ## Comment Footnote
 
@@ -280,6 +280,8 @@ Use the Glob tool to find the latest optimization result report:
 
 Store the file path as `report_file`.
 
+**Consistency check:** Verify that the workflow in the optimization result report matches `workflow.name` in the current `performance-config.json`. If they differ, the config was updated to a different workflow since implementation — warn the user that verification metrics may be comparing against the wrong baseline.
+
 **Step 5.2 – Read Report (Primary Method)**
 
 If report file found:
@@ -293,7 +295,7 @@ If report file found:
    - `baseline_commit_sha` (baseline reference)
    - `capture_mode` (mode used for measurement)
    - `status` (should be "pending_verification")
-3. Read `metadata.metric_type` from `performance-config.md` to determine which metrics to extract
+3. Read `metadata.metric_type` from `performance-config.json` to determine which metrics to extract
 
 4. Extract from Performance Impact table based on metric_type:
 
@@ -377,14 +379,25 @@ Read the **Repository** section from the Jira task description (parsed in Step 1
 Extract the application port from configuration (required for all metric types):
 
 ```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
 # Read port stored by performance-baseline in Development Environment section
-port=$(grep "| Port |" {target-repo-path}/.claude/performance-config.md | awk -F'|' '{print $3}' | xargs)
+port=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get dev_environment.port)
 
 if [ -z "$port" ] || [ "$port" = "TBD" ]; then
-  echo "❌ Application port not configured in performance-config.md."
+  echo "❌ Application port not configured in performance-config.json."
   echo "Please run /sdlc-workflow:performance-baseline first so the port is discovered and stored."
   exit 1
 fi
+
+iterations=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get baseline_settings.iterations)
+
+stored_mode=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get metadata.baseline_mode)
 ```
 
 Branch on `metric_type`:
@@ -414,15 +427,28 @@ if [ ! -f "$template_path" ]; then
   exit 1
 fi
 
-cp "$template_path" /tmp/capture-baseline-verify.mjs
-chmod +x /tmp/capture-baseline-verify.mjs
+baseline_dir=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get directories.baselines)
+
+cp "$template_path" "${baseline_dir}/capture-baseline-verify.mjs"
+chmod +x "${baseline_dir}/capture-baseline-verify.mjs"
 ```
 
 Run the capture script using the stored mode (not hardcoded):
 
 ```bash
-node /tmp/capture-baseline-verify.mjs \
-  --config {target-repo-path}/.claude/performance-config.md \
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+baseline_dir=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get directories.baselines)
+port=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get dev_environment.port)
+stored_mode=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get metadata.baseline_mode)
+
+node "${baseline_dir}/capture-baseline-verify.mjs" \
+  --config {target-repo-path}/.claude/performance-config.json \
   --port "$port" \
   --mode "$stored_mode"
 ```
@@ -439,16 +465,21 @@ Parse the JSON output for: LCP, FCP, DOM Interactive, Total Load Time, bundle si
 - After Pattern 10 completes, write collected results to `{target-repo-path}/.claude/performance/benchmark-results-verify.json`:
 
 ```bash
-# Serialize dynamic_results associative array to JSON
-{
-  echo "{"
-  first=true
-  for scenario in "${!dynamic_results[@]}"; do
-    [ "$first" = true ] && first=false || echo ","
-    echo "  \"$scenario\": ${dynamic_results[$scenario]}"
-  done
-  echo "}"
-} > {target-repo-path}/.claude/performance/benchmark-results-verify.json
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+port=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get dev_environment.port)
+iterations=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get baseline_settings.iterations)
+
+"$plugin_root/scripts/perf-benchmark.sh" \
+  --port "$port" \
+  --iterations "$iterations" \
+  --manifest {target-repo-path}/.claude/performance/test-data/manifest.json \
+  --output {target-repo-path}/.claude/performance/benchmark-results-verify.json
 ```
 
 Parse `benchmark-results-verify.json` for: Response Time (p50/p95/p99), mean latency, cache effectiveness per endpoint.
@@ -463,7 +494,26 @@ For each metric:
 - Calculate difference: `re-run - implementation`
 - Calculate percentage drift: `(difference / implementation) * 100`
 
-**Significant drift threshold:** > 10% difference
+**Drift detection thresholds (dual-gate, aligned with implement Step 9.4.0):**
+
+A drift is only flagged if BOTH conditions are met:
+
+**Frontend time metrics** (LCP, FCP, DOM Interactive, Total Load Time):
+- Relative: > **5%** drift
+- Absolute: > **50ms** drift
+
+**Frontend size metrics** (bundle, transfer):
+- Relative: > **5%** drift
+- Absolute: > **10KB** drift
+
+**Backend response time** (p95, p99):
+- Relative: > **10%** drift
+- Absolute: > **50ms** drift
+
+**Backend throughput:** > **20%** decrease (no absolute gate)
+**Backend error rate:** > **1%** absolute increase
+
+Both gates must be exceeded to flag significant drift.
 
 If any metric shows significant drift, flag for investigation:
 
@@ -892,7 +942,7 @@ Append a new section to the report file:
 **Step 18.3.5 – Update "Latest Verified" in Configuration (if PASS or WARN)**
 
 When the overall verification result is PASS or WARN (i.e., measurable improvement confirmed), update the
-`Latest Verified (p95)` column in `performance-config.md` to reflect the most recent verified
+`Latest Verified (p95)` column in `performance-config.json` to reflect the most recent verified
 metrics. This keeps the config current without requiring a manual baseline re-run on main.
 
 **Only update when:** overall_result is PASS or WARN.
@@ -904,43 +954,48 @@ metrics. This keeps the config current without requiring a manual baseline re-ru
 
 **Procedure:**
 
-1. Read `performance-config.md` from the target repository.
-2. Read `metadata.metric_type` to determine which metrics to update.
-3. Locate the `## Optimization Targets` section (may have Frontend and/or Backend subsections).
-4. Update the `Latest Verified (p95)` column cells with current p95 values based on metric_type:
+Use `perf-config.py set` to update each metric field directly in the JSON config.
+`metric_type` was read at Step 5 start. `target_config` is the path established by Pattern 0.
 
-**If metric_type = "frontend" or "hybrid":**
-   - LCP: `{latest-lcp-p95}` ms → convert to seconds: `{value / 1000}` s
-   - FCP: `{latest-fcp-p95}` ms → convert to seconds: `{value / 1000}` s
-   - DOM Interactive: `{latest-dom-p95}` ms → convert to seconds: `{value / 1000}` s
-   - Total Load Time: `{latest-total-p95}` ms → convert to seconds: `{value / 1000}` s
+```bash
+if [[ "$metric_type" == "frontend" || "$metric_type" == "hybrid" ]]; then
+  python3 "$plugin_root/scripts/perf-config.py" -c "$target_config" \
+    set optimization_targets.frontend.lcp.latest "$(awk "BEGIN{printf \"%.3f\", $latest_lcp_ms/1000}")"
+  python3 "$plugin_root/scripts/perf-config.py" -c "$target_config" \
+    set optimization_targets.frontend.fcp.latest "$(awk "BEGIN{printf \"%.3f\", $latest_fcp_ms/1000}")"
+  python3 "$plugin_root/scripts/perf-config.py" -c "$target_config" \
+    set optimization_targets.frontend.dom_interactive.latest "$(awk "BEGIN{printf \"%.3f\", $latest_dom_ms/1000}")"
+  python3 "$plugin_root/scripts/perf-config.py" -c "$target_config" \
+    set optimization_targets.frontend.total_load_time.latest "$(awk "BEGIN{printf \"%.3f\", $latest_total_ms/1000}")"
+fi
 
-**If metric_type = "backend" or "hybrid":**
-   - Response Time (p95): `{latest-resp-p95}` ms (no conversion)
-   - Response Time (p99): `{latest-resp-p99}` ms (no conversion)
-   - Throughput: `{latest-throughput}` req/sec (no conversion)
-   - Error Rate: `{latest-error-rate}` % (no conversion)
+if [[ "$metric_type" == "backend" || "$metric_type" == "hybrid" ]]; then
+  python3 "$plugin_root/scripts/perf-config.py" -c "$target_config" \
+    set optimization_targets.backend.response_time_p95.latest "$latest_resp_p95"
+  python3 "$plugin_root/scripts/perf-config.py" -c "$target_config" \
+    set optimization_targets.backend.response_time_p99.latest "$latest_resp_p99"
+  python3 "$plugin_root/scripts/perf-config.py" -c "$target_config" \
+    set optimization_targets.backend.throughput.latest "$latest_throughput"
+  python3 "$plugin_root/scripts/perf-config.py" -c "$target_config" \
+    set optimization_targets.backend.error_rate.latest "$latest_error_rate"
+fi
 
-5. Update the `Last Updated` column for each metric row with the current ISO timestamp.
-6. Update `metadata.last_updated` with the current timestamp.
-
-**Apply:** [Common Pattern: Config Write Protection](../performance/common-patterns.md#pattern-9-config-write-protection)
-
-Read the full file, apply the table cell updates in memory, write the complete updated file back.
-Do NOT use sed/regex substitution — read the full file, update the cells in-memory, write back.
+python3 "$plugin_root/scripts/perf-config.py" -c "$target_config" \
+  set metadata.last_updated "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+```
 
 **Log to user based on metric_type:**
 
 **If metric_type = "frontend" or "hybrid":**
 ```
-✓ Latest Verified frontend metrics updated in performance-config.md
+✓ Latest Verified frontend metrics updated in performance-config.json
   LCP: {latest-lcp} ms  |  FCP: {latest-fcp} ms
   DOM Interactive: {latest-dom} ms  |  Total Load Time: {latest-total} ms
 ```
 
 **If metric_type = "backend" or "hybrid":**
 ```
-✓ Latest Verified backend metrics updated in performance-config.md
+✓ Latest Verified backend metrics updated in performance-config.json
   Response Time (p95): {latest-resp-p95} ms  |  Throughput: {latest-throughput} req/sec
   Error Rate: {latest-error-rate} %
 ```
@@ -973,4 +1028,4 @@ Skip this step (backward compatibility for tasks created before optimization-res
 - Sub-tasks created from review feedback use labels `["ai-generated-jira", "review-feedback"]`, while CI failure sub-tasks use `["ai-generated-jira", "ci-failure"]`, both with "Blocks" issue links
 - Keep verification scoped to what the task describes
 - Target Achievement result **DOES** affect Overall result (unlike Test Quality)
-- If baseline re-run shows significant drift (> 10%), flag for investigation but do not block verification
+- If baseline re-run shows significant drift (dual-gate exceeded per Step 6.3), flag for investigation but do not block verification
