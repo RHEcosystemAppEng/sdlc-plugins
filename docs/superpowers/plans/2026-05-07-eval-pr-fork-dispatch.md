@@ -1,5 +1,7 @@
 # Eval PR Fork Dispatch Implementation Plan
 
+> **Superseded:** The implementation evolved past this plan during security hardening. The artifact was eliminated entirely — Stage 2 now derives all data from the GitHub API and git diff. See [the spec](../specs/2026-05-07-eval-pr-fork-dispatch-design.md) for the current design.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Split `eval-pr.yml` into a two-stage `workflow_run` dispatch pattern so fork PRs can run evals with secret access, gated by a collaborator trust check.
