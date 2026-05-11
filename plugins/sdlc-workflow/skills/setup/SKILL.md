@@ -247,3 +247,4 @@ Report the validation results to the user.
 - **Always present changes** to the user for review before writing to CLAUDE.md.
 - **Ask only for what is missing** — do not re-ask for information that is already configured.
 - If no changes are needed, report it clearly and stop.
+
