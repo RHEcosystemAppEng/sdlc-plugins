@@ -5,6 +5,31 @@ All notable changes to the sdlc-workflow plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.0] - 2026-05-14
+
+### Added
+
+- Feature-branch workflow mode with automatic bookend task generation in `plan-feature`
+- Target Branch support and bookend handling in `implement-task`
+- Target Branch and Bookend Type sections in the task description template
+- Feature-branch workflow constraints and documentation
+- Fork PR eval dispatch CI workflow for cross-fork eval runs
+- Commit status reporting for eval PR visibility
+
+### Changed
+
+- Migrated eval CI workflows to direct Workload Identity Federation
+- Hardened eval dispatch against artifact poisoning and injection
+
+### Fixed
+
+- Resolved stale pending commit status when eval discover fails
+- Fork PR resolution via `pulls.list` with pagination
+
+### Documentation
+
+- Excluded eval baselines from changelog scope
+
 ## [0.8.2] - 2026-04-29
 
 ### Changed
