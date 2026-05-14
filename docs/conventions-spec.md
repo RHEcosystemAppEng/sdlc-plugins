@@ -29,8 +29,13 @@ Assisted-by: Claude Code
 
 ### PR Workflow
 
-1. **Branch naming:** The feature branch MUST be named after the Jira issue ID (e.g., `TC-123`)
-2. **PR description:** MUST follow this format:
+1. **Branch naming:**
+   - **Task branches** MUST be named after the Jira task issue ID (e.g., `TC-231`)
+   - **Feature branches** (created by the `create-branch` bookend) MUST be named after the feature issue ID (e.g., `TC-4418`)
+2. **PR base branch:** `gh pr create` MUST always specify `--base <target-branch>` matching the task's Target Branch value:
+   - When Target Branch is `main` (direct-to-main workflow or bookend tasks): `--base main`
+   - When Target Branch is a feature issue ID (feature-branch workflow): `--base <feature-issue-id>` (e.g., `--base TC-4418`)
+3. **PR description:** MUST follow this format:
 
 ```
 ## Summary
@@ -41,11 +46,11 @@ Assisted-by: Claude Code
 Implements [<JIRA-ID>](https://<jira-host>/browse/<JIRA-ID>)
 ```
 
-   Each further commit on the same feature branch MUST update the Summary bullet points to reflect the current state of changes in the PR.
+   Each further commit on the same task branch MUST update the Summary bullet points to reflect the current state of changes in the PR.
 
-3. **Jira linking:** After opening a PR, its link MUST be posted as a comment on the Jira task
-4. **Custom field:** If the project's Jira Configuration includes a Git Pull Request custom field, the PR URL is also set on that field (in ADF format)
-5. **Transition:** The Jira task is transitioned to In Review after the PR is opened
+4. **Jira linking:** After opening a PR, its link MUST be posted as a comment on the Jira task
+5. **Custom field:** If the project's Jira Configuration includes a Git Pull Request custom field, the PR URL is also set on that field (in ADF format)
+6. **Transition:** The Jira task is transitioned to In Review after the PR is opened
 
 ### Task Template Structure
 

@@ -36,6 +36,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.24 | `verify-pr` domain sub-agents MUST return responses using the structured finding template (`finding-template.md`). | `verify-pr/intent-alignment.md`, `security.md`, `correctness.md`, `style-conventions.md` — Output Format |
 | 1.25 | `verify-pr` orchestrator MUST dispatch domain sub-agents in parallel. | `verify-pr/SKILL.md` — Step 4d (Dispatch), Important Rules (orchestrator) |
 | 1.26 | `verify-pr` root-cause investigation MUST receive aggregated findings from all domain sub-agents with source attribution. | `verify-pr/SKILL.md` — Step 5 (orchestrator), Important Rules |
+| 1.27 | `plan-feature` MUST determine the workflow mode (`direct-to-main` or `feature-branch`) during planning and record the decision on the feature issue. | `plan-feature/SKILL.md` — Step 4.5 (Determine Workflow Mode) |
 
 ---
 
@@ -55,6 +56,8 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 |---|---|---|
 | 3.1 | The feature branch MUST be named after the Jira issue ID (e.g., `TC-123`). | `implement-task/SKILL.md` — Step 5 |
 | 3.2 | After opening a PR, its link MUST be posted as a comment on the Jira task. | `implement-task/SKILL.md` — Step 10; `methodology.md` — Pull Request Workflow |
+| 3.3 | `gh pr create` MUST always specify `--base <target-branch>` matching the task's Target Branch value. | `implement-task/SKILL.md` — Step 10 (Default flow) |
+| 3.4 | Feature branches MUST be named after the feature issue ID (e.g., `TC-4418`), not the task issue ID. | `implement-task/SKILL.md` — Step 5 (Create-branch bookend flow); `plan-feature/SKILL.md` — Step 5 (Bookend task generation) |
 
 ---
 
@@ -73,6 +76,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 4.9 | Tasks that change public APIs, configuration, setup steps, or architectural patterns SHOULD include an optional **Documentation Updates** section listing which docs need updating and what content to add or revise. | `plan-feature/SKILL.md` — Template rules |
 | 4.10 | Tasks SHOULD include a **Reuse Candidates** section when overlapping code (domain logic, components, utilities, or patterns) was found during repository analysis, listing file paths, symbol names, and relevance descriptions. | `plan-feature/SKILL.md` — Task Description Template |
 | 4.11 | When a task's scope matches a convention from CONVENTIONS.md (e.g., migrations with FK columns requiring indexes), the Implementation Notes MUST include explicit guidance referencing the convention by section name with a concrete example file. | `plan-feature/SKILL.md` — Step 5 (Convention-aware task enrichment) |
+| 4.12 | Every generated task description MUST include a **Target Branch** section. The value is `main` for direct-to-main mode, or the feature issue ID for feature-branch mode intermediate tasks. | `plan-feature/SKILL.md` — Step 5 (Target Branch assignment); `task-description-template.md` — Rules |
 
 ---
 
@@ -100,8 +104,9 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 
 Each constraint above references its source. The full source files are:
 
-- `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Task Description Template (§4.1–4.10), Step 5 Convention-aware task enrichment (§4.11)
-- `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Important Rules (§1.4–1.6, §5.1–5.3), Step 1 (§1.6), Step 4/6/9 (§5.4), Step 5 (§1.15, §3.1), Step 7 (§5.9–5.13), Step 9 (§2.1–2.3, §5.6–5.8), Step 10 (§3.2)
+- `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Step 4.5 Determine Workflow Mode (§1.27), Task Description Template (§4.1–4.10), Step 5 Convention-aware task enrichment (§4.11), Step 5 Target Branch assignment (§4.12), Step 5 Bookend task generation (§3.4)
+- `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Important Rules (§1.4–1.6, §5.1–5.3), Step 1 (§1.6), Step 4/6/9 (§5.4), Step 5 (§1.15, §3.1, §3.4), Step 7 (§5.9–5.13), Step 9 (§2.1–2.3, §5.6–5.8), Step 10 (§3.2, §3.3)
+- `plugins/sdlc-workflow/shared/task-description-template.md` — Rules (§4.12)
 - `plugins/sdlc-workflow/skills/verify-pr/SKILL.md` — Step 4a (§1.10), Step 4d (§1.12, §1.25), Important Rules (§1.11, §1.13, §1.22, §1.23, §1.25, §1.26), Step 5b (§1.14), Step 5 (§1.26), Step 14 (§1.19)
 - `plugins/sdlc-workflow/skills/verify-pr/intent-alignment.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/security.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
