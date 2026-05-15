@@ -42,7 +42,7 @@ DEFAULT_CONFIG = {
         "backend_available": False,
         "analysis_scope": "frontend-only",
         "backend_endpoint_discovery_method": None,
-        "dev_command_approved": False,
+        "dev_command_approved": False,  # DEPRECATED: use dev_environment.command_approved instead
         "dev_command_hash": None,
         "serena_status": None,
         "metric_type": None,

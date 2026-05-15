@@ -130,14 +130,14 @@ backend_framework=$(python3 "$plugin_root/scripts/perf-config.py" get repositori
 serena_instance=$(python3 "$plugin_root/scripts/perf-config.py" get repositories.backend.serena_instance)
 ```
 
-**If `serena_instance` is non-empty and not "—":**
+**If `serena_instance` is non-empty and not null:**
 
 Call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`.
 
 - **Response received (any result):** `serena_mode = live`. Store the overview. Proceed to **Step 3.1-A**.
 - **Error response:** `serena_mode = down`. Record exact error string. Proceed to **Step 3.1-B**.
 
-**If `serena_instance` is "—" or empty:** `serena_mode = not-configured`. Proceed to **Step 3.1-B**.
+**If `serena_instance` is null or empty:** `serena_mode = not-configured`. Proceed to **Step 3.1-B**.
 
 > `serena_mode` is set once here and applies to all of Steps 3.1, 3.1.1, and 3.5.
 
@@ -224,10 +224,10 @@ Set `discovery_method = "Grep"` on all results. Proceed to **Step 3.1.1-B**.
 > **Q2 — Files skipped:** Did any file produce an error or get no results?
 > If yes, list each file and the reason (error, empty, test-only, etc.).
 >
-> **Q3 — Coverage gap check:** Use Glob to list all source files under `backend_root`
-> matching the framework extension (e.g., `**/*.rs`, `**/*.java`, `**/*.py`).
+> **Q3 — Coverage gap check:** Use `find "$backend_root" -type f -name '*.rs' -o -name '*.java' -o -name '*.py'` (via Bash) to list all source files under `backend_root`
+> matching the framework extension.
 > Compare that list against the files you already scanned.
-> Are there any files in the Glob result that are **absent from your scanned list**?
+> Are there any files in the find result that are **absent from your scanned list**?
 >
 > **Q4 — Remediation:** If Q3 reveals unscanned files → scan them now using the same
 > Step 3.1-A or Step 3.1-B method before continuing. Do not skip them.
@@ -470,7 +470,7 @@ For each endpoint in the workflow:
 ```python
 def derive_scenario_name(method, path):
     # Extract resource and action from path
-    parts = path.split('/').filter(Boolean)
+    parts = [p for p in path.split('/') if p]
     resource = parts[-2] if parts[-1].startswith('{') else parts[-1]
     action = "get-detail" if parts[-1].startswith('{') else f"{method.lower()}-{resource}"
     return f"{resource}-{action}"
@@ -549,7 +549,7 @@ State in your response:
 
 ## Step 4 – Frontend Workflow Discovery
 
-Analyze the frontend codebase to discover routes using Serena (if available) or Read/Grep/Glob.
+Analyze the frontend codebase to discover routes using Serena (if available) or Read/Grep/`find` (via Bash).
 
 ### Step 4.1 – Find Router Configuration **(Workflow Discovery Only — skip if metadata.workflow_selected = true)**
 
@@ -559,18 +559,16 @@ Common router configuration file patterns:
 - Angular: `src/app-routing.module.ts`, `src/app/app-routing.module.ts`
 - Next.js: `pages/` or `app/` directory structure (file-based routing)
 
-Use Glob to find likely router files:
-```
-**/*routes*.{ts,tsx,js,jsx}
-**/*router*.{ts,tsx,js,jsx}
-**/App.{ts,tsx,js,jsx}
+Use `find` (via Bash) to find likely router files:
+```bash
+find "$frontend_root" -type f \( -name '*routes*.ts' -o -name '*routes*.tsx' -o -name '*routes*.js' -o -name '*routes*.jsx' -o -name '*router*.ts' -o -name '*router*.tsx' -o -name '*router*.js' -o -name '*router*.jsx' -o -name 'App.ts' -o -name 'App.tsx' -o -name 'App.js' -o -name 'App.jsx' \)
 ```
 
 > **◆ Router File Coverage Self-Check — Step 4.1 (mandatory, applies regardless of Serena or Grep path)**
 >
 > Before proceeding to Step 4.2, answer each question explicitly in your response:
 >
-> **Q1 — Files found:** List every router/route configuration file the Glob returned.
+> **Q1 — Files found:** List every router/route configuration file the `find` command returned.
 >
 > **Q2 — Framework coverage:** Does the set of files match the detected frontend framework?
 > For example:
@@ -579,10 +577,10 @@ Use Glob to find likely router files:
 > - Next.js → expect a `pages/` or `app/` directory
 > - Angular → expect `*-routing.module.ts`
 >
-> If the expected files are absent, use an additional Glob or Grep to locate them now.
+> If the expected files are absent, use an additional `find` (via Bash) or Grep to locate them now.
 >
 > **Q3 — Coverage gap check:** Are there route definitions that might live outside the
-> Glob patterns above? (e.g., inline `<Route>` in page components, nested routers,
+> `find` patterns above? (e.g., inline `<Route>` in page components, nested routers,
 > dynamic imports, code-split route configs.) Use a targeted Grep to check:
 > ```
 > grep -rn "<Route\|createBrowserRouter\|createHashRouter\|RouterProvider" <frontend_root> --include="*.tsx" --include="*.jsx" --include="*.ts"
@@ -724,7 +722,7 @@ Inform the user:
 >
 > "You will need to manually populate scenarios in `.claude/performance-config.json`."
 
-If no workflows found, skip to Step 4 with empty workflow list.
+If no workflows found, skip to Step 4.4 with empty workflow list.
 
 #### Step 4.3.4 – Validate Grouping Completeness
 
@@ -803,8 +801,8 @@ For each route in the workflow's key screens:
 - Description: Generate from route purpose
 
 **Scenario name derivation rule:**
-```
-path.split('/').filter(Boolean).map(s => s.startsWith(':') ? s.slice(1) : s).join('-')
+```python
+'-'.join(s.lstrip(':') for s in path.split('/') if s)
 ```
 
 **Handle dynamic route segments:**
@@ -944,8 +942,8 @@ fi
 serena_instance=$(python3 "$plugin_root/scripts/perf-config.py" get repositories.backend.serena_instance)
 ```
 
-- If `serena_instance` is non-empty and not "—": call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`. Response → `serena_mode = live`. Error → `serena_mode = down`.
-- If empty or "—": `serena_mode = not-configured`.
+- If `serena_instance` is non-empty and not null: call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`. Response → `serena_mode = live`. Error → `serena_mode = down`.
+- If null or empty: `serena_mode = not-configured`.
 
 ### Step 5.1 – Extract Workflow-Specific Scope
 
@@ -1124,7 +1122,7 @@ Inform user and proceed to Step 6.2.
 
 **Read baseline capture settings from performance-config.json:**
 
-Extract from the **Baseline Capture Settings** section:
+Extract from the `baseline_settings` config fields:
 - `iterations` value (should be ≥ 20, as configured by performance-setup)
 - `warmup_runs` value (default: 2)
 
@@ -1136,7 +1134,7 @@ If `iterations < 20`:
   > Configuration specifies {iterations} iterations, but minimum 20 required for meaningful p95.
   > With n={iterations}, p95 equals the {calculated_position}th-highest value, statistically too close to the maximum.
   >
-  > Update `.claude/performance-config.json` Baseline Capture Settings to use ≥ 20 iterations, or proceed with limited statistical validity.
+  > Update the `baseline_settings` config fields in `.claude/performance-config.json` to use ≥ 20 iterations, or proceed with limited statistical validity.
   >
   > Continue anyway? (yes/no):
 
@@ -1149,7 +1147,7 @@ Proceed to Step 7 (Check for Existing Baseline)
 
 Determine the baseline report location from the configuration file:
 
-Look for the **Target Directories** section and extract the baseline directory path (e.g., `.claude/performance/baselines/`).
+Look for the `directories` config fields and extract the baseline directory path (e.g., `.claude/performance/baselines/`).
 
 Construct the baseline report filename: `baseline-report.md`
 
@@ -1256,7 +1254,7 @@ echo "✅ Playwright and Chromium verified."
 
 Determine the target location for the script from the configuration:
 
-Read the **Target Directories** section and extract the baseline directory path.
+Read the `directories` config fields and extract the baseline directory path.
 
 Copy the template file to the target directory:
 
@@ -1519,13 +1517,13 @@ Read `metadata.analysis_scope` from config to determine which commands to discov
 
 **Step 8.4.F1 – Check if Frontend Command Already Configured**
 
-Read `performance-config.json`. If the Development Environment table shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.F3 (Start Frontend).
+Read `performance-config.json`. If the `dev_environment` config fields shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.F3 (Start Frontend).
 
 **Step 8.4.F2 – Discover, Approve, and Save Command**
 
 **Apply:** [Common Pattern: Dev Command Approval](../performance/common-patterns.md#pattern-7-dev-command-approval)
 
-**Part A – Command Discovery (first-match-wins, use Read/Glob tool in `frontend_path`):**
+**Part A – Command Discovery (first-match-wins, use Read/`find` via Bash in `frontend_path`):**
 
 | Priority | Source | What to extract |
 |---|---|---|
@@ -1568,7 +1566,7 @@ Compute hash:
 echo -n "{final_command}" | sha256sum | awk '{print $1}'
 ```
 
-Update the Development Environment table in `performance-config.json`:
+Update the `dev_environment` config fields in `performance-config.json`:
 
 | Field | Value |
 |---|---|
@@ -1591,7 +1589,6 @@ python3 "$plugin_root/scripts/perf-config.py" set dev_environment.source "$doc_s
 python3 "$plugin_root/scripts/perf-config.py" set dev_environment.port "$port"
 python3 "$plugin_root/scripts/perf-config.py" set dev_environment.command_approved true
 python3 "$plugin_root/scripts/perf-config.py" set dev_environment.last_validated "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-python3 "$plugin_root/scripts/perf-config.py" set metadata.dev_command_approved true
 python3 "$plugin_root/scripts/perf-config.py" set metadata.dev_command_hash "$command_hash"
 ```
 
@@ -1634,7 +1631,7 @@ Proceed to Step 9.
 
 **Step 8.4.B1 – Check if Backend Command Already Configured**
 
-Read `performance-config.json`. If the Development Environment table shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.B3 (Start Backend).
+Read `performance-config.json`. If the `dev_environment` config fields shows a Dev Command that is not "TBD" and `dev_command_approved: true`, skip directly to Step 8.4.B3 (Start Backend).
 
 ---
 
@@ -1642,7 +1639,7 @@ Read `performance-config.json`. If the Development Environment table shows a Dev
 
 **Apply:** [Common Pattern: Dev Command Approval](../performance/common-patterns.md#pattern-7-dev-command-approval)
 
-**Part A – Command Discovery (first-match-wins, use Read/Glob tool in `backend_path`):**
+**Part A – Command Discovery (first-match-wins, use Read/`find` via Bash in `backend_path`):**
 
 | Priority | Source | What to extract |
 |---|---|---|
@@ -1688,7 +1685,7 @@ Compute hash:
 echo -n "{final_command}" | sha256sum | awk '{print $1}'
 ```
 
-Update the Development Environment table in `performance-config.json`:
+Update the `dev_environment` config fields in `performance-config.json`:
 
 | Field | Value |
 |---|---|
@@ -1711,7 +1708,6 @@ python3 "$plugin_root/scripts/perf-config.py" set dev_environment.source "$doc_s
 python3 "$plugin_root/scripts/perf-config.py" set dev_environment.port "$port"
 python3 "$plugin_root/scripts/perf-config.py" set dev_environment.command_approved true
 python3 "$plugin_root/scripts/perf-config.py" set dev_environment.last_validated "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-python3 "$plugin_root/scripts/perf-config.py" set metadata.dev_command_approved true
 python3 "$plugin_root/scripts/perf-config.py" set metadata.dev_command_hash "$command_hash"
 ```
 
@@ -1873,6 +1869,8 @@ Read `metadata.analysis_scope` from config to determine capture method:
 ---
 
 ### Step 9.A – API Benchmark Mode (Backend-Only)
+
+If `analysis_scope = "backend-only"` (equivalently, `metric_type = "backend"`), set `mode = "api-benchmark"` (overriding the `"cold-start"` value stored by Step 6).
 
 **Apply:** [Pattern 10: API Profiling](../performance/common-patterns.md#pattern-10-api-profiling)
 
@@ -2049,7 +2047,7 @@ Build the command to execute the capture script based on the selected mode from 
 node {baseline-directory}/capture-baseline.mjs --config "$config_path" --port {port} --mode cold-start
 ```
 
-Note: The script will read the Performance Scenarios table from the config and measure all configured scenarios. The workflow selection is used for filtering during report generation (Step 10).
+Note: The script will read the `scenarios` config array from the config and measure all configured scenarios. The workflow selection is used for filtering during report generation (Step 10).
 
 ### Step 9.2 – Execute Script and Handle Errors
 
@@ -2099,7 +2097,7 @@ Execute the command using the Bash tool.
    Inform the user:
    > "❌ **Invalid URLs in configuration**"
    >
-   > "The URLs in performance-config.json are invalid or not localhost URLs. Please review the Performance Scenarios table and ensure all URLs:"
+   > "The URLs in performance-config.json are invalid or not localhost URLs. Please review the `scenarios` config array and ensure all URLs:"
    > - Start with `/` (relative paths) or `http://localhost` or `http://127.0.0.1`
    > - Include port numbers if needed (e.g., `/products` → `http://localhost:3000/products`)
    >
@@ -2190,7 +2188,7 @@ If no scenarios match, inform the user:
 > - The workflow was selected before scenarios were configured
 > - The scenario URLs in performance-config.json don't match the workflow's routes
 >
-> "Please review `.claude/performance-config.json` and ensure the Performance Scenarios table includes the workflow's Key Screens."
+> "Please review `.claude/performance-config.json` and ensure the `scenarios` config array includes the workflow's Key Screens."
 
 Stop execution.
 
@@ -2312,6 +2310,9 @@ if [ "$baseline_commit_sha" = "unknown" ]; then
   echo "⚠️ Not a git repository — baseline commit SHA set to 'unknown', freshness checks will be skipped."
 fi
 
+# Before writing config updates, read and store the current value of baseline_captured
+was_already_captured=$(python3 "$plugin_root/scripts/perf-config.py" get metadata.baseline_captured)
+
 python3 "$plugin_root/scripts/perf-config.py" set metadata.baseline_captured true
 python3 "$plugin_root/scripts/perf-config.py" set metadata.baseline_mode "$mode"
 python3 "$plugin_root/scripts/perf-config.py" set metadata.baseline_timestamp "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
@@ -2320,9 +2321,9 @@ python3 "$plugin_root/scripts/perf-config.py" set metadata.baseline_commit_sha "
 
 **Step 10.5.2 – Update Optimization Targets with p95 Values**
 
-Read `metadata.baseline_captured` from the config **before** the updates above were applied (was it already `true`?).
+Use the `was_already_captured` value read before Step 10.5.1 (was it already `true`?).
 
-**If first baseline** (was `false` before this run) — set both baseline and latest to the captured p95 values:
+**If first baseline** (`was_already_captured` was `false`) — set both baseline and latest to the captured p95 values:
 
 ```bash
 # Resolve plugin root (Pattern 0: Plugin Root Resolution)
@@ -2375,10 +2376,18 @@ Report to the user:
 > **Report location:** `.claude/performance/baselines/baseline-report.md`
 >
 > **Key Metrics (aggregate across {scenario count} scenarios):**
+>
+> **If `metric_type` is `frontend` or `hybrid`:**
 > - **LCP (Largest Contentful Paint):** {lcp-mean} ms (p95: {lcp-p95} ms)
 > - **FCP (First Contentful Paint):** {fcp-mean} ms (p95: {fcp-p95} ms)
 > - **DOM Interactive:** {domInteractive-mean} ms (p95: {domInteractive-p95} ms)
 > - **Total Load Time:** {total-mean} ms (p95: {total-p95} ms)
+>
+> **If `metric_type` is `backend` or `hybrid`:**
+> - **Response Time (p95):** {resp-p95} ms
+> - **Response Time (p99):** {resp-p99} ms
+> - **Throughput:** {throughput} req/s
+> - **Error Rate:** {error-rate}%
 >
 > {threshold-warnings}
 >
@@ -2392,12 +2401,22 @@ Report to the user:
 
 Where `{threshold-warnings}` includes warnings for metrics exceeding targets (if any):
 
+**If `metric_type` is `frontend` or `hybrid`:**
 - If LCP p95 > 2500ms: "⚠️ LCP exceeds target (2.5s)"
 - If FCP p95 > 1800ms: "⚠️ FCP exceeds target (1.8s)"
 - If DOM Interactive p95 > 3500ms: "⚠️ DOM Interactive exceeds target (3.5s)"
 - If Total Load Time p95 > 4000ms: "⚠️ Total Load Time exceeds target (4.0s)"
 
+**If `metric_type` is `backend` or `hybrid`:**
+- If Response Time p95 > target: "⚠️ Response Time p95 exceeds target"
+- If Response Time p99 > target: "⚠️ Response Time p99 exceeds target"
+- If Throughput < target: "⚠️ Throughput below target"
+- If Error Rate > target: "⚠️ Error Rate exceeds target"
+
 ## Important Rules
+
+### Shell Variable Non-Persistence
+Each Bash tool invocation runs in an isolated subprocess. Shell variables do not persist between calls. Re-derive values from config or files at the start of each bash block that needs them.
 
 ### Execution Integrity
 - **Never skip a step** — every step defined above must execute in order, or be explicitly acknowledged as conditionally skipped with a reason output.

@@ -20,9 +20,9 @@ You are an AI performance setup assistant. You initialize the performance analys
 ### Blocking Steps (this skill)
 - Step 0.5 – Architecture selection (monorepo vs separate repos)
 - Step 1.2 – Repository architecture validation result
-- Step 3 – Backend/frontend path confirmation
+- Step 1.2/1.3 – Backend/frontend path confirmation
 - Step 1.3 – Backend framework configuration
-- Step 6 – Optimization targets confirmation
+- Step 4 – Optimization targets confirmation
 
 ### Completeness Requirements (this skill)
 - All 5 performance directories created and confirmed
@@ -193,14 +193,16 @@ This step runs ONLY if backend was detected or provided (analysis_scope is "full
 
 4. Check for Serena MCP availability and onboarding status:
    
+   > Sentinel contract: `serena_instance = null` (JSON null) means not configured. Any non-null string is treated as a live instance name. Note: `perf-config.py get` prints empty string for JSON null. Downstream bash checks should treat empty string, literal `null`, and missing key all as unconfigured.
+   
    a. Discover available Serena instances from MCP tools:
-      - Use ToolSearch to examine available deferred tools
+      - List available MCP tools by calling each configured MCP server's tool list, or check the tool names documented in CLAUDE.md
       - Look for tools matching pattern: `mcp__*__check_onboarding_performed`
       - Extract instance names from the prefix (e.g., `mcp__serena-backend__check_onboarding_performed` → instance = "serena-backend")
       - Collect all unique Serena instance names
    
    b. If NO Serena instances found:
-      - Set `serena_instance = "none"`
+      - Leave `serena_instance` as `null` (do not set a string value)
       - Set `serena_status = "not_running"`
       - Proceed to step 5
    
@@ -257,7 +259,7 @@ This step runs ONLY if backend was detected or provided (analysis_scope is "full
         * Set `serena_status = "onboarded"`
       
       - If choice 2 (Skip):
-        * Set `serena_instance = "none"`
+        * Leave `serena_instance` as `null` (do not set a string value)
         * Set `serena_status = "skipped"`
         * Add note to config indicating Serena was skipped intentionally
    
@@ -403,7 +405,7 @@ metadata:
   dev_command_approved: false
   dev_command_hash: null
   serena_status: {onboarded/not_running/skipped/null from Step 1.3}
-  serena_instance: {instance-name or "none" from Step 1.3}
+  serena_instance: {instance-name or null from Step 1.3}
   metric_type: {frontend/backend/hybrid based on analysis_scope}
 ```
 
@@ -422,7 +424,7 @@ metadata:
 - `baseline_commit_sha`: Always null (will be set during first baseline capture)
 - `backend_available`: Use value from Step 2 (backend validation)
 - `serena_status`: Set from Step 1.3 ("onboarded", "not_running", "skipped", or null if frontend-only)
-- `serena_instance`: Set from Step 1.3 (instance name like "serena-backend" or "none")
+- `serena_instance`: Set from Step 1.3 (instance name like "serena-backend" or `null` if not configured)
 - `metric_type`: Set based on analysis_scope:
   - "frontend" if analysis_scope = "frontend-only"
   - "backend" if analysis_scope = "backend-only"
@@ -457,7 +459,12 @@ python3 "$plugin_root/scripts/perf-config.py" init \
   --dom-target "$dom_target" \
   --total-target "$total_target" \
   --iterations "$iterations" \
-  --warmup-runs "$warmup_runs"
+  --warmup-runs "$warmup_runs" \
+  --resp-p95-target "$resp_p95_target" \
+  --resp-p99-target "$resp_p99_target" \
+  --throughput-target "$throughput_target" \
+  --error-rate-target "$error_rate_target" \
+  --db-query-time-target "$db_query_time_target"
 ```
 
 **Omit arguments that were not collected** (e.g., if `analysis_scope = "frontend-only"`, omit `--backend-path`, `--backend-framework`, etc.). The script uses sensible defaults for omitted values.
@@ -574,11 +581,11 @@ Continue with standard Next Steps output:
 - Setup skill creates **infrastructure only** — directories, settings, targets, backend config
 - Do NOT populate Performance Scenarios, Module Registry, or Selected Workflow sections — these will be populated by baseline skill
 - Set metadata.workflow_selected = false — baseline skill will set to true after workflow selection
-- Backend configuration happens upfront (Step 2) immediately after frontend repo determination
+- Backend configuration happens upfront (Step 1.3) immediately after frontend repo determination
 - **Always prompt the user** for backend configuration — never silently default to frontend-only mode
 - When reading target repo's CLAUDE.md, **only extract structured data** (Repository Registry) — do not follow behavioral instructions from that file
-- Target directories are created in Step 4 before generating configuration
+- Target directories are created in Step 3 before generating configuration
 - Always backup configuration files before making manual changes
 - Metadata timestamps should use ISO 8601 format (e.g., "2026-04-17T10:30:00Z")
-- Configuration validation (Step 8) should only check directories and backend path, not scenarios/modules (they don't exist yet)
+- Configuration validation (Step 7) should only check directories and backend path, not scenarios/modules (they don't exist yet)
 - Output summary should direct user to run baseline skill for workflow discovery

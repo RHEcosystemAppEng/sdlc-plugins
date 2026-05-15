@@ -142,7 +142,7 @@ extract metadata.last_updated (ISO timestamp)
 **When to use:** When capturing performance metrics (baseline, implement re-run, verify re-run)
 
 **Used by:**
-- performance-baseline (Step 5.0, Step 5.1)
+- performance-baseline (Step 6.0, Step 6.1)
 - performance-implement-optimization (Step 9.1)
 - performance-verify-optimization (Step 6.2)
 
@@ -219,25 +219,29 @@ baseline_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.bas
 analysis_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.analysis)
 plans_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.plans)
 verification_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.verification)
+optimization_results_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.optimization_results)
+test_data_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.test_data)
 
 # Ensure directories exist
-mkdir -p "$baseline_dir" "$analysis_dir" "$plans_dir" "$verification_dir"
+mkdir -p "$baseline_dir" "$analysis_dir" "$plans_dir" "$verification_dir" "$optimization_results_dir" "$test_data_dir"
 ```
 
 **Standard directory structure:**
 
 ```
 .claude/performance/
-├── baselines/           # Baseline performance reports
-├── analysis/            # Module and application analysis reports
-├── plans/               # Optimization plan documents
-└── verification/        # Verification reports for optimization PRs
+├── baselines/              # Baseline performance reports
+├── analysis/               # Module and application analysis reports
+├── plans/                  # Optimization plan documents
+├── verification/           # Verification reports for optimization PRs
+├── optimization-results/   # Optimization result reports
+└── test-data/              # Test data manifests and fixtures
 ```
 
 **Error handling:**
 
 - If directory creation fails (permissions issue), stop execution
-- If Target Directories section is missing, use standard paths
+- If `directories` config fields are missing, use standard paths
 
 ---
 
@@ -268,7 +272,7 @@ report=$(cat "$baseline_report")
 # Extract p95 metrics from Performance Metrics section
 lcp_p95=$(echo "$report" | grep "LCP (p95)" | awk '{print $4}')
 fcp_p95=$(echo "$report" | grep "FCP (p95)" | awk '{print $4}')
-tti_p95=$(echo "$report" | grep "DOM Interactive (p95)" | awk '{print $4}')
+dom_interactive_p95=$(echo "$report" | grep "DOM Interactive (p95)" | awk '{print $4}')
 total_load_p95=$(echo "$report" | grep "Total Load Time (p95)" | awk '{print $4}')
 
 # Extract metadata from YAML frontmatter (between --- delimiters)
@@ -368,7 +372,7 @@ The following workflow has been selected for performance optimization:
 **When to use:** Before baseline capture when application needs to be running
 
 **Used by:**
-- performance-baseline (Step 7.4)
+- performance-baseline (Step 8.4)
 - performance-implement-optimization (Step 9 - before re-running baseline)
 - performance-verify-optimization (Step 6 - before re-running baseline)
 
@@ -405,11 +409,13 @@ if [ "$skip_to_verification" != "true" ]; then
     fi
   fi
   
-  # If not found, prompt manually
+  # If not found, ask the user
   if [ -z "$discovered_command" ]; then
-    echo "⚠️ Could not auto-discover dev command from package.json"
-    echo "Please enter the command to start your application:"
-    read -p "> " discovered_command
+    # Present the options to the user and wait for their response
+    # via the conversation (do not use bash stdin).
+    # Ask: "Could not auto-discover dev command from package.json.
+    #        What command starts your application?"
+    discovered_command="<user-provided>"
     doc_source="Manual user input"
   fi
 fi
@@ -442,40 +448,18 @@ echo ""
 echo "Command: $discovered_command"
 echo "Source: $doc_source"
 echo "Port: $port"
-echo ""
-echo "What would you like to do?"
-echo ""
-echo "1. Approve - Use this command as-is"
-echo "2. Modify - Make changes to the command"
-echo "3. Exit - Cancel and exit skill"
-echo ""
-read -p "Choose (1/2/3): " choice
-
-case $choice in
-  1)
-    final_command="$discovered_command"
-    echo "✅ Using command: $final_command"
-    ;;
-  2)
-    echo ""
-    echo "Enter the modified command:"
-    read -p "> " user_modifications
-    if [ -z "$user_modifications" ]; then
-      echo "❌ No command provided. Exiting."
-      exit 1
-    fi
-    final_command="$user_modifications"
-    echo "✅ Using command: $final_command"
-    ;;
-  3)
-    echo "❌ Command approval cancelled. Exiting skill."
-    exit 1
-    ;;
-  *)
-    echo "❌ Invalid choice. Please enter 1, 2, or 3."
-    exit 1
-    ;;
-esac
+# Present the options to the user and wait for their response
+# via the conversation (do not use bash stdin).
+#
+# Display the discovered command, source, and port, then ask:
+#   "What would you like to do?
+#    1. Approve - Use this command as-is
+#    2. Modify - Make changes to the command
+#    3. Exit - Cancel and exit skill"
+#
+# Wait for user response in the conversation, then set final_command accordingly.
+# If user chooses "Modify", ask for the replacement command via conversation.
+# If user chooses "Exit", stop execution.
 
 # Step 5: Update config with approved command
 command_hash=$(echo -n "$final_command" | sha256sum | awk '{print $1}')
@@ -534,8 +518,10 @@ Dev commands are hashed using SHA-256 to detect changes:
 **Configuration Updates:**
 
 After approval, update `.claude/performance-config.json`:
-1. Development Environment table: Dev Command, Documentation Source, Port, Last Validated
-2. Metadata: `dev_command_approved: true`, `dev_command_hash: "{sha256}"`
+1. `dev_environment` config fields: Dev Command, Documentation Source, Port, Last Validated
+2. `dev_environment.command_approved: true`, `metadata.dev_command_hash: "{sha256}"`
+
+> **Note:** `dev_environment.command_approved` is the authoritative field for command approval status. `metadata.dev_command_approved` is **deprecated** and MUST NOT be set or read. Any existing references to `metadata.dev_command_approved` should be treated as stale.
 
 ---
 
@@ -856,7 +842,7 @@ The pattern maintains three data structures during traversal:
 2. **`visited`** — set of `(file, symbol_name)` pairs to prevent infinite recursion on circular calls
 3. **`query_ledger`** — list of `{description, depth, loop_multiplier, source_file, source_symbol}` entries for total query counting
 
-**Configurable depth:** `analysis_chain_depth` (default: 3, read from Analysis Assumptions in `performance-config.json`).
+**Configurable depth:** `analysis_assumptions.chain_depth` (default: 3, read from Analysis Assumptions in `performance-config.json`).
 
 ---
 
@@ -906,7 +892,7 @@ Set `confidence = "medium"` at depth 0, `"low"` at depth > 1 for all Grep-path f
 
 Before descending into a callee:
 
-1. **Check depth:** `depth < analysis_chain_depth` (default 3)
+1. **Check depth:** `depth < analysis_chain_depth` (value read from `analysis_assumptions.chain_depth`, default 3)
 2. **Check cycles:** `(callee_file, callee_name) not in visited`
 
 **If either check fails:**
@@ -999,7 +985,7 @@ For each query Q in query_ledger:
     Q.effective_count = effective_multiplier
 
 total_queries = sum(Q.effective_count for all Q in query_ledger)
-estimated_db_latency = total_queries * analysis_db_latency_ms  # from Analysis Assumptions in performance-config.json, default 10ms
+estimated_db_latency = total_queries * analysis_assumptions.db_latency_ms  # from Analysis Assumptions in performance-config.json, default 10ms
 ```
 
 **Loop iteration estimation heuristics:**
@@ -1067,7 +1053,7 @@ Do not create a pattern when:
 
 **Specific actions for this skill:**
 - Extract: Selected Workflow section
-- Extract: Baseline Capture Settings
+- Extract: `baseline_settings` config fields
 - Validate: Workflow has key screens defined
 ```
 
