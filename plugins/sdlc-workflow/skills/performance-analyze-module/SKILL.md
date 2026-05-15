@@ -30,12 +30,13 @@ You are an AI performance analysis assistant. You **inspect source code** to det
 - Complete analysis report written to file before Step 10 output summary
 - **Self-verification (Step 9.0) must pass before report is written** — no steps may be silently skipped
 - **Finding validation (Step 9.1) must pass before report is written** — no unverified findings may enter the report
+- **Deep analysis (Step 9.1-B2) must pass for every finding** — trace full call chains, verify fix premises against technology constraints, assess real-world cardinality, and challenge conclusions before confirming. Precision over volume: 10 correct findings beats 50 with 40% noise
 
 ### Error Handling (this skill)
 - Missing config → halt at Step 2 with remediation: run `performance-setup`
 - Missing selected workflow → halt at Step 2.1 with remediation: run `performance-baseline`
 - Missing baseline report → halt at Step 3 with remediation: run `performance-baseline`
-- Step 6.10 Serena probe failure → do NOT halt; record exact error, set
+- Step 6.B Serena probe failure → do NOT halt; record exact error, set
   `serena_mode = down`, continue with Grep paths (Steps 7.x-B)
 
 ### Plugin Root Resolution
@@ -88,6 +89,11 @@ If the user provided a repository path as an argument, use that as the target. O
 **Specific actions for this skill:**
 - Verify config exists, stop if missing
 - Read configuration for workflow and backend settings
+
+**Gate variable relationships:**
+- `analysis_scope` = user-configured scope (controls which skill sections run)
+- `metric_type` = what metrics to capture (controls report sections)
+- `backend_available` = runtime probe result (controls whether backend tools are accessible)
 
 ### Step 2.0 – Read Analysis Assumptions
 
@@ -185,12 +191,12 @@ Store for use in module analysis and bundler-specific optimization detection.
 
 **Serena instance name from config:**
 
-Store `serena_instance_name` for use in Step 6.10 probe and Step 7 Serena calls.
-All Step 7 Serena tool calls use `mcp__{serena_instance_name}__<tool>` directly.
+Store `serena_instance` for use in Step 6.B probe and Step 7 Serena calls.
+All Step 7 Serena tool calls use `mcp__{serena_instance}__<tool>` directly.
 
 ### Step 2.2.1 – Note on Serena Availability
 
-Serena availability is determined at runtime by a live probe in **Step 6.10**, immediately before
+Serena availability is determined at runtime by a live probe in **Step 6.B**, immediately before
 backend analysis begins. The probe call (`get_symbols_overview`) sets `serena_mode` to one of:
 
 - `live` — Serena responded; backend analysis uses Serena-only paths (Steps 7.x-A)
@@ -210,13 +216,13 @@ backend analysis begins. The probe call (`get_symbols_overview`) sets `serena_mo
 >
 > Analysis will continue with Grep (some patterns may be missed).
 
-**If `serena_instance` is configured but probe fails at Step 6.10, display at that point:**
+**If `serena_instance` is configured but probe fails at Step 6.B, display at that point:**
 
 > ⚠️ **Serena MCP configured but unavailable** — falling back to Grep.
 >
 > Check MCP server is running and verify Serena instance name in CLAUDE.md.
 
-**If unavailable:** `serena_instance` is stored for later use. Backend analysis will use Grep paths when the live probe runs at Step 6.10. Continue to Step 3.
+**If unavailable:** `serena_instance` is stored for later use. Backend analysis will use Grep paths when the live probe runs at Step 6.B. Continue to Step 3.
 
 **If `backend_available = false`:**
 
@@ -250,7 +256,7 @@ Store backend configuration and `backend_available` flag for use in Step 7.
 
 Read `metadata.metric_type` from `performance-config.json` to determine which baseline file(s) to check.
 
-Determine the baseline directory from the **Target Directories** section (e.g., `.claude/performance/baselines/`).
+Determine the baseline directory from the `directories` config fields (e.g., `.claude/performance/baselines/`).
 
 **If metric_type = "frontend" or "hybrid":**
 
@@ -369,7 +375,12 @@ If bundle stats are not available, estimate by examining import patterns in the 
 
 Log: "Skipping frontend analysis (backend-only mode configured)."
 
-Skip to Step 7 (Backend Source Code Analysis).
+Skip to Step 6.B (Serena Availability Probe).
+
+**Flow paths by metric_type:**
+- `metric_type = "frontend"` → run Steps 6.1–6.9, skip Step 6.B and Step 7
+- `metric_type = "backend"` → skip Steps 6.1–6.9, run Step 6.B, run Step 7
+- `metric_type = "hybrid"` → run Steps 6.1–6.9, run Step 6.B, run Step 7
 
 **If metric_type = "frontend" or "hybrid":**
 
@@ -682,9 +693,11 @@ on separate lines may not cause forced reflow if they occur in different event l
 - Estimated initial bundle size reduction: `sum_of_eagerly_loaded_component_sizes`
 - Estimated FCP improvement: `size_reduction / (analysis_bandwidth_mbps * 125000)` (using configured bandwidth)
 
-## Step 6.10 – Serena Availability Probe (Backend Analysis Gate)
+## Step 6.B – Serena Availability Probe (Backend Analysis Gate)
 
-**If `backend_available = false`:** Skip Steps 6.10 and 7 entirely (frontend-only mode).
+**Note:** This step is independent of the Step 6 frontend scope skip. It runs for `metric_type = "backend"` and `metric_type = "hybrid"` regardless of whether Steps 6.1–6.9 were executed.
+
+**If `backend_available = false`:** Skip Steps 6.B and 7 entirely (frontend-only mode). If `metric_type = "hybrid"` and `backend_available = false`, log a warning: "hybrid metric_type configured but backend is not available — skipping backend analysis. Re-run performance-setup to correct configuration."
 
 **If `backend_available = true`:** Run the probe:
 
@@ -699,14 +712,14 @@ fi
 serena_instance=$(python3 "$plugin_root/scripts/perf-config.py" get repositories.backend.serena_instance)
 ```
 
-**If `serena_instance` is non-empty and not "—":**
+**If `serena_instance` is non-empty and not null:**
 
 Call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`.
 
 - **Response received (any result):** `serena_mode = live`. Store overview. Proceed to Step 7 using **-A** sub-steps.
 - **Error response:** `serena_mode = down`. Record exact error. Proceed to Step 7 using **-B** sub-steps.
 
-**If `serena_instance` is "—" or empty:** `serena_mode = not-configured`. Proceed to Step 7 using **-B** sub-steps.
+**If `serena_instance` is null or empty:** `serena_mode = not-configured`. Proceed to Step 7 using **-B** sub-steps.
 
 > `serena_mode` is set once here and applies to all of Steps 7.1 through 7.6.
 
@@ -718,7 +731,7 @@ Call `mcp__{serena_instance}__get_symbols_overview` with `relative_path="."`.
 
 **Apply:** [Common Pattern: Code Intelligence Strategy — Pattern 8](../performance/common-patterns.md#pattern-8-code-intelligence-strategy-serena-first-with-grep-fallback)
 
-(`serena_mode` was set in Step 6.10. Follow -A sub-steps when `serena_mode = live`, -B sub-steps otherwise.)
+(`serena_mode` was set in Step 6.B. Follow -A sub-steps when `serena_mode = live`, -B sub-steps otherwise.)
 
 For EACH API endpoint identified in Step 6.1 (Over-Fetching Detection):
 
@@ -1219,7 +1232,7 @@ For each unused JOIN, suggest the appropriate fix:
 
 #### 7. Report in Analysis Document
 
-Add findings to the analysis report template under "Backend Database Anti-Patterns" section with: endpoint, handler location, query, unused join details, estimated impact, and recommended fix.
+Add findings to the analysis report template under "Backend Anti-Patterns Detected" section with: endpoint, handler location, query, unused join details, estimated impact, and recommended fix.
 
 **Detection confidence levels:**
 - **High confidence:** Raw SQL with clear unused table, or ORM with no field accesses found
@@ -1780,7 +1793,12 @@ Extract metrics and compare against baseline:
 
 ```bash
 # Load baseline metrics if available
-baseline_file=".claude/performance/baselines/benchmark-results.json"
+# Read baseline directory from config: directories.baselines
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+baselines_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.baselines)
+baseline_file="${baselines_dir}/benchmark-results.json"
 if [ -f "$baseline_file" ]; then
   has_baseline=true
 else
@@ -1840,7 +1858,7 @@ for scenario in "${!dynamic_results[@]}"; do
 done
 ```
 
-### Step 7.7.3 – Document Results for Report Generation
+### Step 7.7.1 – Document Results for Report Generation
 
 Dynamic results are already stored in the associative array and saved to `dynamic-results.sh`.
 
@@ -1990,6 +2008,8 @@ Recommendation: Create lightweight /v3/advisory/summary endpoint returning only
   {uuid, document_id, ingested} with count, skipping vulnerability loading entirely
 ```
 
+**Overlapping detection reconciliation:** If Step 8 or 8.F re-classifies or upgrades a finding first detected in Steps 6.x or 7.x, the Step 8/8.F finding supersedes. Remove the earlier finding from the inventory to avoid duplicates in Step 9.1-A.
+
 ## Step 9 – Generate Workflow Analysis Report
 
 Create a comprehensive analysis report at `{analysis-directory}/workflow-analysis-report.md`.
@@ -2023,7 +2043,7 @@ Create a comprehensive analysis report at `{analysis-directory}/workflow-analysi
 
 | Step | Check | Status |
 |---|---|---|
-| 6.10 | Serena Availability Probe executed, `serena_mode` set | ☐ |
+| 6.B | Serena Availability Probe executed, `serena_mode` set | ☐ |
 | 7.1 | Backend handler located for EACH endpoint from Step 6.1 | ☐ |
 | 7.2 | Backend response schema extracted for EACH endpoint | ☐ |
 | 7.3 | Backend N+1 Query Detection completed | ☐ |
@@ -2067,44 +2087,145 @@ Create a comprehensive analysis report at `{analysis-directory}/workflow-analysi
 
 #### Step 9.1-A – Build Findings Inventory
 
-Construct an in-context table listing every finding instance from Steps 5–8:
+Construct an in-context table listing every finding instance from Steps 5–8.
 
-| # | Anti-Pattern | Step | File:Line | Detection Method | Original Confidence | Original Severity |
-|---|---|---|---|---|---|---|
-| F1 | {type} | {step-number} | {file}:{line} | {Serena/Grep/Inference} | {High/Medium/Low} | {Critical/High/Medium/Low} |
-| F2 | ... | ... | ... | ... | ... | ... |
+Each row **must** include an `Evidence Excerpt` — a minimal code snippet (function signature + the line(s) exhibiting the anti-pattern) captured during the detection step. Detection steps that say "extract code snippets" already produce these; for steps that do not, capture the function signature and the pattern-bearing line(s) at inventory time (re-read if necessary). The excerpt is the ground truth for the existence check in Step 9.1-B.
+
+| # | Anti-Pattern | Step | File:Line | Detection Method | Evidence Excerpt | Original Confidence | Original Severity |
+|---|---|---|---|---|---|---|---|
+| F1 | {type} | {step-number} | {file}:{line} | {Serena/Grep/Inference} | `{signature + pattern line}` | {High/Medium/Low} | {Critical/High/Medium/Low} |
+| F2 | ... | ... | ... | ... | ... | ... | ... |
 
 Assign each finding a unique ID (F1, F2, ...) that will be used through the remainder of this step and in the report.
 
 #### Step 9.1-B – Source Code Re-Verification
 
+**Scope:** Local verification at the cited `File:Line` only. This step confirms the code exists
+and locally exhibits the claimed pattern. Contextual invalidation (call chain analysis, technology
+constraints, cardinality bounds, false-positive risk assessment) belongs in Step 9.1-B2.
+Passing 9.1-B means "the code at this location matches the anti-pattern syntactically" — it
+does NOT mean the finding is valid in context.
+
 **For EACH finding in the inventory:**
 
-1. **Re-read the source file at the reported location.** Use the same tool that was used in the detection step (Serena `find_symbol` with `include_body=true` if `serena_mode = live`, otherwise Read tool). Read enough context to verify the finding (the reported line plus at least 10 lines before and after).
+1. **Re-read the source file at the reported location.** Choose the tool based on the
+   `Detection Method` column in the 9.1-A inventory — NOT the global `serena_mode` flag:
+
+   | Detection Method in Inventory | Re-Read Tool |
+   |---|---|
+   | `Serena` (and file is in the backend module) | `mcp__{serena_instance}__find_symbol` with `include_body=true` |
+   | `Grep` | Read tool (reported line ±10 lines minimum; expand to full function if pattern spans more) |
+   | `Inference` (e.g., bundle stats, baseline data) | Read tool on the source file; if finding is derived from baseline data rather than source code, verify the baseline data still exists |
+   | `Read` | Read tool |
+
+   **Do NOT** use Serena for frontend findings (Steps 6.x) even when `serena_mode = live` — Serena
+   indexes the backend project only. Using Serena on frontend paths will fail or return wrong results.
+
+   Read enough context to verify the finding (the reported line plus at least 10 lines before and after).
 
 2. **Apply the existence check:**
    - Does the file still exist at the reported path?
-   - Does the code at the reported line number match the snippet stored for this finding?
-   - If the line number is off (file was not modified, so this indicates an earlier recording error), search within ±20 lines for the pattern. If found at a different line, update the line number and continue. If not found, mark the finding as **FAILED: code not found**.
+   - Does the code at the reported line number match the `Evidence Excerpt` from the 9.1-A inventory?
+   - If the line number is off, search within ±20 lines for the pattern. If found at a different
+     line, update the line number and continue. If not found and the file may have been modified
+     during this session, attempt to re-run the detection step's search for this specific instance.
+     If still not found, mark the finding as **FAILED: code not found**.
 
-3. **Apply the pattern match check:**
-   - Does the code actually exhibit the anti-pattern as claimed?
-   - For N+1 queries: Is there actually a query inside a loop? Is the loop actually iterating (not a single-item collection)?
-   - For over-fetching: Are the fields marked "unused" truly not accessed? Re-check destructuring, prop drilling, and dynamic access patterns.
-   - For unused JOINs: Is the joined table's data really not used in SELECT, WHERE, response mapping, or downstream callers?
-   - For missing caching: Is there really no cache layer? Check for caching at other layers (middleware, proxy, CDN) that the detection step may have missed.
-   - For missing pagination: Does the endpoint truly return unbounded results, or is pagination handled by a framework middleware?
-   - For wasted computation: Are the "unused" fields really unused, or accessed via serialization, logging, or audit?
+3. **Apply the local pattern match check:**
+   - Does the code at the cite site actually exhibit the anti-pattern as claimed?
+   - For anti-patterns with specific 9.1-B checks (below), apply them. For all others
+     (Steps 6.3–6.9, 7.6.x variants not listed below, Step 5 bundle findings), confirm only that
+     the code at the cite site matches the general pattern description from the detection step.
+     Deeper validation for those patterns occurs in Step 9.1-B2.
+
+   **Anti-pattern-specific local checks:**
+   - For N+1 queries (6.2, 7.3): Is there actually a query inside a loop at this location?
+   - For over-fetching (6.1, 8): Are the fields marked "unused" absent at this cite site? (Full destructuring/prop-drilling check is in 9.1-B2.)
+   - For unused JOINs (7.6.1): Is the joined table's data absent from SELECT/WHERE at this query location?
+   - For wasted computation (7.6.3): Does the handler access fewer fields than the return type at this location?
+   - For missing pagination (7.4): Does the handler call `paginate_array` or equivalent in-memory pagination at this location?
    - If the pattern does not match the claim, mark the finding as **FAILED: pattern mismatch** with the specific discrepancy.
 
-#### Step 9.1-C – False-Positive Risk Assessment
+4. **Record outcome** on the inventory row before proceeding to Step 9.1-B2:
+   - `9.1-B: PASS` (with corrected File:Line if updated)
+   - `9.1-B: FAILED: code not found`
+   - `9.1-B: FAILED: pattern mismatch — {specific discrepancy}`
 
-**For EACH finding that passed Step 9.1-B**, evaluate against known false-positive patterns:
+#### Step 9.1-B2 – Deep Analysis Beyond Pattern Matching
+
+**Scope:** Semantic and contextual validation. While 9.1-B confirms the pattern exists locally
+at the cite site, this step determines whether the pattern is actually an anti-pattern in context
+by examining call chains, technology constraints, and real-world cardinality. A finding can pass
+9.1-B (code matches syntactically) and fail 9.1-B2 (code is correct in context).
+
+**Purpose:** Pattern existence does not equal a valid finding. A function may contain the
+textual pattern of an anti-pattern while being correct behavior in context. This step
+prevents the most common false-positive categories: functions analyzed in isolation,
+recommendations that don't work for the target technology, and inflated severity from
+ignoring real-world constraints.
+
+**This step is MANDATORY for every finding with `9.1-B: PASS` in the inventory.**
+
+**1. Trace the full call chain — never analyze functions in isolation:**
+   - **Upstream:** Who calls this function? What bounds, depth limits, or validation
+     exist on the input before it reaches this code? (e.g., a recursive function may
+     appear unbounded, but its input data was already depth-limited during parsing/deserialization)
+   - **Downstream:** How is the output used? Is data reused by multiple consumers?
+     (e.g., fetching a broad dataset and filtering in-memory may be a deliberate
+     optimization to avoid N+1 queries — the data serves two code paths)
+   - If upstream bounds or downstream reuse invalidate the finding, mark as
+     **FAILED: context invalidates pattern** with the specific call chain evidence
+
+**2. Question the premise — verify the fix works for this technology:**
+   - Does the recommended fix actually work in this runtime, database, or framework?
+   - Examples of premise failures (illustrative — apply the same reasoning to your target stack):
+     - PostgreSQL handles one query per connection per transaction — `try_join!`/`Promise.all`
+       on queries sharing a connection provides zero parallelism benefit
+     - `serde_json` enforces a 128-level recursion limit at deserialization — adding
+       depth limits to a function that processes already-deserialized data is dead code
+     - SeaORM `load_one` on a `Vec<Model>` is already a batch query (single `WHERE id IN (...)`) —
+       it is NOT an N+1 pattern
+   - If the recommended fix provides no benefit due to technology constraints, mark as
+     **FAILED: fix premise invalid** with the specific constraint
+
+**3. Assess real-world impact — check actual cardinality and bounds:**
+   - What is the actual data cardinality? Check pagination limits, FK constraints,
+     domain-bounded fan-out, and table sizes
+   - A query filtered by a parent FK with domain-bounded cardinality (e.g., CVEs per
+     advisory, scores per vulnerability) is NOT an "unbounded query" even if it lacks
+     `LIMIT`
+   - A table with <1000 rows does not need an index — sequential scan may be faster
+   - Distinguish between API-facing read paths (latency matters) and internal/batch
+     operations (throughput matters, latency less so)
+   - If the real-world impact is negligible due to actual data constraints, downgrade
+     severity to Low or mark as **FAILED: negligible real-world impact**
+
+**4. Challenge your own conclusion — argue the opposite:**
+   - Before confirming a finding, construct the strongest counterargument for why the
+     current code is correct
+   - If you cannot defeat the counterargument, downgrade or discard the finding
+   - Common counterarguments that invalidate findings:
+     - "The data is fetched once and reused by multiple consumers" (invalidates in-memory filtering findings)
+     - "N is a small constant, not a variable" (invalidates N+1 findings where N < 10 and is fixed)
+     - "The function is long but linear with low cyclomatic complexity" (invalidates oversized function findings)
+     - "Extracting a shared abstraction would create cross-module coupling" (invalidates duplication findings)
+     - "Fire-and-forget is the correct design for best-effort telemetry" (invalidates swallowed error findings)
+
+**5. Verify every factual claim against the codebase:**
+   - If you claim "no index exists," grep ALL migration files to confirm — do not rely
+     on absence of evidence from a partial search
+   - If you claim "no depth limit," trace the full ingestion/parsing pipeline for
+     upstream limits
+   - If you claim "unbounded query," verify there is no FK filter, pagination middleware,
+     or domain constraint that bounds the result set
+   - A factual claim that cannot be verified must be flagged as unverified in the finding
+
+**6. Consult the false-positive risk checklist for the finding's anti-pattern type:**
 
 | Anti-Pattern | False-Positive Risk Factors |
 |---|---|
 | Over-Fetching (6.1, 8) | Field used via spread (`...data`), passed to third-party library, used in test/debug mode only, accessed via computed property name |
-| N+1 Queries (6.2, 7.3) | Loop body uses `Promise.all` or batch variant; loop iterates over a fixed small set (< 3 items); query result is cached across iterations |
+| N+1 Queries (6.2, 7.3) | Loop body uses `Promise.all` or batch variant; loop iterates over a fixed small set (< 3 items); query result is cached across iterations; ORM `load_one`/`load_many` on a `Vec<Model>` is already a batch query (single `WHERE id IN (...)`), NOT N+1 |
 | Waterfall Loading (6.3) | Resources have cache headers and are warm on navigation; dependency chain is unavoidable (auth token needed before API call) |
 | Render-Blocking (6.4) | Resource is critical CSS intentionally inlined; script is a polyfill that must run before app code |
 | Unused Code (6.5) | Code used via dynamic import, reflection, or string-based registration; code is in a shared library used by other apps |
@@ -2112,25 +2233,27 @@ Assign each finding a unique ID (F1, F2, ...) that will be used through the rema
 | Long Tasks (6.7) | Code is in a Web Worker (off-main-thread); operation runs once at app startup, not during user interaction |
 | Layout Thrashing (6.8) | Read and write are in separate animation frames (`requestAnimationFrame`); browser batches the operations |
 | Missing Lazy Loading (6.9) | Component is above the fold (visible on initial load); route chunk is small (< 5 KB) |
-| Backend N+1 (7.3) | Query is inside a conditional branch that rarely executes; collection is bounded by a LIMIT clause |
 | Missing Pagination (7.4) | Table has a known small cardinality (< 50 rows in production); endpoint is admin-only with negligible traffic |
 | Missing Caching (7.5) | Data is user-specific and not cacheable; data changes on every request (real-time feed) |
 | Inefficient Queries (7.6) | ORM requires SELECT * for correct deserialization; columns are needed for computed fields not visible in response |
 | Unused JOINs (7.6.1) | JOIN is for filtering (WHERE clause references joined table); JOIN is for ordering (ORDER BY uses joined column); fields are accessed via ORM relationship lazy-loading |
-| Wasted Computation (7.6.3) | Service method is shared with other endpoints that use all fields; unused fields are cheap (no DB queries) |
 | Conditional Queries (7.6.2) | Caller always passes the pre-loaded variant at runtime; function is called once (no loop multiplier) |
+| Wasted Computation (7.6.3) | Service method is shared with other endpoints that use all fields; unused fields are cheap (no DB queries) |
+| Missing Indexes (7.6.4) | Table has known small cardinality (< 1000 rows) where sequential scan is faster than index lookup; column is only queried on ingestion/admin paths, not API-facing read paths; existing composite or covering index already serves the query pattern |
 | SQL Duplication (7.6.5) | Database query planner deduplicates identical CTEs automatically; duplicate runs are in separate transactions intentionally |
-| Missing Indexes (7.6.4) | Table is small enough that sequential scan is faster than index lookup; column has low cardinality making index ineffective |
 | Cache Effectiveness (7.6.6) | Bypass queries are cheap (< 1ms each); cache improvement was measured against the wrong baseline |
 | Cross-Layer Waste (8.F) | Frontend will use the fields in a future feature (known roadmap item); fields are needed for SEO/meta tags not visible in component render |
 
-**For each finding**, check whether any risk factors from the table above apply:
-- If the risk factor can be resolved by re-reading the code (e.g., "check for destructuring"): do so now and record the result
-- If the risk factor cannot be resolved by static analysis (e.g., "table cardinality in production"): note it as an unresolvable risk and factor it into the confidence score (Step 9.1-D)
+   - If a risk factor can be resolved by re-reading the code (e.g., "check for destructuring"): do so now and record the result
+   - If a risk factor cannot be resolved by static analysis (e.g., "table cardinality in production"): note it as an unresolvable risk and factor it into the confidence score (Step 9.1-C)
 
-#### Step 9.1-D – Assign Per-Instance Confidence Score
+**Precision over volume:** It is better to report 10 high-confidence findings than 50
+findings with a 40% noise rate. Findings that fail any check in this step must be
+discarded or downgraded — do NOT include them to appear thorough.
 
-**For EACH finding that passed Step 9.1-B**, compute a per-instance confidence score.
+#### Step 9.1-C – Assign Per-Instance Confidence Score
+
+**For EACH finding that passed Steps 9.1-B and 9.1-B2** (i.e., not marked FAILED at either step), compute a per-instance confidence score.
 
 **Confidence = min(Detection Method Confidence, Evidence Strength) adjusted by False-Positive Risk**
 
@@ -2155,7 +2278,7 @@ Assign each finding a unique ID (F1, F2, ...) that will be used through the rema
 | Code re-read confirmed the pattern but at a different line number | Medium |
 | Code re-read confirmed the file exists but pattern is ambiguous | Low |
 
-**3. False-Positive Risk Adjustment** (from Step 9.1-C):
+**3. False-Positive Risk Adjustment** (from Step 9.1-B2 check 6):
 
 | Risk Level | Adjustment |
 |---|---|
@@ -2172,7 +2295,7 @@ Assign each finding a unique ID (F1, F2, ...) that will be used through the rema
 
 Record the final confidence and the reason chain: `"Detection: {X}, Evidence: {Y}, Risk: {Z} ⇒ Final: {result}"`.
 
-#### Step 9.1-E – Assign Per-Instance Severity
+#### Step 9.1-D – Assign Per-Instance Severity
 
 Each detection step already defines severity rubrics (e.g., "> 50% unused fields = High"). Apply those rubrics to the specific instance using the actual quantified values from the detection step:
 
@@ -2182,7 +2305,7 @@ Each detection step already defines severity rubrics (e.g., "> 50% unused fields
 
 If the finding's quantified impact changed during re-verification (e.g., re-reading revealed fewer unused fields than initially counted), recalculate severity using the corrected values.
 
-#### Step 9.1-F – Assign Per-Instance Implementation Timeline
+#### Step 9.1-E – Assign Per-Instance Implementation Timeline
 
 For each validated finding, estimate implementation effort:
 
@@ -2201,18 +2324,20 @@ Base the estimate on:
 - Whether the fix requires API contract changes (breaking vs. non-breaking)
 - Whether the fix requires infrastructure changes (new dependencies, configuration)
 
-#### Step 9.1-G – Validation Verdict and Disposition
+#### Step 9.1-F – Validation Verdict and Disposition
 
-**For EACH finding**, assign a disposition:
+**For EACH finding**, assign a disposition based on outcomes from Steps 9.1-B and 9.1-B2:
 
 | Disposition | Criteria | Action |
 |---|---|---|
-| **Confirmed** | Passed source re-verification (9.1-B), no unresolvable false-positive risks, confidence ≥ Medium | Include in report with full details |
-| **Confirmed (Low Confidence)** | Passed source re-verification, but confidence = Low due to detection method or unresolvable risk factors | Include in report with explicit "Low Confidence — requires manual verification" flag |
-| **Downgraded** | Passed source re-verification, but quantified impact was corrected downward during re-verification (e.g., fewer unused fields than originally counted, lower loop iteration count) | Include in report with corrected values; update severity if thresholds change |
-| **Discarded** | Failed source re-verification (code not found, pattern mismatch), OR failed multiple false-positive checks with high confidence that the finding is invalid | **Exclude from report entirely** |
+| **Confirmed** | Passed 9.1-B and 9.1-B2; no unresolvable false-positive risks; confidence ≥ Medium | Include in report with full details |
+| **Confirmed (Low Confidence)** | Passed both validation steps, but confidence = Low due to detection method or unresolvable risk factors | Include in report with explicit "Low Confidence — requires manual verification" flag |
+| **Downgraded** | Passed both validation steps, but quantified impact was corrected downward during re-verification (e.g., fewer unused fields than originally counted, lower loop iteration count) | Include in report with corrected values; update severity if thresholds change |
+| **Discarded** | Failed any validation check: `FAILED: code not found` (9.1-B), `FAILED: pattern mismatch` (9.1-B), `FAILED: context invalidates pattern` (9.1-B2), `FAILED: fix premise invalid` (9.1-B2), `FAILED: negligible real-world impact` (9.1-B2), OR failed multiple false-positive risk factors (9.1-B2) with high confidence that the finding is invalid | **Exclude from report entirely** |
 
-#### Step 9.1-H – Produce Validation Summary
+**Note:** Confirmed (Low Confidence) findings go in the "Candidates for Manual Review" section of the report, not in the main anti-pattern sections.
+
+#### Step 9.1-G – Produce Validation Summary
 
 Construct a validation summary table:
 
@@ -2240,7 +2365,7 @@ Construct a validation summary table:
 
 ### Step 9.2 – Determine Analysis Report Location
 
-Read the **Target Directories** section from performance-config.json and extract the analysis directory path (e.g., `.claude/performance/analysis/`).
+Read the `directories` config fields from performance-config.json and extract the analysis directory path (e.g., `.claude/performance/analysis/`).
 
 Construct the report filename: `workflow-analysis-report.md`
 
@@ -2270,7 +2395,7 @@ Include sections:
 - Inter-query SQL duplication findings (from Step 7.6.5)
 - Cache effectiveness analysis with bypass dominance findings (from Step 7.6.6)
 - Missing database index findings (from Step 7.6.4)
-- Cross-layer computation waste findings (from Step 8.F, only when analysis_scope is full-stack)
+- Cross-layer computation waste findings (from Step 8.F, only when analysis_scope is full-stack or full-stack-monorepo)
 - Dynamic performance testing results (if Step 7.7 executed)
 - Regression detection results (if baseline exists)
 
@@ -2321,8 +2446,8 @@ or improving a cache delivers no benefit while bypass queries dominate.
 | 1 | Fix collect_package N+1 | High | High | 1–3 days | — | Eliminate 601 bypass queries | Medium |
 | 2 | Cache ranking results | Medium | Medium | 1–3 days | Fix #1 first | Reduce repeat requests 120s→<100ms | Medium |
 
-- **Confidence** and **Severity** come from Step 9.1-D and 9.1-E respectively
-- **Timeline** comes from Step 9.1-F (per-finding implementation estimate)
+- **Confidence** and **Severity** come from Step 9.1-C and 9.1-D respectively
+- **Timeline** comes from Step 9.1-E (per-finding implementation estimate)
 - **Prerequisite** notes dependencies (e.g., cache-bypass findings must be fixed before cache improvements); use "—" when none
 
 **Prerequisite column rules (mandatory):**
@@ -2415,7 +2540,7 @@ Where `{warnings-if-any}` includes warnings for critical issues:
 - If bundle stats are unavailable, clearly note estimations in the report
 - Scope all analysis to the selected workflow only — do not analyze code outside the workflow's route components
 - If an anti-pattern detection step finds zero instances, include it in the report with "No instances detected" rather than omitting it
-- Use Serena instance from Code Intelligence configuration (with Grep/Glob fallback if not available)
+- Use Serena instance from Code Intelligence configuration (with Grep/`find` via Bash fallback if not available)
 - Generate report even if some anti-pattern detection steps fail — document failed steps in the report
 - Save report to directory specified in performance-config.json, never to the repository root
 - **Backend schema extraction is mandatory when backend_available = true:** Always search for struct/class definitions and extract all fields. Do not write "Cannot confirm without schema" without documenting exhaustive search attempts and specific failures

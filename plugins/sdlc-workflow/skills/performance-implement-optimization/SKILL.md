@@ -9,6 +9,8 @@ argument-hint: "[jira-issue-id]"
 
 You are an AI performance optimization implementation assistant. You execute performance optimization tasks by reading structured Jira task descriptions (created by performance-plan-optimization), implementing code changes according to the optimization strategy, running performance tests, and updating Jira with results.
 
+**Note:** Steps numbered X.5 were inserted after initial numbering and run between Steps X and X+1.
+
 ## Guardrails
 
 - This skill modifies source code files in the target repository as specified in the Jira task
@@ -34,7 +36,7 @@ You are an AI performance optimization implementation assistant. You execute per
 - Performance regression detected → halt at Step 9.4.R2 for user decision; do not
   auto-merge or auto-abort
 - Step 4.5 Serena probe failure → do NOT halt; set `serena_mode = down`, continue
-  with Read/Grep/Glob paths (Step 5-B)
+  with Read/Grep/find paths (Step 5-B)
 - Jira MCP unavailable → trigger REST fallback; do not halt unless REST also fails
 
 ### Plugin Root Resolution
@@ -176,7 +178,8 @@ Using `mcp__{serena_instance}__<tool>` for all code inspection:
    specific functions, structs, or components you need to understand or change.
 3. **Check backward compatibility:** `find_referencing_symbols` on any symbol you plan
    to modify to identify all callers and ensure your changes won't break them.
-4. **Non-symbolic search:** `search_for_pattern` for configuration, string literals,
+4. **Non-symbolic search:** `find_symbol` with `substring_matching=true` for partial
+   symbol name matches, or `grep` (via Bash) for configuration, string literals,
    or patterns not captured as symbols.
 5. **Convention conformance:** `get_symbols_overview` on 2–3 sibling files to understand
    their structure and patterns.
@@ -186,15 +189,15 @@ Using `mcp__{serena_instance}__<tool>` for all code inspection:
 
 ---
 
-### Step 5-B – Code Inspection via Read/Grep/Glob (`serena_mode = down | not-configured`)
+### Step 5-B – Code Inspection via Read/Grep/find (`serena_mode = down | not-configured`)
 
 > Entered when Step 4.5 probe recorded `serena_mode = down` or `not-configured`.
 
-Use Read, Grep, and Glob tools for all code inspection:
+Use Read, Grep, and `find` (via Bash) for all code inspection:
 
 1. Read files to modify in full or in targeted sections
 2. Grep for patterns, string literals, and configuration
-3. Glob to discover sibling files and module structure
+3. `find` (via Bash) to discover sibling files and module structure
 
 ---
 
@@ -502,10 +505,18 @@ If any metric is worse than the baseline value **beyond noise tolerance** (see S
 Write a regression report to preserve diagnostic information:
 
 ```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
 jira_key="{jira-key}"
 timestamp=$(date -u +"%Y-%m-%dT%H-%M-%S")
-regression_file=".claude/performance/optimization-results/${jira_key}-regression-${timestamp}.md"
-mkdir -p .claude/performance/optimization-results
+opt_results_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.optimization_results)
+regression_file="${opt_results_dir}/${jira_key}-regression-${timestamp}.md"
+mkdir -p "${opt_results_dir}"
 ```
 
 Write the file with:
@@ -543,7 +554,7 @@ Present the regression details and offer two options:
 >
 > {metric-name}: Baseline {baseline-value} → Current {current-value} ({delta})
 >
-> Regression report saved to: `.claude/performance/optimization-results/{jira_key}-regression-{timestamp}.md`
+> Regression report saved to: `{opt_results_dir}/{jira_key}-regression-{timestamp}.md`
 >
 > **Choose how to proceed:**
 > 1. **Stash changes** — Preserve code for review, stop execution (recommended)
@@ -589,21 +600,37 @@ Continue to Step 9.5, passing `status: regression_acknowledged` to the result re
 ### Step 9.5 – Create Optimization Result Report
 
 After capturing current performance metrics and validating no regressions, create an optimization result report for audit trail and verification:
-b
+
 **Step 9.5.1 – Generate Report Filename**
 
 Create timestamped report filename:
 
 ```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
 jira_key="{jira-key}"
 timestamp=$(date -u +"%Y-%m-%dT%H-%M-%S")
-report_file=".claude/performance/optimization-results/${jira_key}-${timestamp}.md"
+opt_results_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.optimization_results)
+report_file="${opt_results_dir}/${jira_key}-${timestamp}.md"
 ```
 
 Ensure directory exists:
 
 ```bash
-mkdir -p .claude/performance/optimization-results
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "❌ sdlc-workflow plugin not found"; exit 1
+fi
+
+opt_results_dir=$(python3 "$plugin_root/scripts/perf-config.py" get directories.optimization_results)
+mkdir -p "${opt_results_dir}"
 ```
 
 **Step 9.5.2 – Prepare Report Data**
@@ -712,19 +739,35 @@ EOF
 
 **Step 9.5.5 – Log Report Creation**
 
-Log to user:
+Log to user, selecting metric lines based on `metric_type`:
+
+**If metric_type = "frontend" or "hybrid":**
 
 ```
 ✓ Optimization result report created:
   - File: {report_file}
   - Status: pending_verification
-  - Performance impact:
+  - Frontend performance impact:
     • LCP (p95): {baseline} → {current} ({delta})
     • FCP (p95): {baseline} → {current} ({delta})
     • DOM Interactive (p95): {baseline} → {current} ({delta})
     • Total Load Time (p95): {baseline} → {current} ({delta})
+```
+
+**If metric_type = "backend" or "hybrid":**
 
 ```
+✓ Optimization result report created:
+  - File: {report_file}
+  - Status: pending_verification
+  - Backend performance impact:
+    • Response Time (p95): {baseline} → {current} ({delta})
+    • Response Time (p99): {baseline} → {current} ({delta})
+    • Throughput: {baseline} req/sec → {current} req/sec ({delta})
+    • Error Rate: {baseline}% → {current}% ({delta})
+```
+
+**Note:** For "hybrid" metric_type, include both frontend and backend sections in the log output.
 
 **Note:** This approach eliminates race conditions by writing to isolated per-task report files instead of shared config. The configuration's "Latest Verified" column is updated by `/sdlc-workflow:performance-verify-optimization` after verification passes.
 
@@ -898,7 +941,7 @@ If some targets were not met:
 - Follow all constraints from implement-task (scope containment, code inspection, conventional commits)
 - Always attempt functional tests before performance tests
 - If no automated tests exist, require manual regression verification before proceeding
-- Do not proceed if any metric regresses — stop and inform user
+- If any metric regresses, stop and inform the user. The user may choose to proceed with an acknowledged warning (Step 9.4.R2).
 - Performance metrics should be captured using the same conditions as the baseline (test data loaded, app running)
 - Commit message MUST include "Performance impact:" section with measured improvements
 - PR body MUST include before/after comparison table

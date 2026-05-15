@@ -14,6 +14,13 @@
 - DOM Interactive (p95): {current-domInteractive} ms (Target: 3500 ms)
 - Total Load Time (p95): {current-total} ms (Target: 4000 ms)
 
+(if metric-type is "backend" or "hybrid")
+- Response Time (p95): {current-response-time-p95} ms
+- Throughput: {current-throughput} req/s
+- Error Rate: {current-error-rate}%
+- DB Query Time (p95): {current-db-query-time-p95} ms
+(end if)
+
 **Expected Impact:**
 - Estimated LCP improvement: {lcp-improvement} ms ({lcp-percentage}% reduction)
 - Estimated FCP improvement: {fcp-improvement} ms ({fcp-percentage}% reduction)
@@ -74,10 +81,22 @@
 **Baseline Metrics:**
 - LCP: {current-lcp} ms
 - Bundle size: {current-bundle-size} KB
+(if metric-type is "backend" or "hybrid")
+- Response Time (p95): {baseline-response-time-p95} ms
+- Throughput: {baseline-throughput} req/s
+- Error Rate: {baseline-error-rate}%
+- DB Query Time (p95): {baseline-db-query-time-p95} ms
+(end if)
 
 **Target Metrics:**
 - LCP: < {target-lcp} ms
 - Bundle size: < {target-bundle-size} KB
+(if metric-type is "backend" or "hybrid")
+- Response Time (p95): < {target-response-time-p95} ms
+- Throughput: > {target-throughput} req/s
+- Error Rate: < {target-error-rate}%
+- DB Query Time (p95): < {target-db-query-time-p95} ms
+(end if)
 
 **Acceptance Criteria:**
 - [ ] {criterion-1}
@@ -177,10 +196,23 @@ If an optimization causes issues:
 
 ---
 
+## Jira Epic and Tasks
+
+**Epic:** {epic-jira-key} - {epic-title}
+
+**Tasks:**
+- {task-1-jira-key}: {task-1-summary}
+- {task-2-jira-key}: {task-2-summary}
+- {task-3-jira-key}: {task-3-summary}
+
+All tasks linked to Epic via parent hierarchy relationship.
+
+---
+
 ## Next Steps
 
 1. **Review this plan** with the team and adjust task sequencing if needed
 2. **Create Jira Epic and Tasks** — This skill will create these automatically
-3. **Implement tasks** in sequence using `/sdlc-workflow:implement-task {task-id}`
+3. **Implement tasks** in sequence using `/sdlc-workflow:performance-implement-optimization {task-id}`
 4. **Re-baseline after each task** using `/sdlc-workflow:performance-baseline` to measure improvements
 5. **Final verification** using `/sdlc-workflow:performance-verify-optimization` to validate all targets met

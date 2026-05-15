@@ -222,7 +222,7 @@
 | **Total (warm)** | | | | | | | **{warm_total}** |
 | **Total (cold)** | | | | | | | **{cold_total}** |
 
-**Estimated Total DB Latency:** {total_queries * analysis_db_latency_ms}ms  
+**Estimated Total DB Latency:** {total_queries * db_latency_ms}ms  
 
 **Anti-Patterns Found at Depth:**
 - Depth {N}: {anti-pattern-description} in `{symbol_name}` ({file}:{line})

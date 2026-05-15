@@ -290,9 +290,9 @@ For each optimization, create a structured impact analysis document:
 - Layout thrashing fix → Reflow savings: `(n_reflows - 1) × 5ms`
 
 **For Backend Optimizations:**
-- N+1 query fix → Response time savings: `(n_queries - 1) × analysis_db_latency_ms` per request
+- N+1 query fix → Response time savings: `(n_queries - 1) × analysis_assumptions.db_latency_ms` per request
   (DB Query Base Latency from config, default 10ms)
-- Deep service chain N+1 fix → Use effective query count from call graph query ledger: `(total_effective_queries - 1) × analysis_db_latency_ms` (DB Query Base Latency from config, default 10ms)
+- Deep service chain N+1 fix → Use effective query count from call graph query ledger: `(total_effective_queries - 1) × analysis_assumptions.db_latency_ms` (DB Query Base Latency from config, default 10ms)
 - Missing index addition → Response time savings: Assume 80–95% reduction for affected query (sequential scan → index lookup)
 - Wasted computation fix → Savings: `(wasted_fields / total_fields) × avg_service_latency_ms` (eliminates DB queries for unused fields)
 - Pagination implementation → Latency reduction: Assume 50% for large result sets (>1000 rows)
@@ -354,7 +354,7 @@ Keep all impact analysis data in memory for:
 - Step 6: Filter optimizations by decision (only RECOMMEND + RECOMMEND WITH CAUTION become tasks)
 - Step 7: Include impact analysis in optimization plan document
 - Step 9: Include impact assessment in Jira task descriptions
-- Step 10: Include risk profile in Jira Epic description
+- Step 8: Include risk profile in Jira Epic description
 
 ## Step 6 – Group Optimizations into Logical Tasks
 
@@ -614,7 +614,7 @@ Prompt the user with the standard fallback flow (see `shared/jira-access-strateg
 
 After Epic creation (via MCP or REST API), extract the Epic key (e.g., `TC-5001`) from the response.
 
-Store the Epic key for use in Step 8 (task creation and linking).
+Store the Epic key for use in Step 9 (task creation and linking).
 
 ## Step 9 – Create Jira Tasks for Each Optimization
 
@@ -828,10 +828,15 @@ For tasks with dependencies (e.g., Task 2 depends on Task 1), create "Blocks" li
 **Create link:**
 ```
 jira.create_issue_link(
-  inward_issue=<task-1-key>,
-  outward_issue=<task-2-key>,
-  link_type="Blocks"
+  inwardIssue=<task-1-key>,
+  outwardIssue=<task-2-key>,
+  type="Blocks"
 )
+```
+
+**If MCP is unavailable**, use the CLI fallback:
+```bash
+python3 "$plugin_root/scripts/jira-client.py" create_link --inward <inward-key> --outward <outward-key> --link-type "Blocks"
 ```
 
 ## Step 10 – Post Optimization Plan as Comment on Epic
@@ -899,7 +904,7 @@ Report to the user:
 > 1. Review the optimization plan and Jira tasks with your team
 > 2. Implement tasks in sequence:
 >    ```
->    /sdlc-workflow:implement-task {task-1-key}
+>    /sdlc-workflow:performance-implement-optimization {task-1-key}
 >    ```
 > 3. After each task, re-run baseline to measure improvement:
 >    ```
