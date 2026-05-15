@@ -9,6 +9,8 @@ argument-hint: "[jira-issue-id]"
 
 You are an AI performance verification assistant. You verify a performance optimization pull request against its Jira task's acceptance criteria, read PR review feedback to create tracked sub-tasks, re-run the performance baseline to detect environmental drift, and validate target achievement. You run objective checks and post findings to both GitHub and Jira, but you do **NOT** modify code and do **NOT** auto-merge.
 
+**Note on step numbering:** Steps numbered X.5 were inserted after initial numbering and run between Steps X and X+1.
+
 ## Relationship to verify-pr
 
 This skill extends the `/sdlc-workflow:verify-pr` workflow with performance-specific verification steps. The core PR verification flow (review feedback, scope containment, acceptance criteria) follows verify-pr exactly. The extensions are:
@@ -205,7 +207,7 @@ For each **unclassified** review comment thread, perform initial classification:
 Before finalizing any **suggestion** classification, check whether the suggested practice aligns with documented conventions or codebase patterns:
 
 1. Check CONVENTIONS.md for documented conventions matching the suggestion
-2. Use Serena `search_for_pattern` (or Grep fallback) to check codebase usage patterns
+2. Use Serena `find_symbol` with `substring_matching=true` (or `grep` via Bash as fallback) to check codebase usage patterns
 3. Performance-related suggestions receive extra scrutiny (indexes, caching, query optimization)
 4. If suggestion matches documented or demonstrated convention, upgrade to **code change request**
 
@@ -213,7 +215,7 @@ Only **code change requests** (including upgraded suggestions) trigger sub-task 
 
 ### Step 4d – Analyze Code Context
 
-For each code change request, inspect the relevant code on the PR branch to understand the required fix. Use Serena instance from **Repository Registry** or fall back to Read/Grep/Glob.
+For each code change request, inspect the relevant code on the PR branch to understand the required fix. Use Serena instance from **Repository Registry** or fall back to Read/Grep/`find` (via Bash).
 
 ### Step 4e – Create Sub-tasks
 
@@ -271,12 +273,23 @@ Read performance results from the optimization result report created by `perform
 
 **Step 5.1 – Find Optimization Result Report**
 
-Look for the report file in `.claude/performance/optimization-results/`:
+Resolve the optimization results directory from configuration, then find the latest report:
 
-Use the Glob tool to find the latest optimization result report:
-- Pattern: `.claude/performance/optimization-results/${jira_key}-*.md`
-- Sort by modification time (most recent first)
-- Select the first match
+```bash
+# Resolve plugin root (Pattern 0: Plugin Root Resolution)
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null \
+  | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then
+  echo "sdlc-workflow plugin not found"; exit 1
+fi
+
+opt_results_dir=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get directories.optimization_results)
+```
+
+Use `find` (via Bash) to locate the latest optimization result report:
+```bash
+find "$opt_results_dir" -name "${jira_key}-*.md" -printf '%T@ %p\n' | sort -rn | head -1 | cut -d' ' -f2-
+```
 
 Store the file path as `report_file`.
 
@@ -462,7 +475,7 @@ Parse the JSON output for: LCP, FCP, DOM Interactive, Total Load Time, bundle si
 **Apply:** [Common Pattern: API Profiling](../performance/common-patterns.md#pattern-10-api-profiling)
 
 - Use `port` extracted above and endpoints from `{target-repo-path}/.claude/performance/test-data/manifest.json`
-- After Pattern 10 completes, write collected results to `{target-repo-path}/.claude/performance/benchmark-results-verify.json`:
+- After Pattern 10 completes, write collected results to the verification directory:
 
 ```bash
 # Resolve plugin root (Pattern 0: Plugin Root Resolution)
@@ -474,12 +487,13 @@ fi
 
 port=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get dev_environment.port)
 iterations=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get baseline_settings.iterations)
+verification_dir=$(python3 "$plugin_root/scripts/perf-config.py" -c {target-repo-path}/.claude/performance-config.json get directories.verification)
 
 "$plugin_root/scripts/perf-benchmark.sh" \
   --port "$port" \
   --iterations "$iterations" \
   --manifest {target-repo-path}/.claude/performance/test-data/manifest.json \
-  --output {target-repo-path}/.claude/performance/benchmark-results-verify.json
+  --output "${verification_dir}/benchmark-results-verify.json"
 ```
 
 Parse `benchmark-results-verify.json` for: Response Time (p50/p95/p99), mean latency, cache effectiveness per endpoint.
@@ -668,7 +682,7 @@ For each failed CI check, analyze the failure log to determine:
 - **What fix is needed** — the concrete code change required to resolve the failure
 
 Use the Serena instance for the task's repository (from the **Repository Registry**
-in CLAUDE.md) or fall back to Read/Grep/Glob to inspect the relevant source files
+in CLAUDE.md) or fall back to Read/Grep/`find` (via Bash) to inspect the relevant source files
 and understand the failure context.
 
 ### Step 12c – Idempotency Check
@@ -698,6 +712,11 @@ After creating each sub-task, create a "Blocks" issue link from the sub-task to 
 
 jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
+**If MCP is unavailable**, use the CLI fallback:
+```bash
+python3 "$plugin_root/scripts/jira-client.py" create_link --inward <inward-key> --outward <outward-key> --link-type "Blocks"
+```
+
 ### Step 12e – Record Result
 
 Record the CI Status check result:
@@ -714,9 +733,9 @@ For each criterion in the **Acceptance Criteria** section, verify it is satisfie
 Use the appropriate Serena instance from **Repository Registry**, with tools:
 - `find_symbol` with `include_body=true` to inspect changed symbols
 - `find_referencing_symbols` to confirm integration
-- `search_for_pattern` for non-symbolic verification
+- `find_symbol` with `substring_matching=true` for non-symbolic verification (or `grep` via Bash as fallback)
 
-**Fallback**: if no Serena instance available, use Read, Grep, and Glob.
+**Fallback**: if no Serena instance available, use Read, Grep, and `find` (via Bash).
 
 Record PASS/FAIL for each individual criterion.
 
@@ -1022,7 +1041,7 @@ Skip this step (backward compatibility for tasks created before optimization-res
 - Verification criteria come from the Jira task description
 - Regression detection is **NOT** the primary responsibility — that happens in performance-implement-optimization
 - Baseline re-run is **optional** — used as redundant validation, not primary check
-- Use Serena instance from **Repository Registry** for code inspection, fall back to Read/Grep/Glob
+- Use Serena instance from **Repository Registry** for code inspection, fall back to Read/Grep/`find` (via Bash)
 - Use `gh` CLI for all GitHub interactions
 - Include the Comment Footnote on all Jira comments
 - Sub-tasks created from review feedback use labels `["ai-generated-jira", "review-feedback"]`, while CI failure sub-tasks use `["ai-generated-jira", "ci-failure"]`, both with "Blocks" issue links

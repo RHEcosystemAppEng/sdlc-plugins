@@ -1,24 +1,24 @@
 ---
-generated_by: {{skill-name}}
-timestamp: {{iso-8601-timestamp}}
-repository: {{repository-name}}
-capture_mode: {{capture-mode}}
+generated_by: {skill-name}
+timestamp: {iso-8601-timestamp}
+repository: {repository-name}
+capture_mode: {capture-mode}
 ---
 
 # Performance Baseline Report
 
 ## Configuration Summary
 
-- **Capture Date:** {{capture-date}}
-- **Iterations:** {{iterations}}
-- **Warmup Runs:** {{warmup-runs}}
-- **Scenarios Measured:** {{scenario-count}}
+- **Capture Date:** {capture-date}
+- **Iterations:** {iterations}
+- **Warmup Runs:** {warmup-runs}
+- **Scenarios Measured:** {scenario-count}
 
 ## Capture Mode
 
-**Mode:** {{capture-mode}}
+**Mode:** {capture-mode}
 
-{{mode-description}}
+{mode-description}
 
 **Mode descriptions:**
 - **cold-start:** Direct URL navigation with cold cache. Measures worst-case/first-visit performance.
@@ -27,7 +27,7 @@ capture_mode: {{capture-mode}}
 
 ## Aggregate Metrics
 
-**Capture Mode:** {{capture-mode}}
+**Capture Mode:** {capture-mode}
 
 **Frontend Performance Metrics** (if capture-mode includes "cold-start" or "hybrid"):
 
@@ -35,10 +35,10 @@ Overall browser performance across all scenarios.
 
 | Metric | Mean | p50 (Median) | p95 | p99 | Unit |
 |---|---|---|---|---|---|
-| **LCP** (Largest Contentful Paint) | {{lcp-mean}} | {{lcp-p50}} | {{lcp-p95}} | {{lcp-p99}} | ms |
-| **FCP** (First Contentful Paint) | {{fcp-mean}} | {{fcp-p50}} | {{fcp-p95}} | {{fcp-p99}} | ms |
-| **DOM Interactive** | {{domInteractive-mean}} | {{domInteractive-p50}} | {{domInteractive-p95}} | {{domInteractive-p99}} | ms |
-| **Total Load Time** | {{total-mean}} | {{total-p50}} | {{total-p95}} | {{total-p99}} | ms |
+| **LCP** (Largest Contentful Paint) | {lcp-mean} | {lcp-p50} | {lcp-p95} | {lcp-p99} | ms |
+| **FCP** (First Contentful Paint) | {fcp-mean} | {fcp-p50} | {fcp-p95} | {fcp-p99} | ms |
+| **DOM Interactive** | {domInteractive-mean} | {domInteractive-p50} | {domInteractive-p95} | {domInteractive-p99} | ms |
+| **Total Load Time** | {total-mean} | {total-p50} | {total-p95} | {total-p99} | ms |
 
 **Backend API Performance Metrics** (if capture-mode includes "api-benchmark" or "hybrid"):
 
@@ -46,14 +46,14 @@ Overall API performance across all endpoints.
 
 | Metric | Mean | p50 (Median) | p95 | p99 | Unit |
 |---|---|---|---|---|---|
-| **Response Time** | {{response-mean}} | {{response-p50}} | {{response-p95}} | {{response-p99}} | ms |
-| **Throughput** | - | - | {{throughput-p95}} | - | req/sec |
-| **Error Rate** | - | - | {{error-rate-p95}} | - | % |
-| **Cache Effectiveness** | - | - | {{cache-improvement-pct}} | - | % improvement |
+| **Response Time** | {response-mean} | {response-p50} | {response-p95} | {response-p99} | ms |
+| **Throughput** | - | - | {throughput-p95} | - | req/sec |
+| **Error Rate** | - | - | {error-rate-p95} | - | % |
+| **Cache Effectiveness** | - | - | {cache-improvement-pct} | - | % improvement |
 
 ## Per-Scenario Metrics
 
-{{per-scenario-sections}}
+{per-scenario-sections}
 
 ## Resource Timing Breakdown
 
@@ -61,16 +61,16 @@ Top resources by load duration across all scenarios:
 
 | Resource | Type | Duration (ms) | Size (KB) | Scenario |
 |---|---|---|---|---|
-| {{resource-1-name}} | {{resource-1-type}} | {{resource-1-duration}} | {{resource-1-size}} | {{resource-1-scenario}} |
-| {{resource-2-name}} | {{resource-2-type}} | {{resource-2-duration}} | {{resource-2-size}} | {{resource-2-scenario}} |
-| {{resource-3-name}} | {{resource-3-type}} | {{resource-3-duration}} | {{resource-3-size}} | {{resource-3-scenario}} |
+| {resource-1-name} | {resource-1-type} | {resource-1-duration} | {resource-1-size} | {resource-1-scenario} |
+| {resource-2-name} | {resource-2-type} | {resource-2-duration} | {resource-2-size} | {resource-2-scenario} |
+| {resource-3-name} | {resource-3-type} | {resource-3-duration} | {resource-3-size} | {resource-3-scenario} |
 
 ## Waterfall Visualization
 
-Resource load timeline for {{waterfall-scenario-name}}:
+Resource load timeline for {waterfall-scenario-name}:
 
 ```
-{{waterfall-ascii-chart}}
+{waterfall-ascii-chart}
 ```
 
 **Legend:**
@@ -81,7 +81,7 @@ Resource load timeline for {{waterfall-scenario-name}}:
 
 ## Comparison with Previous Baseline
 
-{{comparison-section}}
+{comparison-section}
 
 ## Known Limitations
 

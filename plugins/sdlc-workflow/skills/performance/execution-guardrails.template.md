@@ -61,7 +61,7 @@ not be auto-answered, assumed, or skipped. Skill-specific blocking steps are lis
 
 ### In-Context Processing Rule
 
-Shell and MCP tools are for **reading source code only** (grep, find_symbol, Read, Glob).
+Shell and MCP tools are for **reading source code only** (grep, find_symbol, Read, `find` via Bash).
 
 **All collection, counting, grouping, and validation MUST be performed in-context:**
 - Output discovered items (endpoints, routes, modules) as a **markdown table in your response**

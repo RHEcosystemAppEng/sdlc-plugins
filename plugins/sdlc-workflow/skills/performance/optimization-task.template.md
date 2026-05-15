@@ -17,11 +17,17 @@ Current performance metrics before optimization (from baseline-report.md):
 
 | Metric | Current (Baseline) | Unit |
 |---|---|---|
-| LCP (Largest Contentful Paint) | {{baseline-lcp}} | ms |
-| FCP (First Contentful Paint) | {{baseline-fcp}} | ms |
-| DOM Interactive (Time to Interactive) | {{baseline-domInteractive}} | ms |
-| Total Load Time | {{baseline-total}} | ms |
-| Bundle Size | {{baseline-bundle-size}} | KB |
+| LCP (Largest Contentful Paint) | {baseline-lcp} | ms |
+| FCP (First Contentful Paint) | {baseline-fcp} | ms |
+| DOM Interactive (Time to Interactive) | {baseline-domInteractive} | ms |
+| Total Load Time | {baseline-total} | ms |
+| Bundle Size | {baseline-bundle-size} | KB |
+(if metric-type is "backend" or "hybrid")
+| Response Time (p95) | {baseline-response-time-p95} | ms |
+| Throughput | {baseline-throughput} | req/s |
+| Error Rate | {baseline-error-rate} | % |
+| DB Query Time (p95) | {baseline-db-query-time-p95} | ms |
+(end if)
 
 ## Target Metrics
 
@@ -29,11 +35,17 @@ Performance targets to achieve with this optimization:
 
 | Metric | Target | Improvement | Unit |
 |---|---|---|---|
-| LCP (Largest Contentful Paint) | {{target-lcp}} | {{lcp-improvement}}% | ms |
-| FCP (First Contentful Paint) | {{target-fcp}} | {{fcp-improvement}}% | ms |
-| DOM Interactive (Time to Interactive) | {{target-domInteractive}} | {{domInteractive-improvement}}% | ms |
-| Total Load Time | {{target-total}} | {{total-improvement}}% | ms |
-| Bundle Size | {{target-bundle-size}} | {{bundle-improvement}}% | KB |
+| LCP (Largest Contentful Paint) | {target-lcp} | {lcp-improvement}% | ms |
+| FCP (First Contentful Paint) | {target-fcp} | {fcp-improvement}% | ms |
+| DOM Interactive (Time to Interactive) | {target-domInteractive} | {domInteractive-improvement}% | ms |
+| Total Load Time | {target-total} | {total-improvement}% | ms |
+| Bundle Size | {target-bundle-size} | {bundle-improvement}% | KB |
+(if metric-type is "backend" or "hybrid")
+| Response Time (p95) | {target-response-time-p95} | {response-time-improvement}% | ms |
+| Throughput | {target-throughput} | {throughput-improvement}% | req/s |
+| Error Rate | {target-error-rate} | {error-rate-improvement}% | % |
+| DB Query Time (p95) | {target-db-query-time-p95} | {db-query-time-improvement}% | ms |
+(end if)
 
 ## Files to Modify
 - `path/to/file.ext` — <brief reason>
@@ -56,7 +68,7 @@ Reference actual file paths and symbol names found during repository analysis.>
 ## Acceptance Criteria
 - [ ] Criterion 1
 - [ ] Criterion 2
-- [ ] Target metrics achieved (LCP ≤ {{target-lcp}}ms, FCP ≤ {{target-fcp}}ms)
+- [ ] Target metrics achieved (LCP ≤ {target-lcp}ms, FCP ≤ {target-fcp}ms)
 - [ ] No performance regressions in non-target scenarios (< 5% degradation)
 
 ## Test Requirements
