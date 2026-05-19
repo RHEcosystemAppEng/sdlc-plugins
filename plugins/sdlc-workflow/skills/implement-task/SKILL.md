@@ -778,8 +778,14 @@ utilities or helpers, refactor to reuse the existing code before proceeding.
 
 If `CONVENTIONS.md` was loaded in Step 4 and verification commands were extracted,
 run every CI check command recorded during the verification commands extraction.
-Execute each command in sequence. If any command fails, fix the issue before
-proceeding to the next command.
+Execute each command in sequence.
+
+**Hard stop on failure:** If any CI check command exits with a non-zero status,
+**stop execution immediately** — do not proceed to Step 10 (Commit and Push).
+Report the failure to the user, including the command that failed and its output.
+Do not attempt to classify the failure (e.g., infrastructure vs. code), do not
+add fallback logic, and do not treat any failure as non-blocking. Every non-zero
+exit is a hard stop. The user decides how to proceed.
 
 1. **Run all CI check commands**: execute each command extracted from the
    `CONVENTIONS.md` CI checks section (e.g., formatting, linting, type checking,
@@ -790,7 +796,9 @@ proceeding to the next command.
    now. If they produce file changes, stage those changes for commit alongside the
    implementation — they are part of the deliverable.
 3. **Fix failures**: if any CI check command fails, fix the underlying issue and
-   re-run the failing command until it passes. Do not skip failing checks.
+   re-run the failing command until it passes. Do not skip failing checks. If the
+   failure cannot be fixed (e.g., missing infrastructure, unavailable tools), stop
+   and report to the user — do not proceed to commit.
 
 If `CONVENTIONS.md` was not found or contained no CI check section, fall back to
 running the project's standard build or lint step (if one exists) and compare the
