@@ -243,6 +243,47 @@ Verifies a pull request against its originating Jira task's acceptance criteria 
 
 ---
 
+### Triage Phase (Security)
+
+**Skill:** `/sdlc-workflow:triage-security`
+
+Triages a Jira Vulnerability issue (CVE-based, auto-created by PSIRT) with full version awareness. Determines which supported product versions ship the vulnerable dependency, corrects Affects Versions, and either closes the issue or creates remediation Tasks.
+
+**Invocation:**
+
+```
+/sdlc-workflow:triage-security PROJ-123
+```
+
+**Workflow:**
+1. Validate Project Configuration and Security Configuration in CLAUDE.md
+2. Extract CVE data from the Vulnerability issue
+3. Analyze version impact across all supported versions using lock files at pinned source commits
+4. Detect and check the development stream (unreleased Jira versions) at branch HEAD
+5. Correct PSIRT-assigned Affects Versions against lock file evidence
+6. Check for duplicates, EOL versions, and already-fixed cases
+7. Post cross-stream impact comments when version impact differs across streams
+8. Create remediation Tasks consumable by `/implement-task` — for source dependency
+   ecosystems (Cargo, npm, Go modules), creates an upstream backport task and a
+   downstream propagation subtask (blocked by the upstream task); for system package
+   ecosystems (RPM), creates a single task
+
+**Output:**
+- Corrected Affects Versions on the Vulnerability issue
+- Version impact table documenting per-version analysis
+- Cross-stream impact comments (when streams differ)
+- Upstream backport + downstream propagation Tasks for source dependency CVEs
+- Single remediation Task for system package CVEs
+- Audit trail comments on all affected issues
+
+**Guardrails:**
+- Jira-only output — no source file modifications
+- Read-only source access via `git show` for lock files only
+- Every Jira mutation requires explicit engineer confirmation
+- No fabricated data — all evidence from actual lock file output or Jira API responses
+
+---
+
 ## Feature Branch Workflow Variant
 
 When `plan-feature` selects **feature-branch mode**, the workflow wraps the normal implementation tasks with two bookend tasks that manage the feature branch lifecycle:
