@@ -33,6 +33,7 @@ Read the project's CLAUDE.md file. If it exists, parse it for:
 - `## Repository Registry` table — record each Repository name already listed
 - `## Jira Configuration` list — record which fields already have values
 - `## Code Intelligence` section — record which Serena instances are already documented
+- `## Security Configuration` section — record whether it exists and which fields are populated
 
 If the file doesn't exist, note that everything needs to be created.
 
@@ -45,7 +46,7 @@ Collect the set of unique `<instance-name>` values that correspond to Serena ser
 For each discovered Serena instance that is **not** already in the Repository Registry:
 1. Use the instance's `get_diagnostics` tool (which returns the project root path) or ask the user for the repository's local path.
 2. Ask the user for:
-   - **Repository short name** (e.g., `trustify`, `trustify-ui`)
+   - **Repository short name** (e.g., `backend`, `frontend-ui`)
    - **Role** — language and purpose (e.g., "Rust backend", "TypeScript frontend")
 
 If **all** discovered Serena instances are already in the Repository Registry, report "Repository Registry is up to date" and skip to Step 3.
@@ -137,7 +138,7 @@ Proceed to Step 4 with the gathered fields.
 
 If MCP is not available and user chooses not to use REST API, ask the user to provide the missing fields directly:
 - Project key
-- Cloud ID (Jira cloud site URL, e.g., `redhat.atlassian.net`)
+- Cloud ID (Jira cloud site URL, e.g., `mycompany.atlassian.net`)
 - Feature issue type ID
 - Git Pull Request custom field (optional)
 - GitHub Issue custom field (optional)
@@ -228,7 +229,111 @@ For each section in the `CONVENTIONS.md` template, replace the `{{placeholder}}`
 
 Present the populated `CONVENTIONS.md` to the user for review before writing. Clearly show the content that will be written. Only write the file after the user approves.
 
-## Step 8 – Validate
+## Step 8 – Security Configuration (Optional)
+
+Check if `## Security Configuration` already exists in CLAUDE.md with all required
+fields populated (no `{{placeholder}}` markers remaining).
+
+- **If it exists and is fully populated**: Report "Security Configuration is up to date"
+  and skip to Step 9.
+- **If it exists but contains `{{placeholder}}` markers**: Treat it as not yet populated
+  and proceed to the fill-in prompt below (skip scaffolding since the section already exists).
+- **If it does NOT exist**: Ask the user whether they want to enable security triage
+  for this project:
+
+> "Would you like to enable security triage for this project? This configures the
+> triage-security skill to perform CVE impact analysis across supported product versions."
+
+If the user declines, skip to Step 9. If the user accepts, proceed below.
+
+### Step 8.1 – Collect Product Lifecycle fields
+
+Ask the user for the following fields:
+
+1. **Product pages URL** — the product lifecycle page for EOL/support status checks
+2. **Jira version prefix** — filters Jira versions to this product (e.g., `MYPRODUCT`)
+3. **Vulnerability issue type ID** — the Jira issue type ID for Vulnerability issues.
+   If an Atlassian MCP server is available, offer to discover this by listing issue types
+   via `getJiraProjectIssueTypesMetadata` and letting the user select the Vulnerability type.
+4. **Component label pattern** — the label prefix used by PSIRT on Vulnerability issues
+   to identify the affected component (e.g., `pscomponent:`)
+5. **VEX Justification custom field** _(optional)_ — the custom field ID used to record
+   VEX justification when closing a Vulnerability as "Not a Bug" (e.g., `customfield_00000`).
+   This field cannot be auto-discovered via Jira metadata. Ask the user:
+
+   > "Do you have a VEX Justification custom field? If you're unsure, provide a link to
+   > a closed Vulnerability issue that has it set (e.g., https://mycompany.atlassian.net/browse/PROJ-456)
+   > and I'll extract the field ID from it. Otherwise, leave blank — you can add it later."
+
+   If the user provides an issue link, fetch that issue with all fields and search for
+   a field whose value matches a known VEX justification (e.g., "Component not Present",
+   "Vulnerable Code not Present"). Extract the field ID.
+
+   If the user skips, leave the placeholder empty in the template.
+
+### Step 8.2 – Collect Version Streams
+
+Ask the user for one or more version streams. For each stream, collect:
+
+1. **Stream name** — the version range label (e.g., `2.1.x`, `2.2.x`)
+2. **Konflux release repo URL** — the git repository URL (e.g.,
+   `git.downstream.example.com/my-org/product-release.0.4.z`)
+3. **Local path** — the user's local clone path to the Konflux release repo
+4. **Security matrix path** — the path to security-matrix.md within the repo
+   (default: `security-matrix.md`)
+
+### Step 8.3 – Collect Source Repositories
+
+Ask the user for one or more source repositories whose dependencies are tracked
+for CVE analysis. For each repository, collect:
+
+1. **Repository name** — short name (e.g., `backend`, `frontend-ui`)
+2. **URL** — the repository URL
+
+### Step 8.4 – Scaffold Security Configuration
+
+Read `security-config.template.md` from this skill's directory and replace the
+`{{placeholder}}` markers with the values gathered above.
+
+If the `## Security Configuration` section does not yet exist in CLAUDE.md, append it
+after the `## Code Intelligence` section. If the section exists but has placeholders,
+replace only the placeholder content, preserving any surrounding text.
+
+Present the planned Security Configuration section to the user for review before writing.
+
+### Step 8.5 – Scaffold security-matrix.md
+
+For each Version Stream configured above, check if a `security-matrix.md` file exists
+at the specified path within the Konflux release repo.
+
+- **If it does NOT exist**: Read `security-matrix.md` from `docs/templates/` and offer
+  to write it to the configured path. The user must confirm each file.
+- **If it DOES exist**: Report "security-matrix.md already exists in <stream> — skipping."
+
+### Step 8.6 – Populate supportability matrix (Optional)
+
+After scaffolding or confirming security-matrix.md files exist, ask the user:
+
+> "Would you like me to populate the supportability matrix now? I'll query the Konflux
+> release repo's git history to discover versions, image digests, build dates, and
+> source commits."
+
+If the user declines, skip to Step 9. The matrix can be populated later on demand
+by `/triage-security` during CVE investigation.
+
+If the user accepts, for each Version Stream:
+
+1. Read the Konflux release repo's git log or tag history to discover released versions
+2. For each version, extract:
+   - **Image digest** — from the container image reference in the repo
+   - **Build date** — from image metadata or build-date labels
+   - **Source commits** — one per source repository, from the pinned references in the repo
+   - **Retag status** — whether this version shares the same source commits as another
+3. Write the discovered rows into the Supportability Matrix table in the stream's
+   `security-matrix.md`
+4. Present the populated matrix to the user for review before writing
+
+## Step 9 – Validate
 
 After writing, read the CLAUDE.md back and verify:
 - `# Project Configuration` heading exists
@@ -237,6 +342,9 @@ After writing, read the CLAUDE.md back and verify:
 - `## Code Intelligence` documents the `mcp__<instance>__<tool>` naming convention
 - `## Code Intelligence` has a `### Limitations` subheading
 - `docs/constraints.md` exists in the target project
+- (If scaffolded) `## Security Configuration` contains `### Product Lifecycle` with all four required fields (VEX Justification is optional)
+- (If scaffolded) `## Security Configuration` contains `### Version Streams` with at least one row
+- (If scaffolded) `## Security Configuration` contains `### Source Repositories` with at least one row
 
 Report the validation results to the user.
 
