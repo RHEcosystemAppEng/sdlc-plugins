@@ -497,9 +497,14 @@ misses a convention that was never mentioned.
 1. For each task, review its Files to Modify, Files to Create, and Description against the
    conventions collected in Step 3.
 2. Before including a convention, validate its file-type applicability per
-   `shared/convention-applicability-rules.md`. Exclude conventions whose scope does not
-   overlap with the task's target files, and include an applicability rationale for each
-   convention that passes.
+   `shared/convention-applicability-rules.md`. Conventions that fail the applicability
+   check **must** be excluded entirely from the output — do not list them with "Not
+   applicable" annotations or any other marker. For each convention that passes, include
+   an applicability rationale using the exact prescribed format:
+   `Applies: task modifies <file> matching the convention's <scope>.`
+   Do not use free-form prose rationales (e.g., "Applicable — this task creates the
+   model layer"). See `shared/convention-applicability-rules.md` for the full format
+   specification and common mistakes to avoid.
 3. When a match is found, add a line to Implementation Notes of the form:
    `"Per CONVENTIONS.md §<Section Name>: <specific action required>"`
 4. Include a reference to an existing file that demonstrates the convention in practice,
