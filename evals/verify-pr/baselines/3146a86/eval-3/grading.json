@@ -1,0 +1,75 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review comment about transaction wrapping (id 30001) is classified as a code change request and triggers sub-task creation",
+      "passed": true,
+      "evidence": "review-30001.md: Classification is 'code change request', Action states 'Sub-task creation required to wrap the three update operations in a transaction.' subtask-30001.md exists with full sub-task description."
+    },
+    {
+      "text": "The review comment about adding an index (id 30002) is classified as a code change request (or upgraded suggestion) and triggers sub-task creation",
+      "passed": false,
+      "evidence": "review-30002.md: Classification is 'suggestion' (not 'code change request' or upgraded). Action states 'No sub-task created. This is an optional performance improvement that the author may choose to adopt.' No subtask-30002.md file exists in the outputs directory."
+    },
+    {
+      "text": "The nit comment about context message (id 30003) is classified as nit and does NOT trigger sub-task creation",
+      "passed": true,
+      "evidence": "review-30003.md: Classification is 'nit', Action states 'No sub-task created. Minor style feedback that does not affect correctness.' No subtask-30003.md file exists."
+    },
+    {
+      "text": "The question comment about GET behavior (id 30004) is classified as question and does NOT trigger sub-task creation",
+      "passed": true,
+      "evidence": "review-30004.md: Classification is 'question', Action states 'No sub-task created for the question itself. The underlying gap (missing get.rs changes) is captured separately in the scope containment finding.' No subtask-30004.md file exists."
+    },
+    {
+      "text": "Each sub-task description follows the task-description-template.md format: contains Repository, Description, Files to Modify, Implementation Notes, and Acceptance Criteria sections (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-30001.md contains all required sections: '## Repository' (trustify-backend), '## Description' (wrap UPDATE statements in transaction), '## Files to Modify' (modules/fundamental/src/sbom/service/sbom.rs), '## Implementation Notes' (SeaORM transaction API details), '## Acceptance Criteria' (3 criteria listed)."
+    },
+    {
+      "text": "Each sub-task description includes a Target PR section with the PR URL https://github.com/trustify/trustify-backend/pull/744 (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-30001.md contains '## Target PR' section with exact URL 'https://github.com/trustify/trustify-backend/pull/744'."
+    },
+    {
+      "text": "Each sub-task description includes a Review Context section with the original review comment text (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-30001.md contains '## Review Context' section with 'Reviewer reviewer-a (comment 30001)' and the full original comment text quoted: 'The soft_delete method should run all three UPDATE statements inside a single database transaction...'"
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, creates sub-task descriptions, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "All output files are classification files (review-30001.md through review-30004.md), a sub-task description (subtask-30001.md), and a report (report.md) — all in the outputs directory. No code files (.rs, .toml, etc.) appear in the outputs. The report states 'No external services were contacted during this eval run.'"
+    },
+    {
+      "text": "The skill reads and processes all PR review comments before generating findings (constraint 1.10)",
+      "passed": true,
+      "evidence": "All four review comments are processed: review-30001.md, review-30002.md, review-30003.md, review-30004.md each contain detailed classification analysis. The report.md references all four: '1 code change request (transaction wrapping), 1 suggestion (index), 1 nit (context message), 1 question (GET endpoint behavior)'."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR (constraint 1.13)",
+      "passed": true,
+      "evidence": "report.md states 'Overall: FAIL' and 'The PR has one FAIL finding that must be addressed before merge'. No merge action is taken or mentioned. The report is purely analytical."
+    },
+    {
+      "text": "The report contains a Test Change Classification row with ADDITIVE — only new test files were added (tests/api/sbom_delete.rs is a new file)",
+      "passed": true,
+      "evidence": "report.md contains the table row: '| Test Change Classification | ADDITIVE | All test files are new (tests/api/sbom_delete.rs); no modified or deleted tests |'"
+    },
+    {
+      "text": "Convention upgrade eligibility is evaluated for review comment 30002 (index suggestion) — the review classification output (review-30002.md) or the report's Style/Conventions analysis explains whether the suggestion matches a documented or demonstrated project convention",
+      "passed": true,
+      "evidence": "review-30002.md explicitly evaluates convention upgrade: 'No CONVENTIONS.md is available for the trustify-backend repository to check whether index creation on soft-delete columns is a documented convention. Without evidence of a codebase-wide convention (e.g., other migrations consistently adding indexes for nullable timestamp columns), this remains classified as a suggestion rather than being upgraded to a code change request.'"
+    },
+    {
+      "text": "Review comment 30002 (index suggestion) results in a sub-task regardless of classification path — whether classified directly as code change request based on reviewer language, or upgraded from suggestion via convention analysis",
+      "passed": false,
+      "evidence": "No subtask-30002.md exists in the outputs directory. review-30002.md explicitly states 'No sub-task created. This is an optional performance improvement that the author may choose to adopt.' The report.md also confirms: 'Comment 30002 (suggestion): Add a partial index on deleted_at for query performance. Valid optimization but no documented convention to upgrade it. Remains a suggestion for the author to consider.'"
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 2,
+    "total": 13,
+    "pass_rate": 0.846
+  }
+}

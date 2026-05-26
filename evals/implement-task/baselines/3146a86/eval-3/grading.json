@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md service changes section shows 'apply_filter' being called with package_license::Column::LicenseSpdxId. reuse-analysis.md Candidate 1 confirms: 'No new function is written to split or parse the comma-separated license string. No custom IN-clause builder is introduced.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md references 'following the advisory endpoint pattern from modules/fundamental/src/advisory/endpoints/list.rs' for the PackageListQuery struct. reuse-analysis.md Candidate 2 explains the struct shape and Axum Query extractor placement are copied from the advisory pattern."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md shows 'use entity::package_license;' and joins via 'package_license::Relation::Package.def()'. reuse-analysis.md Candidate 3 confirms: 'No raw SQL join strings are written. No new struct or migration is created.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md has three detailed sections: Candidate 1 (apply_filter), Candidate 2 (advisory list.rs pattern), Candidate 3 (package_license.rs entity). Each includes 'Purpose of the existing code', 'How it is applied', and 'What is NOT done' subsections."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md modifies: package/endpoints/list.rs and package/service/mod.rs (both in Files to Modify). Creates: tests/api/package_license_filter.rs (in Files to Create). Out-of-Scope section confirms reuse candidate files are not modified."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "reuse-analysis.md Candidate 1 'What is NOT done' section: 'No new function is written to split or parse the comma-separated license string. No custom IN-clause builder is introduced. The call to apply_filter is the only filtering logic added.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
