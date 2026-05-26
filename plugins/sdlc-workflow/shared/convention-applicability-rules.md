@@ -103,3 +103,25 @@ And a task with:
 - The rationale must be included so downstream skills can audit the decision
 - When multiple scope signals conflict within a convention section, use the most
   restrictive signal (explicit scope statement > file paths > language syntax)
+- Inapplicable conventions must be **excluded entirely** — do not list them with
+  "Not applicable" annotations or any other marker. The output should contain only
+  conventions that passed the applicability check.
+
+## Common Mistakes — Do NOT
+
+The following mistakes have been observed in practice and must be avoided:
+
+- **Do NOT use prose-format rationales.** The rationale must follow the prescribed
+  format: `Applies: task modifies <file> matching the convention's <scope>.` Never
+  use free-form prose like "Applicable — this task creates the model layer" or
+  "This convention is relevant because the task involves database work."
+- **Do NOT annotate inapplicable conventions.** When a convention fails the
+  applicability check, exclude it from the output entirely. Never list it with
+  "Not applicable", "N/A", "Excluded", or any other annotation. The Filtering
+  Example above shows the correct behavior: §Migration Patterns is simply absent
+  from the task's Implementation Notes — it is not listed with a "Not applicable"
+  note.
+- **Do NOT skip the file-type match.** Every applicability rationale must name at
+  least one specific file from the task's Files to Modify or Files to Create that
+  matches the convention's scope. Generic rationales like "Applies: task involves
+  similar work" are not valid.
