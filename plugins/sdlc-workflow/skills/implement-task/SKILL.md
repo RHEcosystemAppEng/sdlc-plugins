@@ -25,7 +25,7 @@ If any of these sections are missing or incomplete, inform the user:
 
 ## Step 0.5 – JIRA Access Initialization
 
-Before attempting any JIRA operations (Steps 1, 2, 3, 11), determine the access method.
+Before attempting any JIRA operations (Steps 1, 1.5, 2, 3, 11), determine the access method.
 
 **For every JIRA operation:**
 1. **Attempt MCP first** (preferred method)
@@ -49,6 +49,7 @@ Before attempting any JIRA operations (Steps 1, 2, 3, 11), determine the access 
 
 **REST API equivalents for this skill's operations:**
 - `jira.get_issue(id)` → `python3 scripts/jira-client.py get_issue <id> --fields "*all"`
+- `jira.get_issue_comments(id)` → `python3 scripts/jira-client.py get_comments <id>`
 - `jira.user_info()` → `python3 scripts/jira-client.py get_user_info`
 - `jira.edit_issue(id, assignee=accountId)` → `python3 scripts/jira-client.py update_issue <id> --fields-json '{"assignee": {"id": "<accountId>"}}'`
 - `jira.transition_issue(id, status)` → First get transitions with `get_transitions <id>`, find ID for target status, then `transition_issue <id> --transition-id <id>`
@@ -176,6 +177,52 @@ section in CLAUDE.md (the field is listed as `GitHub Issue custom field: <field-
   `number` from the pattern `https://github.com/<owner>/<repo>/issues/<number>`.
   Store the parsed reference as `<owner>/<repo>#<number>` for use in Step 10.
 - **If not configured or the field is empty**, skip silently — this is optional.
+
+## Step 1.5 – Verify Description Integrity
+
+After fetching the task, verify that the description has not been modified since
+plan-feature created it. This uses the digest protocol defined in
+`shared/description-digest-protocol.md`.
+
+1. **Retrieve issue comments**: fetch all comments on the Jira issue:
+
+   ```
+   jira.get_issue_comments(<jira-issue-id>)
+   ```
+
+2. **Locate the digest comment**: search for a comment whose body starts with the
+   marker string `[sdlc-workflow] Description digest:`. This marker is defined in
+   `shared/description-digest-protocol.md`.
+
+3. **If no digest comment found**: log a warning and proceed normally — do not block
+   execution:
+
+   > "No description digest found — skipping integrity check. This task may have
+   > been created before digest tracking was introduced."
+
+4. **If digest comment found**:
+   a. **Check for comment editing**: if the comment's `created` and `updated`
+      timestamps are available, compare them. If `updated` is later than `created`,
+      warn: "Digest comment was edited after initial posting — integrity cannot be
+      fully guaranteed." Proceed with digest comparison regardless. If timestamps
+      are not available in the API response, skip this check silently.
+   b. **Extract the stored digest**: parse the `sha256:<hex-digest>` value from the
+      comment body.
+   c. **Compute the current digest**: hash the current description field text using
+      SHA-256, following the same normalization as the protocol (strip
+      leading/trailing whitespace before hashing). Output a lowercase 64-character
+      hexadecimal digest.
+   d. **Compare digests**:
+      - **Match**: proceed silently — no additional user prompt, no added latency.
+      - **Mismatch**: alert the user that the task description was modified after
+        plan-feature created it. Display the expected digest (from the comment) and
+        the actual digest (computed from the current description). Ask the user
+        whether to:
+        1. **Proceed** with the current description as-is
+        2. **Stop** so they can re-run plan-feature to regenerate tasks
+
+        **Stop execution immediately** — do not proceed with any subsequent steps
+        until the user responds.
 
 ## Step 2 – Verify Dependencies
 
