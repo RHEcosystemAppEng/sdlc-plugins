@@ -91,8 +91,17 @@ comment.
 
 ## Consumer Verification
 
-The consumer (implement-task) retrieves issue comments and searches for one whose
-body starts with the marker string `[sdlc-workflow] Description digest:`. If found:
+The consumer (implement-task) retrieves issue comments and searches for those whose
+body starts with the marker string `[sdlc-workflow] Description digest:`.
+
+### Multiple Digest Comments
+
+If multiple comments match the marker string (e.g., from plan-feature re-runs or
+manual postings), the consumer must select the most recent one by `created`
+timestamp. This ensures deterministic behavior without rejecting valid re-planning
+scenarios.
+
+If found:
 
 1. Extract the `sha256:<hex-digest>` value
 2. Compute SHA-256 of the current description field (same normalization as producer)

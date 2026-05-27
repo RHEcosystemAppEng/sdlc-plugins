@@ -190,9 +190,10 @@ plan-feature created it. This uses the digest protocol defined in
    jira.get_issue_comments(<jira-issue-id>)
    ```
 
-2. **Locate the digest comment**: search for a comment whose body starts with the
+2. **Locate the digest comment**: search for all comments whose body starts with the
    marker string `[sdlc-workflow] Description digest:`. This marker is defined in
-   `shared/description-digest-protocol.md`.
+   `shared/description-digest-protocol.md`. If multiple comments match (e.g., from
+   plan-feature re-runs), select the most recent one by `created` timestamp.
 
 3. **If no digest comment found**: log a warning and proceed normally — do not block
    execution:
