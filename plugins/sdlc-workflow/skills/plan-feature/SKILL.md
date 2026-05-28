@@ -497,14 +497,36 @@ misses a convention that was never mentioned.
 1. For each task, review its Files to Modify, Files to Create, and Description against the
    conventions collected in Step 3.
 2. Before including a convention, validate its file-type applicability per
-   `shared/convention-applicability-rules.md`. Conventions that fail the applicability
-   check **must** be excluded entirely from the output — do not list them with "Not
-   applicable" annotations or any other marker. For each convention that passes, include
-   an applicability rationale using the exact prescribed format:
-   `Applies: task modifies <file> matching the convention's <scope>.`
-   Do not use free-form prose rationales (e.g., "Applicable — this task creates the
-   model layer"). See `shared/convention-applicability-rules.md` for the full format
-   specification and common mistakes to avoid.
+   `shared/convention-applicability-rules.md`. Follow these sub-steps for each
+   convention:
+
+   a. **Check file-type overlap.** Compare the convention's scope (file extensions,
+      directory patterns) against the task's Files to Modify and Files to Create.
+      If no file in either section matches the convention's scope, the convention
+      **fails** — proceed to sub-step b.
+
+   b. **Exclude failing conventions silently.** If the convention failed in sub-step a,
+      remove it from the output entirely. Do not list it with "Not applicable",
+      "does NOT apply", "N/A", "Excluded", or any other annotation. The convention
+      must be completely absent from the task description.
+
+   c. **Write the rationale in prescribed format.** If the convention passed, write
+      the rationale using exactly this format — no other format is accepted:
+      `Applies: task modifies <file> matching the convention's <scope>.`
+      Replace `<file>` with a specific file from Files to Modify or Files to Create.
+      Replace `<scope>` with the convention's scope signal (e.g., "migration file
+      scope").
+
+   d. **Self-verify before including.** Before adding the convention to the task,
+      check the rationale against these rules. If any check fails, rewrite — do not
+      include the convention until all pass:
+      - The rationale starts with the word `Applies:`
+      - The rationale names a specific file from the task's Files to Modify or
+        Files to Create
+      - The rationale is not free-form prose (e.g., not "Applicable — this task
+        creates the model layer", not "This convention is relevant because...")
+      - No failing conventions appear anywhere in the output — not with "does NOT
+        apply", "Not applicable", or any other marker
 3. When a match is found, add a line to Implementation Notes of the form:
    `"Per CONVENTIONS.md §<Section Name>: <specific action required>"`
 4. Include a reference to an existing file that demonstrates the convention in practice,
@@ -579,7 +601,8 @@ bracket the intermediate implementation tasks:
 
 - **Summary:** `Create feature branch <feature-id> from main`
 - **Description sections:**
-  - `## Repository` — the primary repository for the feature
+  - `## Repository` — a single repository name (pick the repository where the
+    majority of implementation tasks land; never list multiple repositories)
   - `## Target Branch` — `main` (this task branches FROM main)
   - `## Bookend Type` — `create-branch`
   - `## Description` — Create and push the feature branch `<feature-id>` from the
@@ -587,14 +610,19 @@ bracket the intermediate implementation tasks:
   - `## Acceptance Criteria` — the feature branch `<feature-id>` exists and is pushed
     to the remote
   - `## Test Requirements` — verify the branch exists on the remote after push
-- All other template sections (Files to Modify, Implementation Notes, etc.) are omitted.
+- The following template sections are omitted: Files to Modify, Files to Create,
+  API Changes, Implementation Notes, Reuse Candidates, Verification Commands,
+  Documentation Updates. Do NOT omit Repository, Target Branch, Bookend Type,
+  Description, Acceptance Criteria, Test Requirements, or Dependencies — these
+  are listed above and must be included.
 - All intermediate tasks MUST list this task in their `## Dependencies` section.
 
 **Last task — merge feature branch:**
 
 - **Summary:** `Merge feature branch <feature-id> to main`
 - **Description sections:**
-  - `## Repository` — the primary repository for the feature
+  - `## Repository` — a single repository name (pick the repository where the
+    majority of implementation tasks land; never list multiple repositories)
   - `## Target Branch` — `main` (this task creates a PR TO main)
   - `## Bookend Type` — `merge-branch`
   - `## Description` — Create a PR to merge feature branch `<feature-id>` into `main`.
@@ -603,7 +631,11 @@ bracket the intermediate implementation tasks:
     for review
   - `## Test Requirements` — verify all intermediate task PRs have been merged into
     the feature branch before creating the merge PR
-- All other template sections (Files to Modify, Implementation Notes, etc.) are omitted.
+- The following template sections are omitted: Files to Modify, Files to Create,
+  API Changes, Implementation Notes, Reuse Candidates, Verification Commands,
+  Documentation Updates. Do NOT omit Repository, Target Branch, Bookend Type,
+  Description, Acceptance Criteria, Test Requirements, or Dependencies — these
+  are listed above and must be included.
 - This task MUST list all intermediate tasks in its `## Dependencies` section.
 
 ### Bookend task idempotency guard
