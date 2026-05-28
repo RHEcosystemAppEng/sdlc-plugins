@@ -18,6 +18,8 @@ The orchestrator provides these sections in the Agent-Specific Inputs block
 - **Test Files** — list of modified/deleted test file paths
 - **Branch Names** — base branch and PR branch names for test change
   classification sub-agent
+- **Eval Result Reviews** — full body of eval result reviews detected by the
+  orchestrator (empty if none found)
 
 The dispatch envelope also includes **Context** (Jira Task, PR URL, Branch, Base
 Branch) and **Classified Review Comments** (all classified comments with IDs,
@@ -279,17 +281,73 @@ new-file analysis to produce the final classification:
 - Sub-agent returns NEUTRAL and new test files exist → ADDITIVE
 - Sub-agent returns NEUTRAL and no new test files → NEUTRAL
 
+### Check 5 — Eval Result Extraction
+
+Extract eval quality metrics from eval result reviews posted by CI. This check
+detects eval pass rates and failing assertion details from reviews that the
+orchestrator identified in Step 4a.1.
+
+#### 5a — Check for Eval Result Reviews
+
+Check if eval result review bodies are present in the Eval Result Reviews input
+from the dispatch envelope. If none are present (empty list), skip to the Verdict
+and record N/A.
+
+#### 5b — Parse Per-Eval Metrics
+
+Parse the per-eval summary table from the eval review body. The table follows
+this format:
+
+```
+| Eval | Passed | Failed | Pass Rate |
+|------|--------|--------|-----------|
+| eval-1 | 10 | 0 | 100% |
+| eval-2 | 8 | 2 | 80% |
+```
+
+Extract per-eval pass/fail counts and pass rates. Compute the overall pass rate
+across all evals.
+
+#### 5c — Parse Failing Assertion Details
+
+Parse the "Failed Assertions" `<details>` section from the eval review body to
+extract failing assertion text and evidence. This section is rendered by the
+run-evals skill's summary script and follows this format:
+
+```
+<details>
+<summary>eval-2: 2 failing assertions</summary>
+
+- **Assertion:** "The review comment about..."
+  **Evidence:** "The output file..."
+
+</details>
+```
+
+If no "Failed Assertions" section exists (pre-enhancement format or all
+assertions pass), extract only the pass/fail counts from the summary table.
+
+#### 5d — Produce Verdict
+
+- **PASS** — eval results exist and all assertions pass (0 failures across all evals)
+- **WARN** — eval results exist and at least one assertion failed
+- **N/A** — no eval result reviews found in the PR
+
+Evidence: per-eval pass rates, overall pass rate, and any failing assertion
+details (assertion text and evidence for each failure).
+
 ## Output Format
 
 Return results using the structure defined in finding-template.md.
 
-The Verdicts table must include exactly four rows:
+The Verdicts table must include exactly five rows:
 
 | Check | Verdict | Summary |
 |---|---|---|
 | Convention Upgrade | <PASS\|WARN\|N/A> | <one-line summary> |
 | Repetitive Test Detection | <PASS\|WARN\|N/A> | <one-line summary> |
 | Test Documentation | <PASS\|WARN\|N/A> | <one-line summary> |
+| Eval Quality | <PASS\|WARN\|N/A> | <one-line summary with pass rate> |
 | Test Change Classification | <ADDITIVE\|REDUCTIVE\|MIXED\|NEUTRAL\|N/A> | <one-line summary> |
 
 The Findings section must include one subsection per check, using the format:

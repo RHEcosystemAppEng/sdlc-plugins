@@ -219,6 +219,22 @@ auditable that all threads were considered.
 > failure where a bot review comment posted after `/implement-task` pushed a fix
 > commit was missed by the subsequent `/verify-pr` re-run.
 
+### Step 4a.1 – Detect Eval Result Reviews
+
+Among all fetched PR reviews (from the `gh api repos/<owner/repo>/pulls/<pr-number>/reviews`
+call in Step 4a), identify eval result reviews by checking **all three** conditions:
+
+1. The review author is `github-actions[bot]`
+2. The review body contains the marker `## Eval Results`
+3. The review body contains the footer pattern `sdlc-workflow/run-evals`
+
+All three conditions must match to avoid false positives from other bot reviews or
+human reviews that happen to mention evals. Extract the full body of each detected
+eval review.
+
+If no eval reviews are found, set the eval result review bodies to empty and proceed
+normally — downstream steps will produce Eval Quality = N/A.
+
 ### Step 4b – Load Project Conventions
 
 Before classifying feedback, load the project's established conventions so they can
@@ -302,6 +318,10 @@ Collect all inputs needed for sub-agent dispatch envelopes:
    Correctness sub-agent dispatch so it can auto-generate verification commands
    when eval infrastructure changes (for Correctness sub-agent)
 
+10. **Eval result review bodies** — the eval result review bodies detected in
+    Step 4a.1 (for Style/Conventions sub-agent). Pass the full body of each
+    detected eval review. If no eval reviews were found, pass an empty list.
+
 ### Step 5b – Read Templates and Skill Files
 
 Read the following files to construct dispatch prompts:
@@ -371,11 +391,17 @@ in `plugins/sdlc-workflow/skills/verify-pr/finding-template.md`:
    | Style/Conventions | Convention Upgrade | *(processed in Step 6b)* |
    | Style/Conventions | Repetitive Test Detection | Test Quality *(combined)* |
    | Style/Conventions | Test Documentation | Test Quality *(combined)* |
+   | Style/Conventions | Eval Quality | Test Quality *(combined)* |
    | Style/Conventions | Test Change Classification | Test Change Classification |
 
-   For the **Test Quality** row: combine the Repetitive Test Detection and Test
-   Documentation verdicts — if either is WARN, Test Quality is WARN; if both are
-   PASS, Test Quality is PASS; if both are N/A, Test Quality is N/A.
+   For the **Test Quality** row: combine the Repetitive Test Detection, Test
+   Documentation, and Eval Quality verdicts:
+   - If any of the three is WARN → Test Quality is WARN
+   - If all non-N/A verdicts are PASS → Test Quality is PASS
+   - If all three are N/A → Test Quality is N/A
+
+   This preserves backward compatibility: projects without evals get
+   Eval Quality = N/A, which does not affect the combination result.
 
 2. **Extract findings** from each sub-agent's Findings section for inclusion in
    the report details.
@@ -758,7 +784,7 @@ are assembled from sub-agent results (Step 6a) and orchestrator checks (Steps 6g
 | Sensitive Patterns | PASS/FAIL | <summary> |
 | CI Status | PASS/WARN/FAIL | <summary> |
 | Acceptance Criteria | PASS/FAIL | <N of M criteria met> |
-| Test Quality | PASS/WARN | <summary> |
+| Test Quality | PASS/WARN/N/A | <summary> |
 | Test Change Classification | ADDITIVE/REDUCTIVE/MIXED/NEUTRAL/N/A | <summary> |
 | Verification Commands | PASS/FAIL/N/A | <summary> |
 
@@ -779,9 +805,13 @@ are assembled from sub-agent results (Step 6a) and orchestrator checks (Steps 6g
 | Sensitive Patterns | Security sub-agent (Sensitive Pattern Scan) |
 | CI Status | Correctness sub-agent |
 | Acceptance Criteria | Correctness sub-agent |
-| Test Quality | Style/Conventions sub-agent (Repetitive Test Detection + Test Documentation combined) |
+| Test Quality | Style/Conventions sub-agent (Repetitive Test Detection + Test Documentation + Eval Quality combined) |
 | Test Change Classification | Style/Conventions sub-agent |
 | Verification Commands | Correctness sub-agent |
+
+When eval results are present (Eval Quality is not N/A), include the eval pass
+rate and any failing assertion details in the Test Quality Details column of
+the report table.
 
 Overall result rules:
 - **PASS** — all checks are PASS or N/A

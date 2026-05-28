@@ -59,6 +59,7 @@ structure; the Agent-Specific Inputs section varies per agent.
 - `### CONVENTIONS.md` — full content of the repository's CONVENTIONS.md
 - `### Test Files` — list of modified/deleted test file paths
 - `### Branch Names` — base branch and PR branch names for test change classification sub-agent
+- `### Eval Result Reviews` — full body of eval result reviews detected in Step 4a.1 (empty if none found)
 
 ## Rules
 
