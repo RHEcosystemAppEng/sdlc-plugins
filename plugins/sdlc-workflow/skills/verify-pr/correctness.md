@@ -146,14 +146,48 @@ For each command:
 2. Compare the output to the expected outcome described in the task.
 3. Record PASS if the output matches, FAIL if it does not.
 
-If no Verification Commands section exists in the Task Specification, skip this
-check and record N/A.
+If no Verification Commands section exists in the Task Specification, proceed to
+the eval infrastructure detection below before recording N/A.
+
+#### 3b — Eval Infrastructure Change Detection
+
+Scan the PR diff file list for changes to eval infrastructure — specifically files
+matching `plugins/sdlc-workflow/skills/run-evals/scripts/*.py` or
+`plugins/sdlc-workflow/skills/run-evals/SKILL.md`.
+
+If eval infrastructure changes are detected:
+
+1. **Discover existing baselines**: list directories matching
+   `evals/*/baselines/latest/` in the repository. Each match represents a skill
+   with baseline eval data.
+2. **Generate verification commands**: for each discovered baseline, generate a
+   command that runs the modified render script against that baseline:
+   ```
+   python3 plugins/sdlc-workflow/skills/run-evals/scripts/render_summary.py \
+     --results evals/<skill>/baselines/latest/ \
+     --skill <skill> \
+     --output /tmp/verify-<skill>-summary.md
+   ```
+   If `aggregate_benchmark.py` was also modified, additionally generate:
+   ```
+   python3 plugins/sdlc-workflow/skills/run-evals/scripts/aggregate_benchmark.py \
+     --results evals/<skill>/baselines/latest/
+   ```
+3. **Run the generated commands** and verify they complete successfully (exit
+   code 0). The expected outcome is that the scripts run without errors against
+   existing baseline data — this confirms backward compatibility of the
+   infrastructure changes.
+4. **Include results in the verdict**: if any generated command fails, record
+   the check as FAIL with the failing command and its output.
+
+If no eval infrastructure changes are detected, skip this sub-step — it does not
+affect the verdict when the PR does not touch run-evals files.
 
 #### Verdict
 
-- **PASS** — all verification commands produce the expected output
+- **PASS** — all verification commands (task-specified and auto-generated) produce the expected output
 - **FAIL** — one or more commands produce unexpected output
-- **N/A** — no verification commands were specified in the task
+- **N/A** — no verification commands were specified in the task AND no eval infrastructure changes detected
 
 Evidence: for each command, show the command run, the expected output, and the
 actual output. For PASS results, a brief confirmation is sufficient.
