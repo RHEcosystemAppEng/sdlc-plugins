@@ -46,6 +46,31 @@ def render(results_dir: Path, baseline_dir: Path | None, skill: str | None = Non
 
     lines.append("")
 
+    # Failed assertion evidence
+    has_failures = any(g.get("summary", {}).get("failed", 0) > 0 for g in gradings)
+    if has_failures:
+        lines.append("### Failed Assertions")
+        lines.append("")
+        for g in gradings:
+            s = g.get("summary", {})
+            if s.get("failed", 0) == 0:
+                continue
+            eval_id = g["_eval_id"]
+            failed = [
+                a for a in g.get("assertion_results", []) if not a.get("passed", True)
+            ]
+            count = len(failed)
+            label = "assertion" if count == 1 else "assertions"
+            lines.append("<details>")
+            lines.append(f"<summary>{eval_id}: {count} failing {label}</summary>")
+            lines.append("")
+            for a in failed:
+                lines.append(f'- **Assertion:** "{a.get("text", "")}"')
+                lines.append(f'  **Evidence:** "{a.get("evidence", "")}"')
+                lines.append("")
+            lines.append("</details>")
+            lines.append("")
+
     # Aggregate from benchmark.json if present
     benchmark_path = results_dir / "benchmark.json"
     if benchmark_path.exists():

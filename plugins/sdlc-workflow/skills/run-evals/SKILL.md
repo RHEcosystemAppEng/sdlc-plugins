@@ -182,6 +182,12 @@ renders results without a comparison.
 The script writes `<workspace>/summary.md`. Display its contents to the
 user.
 
+When any eval has failing assertions, the summary includes a
+"Failed Assertions" section after the per-eval table, before the
+aggregate and baseline stats. Each failing eval is rendered as a
+collapsible `<details>` block listing the assertion text and grading
+evidence for each failed assertion.
+
 ## Rules
 
 - Write all outputs to the exact paths specified. No intermediate directories,
