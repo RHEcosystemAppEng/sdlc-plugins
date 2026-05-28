@@ -296,6 +296,12 @@ Collect all inputs needed for sub-agent dispatch envelopes:
 8. **Branch names** — the PR branch and base branch names (for Style/Conventions
    sub-agent's test change classification)
 
+9. **Eval infrastructure files** — filter the PR diff file list for paths matching
+   `plugins/sdlc-workflow/skills/run-evals/scripts/*.py` or
+   `plugins/sdlc-workflow/skills/run-evals/SKILL.md`. Include this list in the
+   Correctness sub-agent dispatch so it can auto-generate verification commands
+   when eval infrastructure changes (for Correctness sub-agent)
+
 ### Step 5b – Read Templates and Skill Files
 
 Read the following files to construct dispatch prompts:
