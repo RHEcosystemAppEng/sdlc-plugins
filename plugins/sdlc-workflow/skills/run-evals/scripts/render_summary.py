@@ -2,6 +2,7 @@
 """Render eval results and optional baseline comparison as Markdown."""
 
 import argparse
+import html
 import json
 import sys
 from pathlib import Path
@@ -65,8 +66,10 @@ def render(results_dir: Path, baseline_dir: Path | None, skill: str | None = Non
             lines.append(f"<summary>{eval_id}: {count} failing {label}</summary>")
             lines.append("")
             for a in failed:
-                lines.append(f'- **Assertion:** "{a.get("text", "")}"')
-                lines.append(f'  **Evidence:** "{a.get("evidence", "")}"')
+                text = html.escape(a.get("text", ""), quote=False)
+                evidence = html.escape(a.get("evidence", ""), quote=False)
+                lines.append(f'- **Assertion:** "{text}"')
+                lines.append(f'  **Evidence:** "{evidence}"')
                 lines.append("")
             lines.append("</details>")
             lines.append("")
