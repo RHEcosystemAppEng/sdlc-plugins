@@ -652,19 +652,41 @@ jira.edit_issue(
 Preserve any existing labels on the feature issue — append `workflow:feature-branch` to
 the current label list rather than replacing it.
 
-Immediately after creating each task (before creating issue links or other comments), you **must** post a description digest comment on the created issue. Compute the SHA-256 hash using the `scripts/sha256-digest.py` script — do **not** compute the hash yourself.
+Immediately after creating each task (before creating issue links or other comments), you **must** produce a description digest for the task. The digest is a SHA-256 hash of the description content you wrote.
 
 **Digest computation steps:**
 
-1. **Write the description JSON to a temp file.** Use the Write tool to save the exact ADF JSON description you passed to `jira.create_issue` (the `description` field value) to a temporary file (e.g., `/tmp/desc-<issue-key>.json`).
+1. **Save the description content to a temp file.** Use the Write tool to save the
+   task description content to a temporary file (e.g., `/tmp/desc-<issue-key>.json`).
+   Save whatever form of the description you have — ADF JSON if you posted to Jira,
+   or the raw markdown text if you wrote to a file.
 
-2. **Run the digest script.** Invoke the script via Bash and capture its output:
+2. **Compute the hash via Bash.** Use the digest script if available, or an inline
+   Python command as fallback. Both produce identical results for JSON input.
+
+   **Primary — digest script:**
    ```
    python3 scripts/sha256-digest.py /tmp/desc-<issue-key>.json
    ```
-   The script outputs only the 64-character lowercase hex digest to stdout — no labels, no prefixes. If the script exits non-zero, report the error and stop.
 
-3. **Post the digest comment.** Use the script's output as the `<hex-digest>` value in this ADF comment:
+   **Fallback — inline Python** (if the script is not available):
+   ```
+   python3 -c "
+   import hashlib, json, sys
+   raw = open(sys.argv[1]).read().strip()
+   try:
+       d = json.loads(raw)
+       normalized = json.dumps(d, separators=(',', ':'))
+   except json.JSONDecodeError:
+       normalized = raw
+   print(hashlib.sha256(normalized.encode('utf-8')).hexdigest())
+   " /tmp/desc-<issue-key>.json
+   ```
+
+   Both output only the 64-character lowercase hex digest to stdout. Do **not**
+   compute SHA-256 yourself — always use Bash to run one of the commands above.
+
+3. **Post the digest comment.** Use the hash output as `<hex-digest>` in this ADF comment:
 
 ```json
 {
@@ -684,7 +706,14 @@ Immediately after creating each task (before creating issue links or other comme
 }
 ```
 
-Replace `<hex-digest>` with the exact output from the script. Do not append the Comment Footnote to this comment — it must be a standalone comment separate from any other comments.
+Replace `<hex-digest>` with the exact Bash output. Do not append the Comment Footnote
+to this comment — it must be a standalone comment separate from any other comments.
+
+If posting to Jira is not available (e.g., in eval or dry-run mode), append the
+digest line directly to the task output file instead:
+```
+[sdlc-workflow] Description digest: sha256:<hex-digest>
+```
 
 4. **Clean up.** Delete the temp file after posting the comment.
 
