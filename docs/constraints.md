@@ -37,6 +37,11 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.25 | `verify-pr` orchestrator MUST dispatch domain sub-agents in parallel. | `verify-pr/SKILL.md` — Step 4d (Dispatch), Important Rules (orchestrator) |
 | 1.26 | `verify-pr` root-cause investigation MUST receive aggregated findings from all domain sub-agents with source attribution. | `verify-pr/SKILL.md` — Step 5 (orchestrator), Important Rules |
 | 1.27 | `plan-feature` MUST determine the workflow mode (`direct-to-main` or `feature-branch`) during planning and record the decision on the feature issue. | `plan-feature/SKILL.md` — Step 4.5 (Determine Workflow Mode) |
+| 1.28 | `verify-pr` MUST detect eval result reviews in PR conversations by matching all three criteria: author is `github-actions[bot]`, body contains `## Eval Results` marker, and body contains `sdlc-workflow/run-evals` footer. | `verify-pr/SKILL.md` — Step 4a.1 |
+| 1.29 | `verify-pr` eval result detection MUST NOT produce false positives — non-eval reviews (human reviews, other bot comments) MUST NOT be identified as eval results. | `verify-pr/SKILL.md` — Step 4a.1 (NFR 2) |
+| 1.30 | `verify-pr` Test Quality verdict MUST incorporate eval results: PASS when all evals pass and no traditional test issues, WARN when any eval assertions fail, N/A only when neither traditional tests nor eval results are present. | `verify-pr/SKILL.md` — Step 6a; `verify-pr/style-conventions.md` — Check 5 |
+| 1.31 | `verify-pr` MUST autonomously create sub-tasks for eval assertion failures with labels `["ai-generated-jira", "eval-failure"]`, grouped by eval ID. | `verify-pr/SKILL.md` — Step 6d |
+| 1.32 | `verify-pr` eval failure sub-tasks MUST enter the existing root-cause investigation pipeline (Step 7). | `verify-pr/SKILL.md` — Step 7 |
 
 ---
 
@@ -107,10 +112,10 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Step 4.5 Determine Workflow Mode (§1.27), Task Description Template (§4.1–4.10), Step 5 Convention-aware task enrichment (§4.11), Step 5 Target Branch assignment (§4.12), Step 5 Bookend task generation (§3.4)
 - `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Important Rules (§1.4–1.6, §5.1–5.3), Step 1 (§1.6), Step 4/6/9 (§5.4), Step 5 (§1.15, §3.1, §3.4), Step 7 (§5.9–5.13), Step 9 (§2.1–2.3, §5.6–5.8), Step 10 (§3.2, §3.3)
 - `plugins/sdlc-workflow/shared/task-description-template.md` — Rules (§4.12)
-- `plugins/sdlc-workflow/skills/verify-pr/SKILL.md` — Step 4a (§1.10), Step 4d (§1.12, §1.25), Important Rules (§1.11, §1.13, §1.22, §1.23, §1.25, §1.26), Step 5b (§1.14), Step 5 (§1.26), Step 14 (§1.19)
+- `plugins/sdlc-workflow/skills/verify-pr/SKILL.md` — Step 4a (§1.10), Step 4a.1 (§1.28, §1.29), Step 4d (§1.12, §1.25), Important Rules (§1.11, §1.13, §1.22, §1.23, §1.25, §1.26), Step 5b (§1.14), Step 5 (§1.26), Step 6a (§1.30), Step 6d (§1.31), Step 7 (§1.32), Step 14 (§1.19)
 - `plugins/sdlc-workflow/skills/verify-pr/intent-alignment.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/security.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/correctness.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
-- `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md` — Check 2 (§1.16), Check 3 (§1.17), Check 4 (§1.18, §1.19, §1.20, §1.21), Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
+- `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md` — Check 2 (§1.16), Check 3 (§1.17), Check 4 (§1.18, §1.19, §1.20, §1.21), Check 5 (§1.30), Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9)
 - `docs/methodology.md` — Core Principles (§2.1, §3.2, §5.5)
