@@ -492,6 +492,41 @@ Process `create-sub-task` actions from the Correctness sub-agent. For each actio
 3. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
+#### Eval failure sub-tasks
+
+Process eval assertion failures from the Style/Conventions sub-agent's Check 5
+(Eval Quality verdict and failing assertion details, extracted in Step 6a). Only
+proceed if Eval Quality is WARN (i.e., at least one assertion failed). If Eval
+Quality is PASS or N/A, skip this section entirely.
+
+1. **Group by eval ID:** Group failing assertions by eval ID (e.g., all failures
+   from eval-3 become one sub-task). Each eval with at least one failing assertion
+   gets one sub-task. The sub-task summary should include the eval ID and a brief
+   description of the failure category, e.g., "Fix eval-3 assertion failures:
+   convention upgrade eligibility, sub-task creation".
+
+2. **Idempotency check:** Check the parent task's existing sub-tasks (issue links)
+   for sub-tasks with labels `["ai-generated-jira", "eval-failure"]` whose summaries
+   reference the same eval ID. If a matching sub-task already exists, skip creation
+   for that eval.
+
+3. **Create sub-task:** For each failing eval, create a Jira sub-task:
+
+   jira.create_issue with:
+   - **Parent:** the current task's Jira issue ID
+   - **Summary:** "Fix <eval-id> assertion failures: <brief description of failures>"
+   - **Labels:** `["ai-generated-jira", "eval-failure"]`
+   - **Description:** structured task description following the template defined in
+     [`shared/task-description-template.md`](../shared/task-description-template.md).
+     Include:
+     - **Review Context** — the eval review body excerpt with specific failing
+       assertions and their evidence (text + evidence fields from the eval review)
+     - **Target PR** — the PR URL from Step 2 (so implement-task adds commits to
+       the existing branch)
+
+4. **Create issue link:**
+   jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
+
 ### Step 6e – Reply to Review Comments
 
 Reply to **every** classified review comment thread with the classification label and
@@ -561,8 +596,9 @@ Record the Review Feedback check result:
 ## Step 7 – Root-Cause Investigation
 
 Investigate the root cause of each defect — whether flagged by a reviewer (Step 6d
-review feedback sub-tasks) or by a CI failure (Step 6d CI failure sub-tasks) — to
-identify systemic improvements that prevent similar mistakes in future tasks.
+review feedback sub-tasks), by a CI failure (Step 6d CI failure sub-tasks), or by
+an eval assertion failure (Step 6d eval failure sub-tasks) — to identify systemic
+improvements that prevent similar mistakes in future tasks.
 
 ### Step 7a – Sub-agent Investigation
 
@@ -570,8 +606,14 @@ If Step 6d created any sub-tasks, spawn a sub-agent to investigate the root
 cause of each defect. If no sub-tasks were created, record Root-Cause
 Investigation as N/A and skip to Step 8.
 
-The sub-agent investigates both reviewer-flagged defects and CI failures
-using the same classification and investigation process below.
+The sub-agent investigates reviewer-flagged defects, CI failures, and eval
+assertion failures using the same classification and investigation process below.
+
+Eval failure sub-tasks (from Step 6d) are included alongside review feedback
+sub-tasks and CI failure sub-tasks as inputs to root-cause investigation. The
+existing classification framework applies: eval assertion failures are typically
+universal knowledge (eval design patterns apply across repos) and classify as
+method-based skill gaps in the implement-task phase.
 
 The sub-agent receives these inputs:
 1. **Parent Feature description** — fetched by following the "incorporates" issue link
