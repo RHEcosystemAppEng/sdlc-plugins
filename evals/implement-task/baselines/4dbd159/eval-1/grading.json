@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "The plan.md 'Pre-Implementation Inspection Plan' section (lines 48-68) explicitly lists inspecting: advisory/service/advisory.rs ('understand existing fetch, list, search method signatures'), advisory/endpoints/get.rs ('understand endpoint handler pattern'), advisory/model/summary.rs ('see AdvisorySummary struct and its severity field'), and advisory/endpoints/mod.rs. Additionally, file-3-description.md lines 9-13 detail inspecting advisory.rs and model/summary.rs with specific Serena tool calls. This covers at least 3 of the 4 listed files."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md lines 29-39 list exactly 3 files to create (severity_summary.rs model, severity_summary.rs endpoint, advisory_summary.rs test) and 3 files to modify (advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs). Lines 41-42 explicitly note 'Files NOT Modified (confirmed)' for server/src/main.rs. The self-verification checklist (line 142) includes 'Scope containment: git diff --name-only matches Files to Modify + Files to Create'. The 6 file descriptions (file-1 through file-6) correspond exactly to these 6 files. No unrelated files are modified."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md lines 31-33: '1. modules/fundamental/src/advisory/model/severity_summary.rs -- SeveritySummary response struct', '2. modules/fundamental/src/advisory/endpoints/severity_summary.rs -- GET handler for /api/v2/sbom/{id}/advisory-summary', '3. tests/api/advisory_summary.rs -- Integration tests for the new endpoint'. Corresponding file descriptions exist in file-1-description.md, file-2-description.md, and file-6-description.md."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md lines 37-39: '1. modules/fundamental/src/advisory/service/advisory.rs -- Add severity_summary method to AdvisoryService', '2. modules/fundamental/src/advisory/endpoints/mod.rs -- Register the new route', '3. modules/fundamental/src/advisory/model/mod.rs -- Add pub mod severity_summary; to register new model module'. Corresponding file descriptions exist in file-3-description.md, file-5-description.md, and file-4-description.md."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md lines 90-99 show the commit message: 'feat(api): add advisory severity aggregation endpoint' (Conventional Commits format with type=feat, scope=api) followed by a body and footer 'Implements TC-9201'. The full git commit command on lines 105-114 confirms this format."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md line 101: 'With trailer: `--trailer=\"Assisted-by: Claude Code\"`'. Lines 105-114 show the full command: 'git commit --trailer=\"Assisted-by: Claude Code\" -m \"feat(api): add advisory severity aggregation endpoint...\"'"
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md lines 20-27: 'Branch name: TC-9201 (named after Jira issue ID per conventions)', 'Base branch: main (from Target Branch field)', and shows commands: 'git checkout main', 'git pull', 'git checkout -b TC-9201'. The PR creation command on line 120 also confirms '--base main'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md identifies both patterns explicitly. Lines 35-36: 'Return type: All handlers return Result<Json<T>, AppError> where T is the response struct' and line 37: 'Error wrapping: Errors use .context() from anyhow, then convert to AppError'. Lines 59-60: 'Module structure: Each domain follows model/ + service/ + endpoints/ triple'. Additionally, line 55: 'Error handling: Service methods return Result<T, AppError> with .context() wrapping on database errors'."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md line 12: 'Target Branch: main'. Line 22: 'Base branch: main (from Target Branch field)'. conventions.md line 17: 'Target Branch: main'. The PR creation command (plan.md line 120) uses '--base main'."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": false,
+      "evidence": "Neither plan.md, conventions.md, nor any of the file description files mention 'description digest', 'digest comment', 'Step 1.5' in the context of digest checking, or the 'shared/description-digest-protocol.md' document. The plan does not reference this protocol at all."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 1,
+    "total": 10,
+    "pass_rate": 0.9
+  }
+}
