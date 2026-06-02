@@ -207,19 +207,25 @@ plan-feature created it. This uses the digest protocol defined in
       warn: "Digest comment was edited after initial posting — integrity cannot be
       fully guaranteed." Proceed with digest comparison regardless. If timestamps
       are not available in the API response, skip this check silently.
-   b. **Extract the stored digest**: parse the `sha256:<hex-digest>` value from the
-      comment body.
+   b. **Extract the stored digest**: parse the tagged digest value from the comment
+      body (e.g., `sha256-md:a1b2...` or `sha256-adf:a1b2...`). Extract the format
+      tag and the hex digest. If the digest uses the legacy untagged format
+      (`sha256:<hex>`), log a warning ("Legacy digest format — skipping integrity
+      check") and proceed normally.
    c. **Compute the current digest**: extract the description field from the issue
-      response (ADF JSON — the default format from `jira.get_issue`). Write it to a
-      temp file and compute the digest using the script:
+      response. Write it to a temp file and compute the digest using the script:
 
       ```bash
-      python3 scripts/sha256-digest.py /tmp/desc-<task-key>.json
+      python3 scripts/sha256-digest.py /tmp/desc-<task-key>.txt
       ```
 
-      The script outputs a lowercase 64-character hexadecimal digest. If the script
+      The script auto-detects the format and outputs a tagged digest. If the script
       exits non-zero, warn and skip the integrity check — do not block execution.
-   d. **Compare digests**:
+   d. **Compare format tags**: if the stored tag differs from the computed tag
+      (e.g., stored is `sha256-adf` but computed is `sha256-md`), the producer and
+      consumer used different API access methods. Log a warning ("Digest format
+      mismatch — skipping integrity check") and proceed normally.
+   e. **Compare hex digests** (when tags match):
       - **Match**: proceed silently — no additional user prompt, no added latency.
       - **Mismatch**: alert the user that the task description was modified after
         plan-feature created it. Display the expected digest (from the comment) and

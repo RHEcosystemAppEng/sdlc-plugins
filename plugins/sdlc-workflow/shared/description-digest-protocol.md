@@ -14,54 +14,71 @@ all issue comments:
 [sdlc-workflow] Description digest:
 ```
 
-The full comment body is a single line:
+The full comment body is a single line with a format-tagged digest:
 
 ```
-[sdlc-workflow] Description digest: sha256:<hex-digest>
+[sdlc-workflow] Description digest: sha256-adf:<hex-digest>
 ```
 
-## Tool-Based Computation (Preferred)
+or
 
-Use the `scripts/sha256-digest.py` script to compute the digest. The script reads
-ADF JSON from a file path argument or stdin, normalizes it with compact JSON
-separators, computes SHA-256, and prints the 64-character lowercase hex digest to
-stdout.
+```
+[sdlc-workflow] Description digest: sha256-md:<hex-digest>
+```
+
+The tag (`adf` or `md`) identifies which description format was hashed, so the
+consumer can verify using the same format. See **Hashing** below.
+
+## Tool-Based Computation
+
+Use the `scripts/sha256-digest.py` script to compute the digest. The script
+auto-detects the input format and outputs a format-tagged digest:
+
+- **ADF JSON input** → `sha256-adf:<64-char-hex>` (parses JSON, re-serializes
+  with compact separators, hashes)
+- **Plain text input** (markdown) → `sha256-md:<64-char-hex>` (strips
+  leading/trailing whitespace, hashes)
 
 **Usage:**
 
 ```bash
 # From a file
-python3 scripts/sha256-digest.py /tmp/desc.json
+python3 scripts/sha256-digest.py /tmp/desc.txt
 
 # From stdin
-cat /tmp/desc.json | python3 scripts/sha256-digest.py
+cat /tmp/desc.txt | python3 scripts/sha256-digest.py
 ```
 
-The script exits non-zero with an error message on stderr if the input is not valid
-JSON or is empty. Always check the exit code before using the output.
+The script exits non-zero with an error message on stderr if the input is empty.
+Always check the exit code before using the output.
 
-This is the preferred method because it eliminates LLM hashing errors (placeholders,
-abbreviated hashes, incorrect computation). The script output is correct by
-construction.
+The format tag in the output tells the consumer which representation was hashed,
+so it can fetch the description in the same format for verification. This
+eliminates cross-format mismatches when the producer and consumer use different
+Jira access methods (MCP returns markdown, REST API returns ADF JSON).
 
 ## Hashing
 
 - **Algorithm:** SHA-256
-- **Canonical format:** ADF JSON — the native Jira storage format. Both producers
-  and consumers must fetch the description as ADF JSON from the Jira API before
-  hashing. Do not hash markdown, raw text, or the description string passed to
-  `create_issue` — Jira normalizes content during storage, so the submitted text
-  is never byte-identical to what the API returns.
-- **Normalization:** Parse the ADF JSON and re-serialize with compact separators
-  (`json.dumps(parsed, separators=(',', ':'))`). This ensures consistent hashing
-  regardless of whitespace or key formatting in the original JSON.
-- **Output:** Lowercase hexadecimal digest (64 characters)
+- **Format awareness:** The Jira API returns the description in different formats
+  depending on the access method — MCP returns markdown text, REST API v3 returns
+  ADF JSON. These are different representations of the same content and produce
+  different hashes. The digest is tagged with the format used (`sha256-adf` or
+  `sha256-md`) so the consumer knows which format to verify against.
+- **Normalization per format:**
+  - **ADF JSON** (REST API path): parse as JSON and re-serialize with compact
+    separators (`json.dumps(parsed, separators=(',', ':'))`)
+  - **Markdown text** (MCP path): strip leading and trailing whitespace
+- **Output:** Format-tagged digest — `sha256-adf:<64-char-hex>` or
+  `sha256-md:<64-char-hex>`
 - **Computation:** Always use `scripts/sha256-digest.py` — see **Tool-Based
-  Computation** above. Do not compute SHA-256 manually.
+  Computation** above. Do not compute SHA-256 manually. Do not hash the
+  description string passed to `create_issue` — always re-fetch from the API
+  after creation, since Jira normalizes content during storage.
 
-The producer computes the hash by re-fetching the description in ADF format from
-the Jira API immediately after creating the issue. This ensures the digest
-reflects exactly what Jira persisted, not what was submitted.
+The producer computes the hash by re-fetching the description from the Jira API
+immediately after creating the issue. The script auto-detects the format and
+produces the appropriate tagged digest.
 
 ## Jira Comment Format
 
@@ -78,13 +95,17 @@ a single paragraph containing the marker and digest:
       "content": [
         {
           "type": "text",
-          "text": "[sdlc-workflow] Description digest: sha256:<hex-digest>"
+          "text": "[sdlc-workflow] Description digest: <tagged-digest>"
         }
       ]
     }
   ]
 }
 ```
+
+Replace `<tagged-digest>` with the full output from `scripts/sha256-digest.py`
+(e.g., `sha256-md:a1b2...` or `sha256-adf:a1b2...`). The tag is part of the
+digest value — do not strip it.
 
 This comment is separate from the skill's standard footnote comment. Post it as an
 independent comment — do not append it to the plan summary comment or any other
@@ -104,16 +125,31 @@ scenarios.
 
 If found:
 
-1. Extract the `sha256:<hex-digest>` value
-2. Fetch the current description as ADF JSON (the default format from `jira.get_issue`),
-   write it to a temp file, and compute the digest using `scripts/sha256-digest.py`
-3. Compare digests
+1. Extract the tagged digest value (e.g., `sha256-md:a1b2...` or
+   `sha256-adf:a1b2...`). Parse the format tag (`md` or `adf`) and the hex digest.
+2. Fetch the current description from `jira.get_issue`, write it to a temp file,
+   and compute the digest using `scripts/sha256-digest.py`. The script auto-detects
+   the format and outputs a tagged digest.
+3. **Compare format tags first:**
+   - **Tags match** (e.g., both `sha256-md`) — compare the hex digests directly.
+   - **Tags differ** (e.g., stored is `sha256-adf`, computed is `sha256-md`) —
+     the producer and consumer used different Jira access methods. Log a warning:
+     "Digest format mismatch (stored: `<tag>`, current: `<tag>`) — producer and
+     consumer used different API access methods. Skipping integrity check."
+     Proceed normally without blocking.
+4. **Compare hex digests** (when tags match):
+   - **Match:** proceed normally — description is unmodified since planning.
+   - **Mismatch:** warn the user that the task description was modified after
+     planning. Display the expected vs actual digest and ask whether to proceed
+     or abort. Do not silently continue.
 
-**Match:** Proceed normally — description is unmodified since planning.
+### Legacy Digest Format
 
-**Mismatch:** Warn the user that the task description was modified after planning.
-Display the expected vs actual digest and ask whether to proceed or abort. Do not
-silently continue.
+Digest comments created before the format-tag enhancement use the untagged format
+`sha256:<hex-digest>`. When the consumer encounters an untagged digest, treat it
+as a legacy digest — log a warning ("Legacy digest format detected — skipping
+integrity check") and proceed normally. Do not attempt to match an untagged digest
+against a tagged one.
 
 ### Comment Edit Detection
 
@@ -169,5 +205,9 @@ The following mistakes have been observed in practice and must be avoided:
   from the actual description content. Never copy a hash from documentation,
   examples, or a previous task.
 - **Do NOT add extra text to the marker line.** The comment body must be exactly
-  one line: `[sdlc-workflow] Description digest: sha256:<64-char-hex>`. Do not
-  append explanations, timestamps, or metadata after the hash.
+  one line: `[sdlc-workflow] Description digest: sha256-md:<64-char-hex>` (or
+  `sha256-adf:<64-char-hex>`). Do not append explanations, timestamps, or metadata
+  after the hash.
+- **Do NOT strip the format tag.** The output from `scripts/sha256-digest.py`
+  includes the tag (`sha256-md:` or `sha256-adf:`). Post the full tagged value —
+  the consumer needs the tag to know which format to verify against.
