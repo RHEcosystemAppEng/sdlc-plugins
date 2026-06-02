@@ -41,6 +41,15 @@ documented conventions that match the suggested practice. For example, if the
 reviewer suggests adding indexes for foreign key columns, check whether
 CONVENTIONS.md documents index creation patterns.
 
+After finding a matching convention, verify that the convention's file-type scope
+overlaps with the PR's changed files, following the rules in
+`shared/convention-applicability-rules.md`. Extract the PR's changed file types
+from the diff headers (`--- a/path` and `+++ b/path` lines) in the PR Diff input.
+If the convention's file-type scope does not overlap with any of the PR's changed
+files, discard the convention match — do not use it for upgrade purposes.
+Conventions without explicit file-type scope are treated as broadly applicable
+(no filtering).
+
 If CONVENTIONS.md is not provided (empty or absent), skip this sub-step.
 
 #### 1b — Check Codebase Patterns
@@ -59,11 +68,15 @@ index migrations, caching layers, documented performance conventions).
 
 #### 1d — Upgrade Decision
 
-If the suggestion matches a documented convention in CONVENTIONS.md **or** is
-demonstrated by consistent codebase usage (multiple instances of the same pattern
-in similar files), upgrade the classification from **suggestion** to **code change
-request**. Record the evidence:
-- `"Matches documented convention: [CONVENTIONS.md section or quote]"`
+If the suggestion matches a documented convention in CONVENTIONS.md (and passes
+the file-type applicability check from 1a) **or** is demonstrated by consistent
+codebase usage (multiple instances of the same pattern in similar files), upgrade
+the classification from **suggestion** to **code change request**. Record the
+evidence:
+- For CONVENTIONS.md matches, the evidence must include three fields: (1) the
+  convention section name or quote, (2) applicability status (yes/no), and (3) the
+  file-type overlap (convention scope vs PR's changed file types). The exact
+  wording is flexible as long as all three fields are present.
 - `"Matches codebase convention: [N occurrences of pattern in similar files]"`
 
 Do **NOT** upgrade based on general industry best practices, framework

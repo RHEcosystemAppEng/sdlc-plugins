@@ -21,6 +21,11 @@ order of precedence:
    syntax (`.ts`/`.tsx`), Python syntax (`.py`), etc. The language implies the
    target file type.
 
+**File type** means the file extension (e.g., `.rs`, `.tsx`, `.py`). For files with
+multiple dots (e.g., `dashboard.test.ts`), use the final extension (`.ts`). Files
+without an extension (e.g., `Makefile`, `Dockerfile`) have no file type and are
+unscoped — they do not match any extension-based convention filter.
+
 If none of these signals are present, the convention has **no explicit scope** — see
 the ambiguous-case rule below.
 
@@ -36,6 +41,10 @@ either section matches the convention's scope (by extension or directory pattern
 
 Compare the convention's target file types against the PR's changed files list.
 A convention applies if at least one changed file matches the convention's scope.
+
+When a convention lists multiple file-type scopes (e.g., `.ts, .tsx` or
+`*.rs, *.sql`), a file matches if it matches **any** listed scope (OR semantics).
+All listed scopes do not need to match simultaneously.
 
 ## Applicability Rationale
 
