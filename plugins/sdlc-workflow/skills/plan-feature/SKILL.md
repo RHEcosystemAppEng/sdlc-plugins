@@ -690,28 +690,27 @@ exactly:
 
 #### Digest computation steps
 
-1. **Re-fetch the description as ADF JSON.** After creating the task, fetch the issue
-   back from Jira to get the description in ADF format (the canonical format for
-   digest computation). Do not hash the markdown string you submitted — Jira
-   normalizes content during storage, so the submitted text differs from what the
-   API returns.
+1. **Re-fetch the description.** After creating the task, fetch the issue back from
+   Jira to get the description as persisted by the API. Do not hash the markdown
+   string you submitted — Jira normalizes content during storage, so the submitted
+   text differs from what the API returns.
 
    ```
    jira.get_issue(<created-task-key>)
    ```
 
-   Extract the `description` field from the response. This is the ADF JSON object
-   that Jira persisted.
+   Extract the `description` field from the response. Write it to a temp file
+   (e.g., `/tmp/desc-<task-key>.txt`).
 
-2. **Compute SHA-256 using the script.** Write the ADF JSON description to a temp
-   file and run the digest script:
+2. **Compute the tagged digest using the script.**
 
    ```bash
-   python3 scripts/sha256-digest.py /tmp/desc-<task-key>.json
+   python3 scripts/sha256-digest.py /tmp/desc-<task-key>.txt
    ```
 
-   The script outputs the 64-character lowercase hex digest to stdout. If the
-   script exits non-zero, report the error and do not post a digest comment.
+   The script auto-detects the input format (ADF JSON or markdown text) and outputs
+   a format-tagged digest (e.g., `sha256-md:a1b2c3...` or `sha256-adf:a1b2c3...`).
+   If the script exits non-zero, report the error and do not post a digest comment.
 
 3. **Post the digest comment.** Post a standalone ADF comment on the created issue:
 
@@ -725,7 +724,7 @@ exactly:
          "content": [
            {
              "type": "text",
-             "text": "[sdlc-workflow] Description digest: sha256:<64-char-hex>"
+             "text": "[sdlc-workflow] Description digest: <tagged-digest>"
            }
          ]
        }
@@ -733,8 +732,9 @@ exactly:
    }
    ```
 
-   Replace `<64-char-hex>` with the digest output from step 2. Do not append the
-   Comment Footnote — this must be a standalone comment separate from any other comments.
+   Replace `<tagged-digest>` with the full output from step 2 (including the format
+   tag — e.g., `sha256-md:a1b2c3...`). Do not append the Comment Footnote — this
+   must be a standalone comment separate from any other comments.
 
 See `shared/description-digest-protocol.md` for the full protocol specification
 including consumer verification behavior and common mistakes to avoid.
