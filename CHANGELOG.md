@@ -5,6 +5,29 @@ All notable changes to the sdlc-workflow plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-06-03
+
+### Added
+
+- Description digest protocol for cross-phase integrity verification in `plan-feature` and `implement-task`
+- Convention applicability rules with file-type scoping for convention upgrades in `plan-feature` and `verify-pr`
+- Eval-aware Test Quality integration with autonomous eval failure sub-task creation in `verify-pr`
+- Description digest verification step in `implement-task`
+- Documentation scope preservation check in `implement-task`
+- Eval infrastructure change detection in `verify-pr` correctness check
+- Failure evidence rendering in `run-evals` summary output
+- Cross-phase integrity and convention applicability constraints
+
+### Fixed
+
+- Standardized digest computation on ADF JSON with format-tagged digests for access-method-agnostic verification
+- Multiple digest comment handling disambiguation in `implement-task`
+- Convention applicability format enforcement and self-verification guards in `plan-feature`
+- Issue link direction for Incorporates and Depend in `plan-feature`
+- Digest protocol inlined in SKILL.md to fix eval regression
+- CI reporting success when no evals need to run
+- HTML special character escaping in eval failure evidence output
+
 ## [0.9.1] - 2026-05-20
 
 ### Fixed
