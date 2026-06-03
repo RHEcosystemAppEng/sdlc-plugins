@@ -190,6 +190,64 @@ implement-task, conventions) to understand where gaps most frequently originate.
 
 ---
 
+### 9. Stale Task Detection Rate
+
+**What it measures:** The percentage of `implement-task` runs that detect a
+description change via the description digest verification (Step 1.5). A
+non-zero rate indicates that task descriptions are being modified after
+`plan-feature` creates them, which may signal process drift or manual
+editing of planned tasks.
+
+**Data source:** Agent conversation logs — `implement-task` logs a warning
+or pauses execution when the digest comparison detects a mismatch.
+
+**How to query:**
+
+1. Count the total number of `implement-task` invocations in the
+   measurement period (each invocation transitions a task to "In Progress"):
+   ```jql
+   labels = "ai-generated-jira" AND status changed to "In Progress" during (<start-date>, <end-date>)
+   ```
+2. From agent logs, count the number of invocations where the digest
+   verification reported a mismatch (the agent displayed the "description
+   has been modified" alert).
+
+**Calculation:** `(implement-task runs with digest mismatch / total implement-task runs) * 100`
+
+A rate of 0% is the expected steady state — descriptions should not change
+after planning. Rising rates may indicate a need to improve the plan-feature
+output or enforce stricter change controls on task descriptions.
+
+---
+
+### 10. Convention Applicability Rejection Rate
+
+**What it measures:** The percentage of conventions excluded by file-type
+filtering during `plan-feature` convention-aware task enrichment. This
+measures how effectively the applicability rules prevent irrelevant
+conventions from being included in task Implementation Notes.
+
+**Data source:** Agent conversation logs — `plan-feature` logs which
+conventions were evaluated and which were excluded due to file-type
+mismatch per `shared/convention-applicability-rules.md`.
+
+**How to query:**
+
+1. From agent logs for a `plan-feature` invocation, count the total number
+   of conventions evaluated against task file lists.
+2. Count the number of conventions excluded because their file-type scope
+   did not overlap with the task's Files to Modify/Create.
+
+**Calculation:** `(conventions excluded by file-type filtering / total conventions evaluated) * 100`
+
+Track this per feature to understand convention relevance. A very high rate
+(>80%) may indicate that the project's CONVENTIONS.md contains many
+narrowly-scoped conventions, which is healthy. A very low rate (<10%) may
+indicate that file-type scoping adds little value for the project's
+convention set.
+
+---
+
 ## Data Sources Summary
 
 | Source | What it provides |
@@ -198,6 +256,7 @@ implement-task, conventions) to understand where gaps most frequently originate.
 | Jira transitions | Status change history with timestamps |
 | GitHub PRs | PR creation time, merge status, commit authors |
 | Git trailers | `Assisted-by: Claude Code` identifies agent commits |
+| Agent conversation logs | Digest verification outcomes (mismatch/match), convention applicability filtering decisions |
 
 ---
 

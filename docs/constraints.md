@@ -42,6 +42,18 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.30 | `verify-pr` Test Quality verdict MUST incorporate eval results: PASS when all evals pass and no traditional test issues, WARN when any eval assertions fail, N/A only when neither traditional tests nor eval results are present. | `verify-pr/SKILL.md` — Step 6a; `verify-pr/style-conventions.md` — Check 5 |
 | 1.31 | `verify-pr` MUST autonomously create sub-tasks for eval assertion failures with labels `["ai-generated-jira", "eval-failure"]`, grouped by eval ID. | `verify-pr/SKILL.md` — Step 6d |
 | 1.32 | `verify-pr` eval failure sub-tasks MUST enter the existing root-cause investigation pipeline (Step 7). | `verify-pr/SKILL.md` — Step 7 |
+| 1.33 | `plan-feature` MUST post a description digest comment after creating each task per `shared/description-digest-protocol.md`. | `plan-feature/SKILL.md` — Step 6a |
+| 1.34 | `implement-task` MUST verify the description digest before proceeding and pause if a mismatch is detected. | `implement-task/SKILL.md` — Step 1.5 |
+| 1.35 | `implement-task` MUST skip digest verification with a warning when no digest comment exists (backward compatibility). | `implement-task/SKILL.md` — Step 1.5 |
+| 1.36 | `verify-pr` convention upgrade MUST validate convention file-type applicability per `shared/convention-applicability-rules.md` before upgrading a suggestion. | `verify-pr/style-conventions.md` — Check 1 |
+
+### Prior Art — Cross-phase integrity (§1.33–1.35)
+
+> Implements the zero-trust inter-agent principle from fullsend's [security-threat-model.md §Zero Trust Between Agents](https://github.com/fullsend-ai/fullsend/blob/7f9cea122112e630eb9a40763c462a2c83b98543/docs/problems/security-threat-model.md#L201-L230) as a content-level detection mechanism. Fullsend handles stale workflow state preventively (clearing labels between phases — [architecture.md §Stale State Clearing](https://github.com/fullsend-ai/fullsend/blob/7f9cea122112e630eb9a40763c462a2c83b98543/docs/architecture.md#L266)); this constraint addresses stale data content detectively (comparing hashes). The temporal split-payload attack pattern ([security-threat-model.md §Temporal Split-Payload](https://github.com/fullsend-ai/fullsend/blob/7f9cea122112e630eb9a40763c462a2c83b98543/docs/problems/security-threat-model.md#L232-L296)) further motivates cross-phase integrity verification.
+
+### Prior Art — Convention applicability (§1.36)
+
+> Net-new; no fullsend counterpart. Fullsend's closest concept — independent tier classification by review agents ([intent-representation.md §Independent Tier Classification](https://github.com/fullsend-ai/fullsend/blob/7f9cea122112e630eb9a40763c462a2c83b98543/docs/problems/intent-representation.md#L251)) — addresses scope assessment, not file-type applicability of convention guidance. This constraint addresses a gap specific to sdlc-plugins' CONVENTIONS.md-driven convention application.
 
 ---
 
@@ -82,6 +94,11 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 4.10 | Tasks SHOULD include a **Reuse Candidates** section when overlapping code (domain logic, components, utilities, or patterns) was found during repository analysis, listing file paths, symbol names, and relevance descriptions. | `plan-feature/SKILL.md` — Task Description Template |
 | 4.11 | When a task's scope matches a convention from CONVENTIONS.md (e.g., migrations with FK columns requiring indexes), the Implementation Notes MUST include explicit guidance referencing the convention by section name with a concrete example file. | `plan-feature/SKILL.md` — Step 5 (Convention-aware task enrichment) |
 | 4.12 | Every generated task description MUST include a **Target Branch** section. The value is `main` for direct-to-main mode, or the feature issue ID for feature-branch mode intermediate tasks. | `plan-feature/SKILL.md` — Step 5 (Target Branch assignment); `task-description-template.md` — Rules |
+| 4.13 | `plan-feature` convention-aware enrichment MUST validate convention file-type applicability per `shared/convention-applicability-rules.md` before including a convention in Implementation Notes. | `plan-feature/SKILL.md` — Step 5 |
+
+### Prior Art — Convention applicability (§4.13)
+
+> Net-new; no fullsend counterpart. Fullsend's closest concept — independent tier classification by review agents ([intent-representation.md §Independent Tier Classification](https://github.com/fullsend-ai/fullsend/blob/7f9cea122112e630eb9a40763c462a2c83b98543/docs/problems/intent-representation.md#L251)) — addresses scope assessment, not file-type applicability of convention guidance. This constraint addresses a gap specific to sdlc-plugins' CONVENTIONS.md-driven convention application.
 
 ---
 
@@ -109,13 +126,15 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 
 Each constraint above references its source. The full source files are:
 
-- `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Step 4.5 Determine Workflow Mode (§1.27), Task Description Template (§4.1–4.10), Step 5 Convention-aware task enrichment (§4.11), Step 5 Target Branch assignment (§4.12), Step 5 Bookend task generation (§3.4)
-- `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Important Rules (§1.4–1.6, §5.1–5.3), Step 1 (§1.6), Step 4/6/9 (§5.4), Step 5 (§1.15, §3.1, §3.4), Step 7 (§5.9–5.13), Step 9 (§2.1–2.3, §5.6–5.8), Step 10 (§3.2, §3.3)
+- `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Step 4.5 Determine Workflow Mode (§1.27), Step 5 Convention-aware task enrichment (§4.11, §4.13), Step 5 Target Branch assignment (§4.12), Step 5 Bookend task generation (§3.4), Step 6a Digest posting (§1.33), Task Description Template (§4.1–4.10)
+- `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Important Rules (§1.4–1.6, §5.1–5.3), Step 1 (§1.6), Step 1.5 Digest verification (§1.34, §1.35), Step 4/6/9 (§5.4), Step 5 (§1.15, §3.1, §3.4), Step 7 (§5.9–5.13), Step 9 (§2.1–2.3, §5.6–5.8), Step 10 (§3.2, §3.3)
 - `plugins/sdlc-workflow/shared/task-description-template.md` — Rules (§4.12)
+- `plugins/sdlc-workflow/shared/description-digest-protocol.md` — Digest format and verification procedure (§1.33, §1.34, §1.35)
+- `plugins/sdlc-workflow/shared/convention-applicability-rules.md` — File-type applicability matching logic (§1.36, §4.13)
 - `plugins/sdlc-workflow/skills/verify-pr/SKILL.md` — Step 4a (§1.10), Step 4a.1 (§1.28, §1.29), Step 4d (§1.12, §1.25), Important Rules (§1.11, §1.13, §1.22, §1.23, §1.25, §1.26), Step 5b (§1.14), Step 5 (§1.26), Step 6a (§1.30), Step 6d (§1.31), Step 7 (§1.32), Step 14 (§1.19)
 - `plugins/sdlc-workflow/skills/verify-pr/intent-alignment.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/security.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/correctness.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
-- `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md` — Check 2 (§1.16), Check 3 (§1.17), Check 4 (§1.18, §1.19, §1.20, §1.21), Check 5 (§1.30), Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
+- `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md` — Check 1 Convention applicability (§1.36), Check 2 (§1.16), Check 3 (§1.17), Check 4 (§1.18, §1.19, §1.20, §1.21), Check 5 (§1.30), Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9)
 - `docs/methodology.md` — Core Principles (§2.1, §3.2, §5.5)
