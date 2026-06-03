@@ -1,8 +1,8 @@
 ---
 name: triage-security
-description: |
-  Use when triaging a Jira Vulnerability issue (CVE-based, auto-created by PSIRT) to determine which
-  product versions are actually affected, correct Affects Versions, and create remediation tasks.
+description: >-
+  Use when a PSIRT-created Vulnerability issue (CVE-based) needs version-aware triage
+  to determine which supported product versions are actually affected.
 argument-hint: "[jira-issue-id]"
 ---
 
