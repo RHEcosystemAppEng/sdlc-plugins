@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "Impact map or task descriptions explicitly flag at least 3 ambiguities from the feature description",
+      "passed": true,
+      "evidence": "The impact-map.md contains a 'Feature Ambiguities Identified' section that explicitly lists 5 ambiguities: (1) 'Search should be faster' — no performance target specified, (2) 'Results should be more relevant' — no definition of 'relevant' provided, (3) 'Add filters' — no specification of which filters, (4) 'Should be fast enough' — non-functional requirement with no measurable target, (5) 'Don't break existing functionality' — standard backward compatibility requirement. All are clearly flagged with 'Interpreted as:' resolutions."
+    },
+    {
+      "text": "Plan acknowledges that 'Better UI' (non-MVP) cannot be planned without design mockups or frontend repository and excludes it from scope",
+      "passed": false,
+      "evidence": "No mention of 'Better UI' appears anywhere in the impact-map.md or any of the four task files. The feature description (feature-ambiguous.md) lists 'Better UI | Make it look nicer | No' as a non-MVP requirement, but the plan simply omits it without any explicit acknowledgment that it cannot be planned due to missing design mockups or frontend repository. The assertion requires explicit acknowledgment, not silent omission."
+    },
+    {
+      "text": "Tasks still follow the task-description-template.md format despite ambiguous requirements",
+      "passed": true,
+      "evidence": "All 4 task files contain the required template sections: Repository (single repo name), Target Branch, Description, Files to Modify/Create, Implementation Notes, Acceptance Criteria (with checkboxes), Test Requirements (with checkboxes), Verification Commands, and Dependencies. This matches the task-description-template.md format. Optional sections (API Changes in task-3, Files to Create in task-1) are included only where applicable, per template rules."
+    },
+    {
+      "text": "Tasks document assumptions where they fill in missing details, labeled as assumptions pending clarification",
+      "passed": false,
+      "evidence": "The impact-map.md uses 'Interpreted as:' language for each ambiguity and states 'These should be confirmed with the product owner before implementation begins,' but the individual task files (task-1 through task-4) do not label any assumptions as 'assumptions pending clarification.' Task descriptions present implementation details as definitive decisions (e.g., task-1 states 'adds tsvector columns and GIN indexes' without labeling this as an assumption). The assertion requires assumptions to be documented in the tasks and labeled as assumptions pending clarification, which is not done."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "All 4 task files contain '## Repository\\ntrustify-backend' — a single repository name. Task 1 line 3-4, Task 2 line 3-4, Task 3 line 3-4, Task 4 line 3-4."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "All 4 task files contain all four required sections: '## Target Branch' (set to 'main'), '## Description' (with multi-line content), '## Acceptance Criteria' (with checkbox items), '## Test Requirements' (with checkbox items). Verified in task-1 (lines 7, 9, 46, 53), task-2 (lines 7, 9, 42, 50), task-3 (lines 7, 9, 49, 59), task-4 (lines 7, 9, 43, 53)."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "All file paths match or follow patterns from repo-backend.md: Task 1 modifies migration/src/lib.rs, entity/src/sbom.rs, entity/src/advisory.rs, entity/src/package.rs (all in manifest) and creates migration/src/m0002_fulltext_search/mod.rs (follows existing m0001_initial/mod.rs pattern). Task 2 modifies modules/search/src/service/mod.rs and modules/search/src/endpoints/mod.rs (both in manifest). Task 3 modifies modules/search/src/endpoints/mod.rs, modules/search/src/service/mod.rs, common/src/db/query.rs (all in manifest). Task 4 modifies tests/api/search.rs (in manifest)."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Task 1 Implementation Notes reference migration/src/m0001_initial/mod.rs, entity/src/sbom.rs, entity/src/advisory.rs, entity/src/package.rs, SeaORM migration API, GIN indexes. Task 2 references modules/search/src/service/mod.rs, common/src/db/query.rs, common/src/model/paginated.rs, common/src/error.rs, modules/fundamental/src/advisory/service/advisory.rs, PaginatedResults<T>, AppError, .context() wrapping. Task 3 references modules/search/src/endpoints/mod.rs, common/src/db/query.rs, AdvisorySummary.severity, PackageSummary.license. Task 4 references tests/api/search.rs, tests/api/sbom.rs, tests/api/advisory.rs, assert_eq! patterns, StatusCode::OK."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "All 4 task files have '## Target Branch\\nmain': task-1 line 7-8, task-2 line 7-8, task-3 line 7-8, task-4 line 7-8."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": false,
+      "evidence": "None of the 5 output files (impact-map.md, task-1 through task-4) contain any '[sdlc-workflow] Description digest:' marker, 'sha256-md:', 'sha256-adf:', or any SHA-256 hash string. No evidence of digest comments being posted anywhere in the outputs."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "None of the 4 task files contain any 'Per CONVENTIONS.md' references, 'Applies:' rationale lines, or any evidence of convention-aware enrichment. The Implementation Notes reference 'docs/constraints.md §2' and 'docs/constraints.md §5' (which are project constraints, not CONVENTIONS.md conventions), but no convention applicability validation was performed. The prescribed format 'Applies: task modifies <file> matching the convention's <scope>' appears nowhere in the outputs."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 4,
+    "total": 11,
+    "pass_rate": 0.636
+  }
+}
