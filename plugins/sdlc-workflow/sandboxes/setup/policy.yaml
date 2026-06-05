@@ -1,0 +1,40 @@
+version: 1
+
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /usr
+    - /lib
+    - /lib64
+    - /proc
+    - /dev/urandom
+    - /etc
+    - /opt
+  read_write:
+    - /tmp
+    - /dev/null
+    - /home/sandbox
+
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+
+network_policies:
+  llm_api:
+    endpoints:
+      - host: api.anthropic.com
+        port: 443
+      - host: "*-aiplatform.googleapis.com"
+        port: 443
+      - host: "bedrock-runtime.*.amazonaws.com"
+        port: 443
+    binaries:
+      - { path: /usr/local/bin/* }
+      - { path: /usr/bin/* }
+  jira:
+    endpoints:
+      - host: "*.atlassian.net"
+        port: 443
+    binaries:
+      - { path: /usr/local/bin/* }
+      - { path: /usr/bin/* }
