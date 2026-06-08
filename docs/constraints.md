@@ -150,5 +150,5 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/skills/verify-pr/correctness.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md` — Check 1 Convention applicability (§1.36), Check 2 (§1.16), Check 3 (§1.17), Check 4 (§1.18, §1.19, §1.20, §1.21), Check 5 (§1.30), Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9)
-- `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.28, §1.29, §1.38), Step 0 (§1.40), Step 1 Ecosystem detection (§1.39, §1.40), Step 2.2 (§1.33), Step 2.3 (§1.39), Step 2.4 (§1.35), Important Rules (§1.29–§1.34, §1.36, §1.37), Remediation Task Creation (§1.37)
+- `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.37, §1.38, §1.47), Step 0 (§1.49), Step 1 Ecosystem detection (§1.48), Step 1 Data Extraction (§1.49), Step 2.1 (§1.47), Step 2.2 (§1.42), Step 2.3 (§1.48), Step 2.4 (§1.44), Step 7 (§1.43), Important Rules (§1.38–§1.43, §1.45, §1.46), Remediation Task Creation (§1.46)
 - `docs/methodology.md` — Core Principles (§2.1, §3.2, §5.5)
