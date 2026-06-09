@@ -12,8 +12,8 @@ Quick reference for all performance optimization skills.
 | 2 | performance-baseline | **Discover workflows**, select workflow, capture metrics | Workflow selection + Playwright automation → `baseline-report.md` + config update |
 | 3 | performance-analyze-module | Detect anti-patterns | **Inspects source code** → `workflow-analysis-report.md` |
 | 4 | performance-plan-optimization | Create Jira tasks | **Reads analysis report** → Jira Epic/Tasks |
-| 5 | performance-implement-optimization | Execute optimization | Implements + validates → PR |
-| 6 | performance-verify-optimization | Verify PR | Review feedback + validation → report |
+| 5 | implement-task (perf mode) | Execute optimization | Implements + validates → PR |
+| 6 | verify-pr (perf mode) | Verify PR | Review feedback + validation → report |
 
 ---
 
@@ -163,87 +163,49 @@ Quick reference for all performance optimization skills.
 
 ---
 
-## performance-implement-optimization
+## implement-task (perf mode)
 
-**Invocation:** `/sdlc-workflow:performance-implement-optimization TC-XXXX`
+Performance optimization behavior is **auto-detected** when the Jira task contains Baseline Metrics and Target Metrics sections (created by `performance-plan-optimization`). No separate skill invocation is needed — use `/sdlc-workflow:implement-task TC-XXXX` as usual.
 
-**Execute optimization task with performance validation.**
-
-| Input | Output |
-|---|---|
-| Jira task ID | Code changes committed to branch |
-| Task description (from plan-optimization) | PR with before/after metrics |
-
-**Extends:** `implement-task` workflow with performance steps
-
-**What it does:**
-1. Reads Jira task (standard + performance sections)
-2. Inspects code and implements optimization
-3. Runs functional tests
-4. **Re-runs baseline** for affected scenarios
-5. Compares results: current vs baseline vs targets
-6. Stops if any metric regressed
-7. Commits with `perf` type + performance impact in body
-8. Creates PR with before/after table
-9. Updates Jira and transitions to In Review
-
-**Performance validation (Step 4):**
-- Re-captures metrics after implementation
-- Compares: baseline → current → target
-- Stops execution if regression detected
-- Continues if improvement (even if target not fully met)
+See [Workflow Documentation — Optimization Implementation](workflow.md#optimization-implementation) for the full workflow.
 
 ---
 
-## performance-verify-optimization
+## verify-pr (perf mode)
 
-**Invocation:** `/sdlc-workflow:performance-verify-optimization TC-XXXX`
+Performance verification behavior is **auto-detected** when the Jira task contains Baseline Metrics and Target Metrics sections. No separate skill invocation is needed — use `/sdlc-workflow:verify-pr TC-XXXX` as usual.
 
-**Verify PR with optional baseline re-run.**
-
-| Input | Output |
-|---|---|
-| Jira task ID | Verification report (PASS/WARN/FAIL) |
-| PR reviews/comments | Sub-tasks for review feedback |
-
-**Extends:** `verify-pr` workflow with performance validation
-
-**What it does:**
-1. Reads Jira task and PR
-2. Checks out PR branch
-3. Reads PR review feedback → creates sub-tasks for change requests
-4. **Prompts:** "Re-run baseline? (yes/no)"
-   - If yes: re-runs baseline, flags >10% drift
-   - If no: uses implementation results from PR
-5. Validates target achievement (Full/Partial Success, Regression)
-6. Runs standard PR checks (scope, CI, acceptance criteria)
-7. Generates verification report
-8. Posts to PR and Jira
-
-**Target achievement classification:**
-
-| Result | Criteria |
-|---|---|
-| Full Success | All target metrics met |
-| Partial Success | Improvement > 20% but targets not fully met |
-| Insufficient Improvement | Improvement < 20% |
-| Regression | Any metric worse than baseline |
-
-**Overall result:**
-- **PASS:** All checks pass or N/A
-- **WARN:** At least one WARN, no FAIL
-- **FAIL:** At least one FAIL
+See [Workflow Documentation — Optimization Verification](workflow.md#optimization-verification) for the full workflow.
 
 ---
 
 ## Skill Dependencies
 
 ```
-setup (infrastructure) → baseline (workflow discovery) → analyze-module → plan-optimization → implement-optimization → verify-optimization
-         ↓                           ↓                          ↓                  ↓                       ↓                        ↓
-  minimal config          config updated with workflow     analysis        Jira Epic/Tasks            PR with           Verification
-  (no workflow)           + baseline report                 report                                    metrics            report
+setup (infrastructure) → baseline (workflow discovery) → analyze-module → plan-optimization → implement-task (perf) → verify-pr (perf)
+         ↓                           ↓                          ↓                  ↓                       ↓                      ↓
+  minimal config          config updated with workflow     analysis        Jira Epic/Tasks            PR with         Verification
+  (no workflow)           + baseline report                 report                                    metrics          report
 ```
+
+---
+
+## Config Field Ownership
+
+Which config sections each consumer reads and for what purpose.
+
+| Config Section | Read By | Purpose |
+|---|---|---|
+| `scenarios`, `baseline_settings` | `capture-baseline.mjs` | Measurement loop (iterations, warmup, scenario URLs) |
+| `optimization_targets` | Skills + report comparison | Target thresholds (seconds for frontend, ms for backend) |
+| `analysis_assumptions` | `analyze-module` / `plan-optimization` skills only | **Not applied at capture time** — used for static cost estimates |
+| `metadata.capture_*` | Skills (CLI construction) | **Not read by capture script** — skills use these to construct CLI args |
+| `dev_environment` | `performance-baseline` skill | Dev server startup; not read by capture script |
+| `workflow`, `modules` | `performance-baseline`, `analyze-module` skills | Workflow selection and code analysis scope |
+| `directories` | All performance skills | Output path resolution |
+| `repositories` | `performance-setup`, `analyze-module` skills | Repository detection and code analysis |
+
+**Unit convention:** `capture-baseline.mjs` emits all timing values in **milliseconds** (from browser `performance` APIs). The `optimization_targets.frontend.*` section stores targets in **seconds**. Skills are responsible for converting ms→s when writing captured p95 values to `optimization_targets.frontend.*.baseline` and `.latest`.
 
 ---
 
