@@ -46,7 +46,7 @@ Tools are called as `mcp__<serena-instance>__<tool>`.
 
 - Product pages URL: https://access.example.com/product-life-cycle/rhtpa
 - Jira version prefix: RHTPA
-- Jira Vulnerability issue type ID: 10024
+- Vulnerability issue type ID: 10024
 - Component label pattern: pscomponent:
 - VEX Justification custom field: customfield_12345
 

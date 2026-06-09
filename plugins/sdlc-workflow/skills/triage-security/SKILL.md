@@ -77,7 +77,7 @@ exist under `# Project Configuration`:
 3. `## Code Intelligence` — must exist with the tool naming convention
 4. `## Security Configuration` — must contain at minimum:
    - `### Product Lifecycle` with Product pages URL, Jira version prefix,
-     Jira Vulnerability issue type ID, and Component label pattern
+     Vulnerability issue type ID, and Component label pattern
    - `### Version Streams` with at least one Konflux release repo path
    - `### Source Repositories` with at least one source repo entry
 
@@ -94,7 +94,7 @@ Extract the following from the configuration for use in later steps:
 - **Project key** — from Jira Configuration
 - **Cloud ID** — from Jira Configuration
 - **Jira version prefix** — from Security Configuration (e.g., `MYPRODUCT`)
-- **Jira Vulnerability issue type ID** — from Security Configuration (e.g., `10001`)
+- **Vulnerability issue type ID** — from Security Configuration (e.g., `10001`)
 - **Product pages URL** — from Security Configuration
 - **Component label pattern** — from Security Configuration (e.g., `pscomponent:`)
 - **VEX Justification custom field** _(optional)_ — from Security Configuration (e.g.,
