@@ -132,6 +132,21 @@ Parse the structured description expecting these sections:
 - **Review Context** — the original review comment that triggered this task (optional)
 - **Bookend Type** — `create-branch` or `merge-branch` for feature branch bookend tasks (optional)
 - **Dependencies** — prerequisite tasks (verify they are Done)
+- **Baseline Metrics** — performance baseline captured at optimization start (optional, performance tasks only)
+- **Target Metrics** — performance targets for this optimization (optional, performance tasks only)
+- **Performance Test Requirements** — scenarios and measurement criteria (optional, performance tasks only)
+
+### Task Type Detection
+
+Set `task_type = performance` if **either** condition is true:
+1. The issue labels include `performance-optimization`, OR
+2. The description contains **Baseline Metrics**, **Target Metrics**, and **Performance Test Requirements** sections
+
+Otherwise, set `task_type = standard`.
+
+Label-based detection covers tasks created by `performance-plan-optimization`. Description-based detection is the fallback for manually created performance tasks.
+
+Performance tasks follow the same implementation flow as standard tasks, with additional performance testing after functional tests (Step 9-Perf) and performance-aware commit/PR formatting.
 
 Also capture the issue's `webUrl` field from the API response (e.g. `https://redhat.atlassian.net/browse/PROJ-231`). This URL will be used later to create a clickable link in the PR description.
 
@@ -321,7 +336,13 @@ Registry (e.g., `<Path>/CONVENTIONS.md`). If present, read it and follow its con
 throughout implementation. This includes naming rules, directory structure for new files,
 code patterns, and test conventions.
 
-This step is optional — if `CONVENTIONS.md` does not exist, proceed normally.
+**Standard tasks (`task_type = standard`):** This step is optional — if `CONVENTIONS.md` does not exist, proceed normally.
+
+**Performance tasks (`task_type = performance`):** CONVENTIONS.md is **mandatory**. If the file does not exist at the repository root, halt immediately:
+
+> "Performance optimization requires CONVENTIONS.md with at minimum: CI check commands, performance test commands, and regression thresholds. Create it before proceeding."
+
+**Stop execution immediately.** Do not proceed with any subsequent steps.
 
 #### Verification commands extraction
 
@@ -614,6 +635,8 @@ After implementing code changes, evaluate whether documentation needs updating:
 
 ## Step 7 – Write Tests
 
+**If the task has no Test Requirements section:** Skip test writing. Proceed to Step 8.
+
 Implement the tests described in Test Requirements.
 
 **Follow test conventions:** Apply the test conventions discovered during Step 4's test
@@ -680,10 +703,26 @@ Fix any failures before proceeding.
 
 ## Step 8 – Verify Acceptance Criteria
 
+**If `task_type = performance`:** Skip — acceptance is verified via performance target checking in Step 9-Perf. Proceed to Step 8.5.
+
 Go through each Acceptance Criterion and verify it is satisfied.
 If any criterion cannot be met, stop and explain to the user.
 
+## Step 8.5 – Run Functional Tests (Performance Tasks)
+
+**If `task_type = standard`:** Skip — tests were already run in Step 7.
+
+**If `task_type = performance`:** Run functional tests to verify the optimization doesn't break existing behavior.
+
+**Test command resolution (in priority order):**
+1. **CONVENTIONS.md CI checks section** (extracted in Step 4) — use these commands first if available. CONVENTIONS.md is mandatory for performance tasks, so this section should exist.
+2. **Framework fallback** — if CONVENTIONS.md has no test command, determine from `metadata.analysis_scope` and backend framework: Frontend/Node.js: `npm test`, Rust: `cargo test`, Java: `./gradlew test` or `mvn test`, Python: `pytest`.
+
+**Do not proceed to Step 9-Perf until functional tests pass.** Fix failures and re-run.
+
 ## Step 9 – Self-Verification
+
+**If `task_type = performance`:** Skip to **Step 9-Perf** (Performance Testing Phase) below.
 
 Before committing, verify that all changes are in scope and free of common errors.
 
@@ -1058,6 +1097,84 @@ Output the contract verification, sibling parity, cross-module shared entity, an
 >   - New code uses `window.location.reload()` — **ANOMALY** (0 of 3 callers use this pattern)
 >   - Error handling ✓ (all callers including new code use `onError` toast)
 
+## Step 9-Perf – Performance Testing Phase
+
+**Runs only when `task_type = performance`.** Standard tasks skip this entire section.
+
+**CONVENTIONS.md cross-reference:** The regression thresholds, performance test commands, and CI check commands extracted from CONVENTIONS.md in Step 4 apply throughout this phase. If CONVENTIONS.md defines custom regression thresholds (e.g., under a "Performance Thresholds" or "Regression Limits" section), use those instead of the defaults in Step 9-Perf.4. If CONVENTIONS.md defines performance test commands, run them after functional tests and before metrics capture.
+
+### Step 9-Perf.0 – Baseline Freshness Check
+
+Read `metadata.baseline_commit_sha` from `.claude/performance-config.json`. If workflow files changed since that commit, prompt: (1) Continue with existing baseline, (2) Re-baseline first (`/sdlc-workflow:performance-baseline`), (3) Cancel.
+
+### Step 9-Perf.1 – Capture Current Performance Metrics
+
+Read `metadata.baseline_mode` and `metadata.metric_type` from config. Use the same capture mode as the original baseline.
+
+**Plugin root resolution** for all bash blocks in this section:
+```bash
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then echo "❌ sdlc-workflow plugin not found"; exit 1; fi
+```
+
+**Frontend/hybrid (Playwright):** Copy `capture-baseline.template.mjs` from plugin cache to baseline directory. Read `metadata.capture_target` from config before `dev_environment.port`.
+
+- **null/missing/`localhost`:** use `--port` from `dev_environment.port` (backward compatible with pre-hosted configs)
+- **`hosted`:** read `metadata.capture_base_url`. If null/empty → halt: "Re-run `/sdlc-workflow:performance-baseline` or `perf-config.py set metadata.capture_base_url <url>`." If present → **blocking prompt**: "Baseline captured against hosted environment (`{url}`). (1) Continue with hosted target — will prompt for auth, (2) Switch to localhost — uses `dev_environment.port`, metrics may not be comparable to hosted baseline, (3) Cancel." If switch: use localhost for this capture only, do NOT overwrite `metadata.capture_target`. Prompt for auth (`--storage-state` or `--user`/`--pass`) and `--insecure` when continuing with hosted.
+
+Construct command mirroring performance-baseline Step 9.1 — absolute `--config` path, `--storage-state`/`--user`/`--pass` mutual exclusivity, omit auth for public hosted apps, `BASELINE_PASS` env var. Parse JSON output for LCP, FCP, DOM Interactive, Total Load Time.
+
+Verification failed → display script diagnostics, halt. Do not retry.
+
+**Backend/hybrid:** Use `perf-benchmark.sh` — the same tool baseline uses, ensuring apples-to-apples comparison:
+```bash
+"$plugin_root/scripts/perf-benchmark.sh" \
+  --port "$(python3 "$plugin_root/scripts/perf-config.py" get dev_environment.port)" \
+  --iterations "$(python3 "$plugin_root/scripts/perf-config.py" get baseline_settings.iterations)" \
+  --manifest .claude/performance/test-data/manifest.json \
+  --output "$(python3 "$plugin_root/scripts/perf-config.py" get directories.optimization_results)/${jira_key}-benchmark.json"
+```
+
+**Prerequisites:** Verify manifest exists and backend is running on configured port before executing. If either is missing, halt with remediation.
+
+### Step 9-Perf.2 – Compare Against Baseline and Targets
+
+Compare only metrics listed in the task's **Target Metrics** section (from Step 1 parsing). Do not compare metrics that are not listed — they are out of scope for this optimization.
+
+For each listed metric: calculate improvement (`baseline - current` for latency/size, `current - baseline` for throughput) and progress to target (`improvement / (baseline - target) × 100`).
+
+### Step 9-Perf.3 – Generate Comparison Table
+
+```markdown
+| Metric | Baseline | Current | Target | Improvement | Progress |
+|---|---|---|---|---|---|
+| {metric} | {baseline} | {current} | {target} | {delta} ({pct}%) | {progress}% |
+```
+
+### Step 9-Perf.4 – Verify Targets and Handle Regressions
+
+Apply target and regression checks **only to metrics listed in the task's Target Metrics section** (same scope as Step 9-Perf.2). Metrics not listed are out of scope — do not flag regressions on them.
+
+**Noise tolerance (both gates must be exceeded to flag regression):**
+
+Check CONVENTIONS.md first — if it defines a "Performance Thresholds" or "Regression Limits" section with custom thresholds, use those values. Otherwise use these defaults:
+
+| Category | Relative | Absolute |
+|---|---|---|
+| Frontend time (LCP, FCP, DOM Interactive) | >5% | >50ms |
+| Frontend size (bundle, transfer) | >5% | >10KB |
+| Backend response time (p95, p99) | >10% | >50ms |
+| Backend throughput | >20% decrease | — |
+| Backend error rate | — | >1% increase |
+
+**Results:** All targets met → proceed. Improved but not all met → proceed, flag in Jira. Regression beyond noise → execute recovery:
+
+**Regression Recovery:** Save regression report to `{opt_results_dir}/{jira_key}-regression-{timestamp}.md`. Prompt user (blocking): (1) Stash changes and stop (recommended), (2) Proceed with warning. If stash: `git stash push -m "perf-regression-stash: ${jira_key}"` and stop. If proceed: set `status: regression_acknowledged`.
+
+### Step 9-Perf.5 – Create Optimization Result Report
+
+Read template from `${plugin_root}skills/performance/optimization-result.template.md`. Populate with: jira_key, workflow, timestamp, branch, commit SHA, baseline commit SHA, capture mode, capture target (`localhost` or `hosted`), capture base URL (URL only, null for localhost), status (`pending_verification` or `regression_acknowledged`), before/after metrics, scenarios measured, files changed. Write to `{opt_results_dir}/{jira_key}-{timestamp}.md`.
+
 ## Step 10 – Commit and Push
 
 Commit following the Conventional Commits specification (https://www.conventionalcommits.org/en/v1.0.0/):
@@ -1072,6 +1189,8 @@ Where type is one of: feat, fix, refactor, test, docs, chore, etc.
 Use a scope when relevant (e.g. `feat(api): add AIBOM endpoint`).
 The footer MUST reference the Jira issue ID.
 Always include `--trailer="Assisted-by: Claude Code"` to attribute AI assistance.
+
+**Performance task commit format (`task_type = performance`):** Use `perf` as the commit type and include a "Performance impact:" section in the body listing each metric and its improvement (e.g., `- LCP p95: 2400ms → 1800ms (-25%)`).
 
 **Default flow (no Target PR, no Bookend Type):**
 
@@ -1093,6 +1212,8 @@ If a GitHub issue reference was extracted in Step 1, append a `Closes <owner>/<r
 line to the PR description body. GitHub recognizes this keyword and will auto-close the
 linked issue when the PR is merged. Do **not** add this to the commit message — only the
 PR description.
+
+**Performance task PR body (`task_type = performance`):** Additionally include a "Performance Impact" section with the before/after comparison table from Step 9-Perf.3, and a "Testing" checklist noting functional tests pass, baseline re-captured, and metrics compared against targets.
 
 **Target PR flow:**
 
@@ -1146,6 +1267,8 @@ Include:
 - PR link
 - Summary of changes made
 - Any deviations from the plan
+
+**Performance task comment (`task_type = performance`):** Additionally include the before/after comparison table from Step 9-Perf.3, target achievement status, and next step: "Run `/sdlc-workflow:verify-pr {jira-key}` to verify results."
 
 Transition the task:
 

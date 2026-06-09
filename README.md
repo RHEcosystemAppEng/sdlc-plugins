@@ -26,10 +26,10 @@ implementing tasks, and verifying pull requests:
 
 - **implement-task** — Implement a Jira task by reading its structured
   description, modifying code, running tests, committing, opening a PR, and
-  updating Jira.
+  updating Jira. (includes performance optimization support)
 
 - **verify-pr** — Verify a PR against its Jira task's acceptance criteria and
-  deterministic guardrails.
+  deterministic guardrails. (includes performance optimization support)
 
 - **report-bug** — Interactively define a Jira Bug by walking through
   project-configured template sections, or accept structured input
@@ -59,13 +59,6 @@ implementing tasks, and verifying pull requests:
 - **performance-plan-optimization** — Generate structured optimization plan from
   analysis reports, creating Jira Epic and Tasks for optimization work.
 
-- **performance-implement-optimization** — Execute performance optimization task
-  by implementing code changes, running performance tests, and comparing results
-  against targets.
-
-- **performance-verify-optimization** — Verify a performance optimization PR by
-  reading review feedback, validating acceptance criteria, optionally re-running
-  performance baseline, and creating sub-tasks for change requests.
 
 ## Installation
 

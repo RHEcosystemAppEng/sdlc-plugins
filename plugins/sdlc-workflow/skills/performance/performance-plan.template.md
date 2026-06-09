@@ -213,6 +213,6 @@ All tasks linked to Epic via parent hierarchy relationship.
 
 1. **Review this plan** with the team and adjust task sequencing if needed
 2. **Create Jira Epic and Tasks** — This skill will create these automatically
-3. **Implement tasks** in sequence using `/sdlc-workflow:performance-implement-optimization {task-id}`
+3. **Implement tasks** in sequence using `/sdlc-workflow:implement-task {task-id}` (performance sections auto-detected)
 4. **Re-baseline after each task** using `/sdlc-workflow:performance-baseline` to measure improvements
-5. **Final verification** using `/sdlc-workflow:performance-verify-optimization` to validate all targets met
+5. **Final verification** using `/sdlc-workflow:verify-pr` to validate all targets met (performance sections auto-detected)

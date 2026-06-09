@@ -127,6 +127,17 @@ Parse the structured description expecting these sections:
 - **Test Requirements** — tests to write or update
 - **Verification Commands** — commands with expected outcomes (optional)
 - **Dependencies** — prerequisite tasks (verify they are Done)
+- **Baseline Metrics** — performance baseline (optional, performance tasks only)
+- **Target Metrics** — performance targets (optional, performance tasks only)
+- **Performance Test Requirements** — scenarios and criteria (optional, performance tasks only)
+
+### Task Type Detection
+
+Set `task_type = performance` if **either** condition is true:
+1. The issue labels include `performance-optimization`, OR
+2. The description contains **Baseline Metrics**, **Target Metrics**, and **Performance Test Requirements** sections
+
+Otherwise, set `task_type = standard`.
 
 If any required section is missing or the description doesn't follow the template, stop and ask the user for clarification.
 
@@ -280,8 +291,15 @@ inform classification decisions.
    yet — that happens in the Style/Conventions sub-agent. The goal here is only to load
    CONVENTIONS.md once for reuse across comment classification and sub-agent dispatch.
 
-If `CONVENTIONS.md` does not exist, proceed normally — the Style/Conventions sub-agent
-will check for implicit conventions demonstrated by codebase usage patterns.
+**Standard tasks (`task_type = standard`):** If `CONVENTIONS.md` does not exist, proceed normally — the Style/Conventions sub-agent will check for implicit conventions demonstrated by codebase usage patterns.
+
+**Performance tasks (`task_type = performance`):** CONVENTIONS.md is **mandatory**. If the file does not exist at the repository root, halt immediately:
+
+> "Performance optimization verification requires CONVENTIONS.md with at minimum: CI check commands, performance test commands, and regression thresholds. Create it before proceeding."
+
+**Stop execution immediately.** Do not proceed with any subsequent steps.
+
+If CONVENTIONS.md exists, extract any "Performance Thresholds" or "Regression Limits" section for use in Step 4.6 (drift detection thresholds).
 
 ### Step 4c – Classify Feedback
 
@@ -302,6 +320,75 @@ as a standalone item.
 Record all classifications. Only **code change requests** trigger sub-task creation
 in Step 6. Convention upgrades from Step 6b may later elevate suggestions to code
 change requests before sub-task creation.
+
+## Step 4.5 – Read Implementation Results (Performance Tasks Only)
+
+**If `task_type = standard`:** Skip to Step 5.
+
+Find the optimization result report in `.claude/performance/optimization-results/{jira_key}-*.md` (most recent by timestamp). Read and extract: jira_key, timestamp, branch, commit_sha, baseline_commit_sha, capture_mode, capture_target, capture_base_url, status, and before/after metrics by metric_type (frontend: LCP, FCP, DOM Interactive; backend: Response Time p95/p99, Throughput, Error Rate).
+
+If report not found, check the PR description for a before/after table as fallback. If neither source has results, record "Implementation results not found" and proceed.
+
+## Step 4.6 – Environmental Drift Detection (Performance Tasks Only)
+
+**If `task_type = standard`:** Skip to Step 5.
+
+**Environment mismatch check (run before re-run prompt):** Read `metadata.capture_target` from config (null → treat as `localhost`). Compare against `capture_target` from the optimization result report (Step 4.5). If they differ → record `Environment Match: MISMATCH` for the report. Skip numeric drift thresholds for frontend metrics — "Baseline used {config target}, implementation used {report target} — metrics not comparable." This check runs even if the user skips re-run.
+
+Prompt user: (1) Re-run baseline now (recommended), (2) Skip and rely on implementation results.
+
+**If re-run:** Read `metadata.baseline_mode`, `metadata.capture_target`, `metadata.capture_base_url`, `dev_environment.port`, `baseline_settings.iterations` from `.claude/performance-config.json`. Use same capture mode as original baseline.
+
+Copy `capture-baseline.template.mjs` from plugin cache to baseline directory (always fresh copy).
+
+**Frontend/hybrid:** Read `capture_target` (null/missing → `localhost`).
+- **`localhost`:** use `--port` from `dev_environment.port`
+- **`hosted`:** read `capture_base_url` (halt if null/empty — "Re-run `/sdlc-workflow:performance-baseline` or `perf-config.py set metadata.capture_base_url <url>`."). Prompt for auth (`--storage-state` or `--user`/`--pass`) and `--insecure`.
+
+Construct command mirroring performance-baseline Step 9.1 — absolute `--config` path, auth flag mutual exclusivity, `BASELINE_PASS` env var. Playwright leg follows `capture_target`; backend leg always uses `perf-benchmark.sh` + `dev_environment.port`.
+
+Verification failed → display script diagnostics, halt. Do not retry.
+
+**Backend/hybrid:** Use `perf-benchmark.sh` (unchanged):
+```bash
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null | sort -V | tail -1)
+"$plugin_root/scripts/perf-benchmark.sh" \
+  --port "$(python3 "$plugin_root/scripts/perf-config.py" get dev_environment.port)" \
+  --iterations "$(python3 "$plugin_root/scripts/perf-config.py" get baseline_settings.iterations)" \
+  --manifest .claude/performance/test-data/manifest.json \
+  --output "$(python3 "$plugin_root/scripts/perf-config.py" get directories.verification)/benchmark-results-verify.json"
+```
+
+Compare re-run results against implementation results.
+
+**Drift thresholds (both gates must be exceeded to flag):**
+
+Check CONVENTIONS.md first — if it defines a "Performance Thresholds" or "Regression Limits" section with custom thresholds (extracted in Step 4b), use those values. Otherwise use these defaults:
+
+| Category | Relative | Absolute |
+|---|---|---|
+| Frontend time | >5% | >50ms |
+| Frontend size | >5% | >10KB |
+| Backend response time | >10% | >50ms |
+| Backend throughput | >20% decrease | — |
+| Backend error rate | — | >1% increase |
+
+If significant drift found, flag for investigation with a comparison table. Record findings for report.
+
+## Step 4.7 – Validate Target Achievement (Performance Tasks Only)
+
+**If `task_type = standard`:** Skip to Step 5.
+
+Evaluate ONLY the metrics listed in the task's **Target Metrics** section. Metrics not listed in the task are not evaluated — they belong to other tasks in the same Epic.
+
+Compare current metrics (from Step 4.5 or 4.6) against the listed target metrics from the Jira task.
+
+**Check for acknowledged regression:** If the optimization result report (Step 4.5) has `status: regression_acknowledged`, classify as **Partial Success** (WARN), not Regression (FAIL). Note in details: "Regression was acknowledged during implementation — see regression report for context."
+
+- **Full Success:** All listed targets met → PASS
+- **Partial Success:** Progress toward target >20% (calculated as `(baseline - current) / (baseline - target) × 100`) but not all targets met → WARN
+- **Insufficient Improvement:** Progress <20% and targets not met → FAIL
+- **Regression:** Any listed metric worse than baseline (and NOT `regression_acknowledged`) → FAIL
 
 ## Step 5 – Dispatch Domain Sub-Agents
 
@@ -912,6 +999,9 @@ are assembled from sub-agent results (Step 6a) and orchestrator checks (Steps 6g
 | Test Quality | PASS/WARN/N/A | <summary> |
 | Test Change Classification | ADDITIVE/REDUCTIVE/MIXED/NEUTRAL/N/A | <summary> |
 | Verification Commands | PASS/FAIL/N/A | <summary> |
+| Target Achievement | PASS/WARN/FAIL/N/A | <performance tasks only> |
+| Environment Match | MATCH/MISMATCH/N/A | <performance tasks only> |
+| Baseline Re-run | PASS/WARN/SKIPPED/N/A | <performance tasks only> |
 
 ### Overall: PASS / WARN / FAIL
 
@@ -933,6 +1023,13 @@ are assembled from sub-agent results (Step 6a) and orchestrator checks (Steps 6g
 | Test Quality | Style/Conventions sub-agent (Repetitive Test Detection + Test Documentation + Eval Quality combined) |
 | Test Change Classification | Style/Conventions sub-agent |
 | Verification Commands | Correctness sub-agent |
+| Target Achievement | Orchestrator (Step 4.7) — N/A for standard tasks |
+| Environment Match | Orchestrator (Step 4.6) — N/A for standard tasks |
+| Baseline Re-run | Orchestrator (Step 4.6) — N/A for standard tasks |
+
+**Performance tasks (`task_type = performance`):** Additionally include a "Performance Results" section after the report table with the before/after comparison table from Step 4.5/4.6, achievement status from Step 4.7, and recommendations.
+
+**Performance report affects Overall:** Target Achievement PASS/WARN/FAIL counts toward Overall result. Baseline Re-run and Environment Match are informational (do not affect Overall). Environment MISMATCH skips numeric drift thresholds — note "metrics not comparable" in the Baseline Re-run details.
 
 When eval results are present (Eval Quality is not N/A), include the eval pass
 rate and any failing assertion details in the Test Quality Details column of
@@ -999,6 +1096,39 @@ Include the Comment Footnote at the end of the Jira comment.
 
 **Important:** This skill does NOT merge the PR and does NOT transition the Jira issue.
 The report is informational — a human reviewer decides whether to merge.
+
+## Step 10 – Update Optimization Result Report (Performance Tasks Only)
+
+**If `task_type = standard`:** Skip this step.
+
+If the optimization result report was found in Step 4.5, update it with verification results.
+
+### Step 10.1 – Determine Status
+
+Map Overall Result: PASS → `verified`, WARN (partial success) → `verified_with_warnings`, FAIL → `verification_failed`.
+
+### Step 10.2 – Update Report Metadata
+
+Confirm `report_file` exists. Update metadata frontmatter: set `status`, `verification_timestamp`, `verification_result`.
+
+### Step 10.3 – Append Verification Section
+
+Append to report: Verification Results section with timestamp, overall result, acceptance criteria summary, review feedback summary, CI status, target achievement, and recommendations.
+
+### Step 10.4 – Update Latest Metrics in Config
+
+**Only when** Overall Result is PASS or WARN (confirmed improvement). Skip on FAIL.
+
+Use `perf-config.py set` to update `.latest` fields for each metric based on `metric_type`:
+- Frontend/hybrid: lcp, fcp, dom_interactive, total_load_time
+- Backend/hybrid: response_time_p95, response_time_p99, throughput, error_rate
+- Always: `metadata.last_updated` to current UTC timestamp
+
+Plugin root resolution for bash blocks:
+```bash
+plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/null | sort -V | tail -1)
+if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then echo "❌ sdlc-workflow plugin not found"; exit 1; fi
+```
 
 ## Important Rules
 

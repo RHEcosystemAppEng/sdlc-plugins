@@ -843,14 +843,14 @@ Generates a structured optimization plan by reviewing module-level analysis repo
 
 ### Optimization Implementation
 
-**Skill:** `/sdlc-workflow:performance-implement-optimization`
+**Skill:** `/sdlc-workflow:implement-task` (performance sections auto-detected from Jira task)
 
 Executes performance optimization tasks by implementing code changes, running functional and performance tests, and comparing results against targets.
 
 **Invocation:**
 
 ```
-/sdlc-workflow:performance-implement-optimization TC-XXXX
+/sdlc-workflow:implement-task TC-XXXX
 ```
 
 **Workflow:**
@@ -870,7 +870,7 @@ Executes performance optimization tasks by implementing code changes, running fu
    - Re-run baseline capture for affected scenarios
    - Compare current metrics against baseline and targets
    - Generate before/after comparison report
-   - Verify target metrics achieved (stop if any metric regressed)
+   - Verify listed target metrics achieved; if a listed metric regresses beyond noise tolerance, prompt to stash and stop or proceed with `regression_acknowledged`
 10. Commit changes using Conventional Commits format (`perf` type) with performance impact in commit body
 11. Push branch and create PR with before/after comparison table
 12. Update Jira with PR link and performance results
@@ -879,7 +879,7 @@ Executes performance optimization tasks by implementing code changes, running fu
 **Output:**
 - Code changes committed to feature branch
 - PR created with performance impact summary
-- **Optimization result report** created: `.claude/performance/optimization-results/{jira_key}-{timestamp}.md` (primary data handoff to verify-optimization)
+- **Optimization result report** created: `.claude/performance/optimization-results/{jira_key}-{timestamp}.md` (primary data handoff to verify-pr perf mode)
 - Before/after comparison report posted to Jira (summary from local report file)
 - Jira task updated with PR link and transitioned to In Review
 
@@ -888,7 +888,7 @@ Executes performance optimization tasks by implementing code changes, running fu
 - Follows all implement-task constraints (scope containment, code inspection before modification, conventional commits)
 - Always attempts functional tests before performance tests
 - If no automated tests exist, requires manual regression verification
-- Stops execution if any performance metric regresses
+- Stops execution if any **listed** target metric regresses beyond noise tolerance (user may acknowledge and proceed, setting `regression_acknowledged`)
 - Does NOT modify files outside task scope
 - Does NOT skip functional tests or manual verification
 - Does NOT fabricate performance metrics — always runs actual baseline capture
@@ -897,14 +897,14 @@ Executes performance optimization tasks by implementing code changes, running fu
 
 ### Optimization Verification
 
-**Skill:** `/sdlc-workflow:performance-verify-optimization`
+**Skill:** `/sdlc-workflow:verify-pr` (performance sections auto-detected from Jira task)
 
 Verifies a performance optimization PR by reading review feedback, validating acceptance criteria, optionally re-running performance baseline, and creating sub-tasks for change requests.
 
 **Invocation:**
 
 ```
-/sdlc-workflow:performance-verify-optimization TC-XXXX
+/sdlc-workflow:verify-pr TC-XXXX
 ```
 
 **Workflow:**
@@ -949,7 +949,7 @@ Verifies a performance optimization PR by reading review feedback, validating ac
 - Extends verify-pr workflow with performance-specific verification
 - Does NOT modify code (follows verify-pr Constraint 1.11)
 - Does NOT auto-merge (follows verify-pr Constraint 1.13)
-- Regression detection is NOT primary responsibility (happens in performance-implement-optimization)
+- Regression detection is NOT primary responsibility (happens in implement-task Step 9-Perf)
 - Baseline re-run is optional — used as redundant validation
 - Target Achievement result affects Overall result (unlike Test Quality which is advisory)
 - If baseline re-run shows significant drift (> 10%), flags for investigation but does not block verification

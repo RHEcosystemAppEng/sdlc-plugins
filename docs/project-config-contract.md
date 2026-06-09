@@ -436,8 +436,8 @@ repository to:
 - **performance-baseline**: Discovers workflows (if not yet selected), saves user-selected workflow, scenarios, modules; captures baseline metrics
 - **performance-analyze-module**: Read selected workflow and baseline data
 - **performance-plan-optimization**: Read analysis reports and target metrics
-- **performance-implement-optimization**: Read baseline metrics and targets
-- **performance-verify-optimization**: Read targets for validation
+- **implement-task** (perf mode): Read baseline metrics and targets
+- **verify-pr** (perf mode): Read targets for validation
 
 **Note**: This configuration is **per-repository**, not per-project. Each
 repository that undergoes performance optimization has its own

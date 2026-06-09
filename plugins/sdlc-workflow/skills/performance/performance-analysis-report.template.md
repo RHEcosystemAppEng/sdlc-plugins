@@ -2,23 +2,9 @@
 
 **Generated:** {iso-8601-timestamp}  
 **Workflow:** {workflow-name}  
-**Baseline Date:** {baseline-capture-date}
-
----
-
-## Executive Summary
-
-**Overall Performance Rating:** {rating} (Excellent / Good / Needs Improvement / Poor)
-
-**Key Findings:**
-- {summary-bullet-1}
-- {summary-bullet-2}
-- {summary-bullet-3}
-
-**Top 3 Optimization Opportunities:**
-1. {opportunity-1} — Estimated impact: {impact-1}
-2. {opportunity-2} — Estimated impact: {impact-2}
-3. {opportunity-3} — Estimated impact: {impact-3}
+**Baseline Date:** {baseline-capture-date}  
+**Validation Artifact:** `{analysis_dir}/findings-validation.json`  
+**Validation Status:** {not validated | passed}
 
 ---
 
@@ -49,6 +35,34 @@
 
 ---
 
+## Finding Validation Summary
+
+**Validation Step:** Step 9.1 re-verified all findings against source code before report generation.
+
+| # | Finding | Anti-Pattern | Step | Disposition | Confidence | Severity | Timeline | Notes |
+|---|---|---|---|---|---|---|---|---|
+| F1 | {description} | {type} | {step} | {Confirmed / Confirmed (Low Confidence) / Downgraded} | {High / Medium / Low} | {Critical / High / Medium / Low} | {estimate} | {reason chain or correction notes} |
+| ... | ... | ... | ... | ... | ... | ... | ... | ... |
+
+**Validation Statistics:**
+- Findings submitted: {total}
+- Confirmed: {confirmed} ({pct}%)
+- Confirmed (Low Confidence): {low_conf} ({pct}%)
+- Downgraded: {downgraded} ({pct}%)
+- Discarded: {discarded} ({pct}%)
+
+{if discarded > 0}
+
+### Discarded Findings (Audit Trail)
+
+| # | Original Claim | Step | File:Line | Discard Reason |
+|---|---|---|---|---|
+| {id} | {original-description} | {step} | {file}:{line} | {FAILED: code not found / FAILED: pattern mismatch — {details}} |
+
+{end if}
+
+---
+
 ## Anti-Pattern Analysis
 
 ### {Anti-Pattern-Name}
@@ -64,6 +78,7 @@
 **Detected Instances:**
 
 1. **{file-path}:{line-number}**
+   **Finding ID:** F{n}
    ```{language}
    {code-snippet}
    ```
@@ -464,34 +479,6 @@ this detects waste at the HTTP API boundary — where the backend serves fields 
 
 ---
 
-## Finding Validation Summary
-
-**Validation Step:** Step 9.1 re-verified all findings against source code before report generation.
-
-| # | Finding | Anti-Pattern | Step | Disposition | Confidence | Severity | Timeline | Notes |
-|---|---|---|---|---|---|---|---|---|
-| F1 | {description} | {type} | {step} | {Confirmed / Confirmed (Low Confidence) / Downgraded} | {High / Medium / Low} | {Critical / High / Medium / Low} | {estimate} | {reason chain or correction notes} |
-| ... | ... | ... | ... | ... | ... | ... | ... | ... |
-
-**Validation Statistics:**
-- Findings submitted: {total}
-- Confirmed: {confirmed} ({pct}%)
-- Confirmed (Low Confidence): {low_conf} ({pct}%)
-- Downgraded: {downgraded} ({pct}%)
-- Discarded: {discarded} ({pct}%)
-
-{if discarded > 0}
-
-### Discarded Findings (Audit Trail)
-
-| # | Original Claim | Step | File:Line | Discard Reason |
-|---|---|---|---|---|
-| {id} | {original-description} | {step} | {file}:{line} | {FAILED: code not found / FAILED: pattern mismatch — {details}} |
-
-{end if}
-
----
-
 ## Candidates for Manual Review (Low Confidence)
 
 > Findings below were detected via grep-based pattern matching without semantic analysis.
@@ -550,7 +537,7 @@ the long-term performance ceiling.
 
 {if no strategic optimizations: "No strategic/architectural optimizations identified — tactical fixes are sufficient to reach target SLAs."}
 
-**Effort Legend:**
+**Effort Legend (shared with Executive Summary):**
 - **Low:** < 1 day of work
 - **Medium:** 1-3 days of work
 - **High:** > 3 days of work
@@ -562,6 +549,22 @@ the long-term performance ceiling.
 - **1–3 days:** Cross-module refactor or new service method
 - **3–5 days:** Architectural change or new infrastructure
 - **> 5 days:** Major restructuring
+
+---
+
+## Executive Summary
+
+**Overall Performance Rating:** {rating} (Excellent / Good / Needs Improvement / Poor)
+
+**Key Findings:**
+- {summary-bullet-1}
+- {summary-bullet-2}
+- {summary-bullet-3}
+
+**Top 3 Optimization Opportunities:**
+1. {opportunity-1} — Estimated impact: {impact-1}
+2. {opportunity-2} — Estimated impact: {impact-2}
+3. {opportunity-3} — Estimated impact: {impact-3}
 
 ---
 

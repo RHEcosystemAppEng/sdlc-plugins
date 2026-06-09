@@ -151,7 +151,7 @@ Performance optimization tasks extend the standard task description template wit
 2. **Target Metrics** — Expected metrics after optimization
 3. **Performance Test Requirements** — How to verify the optimization worked (e.g., "Re-run baseline capture, verify LCP < 2500ms")
 
-These sections are read by `performance-implement-optimization` and `performance-verify-optimization` to validate target achievement.
+These sections are read by `implement-task` and `verify-pr` (auto-detected via task_type) to validate target achievement.
 
 ### Label Conventions
 
@@ -191,8 +191,8 @@ Performance optimization Epics/Tasks can be linked to Feature issues using the *
      - Labels: `ai-generated-jira`, `performance-optimization`, `home`, `api-optimization`, `backend`
      - Link: Epic **incorporates** Task 2
      - Link: Task 1 **blocks** Task 2 (dependency)
-3. User runs `performance-implement-optimization TC-XXXX` for Task 1
-4. User runs `performance-verify-optimization TC-XXXX` to verify Task 1
+3. User runs `implement-task TC-XXXX` for Task 1 (performance sections auto-detected)
+4. User runs `verify-pr TC-XXXX` to verify Task 1 (performance sections auto-detected)
 
 ---
 
