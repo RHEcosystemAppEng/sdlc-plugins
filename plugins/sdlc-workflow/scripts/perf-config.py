@@ -2,7 +2,8 @@
 """Performance configuration manager for sdlc-workflow performance skills.
 
 Manages .claude/performance-config.json — the structured configuration file
-used by all performance skills (setup, baseline, analyze, plan, implement, verify).
+used by all performance skills (performance-setup, performance-baseline,
+performance-analyze-module, performance-plan-optimization, implement-task, verify-pr).
 
 Uses only Python stdlib — no external dependencies required.
 
@@ -39,13 +40,13 @@ DEFAULT_CONFIG = {
         "baseline_mode": None,
         "baseline_timestamp": None,
         "baseline_commit_sha": None,
+        "capture_target": None,
+        "capture_base_url": None,
         "backend_available": False,
         "analysis_scope": "frontend-only",
         "backend_endpoint_discovery_method": None,
-        "dev_command_approved": False,  # DEPRECATED: use dev_environment.command_approved instead
-        "dev_command_hash": None,
         "serena_status": None,
-        "metric_type": None,
+        "metric_type": "frontend",
     },
     "repositories": {
         "frontend": {
@@ -125,6 +126,16 @@ def now_iso() -> str:
 def resolve_config_path(args_config: Optional[str]) -> str:
     if args_config:
         return args_config
+    # Walk up from CWD to find the config, like git finds .git
+    current = os.path.abspath(".")
+    while True:
+        candidate = os.path.join(current, DEFAULT_CONFIG_PATH)
+        if os.path.isfile(candidate):
+            return candidate
+        parent = os.path.dirname(current)
+        if parent == current:
+            break
+        current = parent
     return DEFAULT_CONFIG_PATH
 
 
@@ -257,13 +268,7 @@ def cmd_init(args: argparse.Namespace) -> None:
 
     if args.analysis_scope:
         config["metadata"]["analysis_scope"] = args.analysis_scope
-        scope = args.analysis_scope
-        if scope == "frontend-only":
-            config["metadata"]["metric_type"] = "frontend"
-        elif scope == "backend-only":
-            config["metadata"]["metric_type"] = "backend"
-        else:
-            config["metadata"]["metric_type"] = "hybrid"
+        config["metadata"]["metric_type"] = _resolve_metric_type(args.analysis_scope)
 
     if args.frontend_path:
         config["repositories"]["frontend"]["path"] = args.frontend_path
@@ -310,7 +315,7 @@ def cmd_init(args: argparse.Namespace) -> None:
     if args.db_query_time_target is not None:
         config["optimization_targets"]["backend"]["db_query_time_p95"]["target"] = args.db_query_time_target
 
-    if args.iterations:
+    if args.iterations is not None:
         config["baseline_settings"]["iterations"] = args.iterations
     if args.warmup_runs is not None:
         config["baseline_settings"]["warmup_runs"] = args.warmup_runs
@@ -354,6 +359,10 @@ def cmd_set(args: argparse.Namespace) -> None:
     config = read_config(path)
     value = parse_scalar(args.value)
     set_by_dotpath(config, args.dotpath, value)
+    if args.dotpath == "metadata.analysis_scope" and isinstance(value, str):
+        resolved = _resolve_metric_type(value)
+        if resolved:
+            config["metadata"]["metric_type"] = resolved
     config["metadata"]["last_updated"] = now_iso()
     write_config(path, config)
 
@@ -368,14 +377,35 @@ def cmd_set_json(args: argparse.Namespace) -> None:
         print(f"Error: Invalid JSON value: {e}", file=sys.stderr)
         sys.exit(1)
     set_by_dotpath(config, args.dotpath, value)
+    if args.dotpath == "metadata.analysis_scope" and isinstance(value, str):
+        resolved = _resolve_metric_type(value)
+        if resolved:
+            config["metadata"]["metric_type"] = resolved
     config["metadata"]["last_updated"] = now_iso()
     write_config(path, config)
 
 
+def _resolve_metric_type(scope: str) -> Optional[str]:
+    """Map analysis_scope to expected metric_type."""
+    return {
+        "frontend-only": "frontend",
+        "backend-only": "backend",
+        "full-stack": "hybrid",
+        "full-stack-monorepo": "hybrid",
+    }.get(scope)
+
+
 def cmd_validate(args: argparse.Namespace) -> None:
-    """Validate config structure and value constraints."""
+    """Validate config structure and value constraints.
+
+    --phase baseline: additionally checks that config is ready for baseline capture.
+    Default (no --phase): structural validation only.
+    """
     config = read_config(resolve_config_path(args.config))
     errors: List[str] = []
+    phase = getattr(args, "phase", None)
+
+    # --- Structural validation (always runs) ---
 
     required_sections = ["metadata", "repositories", "workflow", "scenarios",
                          "modules", "baseline_settings", "optimization_targets",
@@ -395,6 +425,17 @@ def cmd_validate(args: argparse.Namespace) -> None:
         mt = m.get("metric_type")
         if mt not in valid_types:
             errors.append(f"metadata.metric_type must be one of {valid_types}, got '{mt}'")
+
+        # metric_type ↔ analysis_scope consistency
+        if scope and mt:
+            expected = _resolve_metric_type(scope)
+            if expected and mt != expected:
+                errors.append(f"metadata.metric_type '{mt}' inconsistent with analysis_scope '{scope}' (expected '{expected}')")
+
+        valid_targets = ["localhost", "hosted", None]
+        ct = m.get("capture_target")
+        if ct not in valid_targets:
+            errors.append(f"metadata.capture_target must be one of {valid_targets}, got '{ct}'")
 
     if "baseline_settings" in config:
         bs = config["baseline_settings"]
@@ -418,6 +459,51 @@ def cmd_validate(args: argparse.Namespace) -> None:
             errors.append(f"analysis_assumptions.chain_depth must be int 1-5, got {depth}")
         if aa.get("db_latency_ms", 0) <= 0:
             errors.append("analysis_assumptions.db_latency_ms must be > 0")
+
+    # --- Baseline-readiness validation (--phase baseline) ---
+
+    if phase == "baseline":
+        scenarios = config.get("scenarios", [])
+        if not scenarios:
+            errors.append("scenarios must contain at least 1 entry for baseline capture")
+        else:
+            for i, s in enumerate(scenarios):
+                if not s.get("name"):
+                    errors.append(f"scenarios[{i}].name is empty")
+                if not s.get("url"):
+                    errors.append(f"scenarios[{i}].url is empty")
+
+        dev = config.get("dev_environment", {})
+        port = dev.get("port")
+        if port is not None:
+            if not isinstance(port, int) or port < 1 or port > 65535:
+                errors.append(f"dev_environment.port must be integer 1-65535, got {port}")
+
+        bs = config.get("baseline_settings", {})
+        iters = bs.get("iterations", 0)
+        warmup = bs.get("warmup_runs", 0)
+        if isinstance(warmup, int) and warmup < 0:
+            errors.append(f"baseline_settings.warmup_runs must be >= 0, got {warmup}")
+        if isinstance(warmup, int) and warmup > 10:
+            errors.append(f"baseline_settings.warmup_runs must be <= 10, got {warmup}")
+        if isinstance(iters, int) and iters < 20:
+            print(f"Warning: {iters} iterations — p95 may not be statistically reliable (≥20 recommended).", file=sys.stderr)
+
+        if config.get("metadata", {}).get("workflow_selected"):
+            wf = config.get("workflow", {})
+            if not wf.get("name"):
+                errors.append("workflow.name required when workflow_selected is true")
+            if not wf.get("entry_point"):
+                errors.append("workflow.entry_point required when workflow_selected is true")
+            modules = config.get("modules", [])
+            if not modules:
+                errors.append("modules must be non-empty when workflow_selected is true")
+            else:
+                for i, mod in enumerate(modules):
+                    if not mod.get("name"):
+                        errors.append(f"modules[{i}].name is empty")
+                    if not mod.get("entry_point"):
+                        errors.append(f"modules[{i}].entry_point is empty")
 
     if errors:
         print("Validation FAILED:", file=sys.stderr)
@@ -459,7 +545,6 @@ def cmd_resolve_module_path(args: argparse.Namespace) -> None:
     dirs: List[str] = []
     for h in handlers:
         entry = h.get("entry_point", "")
-        entry = entry.split(":")[0]
         parts = entry.split("/")
         if len(parts) > 1:
             dir_path = "/".join(parts[:-1])
@@ -481,7 +566,7 @@ def build_parser() -> argparse.ArgumentParser:
         prog="perf-config.py",
         description="Performance configuration manager for sdlc-workflow",
     )
-    parser.add_argument("--config", "-c", help=f"Config file path (default: {DEFAULT_CONFIG_PATH})")
+    parser.add_argument("--config", "-c", help=f"Config file path. Default: walks up from CWD to find {DEFAULT_CONFIG_PATH}")
     sub = parser.add_subparsers(dest="command", required=True)
 
     # init
@@ -531,7 +616,9 @@ def build_parser() -> argparse.ArgumentParser:
     p_sj.add_argument("json_value", help="JSON string to set")
 
     # validate
-    sub.add_parser("validate", help="Validate config structure and constraints")
+    p_val = sub.add_parser("validate", help="Validate config structure and constraints")
+    p_val.add_argument("--phase", choices=["baseline"], default=None,
+                       help="Additional phase-specific checks (baseline: ready-to-capture)")
 
     # resolve-scope
     sub.add_parser("resolve-scope", help="Resolve analysis_scope to capability flags")

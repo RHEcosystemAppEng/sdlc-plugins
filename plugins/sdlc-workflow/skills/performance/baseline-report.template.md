@@ -25,13 +25,13 @@ capture_mode: {capture-mode}
 
 ---
 
-## Aggregate Metrics
+## Summary Metrics
 
 **Capture Mode:** {capture-mode}
 
 **Frontend Performance Metrics** (if capture-mode includes "cold-start" or "hybrid"):
 
-Overall browser performance across all scenarios.
+Mean of per-scenario values (not a statistically pooled aggregate).
 
 | Metric | Mean | p50 (Median) | p95 | p99 | Unit |
 |---|---|---|---|---|---|
@@ -129,6 +129,10 @@ This baseline measures **API endpoint performance** under controlled load (curl/
 ❌ **Query-level profiling:** Use database APM tools (Prometheus, DataDog, New Relic, etc.)  
 ❌ **Resource profiling:** Use runtime profilers (perf for Rust/C++, pprof for Go, py-spy for Python, etc.)  
 ❌ **Realistic load patterns:** Use dedicated load testing tools (k6, Gatling, JMeter) for production-like traffic
+
+**Percentile Method Note:**
+
+Frontend metrics use linear interpolation percentiles (capture-baseline.mjs); backend metrics (perf-benchmark.sh) use nearest-rank. Values are not directly comparable across frontend and backend legs in hybrid baselines.
 
 ## Next Steps
 

@@ -7,6 +7,8 @@ metadata:
   commit_sha: {commit-sha}
   baseline_commit_sha: {baseline-commit-sha}
   capture_mode: {capture-mode}
+  capture_target: {capture-target}
+  capture_base_url: {capture-base-url}
   status: pending_verification
 ---
 
@@ -55,6 +57,6 @@ metadata:
 
 ## Next Steps
 
-- Verify PR passes acceptance criteria with `/sdlc-workflow:performance-verify-optimization {jira-key}`
+- Verify PR passes acceptance criteria with `/sdlc-workflow:verify-pr {jira-key}`
 - After PR merge to main, re-run `/sdlc-workflow:performance-baseline` to update configuration with fresh metrics
 - Continue with remaining optimization tasks if targets not fully met

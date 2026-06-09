@@ -43,8 +43,8 @@ setup (infrastructure only) → baseline (workflow discovery + metrics) → anal
 | 2 | `performance-baseline` | **Discover workflows**, **select workflow**, **select mode**, capture metrics | `baseline-report.md` with Core Web Vitals, config updated with workflow |
 | 3 | `performance-analyze-module` | **Inspect source code** to detect anti-patterns | `workflow-analysis-report.md` with findings |
 | 4 | `performance-plan-optimization` | **Read analysis report** and create Jira tasks | Jira Epic + Tasks, `optimization-plan.md` |
-| 5 | `performance-implement-optimization` | Execute optimization with validation | PR with before/after metrics |
-| 6 | `performance-verify-optimization` | Verify PR and detect regressions | Verification report (PASS/WARN/FAIL) |
+| 5 | `implement-task` (perf mode) | Execute optimization with validation | PR with before/after metrics |
+| 6 | `verify-pr` (perf mode) | Verify PR and detect regressions | Verification report (PASS/WARN/FAIL) |
 
 **Key distinction:** Step 4 analyzes code, Step 5 reads the report.
 
@@ -57,11 +57,11 @@ graph TD
     A[performance-setup<br/>Infrastructure only] --> B[performance-baseline<br/>Discover + select workflow]
     B --> C[performance-analyze-module<br/>Source code inspection]
     C --> D[performance-plan-optimization<br/>Read report, create tasks]
-    D --> E[performance-implement-optimization]
+    D --> E[implement-task<br/>perf mode]
     E --> F{Targets<br/>met?}
     F -->|Regression| G[Stop - investigate]
     F -->|Improvement| H[Create PR]
-    H --> I[performance-verify-optimization]
+    H --> I[verify-pr<br/>perf mode]
     I --> J{Overall?}
     J -->|PASS| K[Merge]
     J -->|WARN/FAIL| E
@@ -101,12 +101,12 @@ npm start  # Start app first
 /sdlc-workflow:performance-plan-optimization
 # Output: Epic TC-5001, Tasks TC-5002, TC-5003, TC-5004
 
-# 5. Implement optimization
-/sdlc-workflow:performance-implement-optimization TC-5002
+# 5. Implement optimization (performance sections auto-detected from Jira task)
+/sdlc-workflow:implement-task TC-5002
 # Output: PR created, optimization report saved, LCP improved 3200ms → 2900ms
 
-# 6. Verify PR
-/sdlc-workflow:performance-verify-optimization TC-5002
+# 6. Verify PR (performance sections auto-detected from Jira task)
+/sdlc-workflow:verify-pr TC-5002
 # Output: PASS (Partial Success - continue with remaining tasks)
 
 # 7. After PR merge to main, update config with fresh baseline
@@ -130,11 +130,11 @@ Each optimization task creates an isolated report file for audit trail and paral
 - Test scenarios measured
 - Code changes (commit, PR, files modified)
 - Validation checks performed
-- Verification results (added by verify-optimization)
+- Verification results (added by verify-pr in perf mode)
 
 **Status lifecycle:**
-1. `pending_verification` — created by implement-optimization
-2. `verified` — updated by verify-optimization if PASS
+1. `pending_verification` — created by implement-task in perf mode
+2. `verified` — updated by verify-pr in perf mode if PASS
 3. `verified_with_warnings` — if WARN (partial success)
 
 **Benefits:**
