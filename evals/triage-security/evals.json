@@ -1,0 +1,62 @@
+{
+  "skill_name": "triage-security",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2, write outputs/affects-versions.md with the Affects Versions correction from Step 3, and write outputs/remediation.md with the remediation task descriptions you would create in Step 7.",
+      "expected_output": "A structured triage analysis demonstrating: correct CVE data extraction (CVE-2026-31812, quinn-proto, affected range < 0.11.14), version impact table built from security-matrix.md pinned commits showing which versions ship the vulnerable dependency, Affects Versions correction from PSIRT-assigned values to lock-file-verified values, and remediation task descriptions following task-description-template.md format.",
+      "files": ["files/vuln-issue-standard.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+        "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+        "Version impact table includes ALL versions from the security-matrix.md supportability matrix — no versions are skipped (Important Rule 4)",
+        "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+        "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+        "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+        "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+        "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+        "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+        "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Triage Vulnerability issue TC-8002. The issue details are in vuln-issue-already-fixed.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data, write outputs/version-impact.md with the version impact table, and write outputs/triage-outcome.md explaining the triage decision and proposed Jira actions.",
+      "expected_output": "A triage analysis where the version impact table shows all supported versions ship a patched dependency version (outside the affected range). The triage outcome should recommend closing the issue as Not a Bug with appropriate justification, since no supported versions are affected.",
+      "files": ["files/vuln-issue-already-fixed.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Version impact table shows NO (not affected) for all supported versions — every version ships a dependency version outside the CVE's affected range",
+        "Triage outcome recommends closing as Not a Bug with resolution, not creating remediation tasks (Step 7 Case C)",
+        "The close recommendation includes a comment documenting the version impact evidence — listing each version and its dependency version as proof of non-impact",
+        "VEX Justification is set to 'Component not Present' or appropriate value when the VEX field is configured (Step 7 VEX Justification)",
+        "The analysis does NOT create any remediation tasks — no upstream backport, no downstream propagation (Step 7 Case C closes the issue)"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Triage Vulnerability issue TC-8003. The issue details are in vuln-issue-duplicate.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. Assume a JQL search for sibling issues with the same CVE label returns one result: TC-7999 with status 'In Progress', same stream suffix [rhtpa-2.2], and Affects Versions [RHTPA 2.2.0, RHTPA 2.2.1]. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data, write outputs/duplicate-check.md with the duplicate analysis from Step 4, and write outputs/triage-outcome.md explaining the triage decision.",
+      "expected_output": "A triage analysis where the duplicate check in Step 4 detects sibling issue TC-7999 with the same CVE and same stream scope. The triage outcome should recommend closing TC-8003 as Duplicate of TC-7999, since both track the same CVE for the same stream.",
+      "files": ["files/vuln-issue-duplicate.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Duplicate check searches for sibling issues using JQL with the CVE label and excludes the current issue key (Step 4)",
+        "Duplicate check correctly classifies TC-7999 as a same-stream sibling (both have stream suffix [rhtpa-2.2]) and identifies it as a duplicate (Step 4.1)",
+        "Triage outcome recommends closing TC-8003 as Duplicate with resolution 'Duplicate', referencing TC-7999 as the original (Step 4.1)",
+        "The close recommendation includes a comment documenting why it is a duplicate — same CVE tracked for the same stream (Step 4.1)",
+        "The analysis does NOT proceed to remediation task creation — duplicate detection short-circuits the triage flow"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Triage Vulnerability issue TC-8004. The issue details are in vuln-issue-split.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has no stream suffix (unscoped) and affects versions across both 2.1.x and 2.2.x streams differently — 2.1.x versions ship the vulnerable dependency while 2.2.x versions ship a patched version. Assume no sibling issues exist (JQL returns empty). Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data, write outputs/version-impact.md with the version impact table showing mixed impact across streams, write outputs/affects-versions.md with the Affects Versions correction scoped to affected versions only, and write outputs/remediation.md with the remediation tasks for the affected stream(s) only.",
+      "expected_output": "A triage analysis for an unscoped issue where the version impact table reveals mixed results: 2.1.x versions are affected while 2.2.x versions ship the fix. The Affects Versions should be corrected to include only the actually affected versions. Remediation tasks should be created only for the affected stream (2.1.x), not for 2.2.x which already ships the fix.",
+      "files": ["files/vuln-issue-split.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
+        "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
+        "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 7 Case A scoping)",
+        "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
+        "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 7 Case B applies only to scoped issues)"
+      ]
+    }
+  ]
+}
