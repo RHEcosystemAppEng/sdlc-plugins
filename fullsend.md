@@ -10,7 +10,7 @@ Run sdlc-workflow skills inside secure sandboxes via [fullsend](https://github.c
 - Jira API token — skills read/write Jira issues via REST API (MCP is not available inside the sandbox)
 - GitHub token — skills read PRs and post comments via `gh` CLI
 
-## Quick start
+## Quick start (local mode)
 
 ```bash
 fullsend run verify-pr \
@@ -19,6 +19,9 @@ fullsend run verify-pr \
   --env-file secrets.env \
   --no-post-script
 ```
+
+This assumes sdlc-plugins is cloned locally. For target repos without the
+clone, see [Deployment modes](#deployment-modes) below.
 
 The `--fullsend-dir` points to the plugin directory itself — it doubles as the
 fullsend config directory, so the same skill files serve both Claude Code plugin
@@ -259,6 +262,110 @@ network_policies:
       - { path: "**/gh" }
 ```
 
+## Deployment modes
+
+There are two ways to run sdlc-workflow skills via fullsend, depending on
+whether the user has sdlc-plugins cloned locally.
+
+### Local mode — for sdlc-plugins developers
+
+When sdlc-plugins is cloned locally, point `--fullsend-dir` at the plugin
+directory. All files (harness, agents, policies, env) are resolved locally.
+Updates arrive via `git pull`.
+
+```bash
+fullsend run verify-pr \
+  --fullsend-dir plugins/sdlc-workflow \
+  --target-repo /tmp/my-repo-clone \
+  --env-file secrets.env \
+  --no-post-script
+```
+
+### Remote mode — for target repos without sdlc-plugins
+
+Target repos that consume sdlc-workflow skills without cloning sdlc-plugins
+use URL-referenced resources in their own `.fullsend/` directory. The agent
+prompt and policy are fetched from GitHub at runtime; the plugin is baked
+into the custom image.
+
+```
+my-repo/
+├── .fullsend/
+│   ├── harness/
+│   │   └── verify-pr.yaml      # URL refs to agent/policy + image tag
+│   └── env/
+│       ├── gcp-vertex.env       # ${VAR} templates (identical across repos)
+│       ├── jira.env
+│       └── github.env
+├── AGENTS.md → CLAUDE.md        # symlink (recommended)
+└── ...
+```
+
+The harness references the agent and policy via URLs with mandatory SHA-256
+integrity hashes ([ADR-0038](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0038-universal-harness-access.md)).
+The plugin comes from the custom image — `plugins:` does not support URL
+references today ([fullsend#2113](https://github.com/fullsend-ai/fullsend/issues/2113)).
+
+```yaml
+# .fullsend/harness/verify-pr.yaml
+agent: https://raw.githubusercontent.com/mrizzi/sdlc-plugins/<commit>/plugins/sdlc-workflow/agents/verify-pr.md#sha256=<hash>
+model: opus
+image: ghcr.io/mrizzi/sdlc-plugins/sdlc-base:<version>
+policy: https://raw.githubusercontent.com/mrizzi/sdlc-plugins/<commit>/plugins/sdlc-workflow/policies/verify-pr.yaml#sha256=<hash>
+
+security:
+  enabled: true
+
+host_files:
+  - src: env/gcp-vertex.env
+    dest: /tmp/workspace/.env.d/gcp-vertex.env
+    expand: true
+  - src: env/jira.env
+    dest: /tmp/workspace/.env.d/jira.env
+    expand: true
+  - src: env/github.env
+    dest: /tmp/workspace/.env.d/github.env
+    expand: true
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/gcp-creds.json
+  - src: ${GCP_OIDC_TOKEN_FILE}
+    dest: /tmp/gcp-oidc-token
+    optional: true
+
+allowed_remote_resources:
+  - https://raw.githubusercontent.com/mrizzi/sdlc-plugins/
+
+timeout_minutes: 30
+```
+
+```bash
+fullsend run verify-pr \
+  --fullsend-dir .fullsend \
+  --target-repo . \
+  --env-file secrets.env \
+  --no-post-script
+```
+
+### Keeping target repos up to date
+
+When sdlc-plugins publishes a new version, target repos need to bump three
+values in their harness YAML: the two SHA-256 hashes (agent, policy) and the
+image tag.
+
+Use [Renovate](https://docs.renovatebot.com/) or
+[Dependabot](https://docs.github.com/en/code-security/dependabot) to automate
+this. On each sdlc-plugins release, the bot computes new hashes, opens a PR
+to bump them, and the maintainer merges when ready. This is the same model
+used for GitHub Actions SHA pinning.
+
+The env template files (`gcp-vertex.env`, `jira.env`, `github.env`) are pure
+`${VAR}` placeholders and rarely change — they do not need version tracking.
+
+When [fullsend#2113](https://github.com/fullsend-ai/fullsend/issues/2113) is
+resolved, the custom image is eliminated: the plugin is also URL-referenced,
+and the image becomes the standard `fullsend-code:latest`. This reduces the
+bump to two hashes + one plugin hash — still automated by Renovate.
+
 ## Design decisions
 
 ### Why the plugin directory is the fullsend dir
@@ -307,8 +414,8 @@ permalinked to fullsend commit `58cc443`.
 | Plugin loading | `plugins:` field — marketplace cache created at runtime | Baked into image at build time | Diverges | **Interim**: same root cause as skills loading — `plugins:` field does not support URL references today, so build-time baking is the only option without duplication. **Target**: converges with skills loading when [fullsend#2113](https://github.com/fullsend-ai/fullsend/issues/2113) is resolved. | [customizing-agents.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/guides/user/customizing-agents.md), [ADR-0038](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0038-universal-harness-access.md) |
 | Pre/post scripts | `pre_script` + `post_script` for split-trust | `--no-post-script` — skills handle side effects inside sandbox | Diverges | **Interim**: keep divergent — verify-pr's writes are deeply interleaved with reads (create sub-task → use its key in PR reply → create root-cause task → comment on it). Per-skill network policy is the enforcement layer. **Target**: structured JSON output from agent with action refs (e.g. `{{subtask-1.key}}`) + deterministic post_script on the runner that processes all writes sequentially. Deferred — document target architecture, implement later. | [architecture.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/architecture.md), [security-threat-model.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/problems/security-threat-model.md) |
 | Validation loop | `validation_loop:` with script + `max_iterations` | Not used — skills validate internally | Diverges | **Converges with pre/post scripts**: when structured JSON output is implemented, add `validation_loop` with output schema per skill to validate JSON before post_script runs. Deferred — implement together with pre/post scripts convergence. | [customizing-agents.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/guides/user/customizing-agents.md), [architecture.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/architecture.md), [running-agents-locally.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/guides/user/running-agents-locally.md) |
-| Config directory | Dedicated `.fullsend` repo per org | Plugin directory doubles as `--fullsend-dir` | Diverges | **Interim**: per-repo `.fullsend/` in target repos with URL-referenced agent/policy from sdlc-plugins + custom image on GHCR. No clone of sdlc-plugins needed. **Target**: same per-repo `.fullsend/` but standard `fullsend-code` image + plugin via URL. Blocked on [fullsend#2113](https://github.com/fullsend-ai/fullsend/issues/2113). | [ADR-0003](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0003-org-config-repo-convention.md), [ADR-0035](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0035-layered-content-resolution.md), [ADR-0038](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0038-universal-harness-access.md) |
-| Layered resolution | Three-tier: upstream < org < per-repo | Single layer — no overrides | Diverges | **Keep**: consequence of per-repo `.fullsend/` model. Per-org overrides possible via target repo's `.fullsend/customized/` if needed later. The per-repo model is the correct tier for external skills consumed across multiple orgs. | [ADR-0035](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0035-layered-content-resolution.md) |
+| Config directory | Dedicated `.fullsend` repo per org | Two modes: local (`--fullsend-dir plugins/sdlc-workflow`) and remote (per-repo `.fullsend/` with URL refs) | Diverges | **Local mode**: plugin dir as `--fullsend-dir` for sdlc-plugins developers. **Remote mode**: per-repo `.fullsend/` with URL-referenced agent/policy + custom image on GHCR. Hashes and image tag bumped by Renovate/Dependabot. **Target**: standard `fullsend-code` image + plugin via URL when [fullsend#2113](https://github.com/fullsend-ai/fullsend/issues/2113) is resolved. | [ADR-0003](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0003-org-config-repo-convention.md), [ADR-0035](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0035-layered-content-resolution.md), [ADR-0038](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0038-universal-harness-access.md) |
+| Layered resolution | Three-tier: upstream < org < per-repo | Single layer — no overrides | Diverges | **Keep**: per-repo `.fullsend/` with URL refs is the correct tier for external skills consumed across multiple orgs. Org-level `.fullsend` repo with `customized/` is possible but requires copying files on each release — Renovate on per-repo URL refs is lower maintenance. | [ADR-0035](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0035-layered-content-resolution.md) |
 | AGENTS.md | Auto-loaded from target repo | Not shipped | Diverges | **Converge now**: recommend target repos create symlink `AGENTS.md → CLAUDE.md`. Verified that fullsend preserves symlinks through upload/download cycle (`UploadDir` uses `tar` without `--dereference`, `sanitizeDownload` allows relative in-repo symlinks, `hasAgentsMD` detects symlink as existing file). Document in fullsend.md. | [customizing-with-agents-md.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/guides/user/customizing-with-agents-md.md), [ADR-0020](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0020-composable-single-responsibility-agents-with-individual-sandboxes.md) |
 | `.agents/skills/` convention | Skills in `.agents/skills/` + symlink to `.claude/skills/` | Skills in `skills/` (Claude Code plugin format) | Different convention | **Keep**: Claude Code plugin format (`plugin.json` + `skills/`) predates `.agents/skills/`. Both are valid for different discovery mechanisms. No benefit converting — Claude Code discovers plugins via marketplace cache, not `.agents/skills/`. | [customizing-with-skills.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/guides/user/customizing-with-skills.md) |
 | Output schemas | `schemas/` directory for JSON validation | Not used — free-form reports | Missing | **Converges with pre/post scripts and validation loop**: when structured JSON output is implemented, add per-skill output schemas to `schemas/` directory. Deferred — implement together. | [architecture.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/architecture.md) |
