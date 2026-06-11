@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md lines 28-29: 'Call `apply_filter(&mut query_builder, \"package_license.license\", &license_value)` (or the equivalent SeaORM column reference) to handle comma-separated parsing and IN clause generation. This avoids duplicating any splitting/filtering logic.' Also plan.md line 74: 'Does not duplicate filtering logic — reuses `apply_filter` from `common/src/db/query.rs`.' reuse-analysis.md lines 9-18 further detail apply_filter reuse for 'Splitting on commas, Trimming whitespace, Generating the appropriate WHERE ... IN (...) clause'."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md line 12: 'following the same pattern as the `severity` field in `modules/fundamental/src/advisory/endpoints/list.rs`'. plan.md line 18: 'Mirror the advisory list endpoint’s `Query` struct pattern: add `pub license: Option<String>` alongside existing pagination/sorting fields.' plan.md line 61: 'Read `modules/fundamental/src/advisory/endpoints/list.rs` to capture the exact Query struct pattern, handler structure, and how `apply_filter` is called.'"
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md line 25: 'Join through the `package_license` entity (`entity/src/package_license.rs`) to filter packages by their associated license records.' plan.md line 30: 'Use the `package_license::Entity` from `entity/src/package_license.rs` for the JOIN — `package_license::Column::PackageId` joins to `package::Column::Id`, then filter on `package_license::Column::License`.' plan.md line 75: 'Does not write raw SQL — uses SeaORM entities and the shared query builder.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md covers all three candidates with dedicated sections each containing 'What it provides' and 'How it is reused' subsections: (1) 'common/src/db/query.rs::apply_filter' at lines 9-18, (2) 'modules/fundamental/src/advisory/endpoints/list.rs' at lines 22-31, (3) 'entity/src/package_license.rs' at lines 35-44. The summary table at lines 50-54 confirms all three. Line 6 states: 'The task specifies three reuse candidates. All three are adopted in the implementation plan.'"
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": false,
+      "evidence": "The task defines Files to Modify as: modules/fundamental/src/package/endpoints/list.rs, modules/fundamental/src/package/service/mod.rs; and Files to Create as: tests/api/package_license_filter.rs. The plan lists these three correctly, but also lists a fourth file at plan.md lines 55-57: 'tests/api/mod.rs (modify, if module-based test registration is used) — Add `mod package_license_filter;` to register the new test file.' This file is outside the task's defined scope in both Files to Modify and Files to Create."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md line 74: 'Does not duplicate filtering logic — reuses `apply_filter` from `common/src/db/query.rs`.' The plan proposes calling apply_filter directly (plan.md lines 28-29) rather than creating any new parsing or filtering utilities. reuse-analysis.md line 17: 'Zero duplication of filtering logic.' No new utility functions for comma-separated parsing or SQL filter generation are proposed anywhere in either output file."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.8333333333333334
+  }
+}

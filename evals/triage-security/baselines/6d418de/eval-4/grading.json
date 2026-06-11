@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
+      "passed": true,
+      "evidence": "version-impact.md Section 2.4 shows a Version Impact Table with 2.1.0 and 2.1.1 marked '**YES**' (h2 0.4.5) and all 2.2.x versions (2.2.0 through 2.2.4) marked 'NO'. Lock file evidence is provided in Section 2.3 via 'git show <tag>:Cargo.lock' inspection showing h2 versions at each tag. Summary states: 'Mixed impact across streams. The 2.1.x stream ships h2 0.4.5 (vulnerable). The 2.2.x stream ships h2 >= 0.4.8 (fixed) in all versions.'"
+    },
+    {
+      "text": "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md shows 'Proposed Affects Versions: RHTPA 2.1.0, RHTPA 2.1.1' with correction details: 'Current: [RHTPA 2.1.0, RHTPA 2.2.0] -> Proposed: [RHTPA 2.1.0, RHTPA 2.1.1]'. Changes explicitly state: 'Added: RHTPA 2.1.1' and 'Removed: RHTPA 2.2.0 -- lock file confirms h2 0.4.8 at tag v0.4.5 (NOT affected, ships the fixed version)'. No 2.2.x versions appear in the proposed list."
+    },
+    {
+      "text": "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 7 Case A scoping)",
+      "passed": true,
+      "evidence": "remediation.md states 'Triage Outcome: Case A -- Affected (create remediation tasks)' and 'remediation tasks are created only for the actually affected stream (2.1.x)'. Task 1 is 'Upstream Backport (2.1.x stream)' targeting release/0.3.z. Task 2 is 'Downstream Propagation (2.1.x stream)' targeting rhtpa-release.0.3.z. The Notes section explicitly confirms: 'No remediation for 2.2.x: The 2.2.x stream ships h2 >= 0.4.8 in all versions and is not affected. No tasks are created for this stream.'"
+    },
+    {
+      "text": "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
+      "passed": true,
+      "evidence": "data-extraction.md states under Stream Scope Resolution: 'The issue summary \"CVE-2026-33501 h2 - Memory exhaustion via CONTINUATION frames\" contains **no stream suffix** in brackets. Therefore, this issue is **unscoped** -- it covers all configured version streams (2.1.x and 2.2.x). Steps 3 and 4 will apply to all streams.' version-impact.md checks all versions across both streams: 2.1.0, 2.1.1 (2.1.x stream) and 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4 (2.2.x stream)."
+    },
+    {
+      "text": "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 7 Case B applies only to scoped issues)",
+      "passed": true,
+      "evidence": "remediation.md explicitly states: 'No cross-stream impact notice is needed because this issue is **unscoped** -- it covers all streams by definition. Cross-stream notices (Case B) only apply to scoped issues where impact is found outside the issue's scope.' This is reiterated in the Notes section: 'No cross-stream impact notice: This issue is unscoped (covers all streams by definition), so no Case B cross-stream notice is needed. Cross-stream notices apply only to scoped issues where impact is discovered outside the issue's scope.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

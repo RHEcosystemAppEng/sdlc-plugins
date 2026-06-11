@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "The conventions.md file explicitly lists analyzing these sibling files: 'modules/fundamental/src/advisory/endpoints/get.rs' (endpoint handler sibling), 'modules/fundamental/src/advisory/service/advisory.rs' (service sibling with fetch and list methods), 'modules/fundamental/src/advisory/model/summary.rs' (model sibling with severity field), and references 'common/src/error.rs' for error handling patterns. At least 3 of the 4 listed files are directly named as analyzed siblings."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "The plan lists exactly 3 files to create (severity_summary.rs model, severity_summary.rs endpoint, advisory_summary.rs test) and 3 files to modify (advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs). The plan also explicitly states under 'No Changes Needed': 'server/src/main.rs — routes auto-mount via module registration; no changes needed as confirmed by the task description.' The git add command in the commit section lists exactly these 6 files. No unrelated files are included."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "Plan.md 'Files to Create' table lists: (1) 'modules/fundamental/src/advisory/model/severity_summary.rs' — SeveritySummary response struct, (2) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs' — GET handler, (3) 'tests/api/advisory_summary.rs' — Integration tests. Corresponding file descriptions (file-1-description.md, file-2-description.md, file-3-description.md) all have 'Action: CREATE'."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "Plan.md 'Files to Modify' table lists: (4) 'modules/fundamental/src/advisory/service/advisory.rs' — Add severity_summary method, (5) 'modules/fundamental/src/advisory/endpoints/mod.rs' — Register the new route, (6) 'modules/fundamental/src/advisory/model/mod.rs' — Add pub mod severity_summary. Corresponding file descriptions (file-4-description.md, file-5-description.md, file-6-description.md) all have 'Action: MODIFY'."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Plan.md line 98-106 shows: 'feat(api): add advisory severity aggregation endpoint' as the subject line (type=feat, scope=api, description follows colon). The footer contains 'Implements TC-9201'. This follows Conventional Commits format with TC-9201 referenced in the footer."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "Plan.md line 108: \"With trailer: `--trailer='Assisted-by: Claude Code'`\". Line 119 shows the full commit command: \"git commit --trailer='Assisted-by: Claude Code' -m ...\""
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "Plan.md line 8: 'Feature Branch Name: TC-9201'. Lines 32-35 show branch creation: 'git checkout main' then 'git checkout -b TC-9201'. Line 37: 'Branch is named after the Jira issue ID (`TC-9201`) per workflow conventions.' Line 7: 'Target Branch: main'. The PR creation command on line 134 also specifies '--base main'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "Conventions.md line 14: 'Error handling: All handlers return Result<T, AppError> with .context() wrapping from common/src/error.rs.' Line 31: 'Error propagation: Methods return Result<T, AppError> and use .context() for error wrapping, consistent with the handler layer.' Lines 18-19 describe the route registration pattern via 'Router::new().route(...)' chaining in endpoints/mod.rs. Lines 36-38 describe model struct conventions with derive macros and module registration in model/mod.rs. The three-section structure of the conventions file (endpoint handlers, service methods, model structs) directly reflects the model/service/endpoints module structure."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "Plan.md line 7: 'Target Branch: main'. Line 32: 'git checkout main' (checking out the target branch before creating the feature branch). Line 134: 'gh pr create --base main' (using main as the PR base branch)."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "Plan.md lines 13-17: 'Step 1.5 — Description Digest Check' section states: 'No description digest comment was found on the issue. Proceeding with a warning:' followed by the quoted warning: 'No description digest found — skipping integrity check. This task may have been created before digest tracking was introduced.' This explicitly shows the check was performed, no digest was found, and execution proceeds with a warning rather than blocking."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}
