@@ -25,11 +25,17 @@ sdlc-workflow plugin pre-installed.
    ```
 
 3. The skill handles everything: fetching the Jira task, identifying the PR,
-   dispatching sub-agents for analysis, creating sub-tasks for review feedback,
-   and posting the verification report.
+   dispatching sub-agents for analysis, and producing the output.
+
+4. After the skill completes, verify the output file exists:
+   ```bash
+   ls -la $FULLSEND_OUTPUT_DIR/agent-result.json
+   ```
 
 ## Constraints
 
 - Do not modify code. This agent only verifies.
 - Do not push branches or create PRs.
+- Do not call Jira write APIs directly — the skill writes structured JSON output.
+- Do not post GitHub comments directly — the post_script handles this.
 - Follow the skill's output — do not improvise verification steps.
