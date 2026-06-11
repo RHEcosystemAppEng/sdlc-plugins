@@ -70,6 +70,19 @@
         "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 7 Remediation Task Creation — system package path)",
         "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 7 Remediation Task Creation)"
       ]
+    },
+    {
+      "id": 6,
+      "prompt": "You are invoked without an issue key — run discovery mode. The project CLAUDE.md is in claude-md-security-config.md and the JQL search results are in discovery-mode-results.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your analysis to the workspace outputs/ directory: write outputs/discovery-listing.md with the formatted issue list grouped by query and status, and write outputs/status-handling.md with the status-aware handling decisions for each listed issue.",
+      "expected_output": "A discovery mode analysis that constructs two JQL queries using the project key (TC) and vulnerability issue type ID (10024) from the project configuration, presents results in two clearly separated lists (Untriaged and Triaged but still New), and applies status-aware handling: New issues are presented for full triage, In Progress issues trigger a warning about active work.",
+      "files": ["files/claude-md-security-config.md", "files/discovery-mode-results.md"],
+      "assertions": [
+        "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+        "Two separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged) and one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New) (§1.48)",
+        "Results are grouped into two clearly separated lists: Untriaged issues and Triaged but still New issues",
+        "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+        "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work"
+      ]
     }
   ]
 }
