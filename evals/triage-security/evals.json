@@ -57,6 +57,19 @@
         "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
         "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 7 Case B applies only to scoped issues)"
       ]
+    },
+    {
+      "id": 5,
+      "prompt": "Triage Vulnerability issue TC-8005. The issue details are in vuln-issue-rpm.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has stream suffix [rhtpa-2.2] so triage is scoped to the 2.2.x stream. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2 using rpms.lock.yaml data, write outputs/affects-versions.md with the Affects Versions correction from Step 3, and write outputs/remediation.md with the remediation task description you would create in Step 7.",
+      "expected_output": "A triage analysis for an RPM system package (openssl-libs) scoped to the 2.2.x stream. The ecosystem is detected as RPM (not Cargo). The version impact table uses rpms.lock.yaml data showing mixed impact: 2.2.0 through 2.2.2 ship the vulnerable openssl-libs version while 2.2.3 and 2.2.4 ship the patched version. Remediation creates a single task (not two-task upstream+downstream) because RPM is a system package ecosystem. The dependency chain classifies openssl-libs as an explicit install (present in rpms.lock.yaml).",
+      "files": ["files/vuln-issue-rpm.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+        "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+        "Dependency chain context classifies the package origin as explicit install because openssl-libs is present in rpms.lock.yaml, not inherited from the base image (Step 2.3.5)",
+        "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 7 Remediation Task Creation — system package path)",
+        "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Files to Modify, and Acceptance Criteria sections (Step 7 Remediation Task Creation)"
+      ]
     }
   ]
 }
