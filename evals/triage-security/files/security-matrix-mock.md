@@ -105,3 +105,20 @@ eval, use this data as the simulated output.
 | `v0.4.9` | _(retag of v0.4.8)_ |
 | `v0.4.11` | 0.4.9 |
 | `v0.4.12` | 0.4.9 |
+
+## openssl-libs versions by tag (rpms.lock.yaml)
+
+The following sections provide the RPM package versions that would be extracted
+by running `git show <tag>:rpms.lock.yaml | grep 'openssl-libs'` for each
+pinned commit. In a real triage, the skill runs these commands; in this eval,
+use this data as the simulated output.
+
+| Tag | openssl-libs version |
+|-----|----------------------|
+| `v0.3.8` | 3.0.7-24.el9 |
+| `v0.3.12` | 3.0.7-24.el9 |
+| `v0.4.5` | 3.0.7-25.el9_3 |
+| `v0.4.8` | 3.0.7-27.el9_4 |
+| `v0.4.9` | _(retag of v0.4.8)_ |
+| `v0.4.11` | 3.0.7-28.el9_4 |
+| `v0.4.12` | 3.0.7-28.el9_4 |
