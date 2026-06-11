@@ -2,7 +2,9 @@
 name: triage-security
 description: >-
   Use when a PSIRT-created Vulnerability issue (CVE-based) needs version-aware triage
-  to determine which supported product versions are actually affected.
+  to determine which supported product versions are actually affected. Covers untriaged
+  CVE assessment, security triage, Affects Versions mismatch correction, version impact
+  analysis, duplicate CVE detection, and remediation task creation.
 argument-hint: "[jira-issue-id]"
 ---
 
@@ -27,6 +29,20 @@ Do **not** use for:
 - Manually reported security bugs (no CVE, no PSIRT labels)
 - Non-security Jira issues (Features, Tasks, Bugs)
 - Issues in projects without Security Configuration in CLAUDE.md
+
+## Quick Reference
+
+| Step | Name | Input | Output |
+|------|------|-------|--------|
+| 0 | Validate Configuration | CLAUDE.md | Project key, Cloud ID, Security Config |
+| 0.5 | Jira Access | -- | MCP or REST API connection |
+| 1 | Data Extraction | Vulnerability issue key | CVE ID, library, affected range, remote links |
+| 2 | Version Impact Analysis | security-matrix.md, lock files | Version impact table |
+| 3 | Affects Versions Correction | Version impact table, Jira versions | Corrected Affects Versions |
+| 4 | Duplicate/Sibling Check | JQL search (sibling issues) | Duplicate detection, issue links |
+| 5 | Version Lifecycle Check | Product pages URL | EOL status per version |
+| 6 | Already Fixed Check | Resolved sibling issues | Already-fixed detection |
+| 7 | Remediation | Impact analysis results | Remediation tasks or close recommendation |
 
 ## Guardrails
 
