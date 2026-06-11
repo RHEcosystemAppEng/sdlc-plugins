@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md line 36: 'Reuse `apply_filter` from `common/src/db/query.rs`': When the `license` parameter is `Some`, call the existing `apply_filter` function to handle comma-separated multi-value parsing and SQL `IN` clause generation. This is the critical reuse point -- `apply_filter` already handles splitting comma-separated values and generating the correct SQL filter clause. Do NOT write custom parsing logic for splitting the comma-separated string.' Also in Code Reuse Summary table: 'Called directly in `service/mod.rs` to parse comma-separated license values and generate SQL IN clause. No new parsing logic written.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md line 11: 'Following the same pattern used in `modules/fundamental/src/advisory/endpoints/list.rs` for the `severity` filter, add an optional `license` field...' Also in Code Reuse Summary table: 'Used as structural guide: the `Query` struct pattern with an optional filter field and its propagation to the service layer is replicated for the license filter in `package/endpoints/list.rs`.'"
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md lines 45-51: 'Join through `package_license` entity: Use the existing `entity::package_license` entity (from `entity/src/package_license.rs`) to construct the JOIN between the `package` table and the `package_license` table. This uses SeaORM's relation/join capabilities rather than writing raw SQL.' Also in Code Reuse Summary: 'Used for the SeaORM JOIN between `package` and `package_license` tables in `service/mod.rs`, avoiding raw SQL.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md contains three dedicated sections: 'Reuse Candidate 1: `common/src/db/query.rs::apply_filter`' (lines 3-12), 'Reuse Candidate 2: `modules/fundamental/src/advisory/endpoints/list.rs`' (lines 14-29), and 'Reuse Candidate 3: `entity/src/package_license.rs`' (lines 31-51). Each section includes 'What it provides', 'How it would be applied', 'Why reuse instead of rewrite', and 'Integration point' subsections with specific explanations."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md lists exactly three files: Files to Modify: (1) 'modules/fundamental/src/package/endpoints/list.rs', (2) 'modules/fundamental/src/package/service/mod.rs'; Files to Create: (3) 'tests/api/package_license_filter.rs'. The Scope Boundaries section (lines 110-115) explicitly states: 'Only the three files listed above are modified or created', 'No changes to entity definitions, or route registration', 'No changes to `entity/src/package_license.rs`', 'No changes to `common/src/db/query.rs`'. No out-of-scope files are proposed."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md line 113: 'No new utility functions that duplicate `apply_filter` behavior'. The plan consistently directs calling apply_filter directly (line 36-42: 'call the existing `apply_filter` function... Do NOT write custom parsing logic'). reuse-analysis.md line 63: 'No new utility functions are created that duplicate the functionality of any reuse candidate.' No section of either output proposes creating a new parsing or filtering utility."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

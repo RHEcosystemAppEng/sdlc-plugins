@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 34-36: 'Vulnerable library: `openssl-libs` (system RPM package)', 'Ecosystem: **RPM**', 'Lock file: `rpms.lock.yaml`'. No mention of Cargo anywhere in the outputs."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md lines 7-13 include all five versions: 2.2.0 (3.0.7-25.el9_3, YES), 2.2.1 (3.0.7-27.el9_4, YES), 2.2.2 (retag of 2.2.1, YES), 2.2.3 (3.0.7-28.el9_4, NO), 2.2.4 (3.0.7-28.el9_4, NO). Data sources section (lines 41-49) confirms versions extracted via `git show <tag>:rpms.lock.yaml | grep 'openssl-libs'` at pinned tags v0.4.5, v0.4.8, v0.4.9, v0.4.11, v0.4.12."
+    },
+    {
+      "text": "Dependency chain context classifies the package origin as explicit install because openssl-libs is present in rpms.lock.yaml, not inherited from the base image (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md lines 28-29: 'rpms.lock.yaml confirms: openssl-libs present in lock file' and 'Origin: explicit install (package listed in rpms.lock.yaml)'. No mention of base image inheritance."
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 7 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md line 9: 'Ecosystem: RPM (system package -- single task)'. data-extraction.md line 38: 'Remediation path: single task (Konflux repo fix -- no upstream backport needed for RPM packages)'. Only one jira.create_issue call is proposed (remediation.md line 33). No upstream backport task exists."
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 7 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md task description (lines 45-92) contains all required sections: '## Repository' (line 46, value: rhtpa-release.0.4.z), '## Target Branch' (line 50, value: main), '## Description' (line 53), '## Implementation Notes' (line 72), '## Acceptance Criteria' (line 79). No '## Files to Modify' section is present anywhere in the task description, confirming intentional omission per remediation-templates.md."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
