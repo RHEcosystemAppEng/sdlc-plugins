@@ -58,6 +58,35 @@ Before attempting any JIRA operations throughout this skill, determine the acces
 
 Refer to `shared/jira-rest-fallback.md` for complete implementation details.
 
+## Step 0.6 – Sandbox Mode Detection
+
+Check whether the `FULLSEND_OUTPUT_DIR` environment variable is set:
+
+```bash
+echo ${FULLSEND_OUTPUT_DIR:-not-set}
+```
+
+If set, this skill is running inside a fullsend sandbox. Switch to **sandbox mode**:
+- Do NOT call Jira write APIs (create_issue, add_comment, create_link, transition_issue) directly
+- Do NOT post GitHub PR comments or replies directly
+- Instead, accumulate all write operations as actions in a JSON structure
+- At the end of execution, write the complete result to `$FULLSEND_OUTPUT_DIR/agent-result.json`
+
+If not set, execute in **interactive mode** (current behavior — call APIs directly).
+
+Throughout the remaining steps, when you encounter a write operation:
+- **Interactive mode:** execute it directly (existing behavior)
+- **Sandbox mode:** add it to the actions array instead
+
+Initialize the actions accumulator as an in-memory JSON structure:
+
+```json
+{
+  "report": {},
+  "actions": []
+}
+```
+
 ## Inputs
 
 The user will provide a Jira issue ID for a task that has an associated PR.
@@ -501,6 +530,30 @@ After creating each sub-task, create a "Blocks" issue link from the sub-task to 
 
 jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
+**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`, add actions to the accumulator:
+
+```json
+{
+  "type": "create_subtask",
+  "ref": "subtask-N",
+  "parent": "<parent-task-id>",
+  "summary": "<summary>",
+  "labels": ["ai-generated-jira", "review-feedback"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Blocks",
+  "inward": "{{subtask-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
+Use incrementing refs: `subtask-1`, `subtask-2`, etc. The `{{subtask-N.key}}` placeholder is resolved by the post_script when the sub-task is actually created.
+
 #### CI failure sub-tasks
 
 Process `create-sub-task` actions from the Correctness sub-agent. For each action:
@@ -526,6 +579,30 @@ Process `create-sub-task` actions from the Correctness sub-agent. For each actio
 
 3. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
+
+**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`, add actions to the accumulator:
+
+```json
+{
+  "type": "create_subtask",
+  "ref": "subtask-N",
+  "parent": "<parent-task-id>",
+  "summary": "<summary>",
+  "labels": ["ai-generated-jira", "review-feedback"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Blocks",
+  "inward": "{{subtask-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
+Use incrementing refs: `subtask-1`, `subtask-2`, etc. The `{{subtask-N.key}}` placeholder is resolved by the post_script when the sub-task is actually created.
 
 #### Eval failure sub-tasks
 
@@ -561,6 +638,30 @@ Quality is PASS or N/A, skip this section entirely.
 
 4. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
+
+**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`, add actions to the accumulator:
+
+```json
+{
+  "type": "create_subtask",
+  "ref": "subtask-N",
+  "parent": "<parent-task-id>",
+  "summary": "<summary>",
+  "labels": ["ai-generated-jira", "eval-failure"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Blocks",
+  "inward": "{{subtask-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
+Use incrementing refs: `subtask-1`, `subtask-2`, etc. The `{{subtask-N.key}}` placeholder is resolved by the post_script when the sub-task is actually created.
 
 ### Step 6e – Reply to Review Comments
 
@@ -628,6 +729,17 @@ When a review body contains multiple classified suggestions (sub-identifiers), p
 a single standalone comment that lists all classifications together rather than one
 comment per sub-identifier.
 
+**Sandbox mode:** Instead of calling `gh api`, add an action for each reply:
+
+```json
+{
+  "type": "post_pr_reply",
+  "repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "comment_id": <comment-id>,
+  "body": "<reply body with {{subtask-N.key}} and {{subtask-N.url}} placeholders if referencing a sub-task>"
+}
+```
 ### Step 6f – Idempotency Guarantees
 
 Idempotency is enforced **within** Step 4a's mandatory enumeration, not as a
@@ -853,6 +965,27 @@ Link the root-cause task to the parent task:
 
 jira.create_issue_link(type="Relates", inwardIssue=<root-cause-task-id>, outwardIssue=<parent-task-id>)
 
+**Sandbox mode:** Instead of calling `jira.create_issue`, add actions:
+
+```json
+{
+  "type": "create_root_cause_task",
+  "ref": "rc-N",
+  "summary": "Root-cause: <description>",
+  "labels": ["ai-generated-jira", "root-cause"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Relates",
+  "inward": "{{rc-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
 #### Action 2 – Post the root-cause analysis as a comment
 
 After creating the task, post a Jira comment on the newly created root-cause task
@@ -869,6 +1002,16 @@ The comment must include:
 
 Include the **Comment Footnote** at the end of the comment (see the Comment Footnote
 section at the top of this skill for the required ADF format).
+
+**Sandbox mode:** Instead of calling `jira.add_comment`, add an action:
+
+```json
+{
+  "type": "post_comment",
+  "issue": "{{rc-N.key}}",
+  "body_adf": <pre-rendered ADF object with root-cause analysis and Comment Footnote>
+}
+```
 
 ### Step 7c – Idempotency Check
 
@@ -991,6 +1134,46 @@ Include the Comment Footnote at the end of the Jira comment.
 
 **Important:** This skill does NOT merge the PR and does NOT transition the Jira issue.
 The report is informational — a human reviewer decides whether to merge.
+
+### Sandbox Mode Output
+
+**Sandbox mode only:** Instead of posting directly, populate the `report` object and add a `post_report` action:
+
+Populate the report:
+
+```json
+{
+  "jira_issue_id": "<issue-id>",
+  "pr_repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "commit_sha": "<short-sha>",
+  "overall": "PASS|WARN|FAIL",
+  "table_md": "<markdown verification table>",
+  "report_md": "<full GitHub PR comment body with markdown footnote>",
+  "report_adf": <full Jira comment ADF with Comment Footnote>,
+  "plugin_version": "<version from plugin.json>"
+}
+```
+
+Add the final action:
+
+```json
+{ "type": "post_report" }
+```
+
+Write the complete accumulated JSON to the output file:
+
+```bash
+cat > $FULLSEND_OUTPUT_DIR/agent-result.json << 'RESULT_EOF'
+<the complete JSON with report and all actions>
+RESULT_EOF
+```
+
+Verify the file was written:
+
+```bash
+python3 -m json.tool $FULLSEND_OUTPUT_DIR/agent-result.json > /dev/null && echo "Output validated"
+```
 
 ## Important Rules
 
