@@ -14,6 +14,7 @@
 
 | File | Responsibility |
 |---|---|
+| `plugins/sdlc-workflow/schemas/verify-pr-input.schema.json` | JSON Schema for pre-fetched Jira data passed into sandbox |
 | `plugins/sdlc-workflow/schemas/verify-pr-result.schema.json` | JSON Schema for verify-pr structured output |
 | `plugins/sdlc-workflow/scripts/pre-verify-pr.sh` | Pre_script: validates inputs before sandbox creation |
 | `plugins/sdlc-workflow/scripts/post-verify-pr.sh` | Post_script: reads JSON, executes all write operations |
@@ -1300,6 +1301,172 @@ git commit --trailer="Assisted-by: Claude Code" -m "feat(fullsend): add pre_scri
 Validate JIRA_ISSUE_ID format and existence, check required env vars,
 and verify PR linkage before creating the sandbox. Fails fast on
 invalid inputs to avoid wasting sandbox compute time.
+
+Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
+```
+
+---
+
+### Task 11: Pre_script data passing — fetch Jira issue into sandbox (Phase 4)
+
+The pre_script already validates that the Jira issue exists (Task 10). This task
+extends it to fetch the full issue details, write them to a JSON file, and mount
+that file into the sandbox via `host_files`. The skill reads the pre-fetched data
+instead of calling the Jira API from inside the sandbox.
+
+Once all Jira reads are handled by the pre_script, the `jira_read` network
+policy entry and Jira credentials (`JIRA_EMAIL`, `JIRA_API_TOKEN`) can be
+removed from the sandbox entirely. The sandbox would only need `claude_code`
+and `github_read` network access.
+
+**Files:**
+- Create: `plugins/sdlc-workflow/schemas/verify-pr-input.schema.json`
+- Modify: `plugins/sdlc-workflow/scripts/pre-verify-pr.sh`
+- Modify: `plugins/sdlc-workflow/harness/verify-pr.yaml`
+- Modify: `plugins/sdlc-workflow/policies/verify-pr.yaml` — remove `jira_read`
+- Modify: `plugins/sdlc-workflow/env/jira.env` — remove `JIRA_EMAIL`, `JIRA_API_TOKEN`
+- Modify: `plugins/sdlc-workflow/skills/verify-pr/SKILL.md`
+
+- [ ] **Step 1: Define the input JSON Schema**
+
+Create `plugins/sdlc-workflow/schemas/verify-pr-input.schema.json` that defines
+the structure of the pre-fetched Jira data passed into the sandbox:
+
+```json
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "verify-pr-input.schema.json",
+  "title": "Verify PR Pre-Script Input",
+  "description": "Pre-fetched Jira issue data written by the pre_script and mounted into the sandbox.",
+  "type": "object",
+  "required": ["jira_issue_id", "jira_issue", "pr_url"],
+  "additionalProperties": false,
+  "properties": {
+    "jira_issue_id": {
+      "type": "string",
+      "pattern": "^[A-Z]+-[0-9]+$"
+    },
+    "jira_issue": {
+      "type": "object",
+      "description": "Full Jira issue response from GET /rest/api/3/issue/{key}"
+    },
+    "pr_url": {
+      "type": "string",
+      "description": "PR URL extracted from the Jira custom field, or empty if not linked"
+    }
+  }
+}
+```
+
+- [ ] **Step 2: Update pre_script to write pre-fetched data**
+
+In `plugins/sdlc-workflow/scripts/pre-verify-pr.sh`, after the existing
+validation steps, add:
+
+```bash
+# 5. Fetch full issue details and write to workspace for sandbox consumption
+ISSUE_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}" --fields "*all" 2>/dev/null)
+if [[ -z "${ISSUE_JSON}" ]]; then
+  echo "WARNING: Could not fetch full issue details — sandbox will re-fetch"
+else
+  PRE_OUTPUT_DIR="/tmp/workspace/pre-script-output"
+  mkdir -p "${PRE_OUTPUT_DIR}"
+  python3 -c "
+import json, sys
+issue = json.loads(sys.argv[1])
+pr_url = sys.argv[2]
+output = {
+    'jira_issue_id': sys.argv[3],
+    'jira_issue': issue,
+    'pr_url': pr_url
+}
+json.dump(output, sys.stdout, indent=2)
+" "${ISSUE_JSON}" "${PR_FIELD}" "${JIRA_ISSUE_ID}" > "${PRE_OUTPUT_DIR}/verify-pr-input.json"
+  echo "Pre-fetched issue data written to ${PRE_OUTPUT_DIR}/verify-pr-input.json"
+fi
+```
+
+- [ ] **Step 3: Add host_files entry for pre-fetched data**
+
+In `plugins/sdlc-workflow/harness/verify-pr.yaml`, add a `host_files` entry
+that mounts the pre-script output into the sandbox:
+
+```yaml
+host_files:
+  # ... existing entries ...
+  - src: /tmp/workspace/pre-script-output/verify-pr-input.json
+    dest: /tmp/workspace/.pre-script/verify-pr-input.json
+    optional: true
+```
+
+The `optional: true` ensures the sandbox still starts if the pre-script
+couldn't fetch the data (the skill falls back to fetching from the API).
+
+- [ ] **Step 4: Update the skill to read pre-fetched data**
+
+In `plugins/sdlc-workflow/skills/verify-pr/SKILL.md`, add a new step after
+Step 0.6 (Sandbox Mode Detection):
+
+```markdown
+## Step 0.7 – Load Pre-Fetched Data
+
+Check if pre-fetched Jira issue data exists:
+
+```bash
+cat /tmp/workspace/.pre-script/verify-pr-input.json 2>/dev/null | python3 -m json.tool > /dev/null 2>&1 && echo "Pre-fetched data available" || echo "No pre-fetched data"
+```
+
+If the file exists and contains valid JSON:
+- Read the `jira_issue` field — this is the full Jira issue response
+- Read the `pr_url` field — this is the PR URL from the custom field
+- Skip Steps 1 (Fetch Jira Task) and 2 (Identify PR) — use the pre-fetched
+  data instead
+
+If the file does not exist or is invalid:
+- Proceed with Steps 1 and 2 as normal (fetch from Jira API directly)
+```
+
+This step applies in both interactive and sandbox mode. In interactive mode,
+the file won't exist (no pre_script ran), so the skill proceeds normally.
+
+- [ ] **Step 5: Remove jira_read from sandbox policy**
+
+In `plugins/sdlc-workflow/policies/verify-pr.yaml`, remove the `jira_read`
+network policy entry entirely. The sandbox no longer needs Jira API access —
+all Jira data comes from the pre-fetched input file.
+
+In `plugins/sdlc-workflow/env/jira.env`, remove `JIRA_EMAIL` and
+`JIRA_API_TOKEN` exports. Keep `JIRA_SERVER_URL` (used by the skill for
+constructing browse URLs in the structured output) and `JIRA_ISSUE_ID`
+(read by the agent prompt).
+
+- [ ] **Step 6: Test with fullsend end-to-end**
+
+Rebuild the image and run fullsend. Verify:
+- Pre_script fetches issue data and writes `verify-pr-input.json`
+- Sandbox starts without Jira network access
+- Skill reads pre-fetched data from the mounted file
+- No Jira API calls from inside the sandbox
+- Post_script executes actions normally
+
+- [ ] **Step 7: Commit**
+
+```bash
+git add plugins/sdlc-workflow/schemas/verify-pr-input.schema.json \
+  plugins/sdlc-workflow/scripts/pre-verify-pr.sh \
+  plugins/sdlc-workflow/harness/verify-pr.yaml \
+  plugins/sdlc-workflow/policies/verify-pr.yaml \
+  plugins/sdlc-workflow/env/jira.env \
+  plugins/sdlc-workflow/skills/verify-pr/SKILL.md
+git commit --trailer="Assisted-by: Claude Code" -m "feat(fullsend): pre_script passes Jira data into sandbox
+
+The pre_script fetches the full Jira issue and writes it to a JSON
+file that host_files mounts into the sandbox. The skill reads
+pre-fetched data instead of calling the Jira API directly.
+
+Removes jira_read from the sandbox network policy and Jira
+credentials from the sandbox environment — the sandbox no longer
+has any Jira API access.
 
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 ```
