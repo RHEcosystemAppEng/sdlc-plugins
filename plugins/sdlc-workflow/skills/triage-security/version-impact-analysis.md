@@ -6,28 +6,42 @@ ship the vulnerable dependency by reading lock files at pinned source commits.
 
 ## 2.1 – Load the supportability matrix
 
-Read `security-matrix.md` from each Konflux release repo listed in the project's
-Security Configuration. Each `security-matrix.md` covers one version stream and
-contains:
+For each row in the **Version Streams** table in Security Configuration, read the
+`security-matrix.md` file at the path given in the **Security Matrix Path** column,
+resolved relative to the project's working directory. Each `security-matrix.md`
+covers one version stream and contains:
 
 - **Version stream** — which product versions this repo covers (e.g., `2.1.x`)
 - **Supportability matrix** — a table mapping each version to source commits
   per repository, with build dates
 - **Ecosystem mappings** — lock file paths and check commands per ecosystem
-- **Forward pointer** — the next stream's Konflux release repo URL (if any)
 
-**Follow forward pointers** to chain across all streams. Starting from the first
-repo in Version Streams, read its `security-matrix.md`, then follow its forward
-pointer to the next repo, and repeat until no more forward pointers exist. This
-ensures full coverage of all supported version streams.
+Enumerate all rows in the Version Streams table directly — each row already
+identifies a stream, so no chaining is needed.
 
-To follow a forward pointer, match the repo URL against the **Konflux Release Repo**
-column in the Version Streams table to find the corresponding **Local Path**. If the
-URL is not in the table, ask the user for the local path or skip that stream.
+### Fallback to Konflux repos
+
+When a local `security-matrix.md` file does not exist at the configured path,
+fall back to reading from the Konflux release repo via `git show`:
+
+```bash
+git -C <konflux-release-repo-local-path> show main:<Security Matrix Path>
+```
+
+Where `<konflux-release-repo-local-path>` is the **Local Path** for that stream's
+Konflux Release Repo from the Version Streams table, and `<Security Matrix Path>`
+is the path from the same row.
+
+After a successful fallback read, offer to write the content to the local path for
+future use:
+
+> "Local matrix file `<Security Matrix Path>` not found. Read from Konflux repo
+> instead. Would you like me to save it locally for future triages?"
+
+If the user confirms, write the file to the local path using the Write tool.
 
 If the Version Streams table in Security Configuration is empty or incomplete, ask
-the user which Konflux release repos to scan. Present any discovered repos (from
-forward pointers) and let the user confirm or add to the list before proceeding.
+the user which streams to configure before proceeding.
 
 Aggregate all versions from all streams into a single working matrix.
 
@@ -41,12 +55,13 @@ was scaffolded but never populated), research and fill it in before proceeding:
 2. For each version, extract image digest, build date, and source commits per
    repository from the repo's build metadata
 3. Identify retags (versions with identical source commits)
-4. Write the discovered rows into the `security-matrix.md` file
+4. Write the discovered rows into the local `security-matrix.md` file at the
+   **Security Matrix Path** from the Version Streams table (relative to the
+   project working directory)
 5. Present the populated matrix to the user for confirmation before writing
 
-This is the **only** file the triage-security skill writes to — source code and
-Jira are the only other output channels (Jira for mutations, source repos are
-read-only).
+This is the **only** local file the triage-security skill writes to — source code
+repositories are read-only, and Jira is the only other output channel.
 
 ## 2.2 – Detect the development stream
 
@@ -60,13 +75,19 @@ Query Jira for unreleased versions to identify the current development stream:
 4. Among the unreleased versions, select the one with the **earliest `releaseDate`**
    — this is the current development version.
 5. Identify which stream's repo and branch correspond to this development version
-   using the forward pointer chain (the development stream is typically the last
-   stream, covered by the most recent Konflux release repo).
+   using the Version Streams table (match the development version to the stream
+   that covers it).
 
 The development stream is checked at **branch HEAD** (not a pinned commit) since
 there is no released version yet.
 
 ## 2.3 – Extract dependency versions
+
+**Environment variable resolution:** Paths in the Version Streams table may contain
+environment variable references (e.g., `${TRUSTIFY_GL_PATH}`) in the **Konflux
+Release Repo** and **Local Path** columns. These must be expanded before using the
+paths for `git show` commands or lock file inspection. The **Security Matrix Path**
+column does not use env vars — it is relative to the project working directory.
 
 For each version in the aggregated matrix (plus the development stream):
 
