@@ -530,7 +530,7 @@ After creating each sub-task, create a "Blocks" issue link from the sub-task to 
 
 jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
-**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`, add actions to the accumulator:
+**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`, add `create_subtask` and `create_link` actions to the accumulator. Use this pattern for all sub-task types (review feedback, CI failure, eval failure):
 
 ```json
 {
@@ -538,7 +538,7 @@ jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<p
   "ref": "subtask-N",
   "parent": "<parent-task-id>",
   "summary": "<summary>",
-  "labels": ["ai-generated-jira", "review-feedback"],
+  "labels": ["ai-generated-jira", "<category-label>"],
   "description_adf": <pre-rendered ADF object>
 }
 ```
@@ -552,7 +552,7 @@ jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<p
 }
 ```
 
-Use incrementing refs: `subtask-1`, `subtask-2`, etc. The `{{subtask-N.key}}` placeholder is resolved by the post_script when the sub-task is actually created.
+Use incrementing refs: `subtask-1`, `subtask-2`, etc. The `{{subtask-N.key}}` placeholder is resolved by the post_script when the sub-task is actually created. Set `<category-label>` to `review-feedback` for review and CI sub-tasks, or `eval-failure` for eval sub-tasks.
 
 #### CI failure sub-tasks
 
@@ -580,29 +580,7 @@ Process `create-sub-task` actions from the Correctness sub-agent. For each actio
 3. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
-**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`, add actions to the accumulator:
-
-```json
-{
-  "type": "create_subtask",
-  "ref": "subtask-N",
-  "parent": "<parent-task-id>",
-  "summary": "<summary>",
-  "labels": ["ai-generated-jira", "review-feedback"],
-  "description_adf": <pre-rendered ADF object>
-}
-```
-
-```json
-{
-  "type": "create_link",
-  "link_type": "Blocks",
-  "inward": "{{subtask-N.key}}",
-  "outward": "<parent-task-id>"
-}
-```
-
-Use incrementing refs: `subtask-1`, `subtask-2`, etc. The `{{subtask-N.key}}` placeholder is resolved by the post_script when the sub-task is actually created.
+**Sandbox mode:** Use the `create_subtask` + `create_link` pattern from the review feedback sandbox mode section above, with labels `["ai-generated-jira", "review-feedback"]`.
 
 #### Eval failure sub-tasks
 
@@ -639,29 +617,7 @@ Quality is PASS or N/A, skip this section entirely.
 4. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
-**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`, add actions to the accumulator:
-
-```json
-{
-  "type": "create_subtask",
-  "ref": "subtask-N",
-  "parent": "<parent-task-id>",
-  "summary": "<summary>",
-  "labels": ["ai-generated-jira", "eval-failure"],
-  "description_adf": <pre-rendered ADF object>
-}
-```
-
-```json
-{
-  "type": "create_link",
-  "link_type": "Blocks",
-  "inward": "{{subtask-N.key}}",
-  "outward": "<parent-task-id>"
-}
-```
-
-Use incrementing refs: `subtask-1`, `subtask-2`, etc. The `{{subtask-N.key}}` placeholder is resolved by the post_script when the sub-task is actually created.
+**Sandbox mode:** Use the `create_subtask` + `create_link` pattern from the review feedback sandbox mode section above, with labels `["ai-generated-jira", "eval-failure"]`.
 
 ### Step 6e – Reply to Review Comments
 
