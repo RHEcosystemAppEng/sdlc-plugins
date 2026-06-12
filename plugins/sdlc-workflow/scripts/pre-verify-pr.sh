@@ -1,8 +1,11 @@
 #!/usr/bin/env bash
-# pre-verify-pr.sh — Validate inputs before sandbox creation.
+# pre-verify-pr.sh — Validate inputs and pre-fetch Jira data.
 #
 # Runs on the fullsend runner BEFORE the sandbox is created.
-# Fails fast on invalid inputs to avoid wasting sandbox compute time.
+# 1. Validates required env vars and JIRA_ISSUE_ID format
+# 2. Verifies the Jira issue exists
+# 3. Fetches the full issue and PR linkage, writes to a JSON file
+#    that host_files mounts into the sandbox
 #
 # Required env vars:
 #   JIRA_ISSUE_ID     — Jira issue key (e.g., TC-4741)
@@ -28,33 +31,81 @@ fi
 
 echo "Issue: ${JIRA_ISSUE_ID}"
 
-# 3. Verify the Jira issue exists
-AUTH=$(echo -n "${JIRA_EMAIL}:${JIRA_API_TOKEN}" | base64)
-HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
-  -H "Authorization: Basic ${AUTH}" \
-  -H "Accept: application/json" \
-  "${JIRA_SERVER_URL}/rest/api/3/issue/${JIRA_ISSUE_ID}?fields=summary")
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-if [[ "${HTTP_CODE}" == "404" ]]; then
-  echo "ERROR: Jira issue ${JIRA_ISSUE_ID} not found"
+# 3. Fetch full issue details (validates existence + pre-fetches for sandbox)
+ISSUE_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}" --fields "*all" 2>&1) || {
+  echo "ERROR: Failed to fetch Jira issue ${JIRA_ISSUE_ID}"
+  echo "${ISSUE_JSON}"
   exit 1
-elif [[ "${HTTP_CODE}" != "200" ]]; then
-  echo "ERROR: Jira API returned HTTP ${HTTP_CODE} for ${JIRA_ISSUE_ID}"
-  exit 1
-fi
+}
 
 echo "Jira issue verified: ${JIRA_ISSUE_ID}"
 
-# 4. Check if the issue has a linked PR (best-effort — don't fail if field is missing)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PR_FIELD=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}" \
-  --fields "customfield_10875" 2>/dev/null | \
-  python3 -c "import json,sys; d=json.load(sys.stdin); f=d.get('fields',{}).get('customfield_10875',''); print(f if f else '')" 2>/dev/null || echo "")
+# 4. Extract PR URL from custom field (best-effort)
+PR_URL=$(echo "${ISSUE_JSON}" | python3 -c "
+import json, sys
+issue = json.load(sys.stdin)
+field = issue.get('fields', {}).get('customfield_10875')
+if not field:
+    print('')
+    sys.exit(0)
+if isinstance(field, str):
+    print(field)
+elif isinstance(field, dict):
+    # ADF format — extract URL from inlineCard
+    for block in field.get('content', []):
+        for inline in block.get('content', []):
+            if inline.get('type') == 'inlineCard':
+                print(inline.get('attrs', {}).get('url', ''))
+                sys.exit(0)
+    print('')
+" 2>/dev/null || echo "")
 
-if [[ -n "${PR_FIELD}" ]]; then
-  echo "PR linked: ${PR_FIELD}"
+if [[ -n "${PR_URL}" ]]; then
+  echo "PR linked: ${PR_URL}"
 else
   echo "WARNING: No PR linked in Jira custom field — the skill will ask for the PR URL"
 fi
 
+# 5. Write pre-fetched data for sandbox consumption (tracker-agnostic format)
+PRE_OUTPUT_DIR="/tmp/fullsend-pre-output"
+mkdir -p "${PRE_OUTPUT_DIR}"
+
+python3 -c "
+import json, sys
+
+issue = json.loads(sys.argv[1])
+fields = issue.get('fields', {})
+
+output = {
+    'task_id': sys.argv[2],
+    'task': {
+        'summary': fields.get('summary', ''),
+        'description': fields.get('description', {}),
+        'status': (fields.get('status') or {}).get('name', ''),
+        'labels': fields.get('labels', []),
+        'issue_links': [
+            {
+                'type': (link.get('type') or {}).get('name', ''),
+                'direction': 'inward' if 'inwardIssue' in link else 'outward',
+                'key': (link.get('inwardIssue') or link.get('outwardIssue') or {}).get('key', '')
+            }
+            for link in fields.get('issuelinks', [])
+        ],
+        'custom_fields': {
+            k: v for k, v in fields.items()
+            if k.startswith('customfield_')
+        }
+    },
+    'pr_url': sys.argv[3],
+    'source': {
+        'tracker': 'jira',
+        'raw': issue
+    }
+}
+json.dump(output, sys.stdout, indent=2)
+" "${ISSUE_JSON}" "${JIRA_ISSUE_ID}" "${PR_URL}" > "${PRE_OUTPUT_DIR}/verify-pr-input.json"
+
+echo "Pre-fetched data written to ${PRE_OUTPUT_DIR}/verify-pr-input.json"
 echo "Input validation passed"
