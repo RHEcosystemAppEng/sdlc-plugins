@@ -691,7 +691,7 @@ def main(argv=None):
     elif args.command == 'create_issue':
         labels = args.labels.split(',') if args.labels else None
         description_adf = None
-        if hasattr(args, 'description_adf') and args.description_adf:
+        if args.description_adf:
             try:
                 description_adf = json.loads(args.description_adf)
             except json.JSONDecodeError as e:
@@ -722,7 +722,7 @@ def main(argv=None):
 
     elif args.command == 'add_comment':
         comment_adf = None
-        if hasattr(args, 'comment_adf') and args.comment_adf:
+        if args.comment_adf:
             try:
                 comment_adf = json.loads(args.comment_adf)
             except json.JSONDecodeError as e:
