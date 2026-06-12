@@ -1169,7 +1169,7 @@ Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 
 ---
 
-### Task 10: Add pre_script for input validation
+### Task 10: Add pre_script for input validation (Phase 3 — deferred)
 
 The pre_script runs on the trusted runner BEFORE sandbox creation. It validates
 inputs and fails fast on invalid configuration, avoiding wasted sandbox compute
