@@ -419,7 +419,8 @@ def create_issue(
     labels: Optional[List[str]] = None,
     assignee_id: Optional[str] = None,
     custom_fields: Optional[Dict[str, Any]] = None,
-    description_adf: Optional[Dict[str, Any]] = None
+    description_adf: Optional[Dict[str, Any]] = None,
+    parent: Optional[str] = None
 ) -> Dict[str, Any]:
     """Create JIRA issue with markdown or ADF description.
 
@@ -432,6 +433,7 @@ def create_issue(
         assignee_id: Optional assignee account ID
         custom_fields: Optional custom field values (field_id: value)
         description_adf: Pre-rendered ADF description (overrides description_md)
+        parent: Optional parent issue key for sub-tasks
 
     Returns:
         Created issue object with key and ID
@@ -452,6 +454,9 @@ def create_issue(
             "issuetype": {"id": issue_type} if issue_type.isdigit() else {"name": issue_type},
         }
     }
+
+    if parent:
+        data["fields"]["parent"] = {"key": parent}
 
     if labels:
         data["fields"]["labels"] = labels
@@ -632,6 +637,7 @@ def main(argv=None):
     create_issue_parser.add_argument('--description-adf', help='Issue description as raw ADF JSON (overrides --description-md)')
     create_issue_parser.add_argument('--issue-type', required=True, help='Issue type ID or name')
     create_issue_parser.add_argument('--labels', help='Comma-separated labels')
+    create_issue_parser.add_argument('--parent', help='Parent issue key for sub-tasks')
     create_issue_parser.add_argument('--assignee-id', help='Assignee account ID')
 
     # update_issue
@@ -699,7 +705,8 @@ def main(argv=None):
             issue_type=args.issue_type,
             labels=labels,
             assignee_id=args.assignee_id,
-            description_adf=description_adf
+            description_adf=description_adf,
+            parent=args.parent
         )
 
     elif args.command == 'update_issue':
