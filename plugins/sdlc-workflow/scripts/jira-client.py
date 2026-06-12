@@ -695,7 +695,7 @@ def main(argv=None):
             try:
                 description_adf = json.loads(args.description_adf)
             except json.JSONDecodeError as e:
-                print(f"❌ Invalid JSON in --description-adf: {e.msg}", file=sys.stderr)
+                print(f"ERROR: Invalid JSON in --description-adf: {e.msg}", file=sys.stderr)
                 print(f"Position: line {e.lineno}, column {e.colno}", file=sys.stderr)
                 sys.exit(1)
         result = create_issue(
@@ -726,7 +726,7 @@ def main(argv=None):
             try:
                 comment_adf = json.loads(args.comment_adf)
             except json.JSONDecodeError as e:
-                print(f"❌ Invalid JSON in --comment-adf: {e.msg}", file=sys.stderr)
+                print(f"ERROR: Invalid JSON in --comment-adf: {e.msg}", file=sys.stderr)
                 print(f"Position: line {e.lineno}, column {e.colno}", file=sys.stderr)
                 sys.exit(1)
         result = add_comment(args.issue_key, comment_md=args.comment_md, comment_adf=comment_adf)
