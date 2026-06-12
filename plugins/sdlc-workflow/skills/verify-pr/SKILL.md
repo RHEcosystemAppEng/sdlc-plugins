@@ -163,7 +163,11 @@ Append these two nodes at the end of the ADF document's `content` array.
 
 ## Step 1 – Fetch and Parse Jira Task
 
-Use:
+**If pre-fetched data was loaded in Step 0.7:** Read `task.description` from
+the pre-fetched JSON. The description is in the issue tracker's native format
+(ADF for Jira). If you need the full raw response, read `source.raw`.
+
+**Otherwise:** Fetch the task from the issue tracker:
 
 jira.get_issue(<jira-issue-id>)
 
@@ -183,8 +187,13 @@ If any required section is missing or the description doesn't follow the templat
 
 ## Step 2 – Identify PR
 
-Look up the **Git Pull Request custom field** ID from the project's **Jira Configuration**
-section in CLAUDE.md (the field is listed as `Git Pull Request custom field: <field-id>`).
+**If pre-fetched data was loaded in Step 0.7:** Read `pr_url` from the
+pre-fetched JSON. If non-empty, extract the PR number and repository from
+the URL. If empty, ask the user to provide the PR URL.
+
+**Otherwise:** Look up the **Git Pull Request custom field** ID from the project's
+**Jira Configuration** section in CLAUDE.md (the field is listed as
+`Git Pull Request custom field: <field-id>`).
 
 If the custom field is configured, read its value from the Jira issue. If the field is empty
 or not configured, ask the user to provide the PR URL.
@@ -781,11 +790,15 @@ universal knowledge (eval design patterns apply across repos) and classify as
 method-based skill gaps in the implement-task phase.
 
 The sub-agent receives these inputs:
-1. **Parent Feature description** — fetched by following the "incorporates" issue link
-   from the current task back to the Feature issue. Use:
+1. **Parent Feature description** — find the "incorporates" issue link from the
+   current task to the Feature issue. If pre-fetched data was loaded in Step 0.7,
+   read `task.issue_links` to find the link with type "Incorporates" and direction
+   "inward", then fetch the Feature issue. Otherwise use:
    ```
    jira.get_issue(<task-id>) → find issue link with type "incorporates" (inward) → jira.get_issue(<feature-id>)
    ```
+   Note: the Feature issue itself still requires a direct API call — only the
+   current task's data is pre-fetched.
 2. **Task description** — the structured description parsed in Step 1
 3. **Review comments** — the code change requests that triggered sub-tasks in Step 6d
 4. **Relevant code** — the files on the PR branch related to each flagged defect
