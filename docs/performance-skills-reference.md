@@ -8,7 +8,7 @@ Quick reference for all performance optimization skills.
 
 | # | Skill | Purpose | Key Action |
 |---|---|---|---|
-| 1 | performance-setup | Initialize infrastructure (dirs, settings, backend) | Creates minimal `.claude/performance-config.json` (no workflow) |
+| 1 | performance-setup | Initialize infrastructure (dirs, settings, backend) | Creates minimal `performance-config.json` (no workflow) |
 | 2 | performance-baseline | **Discover workflows**, select workflow, capture metrics | Workflow selection + Playwright automation → `baseline-report.md` + config update |
 | 3 | performance-analyze-module | Detect anti-patterns | **Inspects source code** → `workflow-analysis-report.md` |
 | 4 | performance-plan-optimization | Create Jira tasks | **Reads analysis report** → Jira Epic/Tasks |
@@ -25,7 +25,7 @@ Quick reference for all performance optimization skills.
 
 | Input | Output |
 |---|---|
-| Target repository path (optional) | Minimal `.claude/performance-config.json` (no workflow selected) |
+| Target repository path (optional) | Minimal `performance-config.json` (no workflow selected) |
 | User responses (backend config, baseline settings, targets) | Target directories created |
 
 **What it does:**
@@ -43,7 +43,7 @@ Quick reference for all performance optimization skills.
    - Empty Selected Workflow (populated by baseline)
    - `workflow_selected: false`
 
-**Default targets:** LCP 2500ms, FCP 1800ms, TTI 3500ms, Total Load 4000ms
+**Default targets:** LCP 2500ms, FCP 1800ms, DOM Interactive 3500ms, Total Load 4000ms
 
 **Next step:** Run `/sdlc-workflow:performance-baseline` to discover workflows and capture metrics
 
@@ -58,7 +58,7 @@ Quick reference for all performance optimization skills.
 | Input | Output |
 |---|---|
 | Target repository path (optional) | `baseline-report.md` + config updated with selected workflow |
-| User responses: workflow selection, mode selection, test data confirmation | Metrics: LCP, FCP, TTI, Total Load Time |
+| User responses: workflow selection, mode selection, test data confirmation | Metrics: LCP, FCP, DOM Interactive, Total Load Time |
 
 **Prerequisites:**
 - Application running locally
@@ -85,7 +85,7 @@ Quick reference for all performance optimization skills.
 **Key metrics captured:**
 - LCP (Largest Contentful Paint)
 - FCP (First Contentful Paint)
-- TTI (Time to Interactive)
+- DOM Interactive (Time to Interactive)
 - Total Load Time
 - Resource breakdown (scripts, CSS, images, API calls)
 
@@ -100,9 +100,15 @@ Quick reference for all performance optimization skills.
 | Input | Output |
 |---|---|
 | Target repository path (optional) | `workflow-analysis-report.md` |
-| Baseline data | Anti-pattern findings with severity, impact, locations |
+| Baseline data | `findings-validation.json`, `query-ledger.json`, `analysis-progress.json` |
 
 **Key distinction:** This skill **inspects source code**. The next skill (plan-optimization) **reads this report**.
+
+**Artifacts:**
+- `workflow-analysis-report.md` — full analysis report with validated findings
+- `findings-validation.json` — all findings with disposition (confirmed/discarded) for audit trail
+- `query-ledger.json` — structured backend query inventory (consumed by live SQL analysis)
+- `analysis-progress.json` — step completion tracker; Step 9.0 gates on all steps being `done`/`skipped`/`not_applicable`
 
 **What it does:**
 1. Reads baseline data

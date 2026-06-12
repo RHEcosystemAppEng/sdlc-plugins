@@ -51,6 +51,22 @@ Overall API performance across all endpoints.
 | **Error Rate** | - | - | {error-rate-p95} | - | % |
 | **Cache Effectiveness** | - | - | {cache-improvement-pct} | - | % improvement |
 
+## API Correlation
+
+**Included when:** capture-mode = "hybrid" AND workflow.traced_api_endpoints is non-empty.
+
+Frontend routes and their traced backend API calls for the selected workflow.
+
+| Frontend Route | Route Load p95 (ms) | Traced APIs | Slowest Traced API | In-Page Fetch Time (ms) | Isolated API p95 (ms) |
+|---|---|---|---|---|---|
+| {route-url} | {route-load-p95} | {api-count} | {slowest-api-path} | {fetch-resource-timing-ms} | {benchmark-p95-ms} |
+
+**Notes:**
+- "In-Page Fetch Time" is from Playwright resource timing (Fetch/XHR entries) — actual duration during page load.
+- "Isolated API p95" is from perf-benchmark.sh — latency without browser overhead.
+- Large gap between in-page and isolated time may indicate parallel API loading or frontend processing overhead.
+- APIs are not necessarily sequential — do not sum API times to explain route load time.
+
 ## Per-Scenario Metrics
 
 {per-scenario-sections}

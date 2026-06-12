@@ -332,6 +332,7 @@ results multiple times.
 
 1. **Table:** `{table_name}`  
    **Column:** `{column_name}`  
+   **Table Source:** `{migration_file_path}` or "Not found in migration files — verify manually"  
    **Used In:** {query_description} (`{source_file}:{line}`)  
    **Query Type:** {WHERE filter / JOIN condition / ORDER BY}  
    **Loop Multiplier:** {from query_ledger — how many times this query fires per request}  
@@ -476,6 +477,78 @@ this detects waste at the HTTP API boundary — where the backend serves fields 
 - Endpoints with >200ms variance: Profile with database query analyzer
 - Minimal cache effectiveness: Review caching strategy
 - Slow endpoints: Prioritize for optimization
+
+---
+
+## Live SQL Analysis (EXPLAIN ANALYZE)
+
+**Note:** This section is included only when live SQL analysis was performed (Step 9.7). If the user skipped live analysis, omit this section entirely.
+
+**Database:** {database_name} (connection details redacted)
+**Queries Analyzed:** {analyzed_count}
+**Queries Skipped:** {skipped_count}
+**Skip Reasons:** {ORM derivation not yet supported: {orm_skip_count}, Mutation query: {mutation_skip_count}, Dynamic SQL: {dynamic_skip_count}}
+**Analysis Method:** EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) for SELECT queries; EXPLAIN (FORMAT TEXT) for mutation queries
+
+### SQL Query Ledger
+
+| # | Query Description | Source | Query Type | Derived SQL | Execution Time | Planning Time |
+|---|---|---|---|---|---|---|
+| {n} | {description} | {file}:{line} | {SELECT/INSERT/...} | `{sql_snippet_truncated}` | {exec_time}ms | {plan_time}ms |
+
+### Execution Plan Bottlenecks
+
+{... for each bottleneck found ...}
+
+#### Query #{n}: {query_description}
+
+**Source:** {file}:{line}
+**Finding ID:** F{n}
+**Execution Time:** {exec_time}ms (Planning: {plan_time}ms)
+
+**Derived SQL:**
+```sql
+{derived_sql}
+```
+
+**EXPLAIN Output:**
+```
+{full_explain_output}
+```
+
+**Bottlenecks Detected:**
+
+| Bottleneck | Node | Table | Est. Rows | Actual Rows | Mismatch | Impact |
+|---|---|---|---|---|---|---|
+| {type} | {node_description} | {table} | {est} | {actual} | {ratio}x | {impact_description} |
+
+**Recommended Fix:**
+```sql
+{recommended_sql_or_index}
+```
+
+**Validation Status:** {Confirmed / Downgraded}
+**Confidence:** High — live execution plan evidence
+**Severity:** {Critical / High / Medium / Low}
+**Timeline:** {estimate}
+
+{... end for each bottleneck ...}
+
+### Heuristic vs Measured Comparison
+
+**Method:** Static estimates use `db_latency_ms` ({db_latency_ms}ms) × effective query count from the query ledger. Measured values are actual EXPLAIN ANALYZE execution times. These are not comparable methodologies — the heuristic is a rough cost model, not a per-query prediction.
+
+| Query # | Heuristic Estimate | Formula | Measured Time | Notes |
+|---|---|---|---|---|
+| {n} | {heuristic_ms}ms | {db_latency_ms}ms × {effective_count} | {measured_ms}ms | {notes} |
+
+**Summary:** {N} of {total} analyzed queries show >10x variance between heuristic and measured — indicating the heuristic under/overestimates for those query shapes.
+
+### Phase 1 Limitations
+
+- ORM-derived queries (SeaORM builders, SQLAlchemy chains, TypeORM QueryBuilder) were skipped. Only queries with literal SQL in source code were analyzed.
+- Mutation queries (INSERT/UPDATE/DELETE) used EXPLAIN without ANALYZE (plan only, no execution) or were skipped.
+- Query parameters were substituted with representative values — actual runtime parameters may produce different execution plans due to data distribution.
 
 ---
 

@@ -348,11 +348,11 @@ Performance optimization skills use a separate configuration file in the
 **target repository** (not in the sdlc-plugins project). This file is
 created by the `performance-setup` skill (minimal scaffold) and populated by
 the `performance-baseline` skill (workflow selection). It lives at
-`.claude/performance-config.json` in the target repository.
+`performance-config.json` in the target repository.
 
 ### Location
 
-**Target repository root**: `.claude/performance-config.json`
+**Target repository root**: `performance-config.json`
 
 **Created by**: `/sdlc-workflow:performance-setup` (minimal scaffold)  
 **Populated by**: `/sdlc-workflow:performance-baseline` (workflow selection)
@@ -398,10 +398,10 @@ The Performance Analysis Configuration file contains:
 
 ## Target Directories
 
-- **Baselines:** `.claude/performance/baselines/`
-- **Analysis:** `.claude/performance/analysis/`
-- **Plans:** `.claude/performance/plans/`
-- **Verification:** `.claude/performance/verification/`
+- **Baselines:** `performance/baselines/`
+- **Analysis:** `performance/analysis/`
+- **Plans:** `performance/plans/`
+- **Verification:** `performance/verification/`
 
 ---
 
@@ -429,7 +429,7 @@ The Performance Analysis Configuration file contains:
 
 ### How Skills Use It
 
-Performance skills read `.claude/performance-config.json` from the target
+Performance skills read `performance-config.json` from the target
 repository to:
 
 - **performance-setup**: Creates minimal config with backend, settings, targets; does NOT discover workflows
@@ -441,7 +441,7 @@ repository to:
 
 **Note**: This configuration is **per-repository**, not per-project. Each
 repository that undergoes performance optimization has its own
-`.claude/performance-config.json` file.
+`performance-config.json` file.
 
 ---
 

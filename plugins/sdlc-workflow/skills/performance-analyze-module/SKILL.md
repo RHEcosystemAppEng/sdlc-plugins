@@ -13,13 +13,14 @@ Source code analysis to detect performance anti-patterns in a user-selected work
 
 ## Guardrails
 
-- Creates files in `.claude/performance/analysis/` — does NOT modify source code
+- Creates files in `performance/analysis/` — does NOT modify source code
 - Requires Performance Analysis Configuration with a selected workflow and baseline report
 - Blocking step: Step 1 (target repository path, if not provided)
 - Missing config → halt, suggest `performance-setup`. Missing baseline → halt, suggest `performance-baseline`
 - Serena probe failure → do NOT halt; set `serena_mode = down`, continue with Grep
 - Finding validation (Step 9) is mandatory. Precision over volume: 10 correct findings beats 50 with 40% noise
 - Detection steps (5–8) may be delegated to subagents for parallelism. Validation (Step 9) may not — subagent output is input to validation, not input to the report
+- When delegating detection steps, the parent agent must update `analysis-progress.json` with each subagent's results before proceeding to Step 9
 - `findings-validation.json` must exist before the report is written
 
 ### Plugin Root Resolution
@@ -38,7 +39,7 @@ fi
 
 Use the user-provided repository path, or the current working directory.
 
-If `.claude/performance-config.json` exists, read `metadata.analysis_scope` and verify the repository matches:
+If `performance-config.json` exists, read `metadata.analysis_scope` and verify the repository matches:
 - `backend-only`: backend indicators (Cargo.toml, pom.xml, requirements.txt, etc.)
 - `frontend-only`: frontend indicators (package.json with frontend deps, framework config)
 - `full-stack`/`full-stack-monorepo`: both sets of indicators
@@ -49,7 +50,7 @@ If config doesn't exist, skip validation.
 
 ### Step 2.0 – Read Analysis Assumptions
 
-Read `analysis_assumptions` from `.claude/performance-config.json`:
+Read `analysis_assumptions` from `performance-config.json`:
 
 ```bash
 assumptions=$(python3 "$plugin_root/scripts/perf-config.py" get-section analysis_assumptions)
@@ -68,17 +69,28 @@ Validate each value (positive numbers, `cache_hit_rate` 0.0–1.0, `chain_depth`
 
 ### Step 2.1 – Check for Selected Workflow
 
-Extract workflow name, entry point, and key screens from `.claude/performance-config.json`. If no workflow is selected, halt with: "Run `performance-baseline` first."
+Extract workflow name, entry point, key screens from config. If no workflow selected → halt: "Run `performance-baseline` first."
 
 ### Step 2.2 – Read Backend/Frontend Configuration
 
-Read `metadata.backend_available` from config.
+Read `metadata.backend_available`. If `true`: read backend config (name, path, framework, `serena_instance`, api_base_path) + frontend config if scope includes frontend. If `false`: log frontend-only mode; backend steps (6.B, 7) will be skipped. Serena availability is determined by live probe in Step 6.B, not here.
 
-**If `backend_available = true`:** Read backend config (`repositories.backend`): name, path, framework, `serena_instance`, api_base_path. Read frontend config if scope includes frontend.
+### Step 2.3 – Initialize Progress Checklist
 
-**If `backend_available = false`:** Log frontend-only mode. Backend analysis (Steps 6.B, 7) will be skipped.
+Write `{analysis_dir}/analysis-progress.json` based on `(metric_type, backend_available)`:
 
-**Serena availability** is determined by a live probe in Step 6.B, not here. If `serena_instance` is not configured, display an early info message recommending Serena for higher-accuracy detection.
+| metric_type | backend_available | Steps → `pending` | Steps → `not_applicable` |
+|---|---|---|---|
+| `frontend` | any | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.6.1-7.6.6, 8.A-D, 8.F, 9.7 |
+| `backend` | `true` | 6.B, 7.1-7.7, 7.6.1-7.6.6, 9.7 | 5.1-5.3, 6.1-6.9, 8.A-D, 8.F |
+| `hybrid` | `true` | 5.1-5.3, 6.1-6.9, 6.B, 7.1-7.7, 7.6.1-7.6.6, 8.A-D, 8.F, 9.7 | (none) |
+| `hybrid` | `false` | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.6.1-7.6.6, 8.A-D, 8.F, 9.7 |
+
+Status values: `pending` (not yet run), `done` (completed — requires `findings` count, 0 = "no instances"), `skipped` (runtime scope guard excluded a step that could apply — requires `reason`), `not_applicable` (step does not apply to this `metric_type`/`backend_available` combo — use for all steps initialized as `not_applicable` in the table above), `optional_skipped` (user declined or prerequisites not met — requires `reason`). Use `not_applicable` (not `skipped`) for steps excluded by metric_type at initialization.
+
+Optional step rules: Step 5.1 (no bundle stats found) → `done` with `findings: 0` (estimation fallback runs). Step 7.7 (service not running) → `optional_skipped`. Step 9.7 guard failure → `not_applicable`; user declines → `optional_skipped`.
+
+At the end of each detection step (5.x, 6.x, 7.x, 8.x): update `analysis-progress.json` with the step's status and findings count.
 
 ## Step 3 – Verify Baseline Report Exists
 
@@ -132,6 +144,9 @@ All detection steps (6.x and 7.x) classify findings using this table. Each step 
 | Unused JOINs (7.6.1) | Large table (>10K rows) or 3+ unused | Medium table (1K-10K) | Small table (<1K) with indexes |
 | Missing Indexes (7.6.4) | JOIN/WHERE on loop query (multiplier>1) | Range filter on large table | ORDER BY or small table |
 | SQL Duplication (7.6.5) | Same CTE 3+ times or table scans | Same CTE 2 times | >50% overlap across 2 queries |
+| Seq Scan (9.7) | >10K rows in loop query | 1K-10K rows or single query | <1K rows |
+| Row Estimate Mismatch (9.7) | >100x mismatch | 10x-100x mismatch | <10x mismatch |
+| Nested Loop on Large Table (9.7) | Inner scan >10K rows | Inner 1K-10K rows | Inner <1K rows |
 
 **Impact formulas** (use throughout):
 - Over-fetching: `(unused/total) × response_size ÷ (bandwidth_mbps × 125000)`
@@ -144,13 +159,19 @@ All detection steps (6.x and 7.x) classify findings using this table. Each step 
 
 **Scope:** Skip if `metric_type = "backend"` (jump to Step 6.B). Run for `frontend` or `hybrid`.
 
-Impact estimates are rough heuristics for prioritization, not predictions. Verify with Lighthouse/WebPageTest after implementation.
+Impact estimates are heuristics for prioritization — verify after implementation.
 
 ### Step 6.1 – Over-Fetching Detection
 
 Search workflow components for API calls (`fetch(`, `axios.get(`, `useQuery(`). For each endpoint, identify the response schema and grep for field usage in consuming components. Flag fields in the response that are never referenced.
 
 Confidence: Low (grep cannot track destructuring, prop drilling, or dynamic access).
+
+**Advisory drift check (hybrid only):** If `workflow.traced_api_endpoints` exists, compare endpoints discovered here against that list. Log as informational notes (not findings, not blocking):
+- Endpoint in Step 6.1 but NOT in traced list → "API call `{url}` in `{file}` not in baseline trace — baseline may need refresh"
+- Endpoint in traced list but NOT in Step 6.1 → "Traced API `{path}` not found in current source — may have been removed"
+
+These are advisory only. Code changes between baseline and analysis are normal. Do not halt or create findings from drift.
 
 ### Step 6.2 – N+1 Query Detection (Frontend)
 
@@ -174,7 +195,7 @@ Identify component hierarchy in workflow routes. Search for missing memoization 
 
 ### Step 6.7 – Long Task Detection
 
-Check baseline for performance traces (long task API data). Fallback: grep for expensive patterns — synchronous loops over large datasets, JSON.parse of large payloads, DOM manipulation in loops, spread inside `.reduce()` (O(n²) memory: `[...prev,` patterns).
+Check baseline for resource timing data. Grep for expensive patterns — synchronous loops over large datasets, JSON.parse of large payloads, DOM manipulation in loops, spread inside `.reduce()` (O(n²) memory: `[...prev,` patterns).
 
 ### Step 6.8 – Layout Thrashing Detection
 
@@ -200,8 +221,8 @@ Read `serena_instance` from config. If non-empty, call `mcp__{serena_instance}__
 **Runs when `backend_available = true` and `metric_type` is `backend` or `hybrid`.**
 
 **Endpoint source (scope-aware):** Step 7 does not run for `metric_type = "frontend"` (frontend-only skips backend analysis).
-- `metric_type = "backend"`: Iterate endpoints from `.claude/performance-config.json` scenarios (populated by baseline's Step 3 backend discovery). Step 6.1 was skipped; config scenarios are the authoritative endpoint list.
-- `metric_type = "hybrid"`: Union of config scenarios AND Step 6.1 frontend-discovered endpoints. Config scenarios are primary (complete workflow scope); Step 6.1 adds frontend-specific call context for cross-layer analysis (Steps 8/8.F).
+- `metric_type = "backend"`: Iterate endpoints from `performance-config.json` scenarios (populated by baseline's Step 3 backend discovery). Step 6.1 was skipped; config scenarios are the authoritative endpoint list.
+- `metric_type = "hybrid"`: Iterate endpoints from `workflow.traced_api_endpoints` (populated by baseline Step 4.8 frontend-to-backend API tracing). These are the specific backend APIs that the selected frontend workflow calls. Fallback: if `traced_api_endpoints` is empty (backward compat with older configs), use config scenarios with `type: "backend"` instead.
 
 For EACH endpoint from the source above:
 
@@ -286,48 +307,25 @@ Trace function calls from each handler into service methods, model builders, and
 
 **For each handler**, initialize `call_graph = []`, `visited = {handler}`, `query_ledger = []`, `depth = 0`.
 
-**Recursive tracing:**
+**Recursive tracing:** For each call site in function body, resolve the callee (`self.method` → same impl, `service.method` → resolve type, trait methods → concrete impl). Use Serena `find_symbol`/`find_declaration` when live, grep+Read otherwise.
 
-1. Extract call sites from function body. Resolve each call:
-   - `self.method(...)` → find method in same impl block
-   - `service.method(...)` → resolve service type from params, find method
-   - `Type::associated_fn(...)` → find associated function
-   - Trait methods → find concrete implementation
+For each resolved callee: check cycle/depth limit, read body, apply anti-pattern checks (N+1, unused JOINs, SELECT *, missing caching). Special cases:
+- **Cache-guarded paths:** `.get(key)` + early return + `.insert(key, value)` on miss → annotate as `cache_gated: true`. Confirm it's a cache (type contains Cache/Lru/Ttl, known crate), not a dedup set
+- **Conditional queries:** `Memo<T>`/`Option<T>` params where one branch triggers a query — check what caller passes
+- **Model builders:** Always trace into `from_entity`/`from_row`/`from_model`/`new`
+- Add queries to `query_ledger` with depth, loop multiplier, source. Recurse at `depth + 1`
 
-   Use Serena `find_symbol`/`find_declaration` when live, grep+Read otherwise.
+**Persist Query Ledger:**
 
-2. For each resolved callee:
-   - Check cycle (skip if visited) and depth limit
-   - Read callee body
-   - Apply anti-pattern checks: N+1, unused JOINs, SELECT *, missing caching
-   - **Cache-guarded paths:** Detect get-or-compute patterns (`.get(key)` with early return + `.insert(key, value)` on miss). Confirm it's a cache (type name contains Cache/Lru/Ttl, or known crate like `moka`/`quick_cache`), not a dedup set. Trace miss path for queries, annotate as `cache_gated: true`
-   - **Conditional queries:** Detect `Memo<T>`/`Option<T>` parameters where one branch triggers a query. Check what caller passes — if `None`/`NotProvided`, the query fires
-   - **Model builders:** Always trace into `from_entity`/`from_row`/`from_model`/`new` — they commonly contain hidden queries
-   - Add queries to `query_ledger` with depth, loop multiplier, source location
-   - Recurse into callee's call sites at `depth + 1`
+After building the query ledger, write `{analysis_dir}/query-ledger.json`. This structured artifact is consumed by Step 9.7 (live SQL analysis) and must exist before Step 9.7 runs.
 
-**Outputs:**
+Schema: `[{query_id, description, source_file, source_line, depth, loop_multiplier, orm_snippet, raw_sql, query_type, is_literal_sql}]`
+- `is_literal_sql`: `true` for `query!()` macros, `@Query`, raw SQL strings. `false` for ORM builder chains.
+- `query_type`: SELECT, INSERT, UPDATE, DELETE, or UNKNOWN.
 
-**Call Graph** (text format for report):
-```
-GET /v3/sbom/{id}/advisory
-  └─ SbomService::fetch_sbom_details          [service/sbom.rs:88]
-       ├─ fetch_sbom                            [service/sbom.rs:71]    ← 1 query
-       └─ SbomDetails::from_entity             [model/details.rs:76]
-            └─ [advisory join query]            [model/details.rs:88]  ← 1 query (multi-JOIN)
-```
+**Outputs:** Call graph (tree format: `endpoint → service → model [file:line] ← N queries`) and query ledger table (per-query: description, source, depth, loop multiplier, conditional†, cache-gated‡, effective count; totals for all and warm-cache).
 
-**Query Ledger:**
-
-| # | Query | Source | Depth | Loop Mult. | Cond? | Cache? | Effective Count |
-|---|---|---|---|---|---|---|---|
-| 1 | {description} | {file:line} | {depth} | {mult} | † | ‡ | {effective} |
-| **Total** | | | | | | | **{total}** |
-| **Warm cache** | | | | | | | **{warm}** |
-
-`†` = conditional (fires only when caller passes None/NotProvided). `‡` = cache-gated (fires only on cache miss).
-
-**Multiplier propagation:** Walk call_graph from root to query; multiply by all loop multipliers on the path. **Estimated total DB latency:** `total_queries × db_latency_ms`.
+**Multiplier propagation:** Walk call_graph root→query; multiply by all loop multipliers on the path. **Estimated total DB latency:** `total_queries × db_latency_ms`.
 
 **Zero-result check:** If a bulk fetch (`WHERE id IN (?)`) is keyed on IDs from a preceding query that can return zero results, check whether the fetch is guarded (`if ids.is_empty() { return }`) or fires unconditionally. Flag unconditional empty-set queries as wasted computation (Medium severity).
 
@@ -338,6 +336,10 @@ For each handler, compare fields accessed from the service call return value aga
 ### Step 7.6.4 – Missing Index Detection
 
 Cross-reference WHERE/JOIN/ORDER BY columns from query_ledger against migration files. Build an index registry from `CREATE INDEX`, `.create_index()`, primary keys. Flag columns with no covering index.
+
+**Table registry validation:** Also build a **table registry** from migration DDL (`CREATE TABLE` statements and `.create_table()` calls). Before flagging a missing index, confirm the target table exists in the table registry. If not found, record the gap in the finding's reason (e.g., "table `foo` not found in migration files — verify manually"). This feeds into Step 9.1-B check 5 which greps migration files for factual claims.
+
+Tables from live EXPLAIN findings (Step 9.7.4) are inherently validated — the query executed successfully against the database.
 
 ### Step 7.6.5 – Inter-Query Duplication Detection
 
@@ -376,15 +378,15 @@ Map response fields to their computation cost (queries from call graph). Cross-r
 
 ## Step 9 – Generate Workflow Analysis Report
 
-### Step 9.0 – Pre-Report Completeness Verification
+### Step 9.0 – Pre-Report Completeness Gate
 
-Walk through all analysis steps and verify each either produced findings, recorded "no instances", or documented a skip reason. If any step is missing, go back and complete it.
+Read `{analysis_dir}/analysis-progress.json`. Verify:
+1. No step has status `pending` — if any do, go back and complete them
+2. Each `done` step has an explicit findings count (0 is valid)
+3. No endpoints were silently dropped (compare analyzed endpoints vs config)
+4. Query ledger was consumed by Steps 7.6.3-7.6.6 when it exists
 
-**Frontend checklist** (skip if backend-only): Steps 5.1-5.3, 6.1-6.9.
-**Backend checklist** (skip if frontend-only or no backend): Steps 6.B, 7.1-7.2, 7.3-7.6.6, 7.7.
-**Cross-reference checklist** (skip if no backend): Steps 8 A-D, 8.F.
-
-Confirm no endpoints were silently dropped. Confirm query ledger was consumed by Steps 7.6.3-7.6.6 when it exists.
+Do not proceed to Step 9.1 until all checks pass.
 
 ### Step 9.1 – Finding Validation
 
@@ -430,15 +432,7 @@ For each finding, apply these checks:
 
 #### Step 9.1-C – Assign Confidence
 
-Confidence = min(Detection Method, Evidence Strength) adjusted by false-positive risk.
-
-| Detection Method | Base |
-|---|---|
-| Serena with `include_body=true`, raw SQL | High |
-| Grep with structural context, depth-0 chain | Medium |
-| Dynamic queries, grep at depth>0, control flow ambiguity | Low |
-
-Downgrade one level per unresolvable risk factor.
+Confidence = min(Detection Method, Evidence Strength) adjusted by false-positive risk. Base: High (Serena/raw SQL), Medium (grep + structural context, depth-0), Low (dynamic queries, depth>0, control flow ambiguity). Downgrade one level per unresolvable risk factor.
 
 #### Step 9.1-D – Assign Severity
 
@@ -446,14 +440,7 @@ Apply the Anti-Pattern Severity Reference table using actual quantified values f
 
 #### Step 9.1-E – Assign Implementation Timeline
 
-| Timeline | Criteria |
-|---|---|
-| < 1 hour | Single-line change, config toggle, attribute addition |
-| 1–4 hours | Single-file refactor, parameter addition |
-| 0.5–1 day | Multi-file change in one module |
-| 1–3 days | Cross-module refactor, new service method, API change |
-| 3–5 days | Architectural change, new infrastructure |
-| > 5 days | Major restructuring, new system component |
+`<1h` (single-line/config) · `1-4h` (single-file refactor) · `0.5-1d` (multi-file, one module) · `1-3d` (cross-module/API change) · `3-5d` (architectural) · `>5d` (major restructuring)
 
 #### Step 9.1-F – Assign Disposition
 
@@ -478,27 +465,15 @@ Write `{analysis_dir}/findings-validation.json` with all findings (including dis
 
 ### Step 9.2 – Report Location
 
-Read `directories` from config. Report path: `{analysis_dir}/workflow-analysis-report.md`.
+Report path: `{analysis_dir}/workflow-analysis-report.md`.
 
 ### Step 9.3 – Report Structure
 
-Read the template from `${plugin_root}skills/performance/performance-analysis-report.template.md`. Populate using:
-- Metrics, bundle, baseline data from Steps 2–8 (non-finding sections)
-- Findings exclusively from `findings-validation.json` (never raw detection output)
-
-Include sections based on `metric_type`:
-- Frontend sections for `frontend`/`hybrid`: Performance summary, frontend anti-patterns, bundle analysis
-- Backend sections for `backend`/`hybrid`: Performance summary, backend anti-patterns, call graphs, query ledgers, wasted computation, SQL duplication, cache effectiveness, missing indexes, cross-layer waste, dynamic testing results
+Read template from `${plugin_root}skills/performance/performance-analysis-report.template.md`. Populate with metrics/bundle/baseline from Steps 2–8 and findings exclusively from `findings-validation.json` (never raw detection output). Include frontend sections for `frontend`/`hybrid`, backend sections for `backend`/`hybrid`.
 
 ### Step 9.4 – Overall Performance Rating
 
-Compare metrics against Optimization Targets:
-- **Excellent:** All within targets
-- **Good:** 1-2 slightly above (within 20%)
-- **Needs Improvement:** 2-3 above (>20%)
-- **Poor:** All above or any >50% over
-
-For `hybrid`: overall = worst of frontend and backend ratings.
+Compare metrics against Optimization Targets: Excellent (all within), Good (1-2 slightly above, ≤20%), Needs Improvement (2-3 above, >20%), Poor (all above or any >50%). Hybrid: worst of frontend and backend.
 
 ### Step 9.5 – Prioritize Optimizations
 
@@ -516,11 +491,57 @@ Prerequisites: use "Fix #N first" when an optimization delivers no benefit until
 
 **Strategic optimizations** (materialized views, background jobs, data model changes, ingestion pipeline changes) go in a separate table with S1, S2, ... numbering. For each, explain what scaling limit tactical fixes cannot address.
 
-### Step 9.6 – Validate and Write Report
+### Step 9.7 – Live SQL Analysis (Optional)
 
-**Step 9.6-A:** Confirm `findings-validation.json` exists. Assemble report content. Run validation checklist from [finding-validation.md](../performance/finding-validation.md). All rules must PASS.
+**Guard:** `backend_available = true` AND `metric_type` is `backend` or `hybrid` AND `{analysis_dir}/query-ledger.json` exists and is non-empty. Skip entirely when any guard condition is false.
 
-**Step 9.6-B:** Only when 9.6-A shows all PASS: set `Validation Status: passed`, write to `{analysis_dir}/workflow-analysis-report.md`.
+#### Step 9.7.0 – Prompt User
+
+Offer: (1) Automated — provide connection details, (2) Manual — receive EXPLAIN commands to run yourself, (3) Skip → proceed to Step 9.8. Warn: use dev/staging DB only.
+
+#### Step 9.7.1 – Prepare Queries
+
+Read `{analysis_dir}/query-ledger.json`. Only eligible queries proceed:
+
+- `is_literal_sql = true` AND `query_type = "SELECT"` → EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+- Mutation queries (INSERT/UPDATE/DELETE) → EXPLAIN without ANALYZE only, or skip
+- `is_literal_sql = false` or dynamic SQL → skip, document as Phase 1 limitation
+
+Parameterize eligible queries with representative values from test data manifest or safe defaults.
+
+#### Step 9.7.2 – Collect Connection Details (Automated Mode Only)
+
+Prompt for PostgreSQL connection details. Verify connectivity. On failure: offer re-entry, switch to manual mode, or skip.
+
+**Security:** Connection details held in session memory only — never written to any file or artifact.
+
+#### Step 9.7.3 – Obtain EXPLAIN Results
+
+**Automated:** Execute EXPLAIN on eligible queries with a 30-second statement timeout. Never execute mutation queries via EXPLAIN ANALYZE — use EXPLAIN without ANALYZE or skip. On timeout: prompt user to run the timed-out query manually and share the result, or skip that query. On other errors: record and continue.
+
+**Manual:** Present numbered EXPLAIN commands for each eligible query (with source location and parameterized SQL). User executes on their database and shares results back. Accept partial results — analyze whatever is provided. Determine `detection_method` from whether output contains execution timing.
+
+#### Step 9.7.4 – Analyze Bottlenecks
+
+Parse EXPLAIN output for: sequential scans on large tables, missing indexes, nested loop joins on large inner relations, row estimate mismatches, sorts spilling to disk, high-cost nodes, hash batch overflow. Classify severity per the Anti-Pattern Severity Reference table.
+
+#### Step 9.7.5 – Create and Validate Findings
+
+Create findings with `detection_method: "EXPLAIN ANALYZE"` (or `"EXPLAIN"`), `step: "9.7.4"`, confidence: High. Include `explain_data` per [finding-validation.md](../performance/finding-validation.md) schema. Finding IDs continue the existing F-sequence.
+
+Pass each finding through the Step 9.1 validation flow (9.1-B source re-verification, 9.1-B2 fix premise validation, 9.1-C–F confidence/severity/disposition assignment). Update `findings-validation.json`.
+
+If Step 9.7 added any new Confirmed or Downgraded findings, re-run Step 9.5 to incorporate them into the priority table before proceeding to Step 9.8.
+
+#### Step 9.7.6 – Heuristic vs Measured Comparison
+
+Compare static estimates (`db_latency_ms` × effective query count) against measured execution times. Label clearly as "Heuristic Estimate vs Measured" with the formula — these are not comparable methodologies.
+
+### Step 9.8 – Validate and Write Report
+
+**Step 9.8-A:** Confirm `findings-validation.json` exists. Assemble report content (including Live SQL Analysis section if Step 9.7 was performed). Run validation checklist from [finding-validation.md](../performance/finding-validation.md). All rules must PASS.
+
+**Step 9.8-B:** Only when 9.8-A shows all PASS: set `Validation Status: passed`, write to `{analysis_dir}/workflow-analysis-report.md`.
 
 ## Step 10 – Output Summary
 
@@ -529,7 +550,7 @@ Prerequisites: use "Fix #N first" when an optimization delivers no benefit until
 
 Workflow: {name}
 Overall Rating: {rating}
-Report: .claude/performance/analysis/workflow-analysis-report.md
+Report: performance/analysis/workflow-analysis-report.md
 Validation: {confirmed} confirmed, {downgraded} downgraded, {discarded} discarded
 
 Key Findings:
@@ -539,17 +560,19 @@ Key Findings:
 
 Top Optimization: {top} — Impact: {impact}
 
+{if Step 9.7 was performed}
+Live SQL Analysis: {analyzed} queries analyzed, {skipped} skipped, {bottlenecks} bottlenecks found
+Top bottleneck: {description} — {execution_time}ms
+{end if}
+
 Next: Run /sdlc-workflow:performance-plan-optimization to create Jira tasks
 ```
 
 ## Important Rules
 
-- Never modify source code — only create analysis artifacts
 - All detection must be based on actual code search results — never fabricate findings
-- Impact estimates should be conservative
-- Scope analysis to the selected workflow only
-- If a detection step finds zero instances, report "No instances detected" — don't omit
-- Use Serena when available, grep/Read as fallback
-- If detection steps fail, document failures in the report's limitations section. The validation gate (Step 9.6) still applies — all checklist rules must PASS before writing
-- Backend schema extraction is mandatory when backend is available
-- Finding validation is mandatory — every finding must pass before inclusion
+- Impact estimates should be conservative; scope analysis to the selected workflow only
+- Zero instances = report "No instances detected" — don't omit the step
+- Detection failures → document in report limitations; validation gate (Step 9.8) still applies
+- Live SQL credentials: session-only, NEVER written to any file/artifact. Use env vars for passwords — never CLI args
+- Live SQL: NEVER execute mutation queries via EXPLAIN ANALYZE. Use EXPLAIN without ANALYZE, or skip

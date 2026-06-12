@@ -151,7 +151,7 @@ npx playwright install
 The `performance-baseline` skill uses Playwright to:
 1. Launch a headless Chromium browser
 2. Navigate to each scenario in the selected workflow
-3. Measure Web Vitals (LCP, FCP, TTI) and total load time
+3. Measure Web Vitals (LCP, FCP, DOM Interactive) and total load time
 4. Capture resource timing (scripts, stylesheets, images)
 5. Generate a baseline report with metrics and waterfall visualization
 

@@ -147,7 +147,7 @@ Epic (Performance Optimization: {workflow-name})
 
 Performance optimization tasks extend the standard task description template with three additional sections:
 
-1. **Baseline Metrics** — Current performance metrics before optimization (LCP, FCP, TTI, bundle size)
+1. **Baseline Metrics** — Current performance metrics before optimization (LCP, FCP, DOM Interactive, bundle size)
 2. **Target Metrics** — Expected metrics after optimization
 3. **Performance Test Requirements** — How to verify the optimization worked (e.g., "Re-run baseline capture, verify LCP < 2500ms")
 

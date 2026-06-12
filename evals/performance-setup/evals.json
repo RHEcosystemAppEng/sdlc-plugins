@@ -1,0 +1,95 @@
+{
+  "skill_name": "performance-setup",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Initialize performance analysis configuration for a frontend-only Next.js project. Bootstrap: copy files/mock-frontend-next/ to outputs/mock-repo/. The available MCP tools are listed in files/mcp-tools-no-serena.md — there are NO Serena tools available. Simulate tool discovery using the listing — do NOT call any actual MCP tools. Architecture choice: Frontend-only (analysis_scope='frontend-only', metric_type='frontend'). Detect the frontend framework from package.json and next.config.js (should detect Next.js with webpack bundler). Use recommended defaults for baseline settings (iterations=20, warmup=2) and frontend optimization targets (LCP=2.5s, FCP=1.8s, DOM Interactive=3.5s, Total Load Time=4.0s). Set backend_available=false, serena_status and serena_instance to null. Write config to outputs/mock-repo/performance-config.json following the perf-config.py init output schema (metadata, repositories, baseline, optimization_targets, workflow, scenarios, modules sections). Create directories under outputs/mock-repo/performance/{baselines,analysis,plans,optimization-results,verification}/. Check for CONVENTIONS.md at outputs/mock-repo/ root — it won't exist, so note the warning in the summary. Write setup summary to outputs/setup-summary.md. After writing config, run perf-config.py validate against the config path and save output to outputs/config-validation.txt. To find perf-config.py, resolve: plugin_root=$(ls -d \"${HOME}/.claude/plugins/cache/\"*/sdlc-workflow/*/ 2>/dev/null | sort -V | tail -1). Do NOT call MCP tools. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "expected_output": "A performance-config.json at outputs/mock-repo/performance-config.json with analysis_scope='frontend-only', metric_type='frontend', backend_available=false, repositories.frontend.framework is a Next.js variant (next/next.js/nextjs). The setup summary warns about missing CONVENTIONS.md. config-validation.txt shows validation passed. Directory structure performance/{baselines,analysis,plans,optimization-results,verification} created under outputs/mock-repo/.",
+      "files": ["files/mock-frontend-next/package.json", "files/mock-frontend-next/next.config.js", "files/mock-frontend-next/src/app/page.tsx", "files/mcp-tools-no-serena.md"],
+      "assertions": [
+        "outputs/mock-repo/performance-config.json exists",
+        "outputs/config-validation.txt exists and contains 'passed'",
+        "outputs/setup-summary.md exists",
+        "outputs/mock-repo/performance/baselines/ directory exists",
+        "performance-config.json contains analysis_scope set to 'frontend-only'",
+        "performance-config.json contains metric_type set to 'frontend'",
+        "performance-config.json shows backend_available as false",
+        "performance-config.json shows repositories.frontend.framework as a Next.js variant (next, next.js, or nextjs)",
+        "outputs/setup-summary.md warns about missing CONVENTIONS.md",
+        "performance-config.json all directories values use 'performance/' prefix (not '.claude/performance/')"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Initialize performance analysis configuration for a full-stack monorepo with Serena onboarded. Bootstrap: copy files/mock-frontend-next/ to outputs/mock-repo/ and copy files/mock-backend-rust/ to outputs/mock-repo/backend/. The available MCP tools are listed in files/mcp-tools-with-serena.md — simulate Serena discovery (find mcp__serena_backend__check_onboarding_performed in the listing) and assume onboarding is complete (serena_status='onboarded', serena_instance='serena_backend'). Do NOT call actual MCP tools. Architecture choice: Full-stack monorepo (analysis_scope='full-stack-monorepo', metric_type='hybrid'). Detect frontend framework from package.json/next.config.js (Next.js, webpack bundler). Detect backend framework from Cargo.toml (actix-web). API base path: '/api/v1'. Set backend_available=true. Use recommended defaults for baseline settings (iterations=20, warmup=2) and all optimization targets (frontend: LCP=2.5s, FCP=1.8s, DOM Interactive=3.5s, Total Load Time=4.0s; backend: Response Time p95=200ms, p99=500ms, Throughput=100 req/s, Error Rate=0.1%, DB Query Time p95=50ms). Write config to outputs/mock-repo/performance-config.json following the perf-config.py init output schema. Create directories under outputs/mock-repo/performance/{baselines,analysis,plans,optimization-results,verification}/. Write setup summary to outputs/setup-summary.md showing full-stack monorepo with Serena enabled. After writing config, run perf-config.py validate against the config path and save output to outputs/config-validation.txt. To find perf-config.py, resolve: plugin_root=$(ls -d \"${HOME}/.claude/plugins/cache/\"*/sdlc-workflow/*/ 2>/dev/null | sort -V | tail -1). Do NOT call MCP tools. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "expected_output": "A performance-config.json at outputs/mock-repo/performance-config.json with analysis_scope='full-stack-monorepo', metric_type='hybrid', backend_available=true, repositories.frontend.framework='Next.js', repositories.backend.framework='actix-web', repositories.backend.api_base_path='/api/v1', serena_status='onboarded', serena_instance='serena_backend'. Both frontend and backend optimization targets included. Setup summary shows full-stack monorepo architecture with Serena enabled.",
+      "files": ["files/mock-frontend-next/package.json", "files/mock-frontend-next/next.config.js", "files/mock-frontend-next/src/app/page.tsx", "files/mock-backend-rust/Cargo.toml", "files/mcp-tools-with-serena.md"],
+      "assertions": [
+        "outputs/mock-repo/performance-config.json exists",
+        "outputs/config-validation.txt exists and contains 'passed'",
+        "outputs/setup-summary.md exists",
+        "outputs/mock-repo/performance/baselines/ directory exists",
+        "performance-config.json contains analysis_scope set to 'full-stack-monorepo'",
+        "performance-config.json contains metric_type set to 'hybrid'",
+        "performance-config.json shows repositories.backend.framework as 'actix-web'",
+        "performance-config.json shows repositories.backend.api_base_path as '/api/v1'",
+        "performance-config.json shows serena_status as 'onboarded' and serena_instance as 'serena_backend'",
+        "performance-config.json all directories values use 'performance/' prefix (not '.claude/performance/')"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Initialize performance analysis configuration for separate frontend and backend repositories. Bootstrap: copy files/mock-frontend-next/ to outputs/mock-frontend/ and copy files/mock-backend-node/ to outputs/mock-backend/. MCP tools listed in files/mcp-tools-no-serena.md — no Serena available. Do NOT call actual MCP tools. Architecture choice: Separate repos (analysis_scope='full-stack', metric_type='hybrid'). Frontend path: outputs/mock-frontend/ — detect Next.js from package.json/next.config.js (webpack bundler). Backend path: outputs/mock-backend/ — framework is 'express' (manually specified, auto-detection has low confidence for this package.json). API base path: '/api'. Set backend_available=true, serena_status='not_running', serena_instance=null. Use recommended defaults for baseline settings (iterations=20, warmup=2) and all optimization targets. Treat outputs/mock-frontend/ as the primary target repository for config placement. Write config to outputs/mock-frontend/performance-config.json following the perf-config.py init output schema. Create directories under outputs/mock-frontend/performance/{baselines,analysis,plans,optimization-results,verification}/. Write setup summary to outputs/setup-summary.md noting no Serena available and recommending grep-based analysis. After writing config, run perf-config.py validate against the config path and save output to outputs/config-validation.txt. To find perf-config.py, resolve: plugin_root=$(ls -d \"${HOME}/.claude/plugins/cache/\"*/sdlc-workflow/*/ 2>/dev/null | sort -V | tail -1). Do NOT call MCP tools. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "expected_output": "A performance-config.json at outputs/mock-frontend/performance-config.json with analysis_scope='full-stack', metric_type='hybrid', repositories.backend.framework='express', repositories.backend.api_base_path='/api', serena_status='not_running', serena_instance=null. Both frontend and backend optimization targets included. The setup summary notes no Serena available and recommends grep-based analysis.",
+      "files": ["files/mock-frontend-next/package.json", "files/mock-frontend-next/next.config.js", "files/mock-frontend-next/src/app/page.tsx", "files/mock-backend-node/package.json", "files/mcp-tools-no-serena.md"],
+      "assertions": [
+        "outputs/mock-frontend/performance-config.json exists",
+        "outputs/config-validation.txt exists and contains 'passed'",
+        "outputs/setup-summary.md exists",
+        "outputs/mock-frontend/performance/baselines/ directory exists",
+        "performance-config.json contains analysis_scope set to 'full-stack'",
+        "performance-config.json contains metric_type set to 'hybrid'",
+        "performance-config.json shows repositories.backend.framework as 'express'",
+        "performance-config.json shows repositories.backend.api_base_path as '/api'",
+        "performance-config.json shows serena_status as 'not_running' and serena_instance as null",
+        "performance-config.json all directories values use 'performance/' prefix (not '.claude/performance/')"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Initialize performance analysis configuration for a backend-only Rust repository. Bootstrap: copy files/mock-backend-only/ to outputs/mock-backend/. MCP tools listed in files/mcp-tools-no-serena.md — no Serena available. Do NOT call actual MCP tools. Architecture choice: Backend-only (analysis_scope='backend-only', metric_type='backend'). Detect backend framework from Cargo.toml (actix-web). API base path: '/api'. Set backend_available=true, serena_status='not_running', serena_instance=null. No frontend repository — repositories.frontend fields should be null/unconfigured. Use recommended defaults for baseline settings (iterations=20, warmup=2) and backend optimization targets only (Response Time p95=200ms, p99=500ms, Throughput=100 req/s, Error Rate=0.1%, DB Query Time p95=50ms). No frontend targets. Write config to outputs/mock-backend/performance-config.json following the perf-config.py init output schema. Create directories under outputs/mock-backend/performance/{baselines,analysis,plans,optimization-results,verification}/. Write setup summary to outputs/setup-summary.md. After writing config, run perf-config.py validate against the config path and save output to outputs/config-validation.txt. To find perf-config.py, resolve: plugin_root=$(ls -d \"${HOME}/.claude/plugins/cache/\"*/sdlc-workflow/*/ 2>/dev/null | sort -V | tail -1). Do NOT call MCP tools. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "expected_output": "A performance-config.json at outputs/mock-backend/performance-config.json with analysis_scope='backend-only', metric_type='backend', backend_available=true, no frontend repository configured, repositories.backend.framework='actix-web', repositories.backend.api_base_path='/api'. Backend optimization targets included. No frontend optimization targets. config-validation.txt shows validation passed.",
+      "files": ["files/mock-backend-only/Cargo.toml", "files/mcp-tools-no-serena.md"],
+      "assertions": [
+        "outputs/mock-backend/performance-config.json exists",
+        "outputs/config-validation.txt exists and contains 'passed'",
+        "outputs/setup-summary.md exists",
+        "outputs/mock-backend/performance/baselines/ directory exists",
+        "performance-config.json contains analysis_scope set to 'backend-only'",
+        "performance-config.json contains metric_type set to 'backend'",
+        "performance-config.json shows backend_available as true",
+        "performance-config.json shows repositories.backend.framework as 'actix-web'",
+        "performance-config.json shows repositories.frontend values are all null (no frontend configured)",
+        "performance-config.json all directories values use 'performance/' prefix (not '.claude/performance/')"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Initialize performance analysis configuration for a full-stack monorepo where Serena is discovered but NOT onboarded. Bootstrap: copy files/mock-frontend-next/ to outputs/mock-repo/ and copy files/mock-backend-rust/ to outputs/mock-repo/backend/. The available MCP tools are listed in files/mcp-tools-serena-not-onboarded.md — Serena tools are present but check_onboarding_performed would return 'Onboarding not performed yet'. Simulate this discovery — do NOT call actual MCP tools. Architecture choice: Full-stack monorepo (analysis_scope='full-stack-monorepo', metric_type='hybrid'). Detect frontend framework from package.json/next.config.js (Next.js, webpack bundler). Detect backend framework from Cargo.toml (actix-web). API base path: '/api/v1'. Set backend_available=true. Serena onboarding: user chooses to skip (serena_status='skipped', serena_instance=null) — will use grep-based analysis instead. Use recommended defaults for baseline settings (iterations=20, warmup=2) and all optimization targets. Write config to outputs/mock-repo/performance-config.json following the perf-config.py init output schema. Create directories under outputs/mock-repo/performance/{baselines,analysis,plans,optimization-results,verification}/. Write setup summary to outputs/setup-summary.md noting Serena was discovered but user skipped onboarding, recommending grep-based analysis. After writing config, run perf-config.py validate against the config path and save output to outputs/config-validation.txt. To find perf-config.py, resolve: plugin_root=$(ls -d \"${HOME}/.claude/plugins/cache/\"*/sdlc-workflow/*/ 2>/dev/null | sort -V | tail -1). Do NOT call MCP tools. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "expected_output": "A performance-config.json at outputs/mock-repo/performance-config.json with analysis_scope='full-stack-monorepo', metric_type='hybrid', backend_available=true, repositories.backend.framework='actix-web', serena_status='skipped'. The setup summary notes Serena was discovered but user skipped onboarding, recommending grep-based analysis. config-validation.txt shows validation passed.",
+      "files": ["files/mock-frontend-next/package.json", "files/mock-frontend-next/next.config.js", "files/mock-frontend-next/src/app/page.tsx", "files/mock-backend-rust/Cargo.toml", "files/mcp-tools-serena-not-onboarded.md"],
+      "assertions": [
+        "outputs/mock-repo/performance-config.json exists",
+        "outputs/config-validation.txt exists and contains 'passed'",
+        "outputs/setup-summary.md exists",
+        "outputs/mock-repo/performance/baselines/ directory exists",
+        "performance-config.json contains analysis_scope set to 'full-stack-monorepo'",
+        "performance-config.json contains metric_type set to 'hybrid'",
+        "performance-config.json shows serena_status as 'skipped'",
+        "performance-config.json shows repositories.backend.framework as 'actix-web'",
+        "outputs/setup-summary.md mentions grep-based analysis or skipped Serena onboarding",
+        "performance-config.json all directories values use 'performance/' prefix (not '.claude/performance/')"
+      ]
+    }
+  ]
+}

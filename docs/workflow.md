@@ -450,7 +450,7 @@ flowchart TD
 **Jira state transitions:** New → In Progress → Done (create-branch bookend) | New → In Progress → In Review (intermediate + merge-branch tasks) → Done (human merge)
 ## Performance Optimization Workflow
 
-The performance optimization workflow is a specialized workflow for discovering, analyzing, and optimizing application performance across **full-stack applications** (frontend + backend). It operates independently of the main SDLC workflow but follows a similar structured approach.
+The performance optimization workflow is a specialized workflow for discovering, analyzing, and optimizing **cold-start page load and API endpoint performance** across full-stack applications (frontend + backend). It operates independently of the main SDLC workflow but follows a similar structured approach.
 
 ### Analysis Capabilities
 
@@ -485,6 +485,7 @@ The performance optimization workflow is a specialized workflow for discovering,
 **Full-Stack Analysis:**
 
 When both frontend and backend are configured, combines **Frontend Analysis Capabilities** + **Backend Analysis Capabilities** with additional cross-repository integration:
+- **Workflow-scoped backend measurement:** Backend baseline measures only the API endpoints that the selected frontend workflow calls, enabling direct correlation of frontend load time with specific backend API latency
 - **Comprehensive over-fetching detection:** Cross-reference backend response schemas with frontend field usage to identify unused fields
 - **N+1 impact multiplier:** Calculate combined impact of frontend N+1 patterns × backend query overhead
 - **End-to-end optimization planning:** Coordinate API response size reduction (backend) with API call pattern improvements (frontend)
@@ -545,11 +546,11 @@ Runs ONLY if backend detected or provided:
 
 1. Determine target repository (argument or current directory)
 2. Detect existing configuration (update or skip if exists)
-4. Create target directories (`.claude/performance/baselines/`, `/analysis/`, `/plans/`, `/optimization-results/`, `/verification/`)
+4. Create target directories (`performance/baselines/`, `/analysis/`, `/plans/`, `/optimization-results/`, `/verification/`)
 5. Collect baseline capture settings (iterations, warmup runs, metrics)
 6. Collect optimization targets (LCP, FCP, DOM Interactive, Total Load Time)
 7. Initialize metadata section with `workflow_selected: false`
-8. Generate minimal `.claude/performance-config.json` with:
+8. Generate minimal `performance-config.json` with:
    - Backend configured
    - Baseline settings configured
    - Optimization targets configured
@@ -559,7 +560,7 @@ Runs ONLY if backend detected or provided:
 9. Validate configuration and output summary
 
 **Output:**
-- Minimal `.claude/performance-config.json` created in target repository with:
+- Minimal `performance-config.json` created in target repository with:
   - Backend Repository Configuration (configured upfront)
   - Baseline Capture Settings (configured)
   - Optimization Targets (configured)
@@ -568,11 +569,11 @@ Runs ONLY if backend detected or provided:
   - Selected Workflow: empty (note: "run baseline to select")
   - Metadata: `workflow_selected: false`
 - Target directories created:
-  - `.claude/performance/baselines/` - Baseline performance reports
-  - `.claude/performance/analysis/` - Module and application analysis reports
-  - `.claude/performance/plans/` - Optimization plan documents
-  - `.claude/performance/optimization-results/` - Individual optimization result reports
-  - `.claude/performance/verification/` - Verification reports for optimization PRs
+  - `performance/baselines/` - Baseline performance reports
+  - `performance/analysis/` - Module and application analysis reports
+  - `performance/plans/` - Optimization plan documents
+  - `performance/optimization-results/` - Individual optimization result reports
+  - `performance/verification/` - Verification reports for optimization PRs
 
 **Guardrails:**
 - Idempotent — running multiple times offers to update or skip
@@ -649,7 +650,15 @@ Runs ONLY if backend detected or provided:
 
 - **Frontend-only:** Run **Frontend Workflow Discovery**, present workflows, user selects ONE
 - **Backend-only:** Run **Backend Workflow Discovery**, present workflows, user selects ONE
-- **Full-stack:** Run **Frontend Workflow Discovery** + **Backend Workflow Discovery**, present combined workflows, user selects ONE
+- **Full-stack:** Run **Frontend Workflow Discovery**, present workflows, user selects ONE frontend workflow. Then **trace backend API calls** from that workflow's components (Step 4.8) to identify which backend endpoints to measure. Backend scenarios are scoped to the APIs the selected frontend workflow actually calls.
+
+**Frontend-to-Backend API Tracing (Step 4.8, full-stack only):**
+- After frontend workflow selection, scan the workflow's component files for API call patterns
+- Extract API endpoint URLs from `fetch()`, `axios`, `useQuery`, `useSWR`, and custom API client calls
+- Resolve frontend API paths against the backend's `api_base_path` and verify endpoints exist in backend route definitions
+- Generate backend scenarios scoped to the traced API endpoints (GET only; POST/PUT/DELETE traced for analysis but not benchmarked)
+- User confirms the traced endpoints before measurement proceeds
+- Best-effort trace: one level of local imports from module entry points; user edits expected for complex codebases
 
 **Final Steps (all modes):**
 - **Update config** with selected workflow, scenarios, modules
@@ -673,7 +682,7 @@ Runs ONLY if backend detected or provided:
 9. Parse JSON output and generate baseline-report.md from template
 10. Filter scenarios to include only those in selected workflow
 11. **Update config with baseline metadata** (`baseline_captured: true`, `baseline_mode`, etc.)
-12. Save report to configured location (`.claude/performance/baselines/baseline-report.md`)
+12. Save report to configured location (`performance/baselines/baseline-report.md`)
 13. Output summary with key metrics and threshold warnings
 
 **Output:**
@@ -750,7 +759,7 @@ Performs deep analysis of the selected workflow by examining bundle composition,
      - Most extensive check: Analyzes 7 ORM frameworks with specific patterns
      - Calculates impact: JOIN cost × query frequency
 8. Generate workflow-analysis-report.md with severity classification and quantified impact
-9. Save report to configured location (`.claude/performance/analysis/workflow-analysis-report.md`)
+9. Save report to configured location (`performance/analysis/workflow-analysis-report.md`)
 
 **Output:**
 - `workflow-analysis-report.md` created in configured analysis directory
@@ -879,7 +888,7 @@ Executes performance optimization tasks by implementing code changes, running fu
 **Output:**
 - Code changes committed to feature branch
 - PR created with performance impact summary
-- **Optimization result report** created: `.claude/performance/optimization-results/{jira_key}-{timestamp}.md` (primary data handoff to verify-pr perf mode)
+- **Optimization result report** created: `performance/optimization-results/{jira_key}-{timestamp}.md` (primary data handoff to verify-pr perf mode)
 - Before/after comparison report posted to Jira (summary from local report file)
 - Jira task updated with PR link and transitioned to In Review
 
@@ -918,7 +927,7 @@ Verifies a performance optimization PR by reading review feedback, validating ac
    - Perform convention check to upgrade suggestions to code change requests
    - Create sub-tasks for code change requests
    - Reply to every review comment with classification
-6. Read implementation results from optimization result report file (`.claude/performance/optimization-results/{jira_key}-*.md`), fallback to PR description/comments if file not found
+6. Read implementation results from optimization result report file (`performance/optimization-results/{jira_key}-*.md`), fallback to PR description/comments if file not found
 7. Optional baseline re-run (prompt user):
    - Re-run baseline capture for all scenarios
    - Compare with implementation results (flag > 10% drift)
@@ -935,7 +944,7 @@ Verifies a performance optimization PR by reading review feedback, validating ac
 16. Generate verification report with Overall result (PASS/WARN/FAIL)
 17. Post report to GitHub PR and Jira task
 18. **Update Optimization Result Report Status:**
-    - Read report from `.claude/performance/optimization-results/{jira_key}-*.md`
+    - Read report from `performance/optimization-results/{jira_key}-*.md`
     - Update frontmatter metadata: `status` (verified), `verification_timestamp`, `verification_result` (PASS/WARN/FAIL)
     - Append "Verification Results" section with: acceptance criteria results, review feedback summary, CI status, target achievement status
 

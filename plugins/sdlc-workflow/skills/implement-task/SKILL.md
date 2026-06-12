@@ -135,18 +135,21 @@ Parse the structured description expecting these sections:
 - **Baseline Metrics** — performance baseline captured at optimization start (optional, performance tasks only)
 - **Target Metrics** — performance targets for this optimization (optional, performance tasks only)
 - **Performance Test Requirements** — scenarios and measurement criteria (optional, performance tasks only)
+- **Database Migration** — migration framework, migration script (source code), before/after SQL (manual verification), migration up/down SQL (manual verification), rollback, safety checks, manual verification command, storage impact (optional, db-migration tasks only)
 
 ### Task Type Detection
 
-Set `task_type = performance` if **either** condition is true:
-1. The issue labels include `performance-optimization`, OR
-2. The description contains **Baseline Metrics**, **Target Metrics**, and **Performance Test Requirements** sections
+Set `task_type` using these checks in priority order:
 
-Otherwise, set `task_type = standard`.
+1. **`db-migration`**: The issue labels include `db-migration`, OR the description contains a **Database Migration** section with **Migration Script (Source Code)** and **Before/After SQL** subsections
+2. **`performance`**: The issue labels include `performance-optimization`, OR the description contains **Baseline Metrics**, **Target Metrics**, and **Performance Test Requirements** sections
+3. **`standard`**: Otherwise
 
-Label-based detection covers tasks created by `performance-plan-optimization`. Description-based detection is the fallback for manually created performance tasks.
+`db-migration` is a specialization of `performance` — it runs all performance steps (including Step 9-Perf) plus migration-specific implementation and self-verification substeps. db-migration tasks carry the `performance-optimization` label for Epic grouping.
 
-Performance tasks follow the same implementation flow as standard tasks, with additional performance testing after functional tests (Step 9-Perf) and performance-aware commit/PR formatting.
+Label-based detection covers tasks created by `performance-plan-optimization`. Description-based detection is the fallback for manually created tasks.
+
+Performance and db-migration tasks follow the same implementation flow as standard tasks, with additional performance testing after functional tests (Step 9-Perf) and performance-aware commit/PR formatting.
 
 Also capture the issue's `webUrl` field from the API response (e.g. `https://redhat.atlassian.net/browse/PROJ-231`). This URL will be used later to create a clickable link in the PR description.
 
@@ -610,6 +613,18 @@ on the backend repo to perform the same verification.
 > - `GET /api/v2/sboms` — path ✓, method ✓, response shape ✓ (matches `SbomSummary` in `modules/fundamental/src/sbom/model/summary.rs`)
 > - `DELETE /api/v2/sbom/{id}` — path ✗ — **MISMATCH** (backend uses `/api/v2/sboms/{id}` with trailing 's', see `modules/fundamental/src/sbom/endpoints/mod.rs:48`)
 > - `GET /api/v2/risk-assessment/group/{groupId}` — sort order ✗ — **MISMATCH** (frontend picks `assessments[0]` expecting newest, but backend returns `ORDER BY created_at ASC` — oldest first, see `modules/risk/src/assessment/endpoints/mod.rs:92`)
+
+### Database migration implementation (db-migration tasks only)
+
+When `task_type = db-migration`: the task description contains both raw SQL (for manual verification) and framework migration code (for implementation). Write the **framework-level code**, not the raw SQL.
+
+1. **Read CONVENTIONS.md** — mandatory for `db-migration` tasks. Extract migration conventions: naming patterns, file structure, index naming, transaction handling, registration patterns. If CONVENTIONS.md is missing → halt with: "CONVENTIONS.md is required for db-migration tasks. Document migration patterns before proceeding."
+2. **Validate task migration against conventions** — compare the migration script from the task's **Migration Script (Source Code)** section against CONVENTIONS.md patterns. If the task script deviates from documented conventions, adapt the script to match conventions rather than writing it verbatim. Log any adaptations made.
+3. **Scan existing migrations for pattern consistency** — read 2-3 recent migration files in the repository. If CONVENTIONS.md and existing practice diverge, follow existing practice and flag the convention gap.
+4. **Create migration file** at the convention-aligned path. Register with the framework (e.g., add to SeaORM's `lib.rs` migration list, chain Alembic revision, register in TypeORM config).
+5. **Apply ORM/query builder rewrites** if the task includes query changes (not just index additions) — translate the Before/After SQL into equivalent framework code at the source locations specified in Files to Modify.
+6. **Run test suite** to verify no regressions. Run migration locally if a dev database is available.
+7. **Present manual verification to user (BLOCKING)** — extract the Before/After SQL, Migration Up/Down SQL, EXPLAIN ANALYZE verification command, and **Storage Impact** queries from the task description's **Database Migration** section. Present all available artifacts to the user in a single block so they can run them against their database to validate the change. If any artifacts are missing from the task description, warn about the missing artifacts but still present what is available. This step is mandatory — prompt the user to confirm before proceeding: (1) Verified — proceed, (2) Need to run queries — pause, (3) Skip verification. Do not continue to code quality checks, self-verification, or commit without the user's explicit response.
 
 ### Code quality practices
 
@@ -1097,15 +1112,27 @@ Output the contract verification, sibling parity, cross-module shared entity, an
 >   - New code uses `window.location.reload()` — **ANOMALY** (0 of 3 callers use this pattern)
 >   - Error handling ✓ (all callers including new code use `onError` toast)
 
+### Migration safety verification (db-migration tasks only)
+
+When `task_type = db-migration`, verify each migration file created:
+
+1. **No destructive DDL** — scan for `DROP TABLE`, `DROP COLUMN`, `DELETE FROM`, `TRUNCATE`. Any of these is a blocking issue — fix before proceeding.
+2. **Rollback/down exists** — verify the migration has a corresponding rollback (SeaORM `down()`, Diesel `down.sql`, Alembic `downgrade()`, TypeORM `down()`, Flyway: note rollback is not natively supported — document as known limitation).
+3. **Naming convention** — verify migration file name and index names follow CONVENTIONS.md patterns and match existing migration naming in the repository.
+4. **Query equivalence** — if query rewrites were applied (not just index additions), verify the new query produces equivalent results: same columns, same filtering logic, same ordering. Cross-reference with the Before/After SQL from the task description.
+5. **Regression test execution (MANDATORY)** — run the existing test suite (unit, integration, e2e) that covers the affected table(s). If CI check commands from CONVENTIONS.md already include test execution, no separate run is needed. If they do not, run the project's test suite explicitly. This is a hard stop — do not proceed to commit if any test fails.
+
+Do NOT require `CONCURRENTLY` in framework migration files — most migration runners wrap in transactions where `CONCURRENTLY` is invalid. `CONCURRENTLY` belongs in the manual verification SQL only.
+
 ## Step 9-Perf – Performance Testing Phase
 
-**Runs only when `task_type = performance`.** Standard tasks skip this entire section.
+**Runs only when `task_type = performance` or `task_type = db-migration`.** Standard tasks skip this entire section.
 
 **CONVENTIONS.md cross-reference:** The regression thresholds, performance test commands, and CI check commands extracted from CONVENTIONS.md in Step 4 apply throughout this phase. If CONVENTIONS.md defines custom regression thresholds (e.g., under a "Performance Thresholds" or "Regression Limits" section), use those instead of the defaults in Step 9-Perf.4. If CONVENTIONS.md defines performance test commands, run them after functional tests and before metrics capture.
 
 ### Step 9-Perf.0 – Baseline Freshness Check
 
-Read `metadata.baseline_commit_sha` from `.claude/performance-config.json`. If workflow files changed since that commit, prompt: (1) Continue with existing baseline, (2) Re-baseline first (`/sdlc-workflow:performance-baseline`), (3) Cancel.
+Read `metadata.baseline_commit_sha` from `performance-config.json`. If workflow files changed since that commit, prompt: (1) Continue with existing baseline, (2) Re-baseline first (`/sdlc-workflow:performance-baseline`), (3) Cancel.
 
 ### Step 9-Perf.1 – Capture Current Performance Metrics
 
@@ -1117,21 +1144,21 @@ plugin_root=$(ls -d "${HOME}/.claude/plugins/cache/"*/sdlc-workflow/*/ 2>/dev/nu
 if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then echo "❌ sdlc-workflow plugin not found"; exit 1; fi
 ```
 
-**Frontend/hybrid (Playwright):** Copy `capture-baseline.template.mjs` from plugin cache to baseline directory. Read `metadata.capture_target` from config before `dev_environment.port`.
+**Frontend/hybrid (Playwright):** Copy `capture-baseline.template.mjs` from plugin cache to baseline directory. Read `metadata.capture_target` from config before `dev_environment.frontend.port`.
 
-- **null/missing/`localhost`:** use `--port` from `dev_environment.port` (backward compatible with pre-hosted configs)
-- **`hosted`:** read `metadata.capture_base_url`. If null/empty → halt: "Re-run `/sdlc-workflow:performance-baseline` or `perf-config.py set metadata.capture_base_url <url>`." If present → **blocking prompt**: "Baseline captured against hosted environment (`{url}`). (1) Continue with hosted target — will prompt for auth, (2) Switch to localhost — uses `dev_environment.port`, metrics may not be comparable to hosted baseline, (3) Cancel." If switch: use localhost for this capture only, do NOT overwrite `metadata.capture_target`. Prompt for auth (`--storage-state` or `--user`/`--pass`) and `--insecure` when continuing with hosted.
+- **null/missing/`localhost`:** use `--port` from `dev_environment.frontend.port` (backward compatible with pre-hosted configs)
+- **`hosted`:** read `metadata.capture_base_url`. If null/empty → halt: "Re-run `/sdlc-workflow:performance-baseline` or `perf-config.py set metadata.capture_base_url <url>`." If present → **blocking prompt**: "Baseline captured against hosted environment (`{url}`). (1) Continue with hosted target — will prompt for auth, (2) Switch to localhost — uses `dev_environment.frontend.port`, metrics may not be comparable to hosted baseline, (3) Cancel." If switch: use localhost for this capture only, do NOT overwrite `metadata.capture_target`. Prompt for auth (`--storage-state` or `--user`/`--pass`) and `--insecure` when continuing with hosted.
 
-Construct command mirroring performance-baseline Step 9.1 — absolute `--config` path, `--storage-state`/`--user`/`--pass` mutual exclusivity, omit auth for public hosted apps, `BASELINE_PASS` env var. Parse JSON output for LCP, FCP, DOM Interactive, Total Load Time.
+Construct command mirroring performance-baseline Step 9.3 — absolute `--config` path, `--storage-state`/`--user`/`--pass` mutual exclusivity, omit auth for public hosted apps, `BASELINE_PASS` env var. Parse JSON output for LCP, FCP, DOM Interactive, Total Load Time.
 
 Verification failed → display script diagnostics, halt. Do not retry.
 
 **Backend/hybrid:** Use `perf-benchmark.sh` — the same tool baseline uses, ensuring apples-to-apples comparison:
 ```bash
 "$plugin_root/scripts/perf-benchmark.sh" \
-  --port "$(python3 "$plugin_root/scripts/perf-config.py" get dev_environment.port)" \
+  --port "$(python3 "$plugin_root/scripts/perf-config.py" get dev_environment.backend.port)" \
   --iterations "$(python3 "$plugin_root/scripts/perf-config.py" get baseline_settings.iterations)" \
-  --manifest .claude/performance/test-data/manifest.json \
+  --manifest performance/test-data/manifest.json \
   --output "$(python3 "$plugin_root/scripts/perf-config.py" get directories.optimization_results)/${jira_key}-benchmark.json"
 ```
 
@@ -1140,6 +1167,8 @@ Verification failed → display script diagnostics, halt. Do not retry.
 ### Step 9-Perf.2 – Compare Against Baseline and Targets
 
 Compare only metrics listed in the task's **Target Metrics** section (from Step 1 parsing). Do not compare metrics that are not listed — they are out of scope for this optimization.
+
+**Unit note:** Task metrics are in milliseconds. If reading baseline values from `optimization_targets` in config, multiply by 1000 (config stores frontend metrics in seconds).
 
 For each listed metric: calculate improvement (`baseline - current` for latency/size, `current - baseline` for throughput) and progress to target (`improvement / (baseline - target) × 100`).
 
@@ -1191,6 +1220,8 @@ The footer MUST reference the Jira issue ID.
 Always include `--trailer="Assisted-by: Claude Code"` to attribute AI assistance.
 
 **Performance task commit format (`task_type = performance`):** Use `perf` as the commit type and include a "Performance impact:" section in the body listing each metric and its improvement (e.g., `- LCP p95: 2400ms → 1800ms (-25%)`).
+
+**Database migration commit format (`task_type = db-migration`):** Use `perf(db)` as the commit type and include a "Migration:" section in the body listing each migration file and its purpose (e.g., `- m20260609_add_index_sbom_packages_sbom_id: CREATE INDEX on sbom_packages(sbom_id)`).
 
 **Default flow (no Target PR, no Bookend Type):**
 
