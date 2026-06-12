@@ -87,6 +87,28 @@ Initialize the actions accumulator as an in-memory JSON structure:
 }
 ```
 
+## Step 0.7 – Load Pre-Fetched Data (sandbox mode only)
+
+**Skip this step in interactive mode.**
+
+In sandbox mode, the pre_script fetches task data on the trusted runner and
+mounts it into the sandbox. Read the pre-fetched data:
+
+```bash
+cat /tmp/workspace/.pre-script/verify-pr-input.json | python3 -m json.tool > /dev/null 2>&1 && echo "Pre-fetched data available" || echo "ERROR: Pre-fetched data missing or invalid"
+```
+
+If the file exists and contains valid JSON:
+- Read the `task` field — this contains summary, description, status, labels,
+  issue links, and custom fields
+- Read the `pr_url` field — this is the PR URL from the task's custom field
+- Read `source.raw` if you need the full original issue tracker response
+- **Skip Steps 1 (Fetch and Parse Jira Task) and 2 (Identify PR)** — use the
+  pre-fetched data instead
+
+If the file does not exist or is invalid, log a warning and proceed with
+Steps 1 and 2 as a fallback (fetch from the issue tracker API directly).
+
 ## Inputs
 
 The user will provide a Jira issue ID for a task that has an associated PR.
