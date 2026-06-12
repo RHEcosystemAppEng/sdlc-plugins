@@ -32,11 +32,22 @@ echo "Issue: ${JIRA_ISSUE_ID}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 # 3. Fetch full issue details (validates existence + pre-fetches for sandbox)
-ISSUE_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}" --fields "*all" 2>&1) || {
-  echo "ERROR: Failed to fetch Jira issue ${JIRA_ISSUE_ID}"
-  echo "${ISSUE_JSON}"
+ISSUE_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}" --fields "*all" 2>"/tmp/fullsend-pre-jira-stderr.txt") || {
+  JIRA_STDERR=$(cat /tmp/fullsend-pre-jira-stderr.txt 2>/dev/null || echo "")
+  if echo "${JIRA_STDERR}" | grep -qi "401\|unauthorized"; then
+    echo "ERROR: Jira authentication failed — check JIRA_EMAIL and JIRA_API_TOKEN"
+  elif echo "${JIRA_STDERR}" | grep -qi "403\|forbidden"; then
+    echo "ERROR: Jira permission denied — check that the API token has access to ${JIRA_ISSUE_ID}"
+  elif echo "${JIRA_STDERR}" | grep -qi "404\|not found"; then
+    echo "ERROR: Jira issue ${JIRA_ISSUE_ID} not found"
+  else
+    echo "ERROR: Failed to fetch Jira issue ${JIRA_ISSUE_ID}"
+    echo "${JIRA_STDERR}"
+  fi
+  rm -f /tmp/fullsend-pre-jira-stderr.txt
   exit 1
 }
+rm -f /tmp/fullsend-pre-jira-stderr.txt
 
 echo "Jira issue verified: ${JIRA_ISSUE_ID}"
 
