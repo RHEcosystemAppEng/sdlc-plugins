@@ -121,7 +121,7 @@
      
      Example:
      - Baseline capture frequency: Before major releases, after library upgrades
-     - Target metrics: LCP < 2500ms (p95), FCP < 1800ms (p95), TTI < 3500ms (p95)
+     - Target metrics: LCP < 2500ms (p95), FCP < 1800ms (p95), DOM Interactive < 3500ms (p95)
      - Anti-pattern severity thresholds: Follow default thresholds in performance-metrics-guide.md
      - Commit message type: Use `perf(scope): description` for performance optimizations
      - Performance documentation: Quick reference style (tables, bullets, minimal prose)

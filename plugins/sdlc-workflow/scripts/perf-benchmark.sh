@@ -45,8 +45,8 @@ Arguments:
 
 Example:
   perf-benchmark.sh --port 8080 --iterations 20 \\
-    --manifest .claude/performance/test-data/manifest.json \\
-    --output .claude/performance/baselines/benchmark-results.json
+    --manifest performance/test-data/manifest.json \\
+    --output performance/baselines/benchmark-results.json
 EOF
   exit 1
 }
