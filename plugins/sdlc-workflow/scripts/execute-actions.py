@@ -7,6 +7,10 @@ Reads agent-result.json, processes actions sequentially, resolves
 Uses jira-client.py for Jira operations and gh CLI for GitHub operations.
 Runs on the fullsend runner (trusted side), not inside the sandbox.
 
+Not idempotent: if an action fails mid-execution, previously completed
+actions (e.g., created Jira sub-tasks) are not rolled back. Manual
+cleanup may be needed after partial failures.
+
 Usage:
     execute-actions.py <result-json>
 
