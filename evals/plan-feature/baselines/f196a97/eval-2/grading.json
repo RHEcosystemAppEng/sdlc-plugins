@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "Impact map or task descriptions explicitly flag at least 3 ambiguities from the feature description",
+      "passed": true,
+      "evidence": "The impact-map.md 'Ambiguity flags' section explicitly flags 4 ambiguities: (1) 'No performance targets' — 'Search should be faster' provides no quantitative targets, (2) 'No relevance criteria defined' — 'Results should be more relevant' does not specify what relevance means, (3) 'Filter fields unspecified' — 'Add filters — Some kind of filtering capability' does not enumerate which entity fields should be filterable, (4) 'No backward compatibility constraints detailed'. All four are genuine ambiguities from the feature description TC-9002."
+    },
+    {
+      "text": "Plan acknowledges that 'Better UI' (non-MVP) cannot be planned without design mockups or frontend repository and excludes it from scope",
+      "passed": false,
+      "evidence": "The impact-map.md does not mention 'Better UI' at all. None of the four task descriptions reference it. The non-MVP 'Better UI' requirement from TC-9002 is simply absent from the outputs without any explicit acknowledgment that it was excluded because it cannot be planned without design mockups or a frontend repository."
+    },
+    {
+      "text": "Tasks still follow the task-description-template.md format despite ambiguous requirements",
+      "passed": true,
+      "evidence": "All four task files (task-1-search-indexes.md, task-2-relevance-ranking.md, task-3-search-filters.md, task-4-search-tests.md) follow the template format with sections: Repository, Target Branch, Description, Files to Modify, Files to Create (when applicable), Implementation Notes, Reuse Candidates, Acceptance Criteria, Test Requirements, Verification Commands, and Dependencies. Optional sections are omitted where not applicable (e.g., API Changes only appears in tasks 2 and 3)."
+    },
+    {
+      "text": "Tasks document assumptions where they fill in missing details, labeled as assumptions pending clarification",
+      "passed": true,
+      "evidence": "Each task contains an 'Ambiguity note' paragraph in the Description section documenting assumptions. Task 1: 'This task assumes that adding GIN indexes is the appropriate first step...The product owner should confirm acceptable latency SLAs.' Task 2: 'This task implements text-match relevance ranking using ts_rank as a reasonable default. If the product owner requires additional ranking signals...those should be specified.' Task 3: 'This task proposes three filter dimensions based on the existing data model...The product owner should confirm this filter set or request additional filters.' The impact map also documents assumptions: 'Tasks below assume reasonable defaults but the product owner should confirm.' While these use 'assumes/assumption' language and flag need for clarification, they are not explicitly labeled with the word 'assumption' as a section header or tag — they use 'Ambiguity note' framing. This still satisfies the assertion as the assumptions are clearly documented and marked as pending clarification."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "All four tasks contain a '## Repository' section with exactly 'trustify-backend' as the single repository name. Task 1: line 3-4, Task 2: line 3-4, Task 3: line 3-4, Task 4: line 3-4."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "All four tasks contain: '## Target Branch' (set to 'main'), '## Description' (detailed paragraphs), '## Acceptance Criteria' (checkbox lists), and '## Test Requirements' (checkbox lists). Verified in task-1-search-indexes.md (lines 7, 9, 36, 42), task-2-relevance-ranking.md (lines 7, 9, 35, 41), task-3-search-filters.md (lines 7, 9, 43, 52), task-4-search-tests.md (lines 7, 9, 34, 41)."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "Checking all file paths against the repo-backend.md directory tree: Task 1 Files to Modify: 'modules/search/src/service/mod.rs' (in manifest), 'entity/src/sbom.rs' (in manifest), 'entity/src/advisory.rs' (in manifest), 'entity/src/package.rs' (in manifest). Task 1 Files to Create: 'migration/src/m0002_search_indexes/mod.rs' — follows the migration pattern from 'migration/src/m0001_initial/mod.rs' (valid new migration path). Task 2: 'modules/search/src/service/mod.rs' (in manifest), 'modules/search/src/endpoints/mod.rs' (in manifest). Task 3: 'modules/search/src/endpoints/mod.rs' (in manifest), 'modules/search/src/service/mod.rs' (in manifest), 'common/src/db/query.rs' (in manifest). Task 4: 'tests/api/search.rs' (in manifest). All paths correspond to the repo-backend.md structure."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Task 1 Implementation Notes reference: 'migration/src/m0001_initial/mod.rs' (migration pattern), 'modules/search/src/service/mod.rs' (SearchService), 'common/src/db/query.rs' (query builder helpers). Task 2 references: 'common/src/db/query.rs' (sorting infrastructure), 'common/src/model/paginated.rs' (PaginatedResults<T>). Task 3 references: 'common/src/db/query.rs' (filter construction), 'entity/src/sbom.rs', 'entity/src/advisory.rs', 'entity/src/package.rs' (timestamp columns), 'modules/fundamental/src/advisory/model/summary.rs' (AdvisorySummary severity field), 'common/src/error.rs' (AppError). Task 4 references: 'tests/api/search.rs' (test patterns), 'common/src/model/paginated.rs' (PaginatedResults<T>), assert_eq!(resp.status(), StatusCode::OK) pattern. All tasks cite concrete file paths and patterns from the codebase."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "All four tasks have '## Target Branch' followed by 'main': task-1-search-indexes.md line 7-8, task-2-relevance-ranking.md line 7-8, task-3-search-filters.md line 7-8, task-4-search-tests.md line 7-8."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": false,
+      "evidence": "None of the output files (impact-map.md, task-1-search-indexes.md, task-2-relevance-ranking.md, task-3-search-filters.md, task-4-search-tests.md) contain any SHA-256 digest comments. No file contains the string 'sha256-md:' or 'sha256-adf:' or '[sdlc-workflow] Description digest'. There is no evidence that description digest comments were posted after task creation."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "None of the four task descriptions contain convention applicability rationales in the prescribed format 'Applies: task modifies <file> matching the convention's <scope>'. The Implementation Notes sections reference 'docs/constraints.md Section 2' and 'docs/constraints.md Section 5' but these use the format 'Per docs/constraints.md Section X (Name): description' without the required 'Applies: task modifies <file> matching the convention's <scope>' rationale. There is no evidence that CONVENTIONS.md conventions were evaluated for file-type applicability per the convention-applicability-rules.md. The tasks reference docs/constraints.md rather than CONVENTIONS.md, and none use the prescribed rationale format."
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 3,
+    "total": 11,
+    "pass_rate": 0.7272727272727273
+  }
+}

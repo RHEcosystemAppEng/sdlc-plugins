@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4 explicitly references inspecting: (1) 'AdvisoryService in modules/fundamental/src/advisory/service/advisory.rs has fetch and list methods', (2) 'AdvisorySummary in modules/fundamental/src/advisory/model/summary.rs has a severity field usable for counting', (3) 'Endpoint pattern in modules/fundamental/src/advisory/endpoints/get.rs uses Path<Id> extraction', (4) 'Error handling uses AppError with .context() wrapping from common/src/error.rs'. All 4 files are mentioned."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md lists Files to Create: (1) severity_summary.rs model, (2) severity_summary.rs endpoint handler, (3) advisory_summary.rs test file. Files to Modify: (1) advisory/model/mod.rs, (2) advisory/service/advisory.rs, (3) advisory/endpoints/mod.rs. The plan explicitly states in Step 9 'All modified/created files are within the Files to Modify and Files to Create lists. No out-of-scope changes.' and includes a 'Files NOT Modified' section confirming no extra files are changed."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md 'Files to Create' section lists: (1) 'modules/fundamental/src/advisory/model/severity_summary.rs -- SeveritySummary response struct', (2) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs -- GET handler for /api/v2/sbom/{id}/advisory-summary', (3) 'tests/api/advisory_summary.rs -- Integration tests for the new endpoint'. Detailed descriptions are in file-1-description.md, file-2-description.md, and file-3-description.md respectively."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md 'Files to Modify' section lists: (1) 'modules/fundamental/src/advisory/model/mod.rs -- add pub mod severity_summary; to register the new model module', (2) 'modules/fundamental/src/advisory/service/advisory.rs -- add severity_summary method to AdvisoryService', (3) 'modules/fundamental/src/advisory/endpoints/mod.rs -- register the new route'. Detailed descriptions are in file-4-description.md, file-5-description.md, and file-6-description.md respectively."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10 shows the commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' which follows Conventional Commits format (type=feat, scope=advisory, description). The footer contains 'Implements TC-9201' which references the Jira issue."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md Step 10 explicitly states: \"With trailer: `--trailer='Assisted-by: Claude Code'`\""
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Task Summary states 'Branch to Create: TC-9201' and 'Target Branch: main'. Step 5 shows 'git checkout main' and 'git checkout -b TC-9201'. Step 10 shows 'git push -u origin TC-9201' and 'gh pr create --base main'. The branch name TC-9201 and target branch main are both explicitly referenced."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md 'Discovered Conventions' section identifies both patterns explicitly: (1) 'Error handling: All handlers return Result<T, AppError> where AppError is defined in common/src/error.rs. Errors are wrapped using .context() for descriptive messages.' (2) 'Module structure: Every domain module follows model/ + service/ + endpoints/ sub-directory layout. Each sub-directory has a mod.rs that re-exports public types.' Additional patterns are also identified including endpoint patterns, service patterns, and naming conventions."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md Task Summary explicitly states 'Target Branch: main'. Step 1 confirms 'Target Branch: main' was parsed from the Jira task. Step 5 shows 'git checkout main' as the starting point. Step 10 shows '--base main' in the PR creation command."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "plan.md Step 1.5 states: 'No description digest found -- skipping integrity check. This task may have been created before digest tracking was introduced.' conventions.md Step 1.5 similarly states: 'No description digest found -- skipping integrity check. This task may have been created before digest tracking was introduced.' and adds: '(In a real run, this step would call jira.get_issue_comments(TC-9201) to look for a comment starting with [sdlc-workflow] Description digest:. Since we are not calling external tools, we note the warning and proceed.)' This shows the plan checks for the digest and proceeds with a warning when not found, rather than blocking."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}
