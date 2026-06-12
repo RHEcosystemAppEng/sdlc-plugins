@@ -29,6 +29,7 @@ from typing import Any
 
 
 REF_PATTERN = re.compile(r"\{\{([a-z0-9-]+)\.(key|url)\}\}")
+JIRA_CLIENT_SCRIPT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "jira-client.py")
 
 
 def resolve_refs(text: str, registry: dict[str, dict[str, str]]) -> str:
@@ -54,11 +55,9 @@ def resolve_refs_in_obj(obj: Any, registry: dict[str, dict[str, str]]) -> Any:
 
 def jira_client(*args: str) -> dict:
     """Call jira-client.py and return parsed JSON output."""
-    script = os.path.join(os.path.dirname(__file__), "jira-client.py")
-    result = subprocess.run(
-        ["python3", script, *args],
-        capture_output=True, text=True
-    )
+    cmd = ["python3", JIRA_CLIENT_SCRIPT]
+    cmd.extend(args)
+    result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
         print(f"jira-client.py {args[0]} failed:", file=sys.stderr)
         if result.stdout.strip():
