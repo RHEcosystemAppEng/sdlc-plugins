@@ -12,7 +12,6 @@
 #   JIRA_SERVER_URL   — Jira instance URL
 #   JIRA_EMAIL        — Jira user email
 #   JIRA_API_TOKEN    — Jira API token
-#   GH_TOKEN          — GitHub token
 
 set -euo pipefail
 
@@ -21,7 +20,6 @@ set -euo pipefail
 : "${JIRA_SERVER_URL:?JIRA_SERVER_URL is required}"
 : "${JIRA_EMAIL:?JIRA_EMAIL is required}"
 : "${JIRA_API_TOKEN:?JIRA_API_TOKEN is required}"
-: "${GH_TOKEN:?GH_TOKEN is required}"
 
 # 2. Validate JIRA_ISSUE_ID format
 if [[ ! "${JIRA_ISSUE_ID}" =~ ^[A-Z]+-[0-9]+$ ]]; then
