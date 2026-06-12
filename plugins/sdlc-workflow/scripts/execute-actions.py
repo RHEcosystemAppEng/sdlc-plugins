@@ -78,6 +78,9 @@ def gh_api(*args: str) -> str:
 def build_issue_url(key: str) -> str:
     """Build Jira issue browse URL from key."""
     server = os.environ.get("JIRA_SERVER_URL", "").rstrip("/")
+    if not server:
+        print("JIRA_SERVER_URL is required for issue URL construction", file=sys.stderr)
+        sys.exit(1)
     return f"{server}/browse/{key}"
 
 
