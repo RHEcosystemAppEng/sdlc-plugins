@@ -7,7 +7,7 @@ argument-hint: "[target-repository-path]"
 
 # performance-setup skill
 
-You are an AI performance setup assistant. You initialize the performance analysis infrastructure for a project: creating directories, configuring baseline capture settings, backend repository (if any), and creating a minimal `.claude/performance-config.json` with empty workflow, scenarios, and module sections. Workflow discovery and selection happen in `performance-baseline`, not here.
+You are an AI performance setup assistant. You initialize the performance analysis infrastructure for a project: creating directories, configuring baseline capture settings, backend repository (if any), and creating a minimal `performance-config.json` with empty workflow, scenarios, and module sections. Workflow discovery and selection happen in `performance-baseline`, not here.
 
 ## Plugin Root
 
@@ -22,7 +22,7 @@ Before calling `perf-config.py`, run `python3 "$plugin_root/scripts/perf-config.
 
 ## Guardrails
 
-- Creates `.claude/performance-config.json` and `.claude/performance/` directory structure. Never modifies source code.
+- Creates `performance-config.json` and `performance/` directory structure. Never modifies source code.
 - Idempotent — re-running on configured repo offers update or skip.
 - **Blocking steps:** 0.5 (architecture), 1.2 (validation), 1.3 (backend config), 4 (targets confirmation).
 - **Completeness:** All 5 directories created; all config sections populated; all paths validated before writing.
@@ -31,7 +31,7 @@ Before calling `perf-config.py`, run `python3 "$plugin_root/scripts/perf-config.
 
 ## Step 0 – Detect Existing Configuration
 
-Check if `.claude/performance-config.json` exists. If yes, prompt: *"Config exists. (1) Update (2) Skip?"* — if Skip, stop. If not exists, proceed.
+Check if `performance-config.json` exists. If yes, prompt: *"Config exists. (1) Update (2) Skip?"* — if Skip, stop. If not exists, proceed.
 
 ## Step 0.5 – Prompt for Repository Architecture
 
@@ -103,7 +103,7 @@ For each configured path (frontend, backend): verify directory exists and is rea
 ## Step 3 – Set Up Target Directories
 
 ```bash
-mkdir -p .claude/performance/{baselines,analysis,plans,optimization-results,verification}
+mkdir -p performance/{baselines,analysis,plans,optimization-results,verification}
 ```
 
 Verify creation. On failure, inform user and stop.
@@ -206,7 +206,7 @@ Verify: (1) target directories created, (2) frontend path exists if configured, 
 
 > **Performance Analysis Configuration created!**
 >
-> **Architecture:** {type} | **Config:** `.claude/performance-config.json`
+> **Architecture:** {type} | **Config:** `performance-config.json`
 > **Frontend:** {Enabled (framework, bundler) | Disabled} | **Backend:** {Enabled (framework) | Disabled}
 > **Baseline:** {iterations} iterations, {warmup} warmup | **Targets:** LCP {t}s, FCP {t}s, DOM {t}s
 
@@ -215,13 +215,13 @@ Verify: (1) target directories created, (2) frontend path exists if configured, 
 - `serena_status="skipped"`: Note Serena is available. Re-run setup and choose "Complete onboarding" to enable.
 - `serena_status="onboarded"`: No recommendation needed.
 
-> **Single-workflow mode:** Selecting a different workflow in `performance-baseline` replaces current workflow and baseline data. Back up `.claude/performance/baselines/` before switching.
+> **Single-workflow mode:** Selecting a different workflow in `performance-baseline` replaces current workflow and baseline data. Back up `performance/baselines/` before switching.
 
 > **Next Steps:** Run `/sdlc-workflow:performance-baseline` — it will discover dev commands, discover workflows, prompt for workflow selection, auto-populate scenarios/modules, and capture initial metrics.
 
 ## Important Rules
 
-- Never modify source code — only create/update `.claude/performance-config.json`
+- Never modify source code — only create/update `performance-config.json`
 - Do NOT populate scenarios, modules, or workflow sections — baseline skill handles those
 - Set `metadata.workflow_selected = false` — baseline skill sets true after selection
 - Always prompt for backend config — never silently default to frontend-only

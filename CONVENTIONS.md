@@ -210,5 +210,5 @@ requests targeting `main`). Run it locally before pushing so failures surface be
 - **Baseline capture**:
   - Tool: Playwright for browser automation
   - Security: Validate user input, use timeouts, graceful degradation
-  - Configuration: Store in `.claude/performance-config.json` in target repository
+  - Configuration: Store in `performance-config.json` in target repository
 - **Anti-pattern detection**: 9 standard patterns (over-fetching, N+1 queries, waterfall loading, render-blocking, unused code, expensive re-renders, long tasks, layout thrashing, missing lazy loading)

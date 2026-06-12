@@ -1,0 +1,140 @@
+{
+  "skill_name": "performance-analyze-module",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run /sdlc-workflow:performance-analyze-module on the mock repo. Bootstrap: copy files/mock-repo/ to outputs/mock-repo/. Copy files/mock-repo/performance/config-frontend-only.json to outputs/mock-repo/performance-config.json. Copy baselines to outputs/mock-repo/performance/baselines/. Write analysis artifacts to outputs/mock-repo/performance/analysis/. Do NOT call Serena, Jira, or live SQL. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/. This is a frontend-only analysis (no backend). Run Steps 2–6.9 and Step 9 (validation + report). Mark Step 9.7 as not_applicable (no backend). Treat outputs/mock-repo/ as the target repository and read source files from there.",
+      "expected_output": "A complete frontend-only analysis with analysis-progress.json showing all frontend steps done and backend steps not_applicable, findings-validation.json with validated findings, and workflow-analysis-report.md with Anti-Pattern Analysis section. At least 2 anti-patterns should be detected from the planted issues in Dashboard.tsx (N+1 fetch in loop) and Dashboard.tsx/HeavyChart.tsx (missing lazy loading for HeavyChart).",
+      "files": [
+        "files/mock-repo/performance/config-frontend-only.json",
+        "files/mock-repo/performance/baselines/baseline-report.md",
+        "files/mock-repo/package.json",
+        "files/mock-repo/vite.config.ts",
+        "files/mock-repo/src/pages/Dashboard.tsx",
+        "files/mock-repo/src/components/HeavyChart.tsx",
+        "files/mock-repo/src/hooks/useProducts.ts",
+        "files/mock-repo/src/utils/unused-imports.ts"
+      ],
+      "assertions": [
+        "outputs/mock-repo/performance/analysis/analysis-progress.json exists and contains no step with status 'pending'",
+        "outputs/mock-repo/performance/analysis/analysis-progress.json shows backend steps (6.B, 7.1-7.7, 7.6.1-7.6.6, 8.A-D, 8.F) with status 'not_applicable'",
+        "outputs/mock-repo/performance/analysis/findings-validation.json exists and contains 'validation_run': true or validation_run: true",
+        "outputs/mock-repo/performance/analysis/findings-validation.json contains at least 2 findings with disposition 'Confirmed' or 'Confirmed (Low Confidence)'",
+        "outputs/mock-repo/performance/analysis/workflow-analysis-report.md exists and contains an 'Anti-Pattern Analysis' heading or section",
+        "outputs/mock-repo/performance/analysis/workflow-analysis-report.md does NOT contain 'Backend Source Code Analysis' heading or section",
+        "outputs/mock-repo/performance/analysis/workflow-analysis-report.md contains 'Validation Status: passed' or 'Validation Status: Passed'",
+        "outputs/mock-repo/performance-config.json directories.baselines value starts with 'performance/' (not '.claude/performance/')"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run /sdlc-workflow:performance-analyze-module on mock repos. Bootstrap: copy files/mock-repo/ to outputs/mock-repo/ and copy files/mock-backend/ to outputs/mock-backend/. Copy files/mock-repo/performance/config-hybrid.json to outputs/mock-repo/performance-config.json. Ensure repositories.backend.path is '../mock-backend' (relative from outputs/mock-repo/). Copy baselines to outputs/mock-repo/performance/baselines/. Write analysis artifacts to outputs/mock-repo/performance/analysis/. Do NOT call Serena, Jira, or live SQL. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/. This is a hybrid (full-stack) analysis with backend_available=true. Run all detection steps (5-8) and Step 9 (validation + report). Mark Step 9.7 as not_applicable (no live database). Use grep fallback (no Serena). Treat outputs/mock-repo/ as the frontend repository and outputs/mock-backend/ as the backend repository. Read source files from both paths.",
+      "expected_output": "A hybrid analysis with both frontend and backend steps completed. The analysis-progress.json should show all applicable steps as done. The query-ledger.json should exist from Step 7.6.2. The report should contain both frontend Anti-Pattern Analysis and Backend Source Code Analysis sections, plus Cross-Repository Over-Fetching or Cross-Layer Computation Waste. At least 1 backend finding (missing pagination in products.rs) and 1 frontend finding (N+1 fetch in Dashboard.tsx) should be confirmed.",
+      "files": [
+        "files/mock-repo/performance/config-hybrid.json",
+        "files/mock-repo/performance/baselines/baseline-report.md",
+        "files/mock-repo/performance/baselines/benchmark-results.json",
+        "files/mock-repo/package.json",
+        "files/mock-repo/vite.config.ts",
+        "files/mock-repo/src/pages/Dashboard.tsx",
+        "files/mock-repo/src/components/HeavyChart.tsx",
+        "files/mock-repo/src/hooks/useProducts.ts",
+        "files/mock-repo/src/utils/unused-imports.ts",
+        "files/mock-backend/Cargo.toml",
+        "files/mock-backend/src/handlers/products.rs",
+        "files/mock-backend/src/models/product.rs"
+      ],
+      "assertions": [
+        "outputs/mock-repo/performance/analysis/analysis-progress.json exists and shows both frontend steps (5.x, 6.x) and backend steps (6.B, 7.x) as 'done'",
+        "outputs/mock-repo/performance/analysis/query-ledger.json exists and is valid JSON (contains at least one query entry)",
+        "outputs/mock-repo/performance/analysis/workflow-analysis-report.md contains 'Backend Source Code Analysis' heading or section",
+        "outputs/mock-repo/performance/analysis/workflow-analysis-report.md contains 'Cross-Repository Over-Fetching' or 'Cross-Layer Computation Waste' heading or section",
+        "outputs/mock-repo/performance/analysis/findings-validation.json contains at least 1 backend finding with disposition 'Confirmed' (missing pagination or N+1 from products.rs)",
+        "outputs/mock-repo/performance/analysis/findings-validation.json contains at least 1 frontend finding with disposition 'Confirmed' (N+1 fetch or missing lazy load from Dashboard.tsx)",
+        "outputs/mock-repo/performance-config.json directories.baselines value starts with 'performance/' (not '.claude/performance/')"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Run /sdlc-workflow:performance-analyze-module on the mock repo. Bootstrap: copy files/mock-repo/ to outputs/mock-repo/. Copy files/mock-repo/performance/config-frontend-only.json to outputs/mock-repo/performance-config.json. Copy baselines to outputs/mock-repo/performance/baselines/. IMPORTANT: copy files/pre-seeded-progress.json to outputs/mock-repo/performance/analysis/analysis-progress.json before starting. This progress file has Step 6.5 (Unused Code Detection) still in 'pending' status while all other frontend steps are 'done'. Start from Step 9.0 (Pre-Report Completeness Gate). The gate should detect the pending step, complete Step 6.5, update the progress file, then proceed to validation and report generation. Write analysis artifacts to outputs/mock-repo/performance/analysis/. Do NOT call Serena, Jira, or live SQL. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "files": [
+        "files/mock-repo/performance/config-frontend-only.json",
+        "files/mock-repo/performance/baselines/baseline-report.md",
+        "files/mock-repo/package.json",
+        "files/mock-repo/src/pages/Dashboard.tsx",
+        "files/mock-repo/src/components/HeavyChart.tsx",
+        "files/mock-repo/src/hooks/useProducts.ts",
+        "files/mock-repo/src/utils/unused-imports.ts",
+        "files/pre-seeded-progress.json"
+      ],
+      "expected_output": "The agent detects Step 6.5 is pending in analysis-progress.json, completes the unused code detection step on the mock source files, updates the progress file to mark 6.5 as done with findings >= 1, then proceeds to generate the validation artifact and report.",
+      "assertions": [
+        "outputs/mock-repo/performance/analysis/analysis-progress.json exists and Step 6.5 has status 'done' (not 'pending')",
+        "outputs/mock-repo/performance/analysis/analysis-progress.json Step 6.5 has findings >= 1",
+        "outputs/mock-repo/performance/analysis/analysis-progress.json has no steps with status 'pending'",
+        "outputs/mock-repo/performance/analysis/workflow-analysis-report.md exists (report was generated after the gate passed)",
+        "outputs/mock-repo/performance/analysis/findings-validation.json exists (validation was run after completing the missing step)",
+        "outputs/mock-repo/performance-config.json directories.baselines value starts with 'performance/' (not '.claude/performance/')"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Run /sdlc-workflow:performance-analyze-module on mock-backend. Bootstrap: copy files/mock-backend/ to outputs/mock-backend/. Copy files/mock-backend/performance/config-backend-only.json to outputs/mock-backend/performance-config.json. Copy baselines to outputs/mock-backend/performance/baselines/. Write analysis artifacts to outputs/mock-backend/performance/analysis/. Do NOT call Serena (use grep). Do NOT run live SQL. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/. The backend contains two patterns that look similar but have different dispositions: (1) A TRUE N+1 sequential query loop in src/handlers/products.rs (get_product_details function — Product::find_by_id in a for loop), and (2) A FALSE POSITIVE in src/models/product.rs (load_product_vendors function — SeaORM load_one which is a batch query using WHERE id IN (...), NOT N+1). Run Steps 6.B, 7, and 9. Mark frontend steps and Step 9.7 as not_applicable. Treat outputs/mock-backend/ as the target repository.",
+      "files": [
+        "files/mock-backend/performance/config-backend-only.json",
+        "files/mock-backend/performance/baselines/benchmark-results.json",
+        "files/mock-backend/Cargo.toml",
+        "files/mock-backend/src/handlers/products.rs",
+        "files/mock-backend/src/models/product.rs"
+      ],
+      "expected_output": "The true N+1 query in products.rs::get_product_details (find_by_id in a loop) should be confirmed as a finding. The SeaORM load_one call in product.rs::load_product_vendors should be discarded as a false positive because load_one is a batch operation (single WHERE id IN query), not N+1. The findings-validation.json should contain both findings — one Confirmed and one Discarded with a reason mentioning batch semantics or load_one.",
+      "assertions": [
+        "outputs/mock-backend/performance/analysis/findings-validation.json contains a finding for the load_one/load_product_vendors pattern with disposition 'Discarded' and reason mentioning 'batch' or 'load_one' or 'WHERE id IN'",
+        "outputs/mock-backend/performance/analysis/findings-validation.json contains a finding for the get_product_details N+1 pattern with disposition 'Confirmed'",
+        "outputs/mock-backend/performance/analysis/workflow-analysis-report.md does NOT mention load_product_vendors or load_one in any anti-pattern findings section (discarded findings excluded from report body)",
+        "outputs/mock-backend/performance/analysis/findings-validation.json validation summary or statistics shows at least 1 discarded finding",
+        "outputs/mock-backend/performance-config.json directories.baselines value starts with 'performance/' (not '.claude/performance/')"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Run /sdlc-workflow:performance-analyze-module on the mock repo. Bootstrap: copy files/mock-repo/ to outputs/mock-repo/ but do NOT copy or create any performance config file (no outputs/mock-repo/performance-config.json). The skill should halt when config is missing. Write the halt/remediation message to outputs/response.md. Do NOT write analysis artifacts. Do NOT call Serena, Jira, or live SQL. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "expected_output": "Skill detects missing performance config and halts with remediation directing user to run performance-setup first. No analysis report written.",
+      "files": [
+        "files/mock-repo/package.json",
+        "files/mock-repo/vite.config.ts",
+        "files/mock-repo/src/pages/Dashboard.tsx",
+        "files/mock-repo/src/components/HeavyChart.tsx",
+        "files/mock-repo/src/hooks/useProducts.ts"
+      ],
+      "assertions": [
+        "outputs/response.md exists",
+        "outputs/response.md mentions 'performance-setup' or '/performance-setup' as the remediation step",
+        "outputs/response.md references missing performance config or performance-config.json",
+        "outputs/mock-repo/performance-config.json does NOT exist",
+        "outputs/mock-repo/performance/analysis/workflow-analysis-report.md does NOT exist",
+        "outputs/mock-repo/performance/analysis/findings-validation.json does NOT exist"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Run /sdlc-workflow:performance-analyze-module on the mock repo. Bootstrap: copy files/mock-repo/ to outputs/mock-repo/. Copy files/mock-repo/performance/config-frontend-only.json to outputs/mock-repo/performance-config.json but do NOT copy any baseline files (no outputs/mock-repo/performance/baselines/baseline-report.md). The skill should halt at Step 3 when the baseline report is missing. Write the halt/remediation message to outputs/response.md. Do NOT write analysis artifacts. Do NOT call Serena, Jira, or live SQL. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "expected_output": "Skill detects config present but baseline report missing and halts with remediation directing user to run performance-baseline first. No analysis report written.",
+      "files": [
+        "files/mock-repo/performance/config-frontend-only.json",
+        "files/mock-repo/package.json",
+        "files/mock-repo/vite.config.ts",
+        "files/mock-repo/src/pages/Dashboard.tsx",
+        "files/mock-repo/src/components/HeavyChart.tsx",
+        "files/mock-repo/src/hooks/useProducts.ts"
+      ],
+      "assertions": [
+        "outputs/response.md exists",
+        "outputs/response.md mentions 'performance-baseline' or '/performance-baseline' as the remediation step",
+        "outputs/response.md references missing baseline or baseline-report.md",
+        "outputs/mock-repo/performance/analysis/workflow-analysis-report.md does NOT exist",
+        "outputs/mock-repo/performance/analysis/findings-validation.json does NOT exist"
+      ]
+    }
+  ]
+}

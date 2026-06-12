@@ -71,10 +71,12 @@ const AUTH_PATH_PATTERNS = ['/login', '/auth', '/signin', '/oauth', '/sso'];
 
 async function parseConfig(path) {
   const raw = JSON.parse(await readFile(path, 'utf-8'));
-  const scenarios = (raw.scenarios || []).map(s => ({
-    name: s.name, path: s.url, description: s.description || ''
-  }));
-  if (!scenarios.length) throw new Error('No scenarios in config. Run /sdlc-workflow:performance-baseline first.');
+  const scenarios = (raw.scenarios || [])
+    .filter(s => (s.type || 'frontend') !== 'backend')
+    .map(s => ({
+      name: s.name, path: s.url, description: s.description || ''
+    }));
+  if (!scenarios.length) throw new Error('No frontend scenarios in config. Check scenario types or run /sdlc-workflow:performance-baseline first.');
   const iterations = Math.min(Math.max(raw.baseline_settings?.iterations ?? 20, 1), 50);
   const warmupRuns = Math.min(Math.max(raw.baseline_settings?.warmup_runs ?? 2, 0), 10);
   return { scenarios, iterations, warmupRuns };

@@ -1,0 +1,135 @@
+{
+  "skill_name": "performance-baseline",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run /sdlc-workflow:performance-baseline on the mock frontend repo. Bootstrap: copy files/mock-frontend/ to outputs/mock-repo/. Copy files/mock-frontend/performance/config-pre-discovery.json to outputs/mock-repo/performance-config.json (rename — do not leave as config-pre-discovery.json). Execute ONLY Steps 2–4.7 (workflow discovery and config write). Do NOT attempt Steps 8-10 (baseline capture — no app running). When the skill reaches the Step 4.4 workflow selection prompt, do NOT call AskUserQuestion — select workflow #3 'Settings' (the /settings route) and continue executing Steps 4.5, 4.6, and 4.7 to completion. Treat outputs/mock-repo/ as the target repository. Write config to outputs/mock-repo/performance-config.json. After config write, run perf-config.py validate --phase baseline against the config path and save output to outputs/config-validation.txt. Do NOT call MCP tools (Serena, Jira). Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "expected_output": "Workflows discovered from App.tsx router, user selects Settings, scenario and module auto-populated for /settings, config written to canonical path and validated.",
+      "files": [
+        "files/mock-frontend/package.json",
+        "files/mock-frontend/src/App.tsx",
+        "files/mock-frontend/src/pages/Packages.tsx",
+        "files/mock-frontend/src/pages/PackageDetail.tsx",
+        "files/mock-frontend/src/pages/Settings.tsx",
+        "files/mock-frontend/src/components/Home.tsx",
+        "files/mock-frontend/performance/config-pre-discovery.json"
+      ],
+      "assertions": [
+        "outputs/mock-repo/performance-config.json exists",
+        "outputs/mock-repo/performance-config.json has metadata.workflow_selected set to true",
+        "outputs/mock-repo/performance-config.json scenarios array includes a URL containing '/settings'",
+        "outputs/mock-repo/performance-config.json modules array includes an entry_point value containing 'Settings.tsx'",
+        "outputs/mock-repo/performance-config.json workflow.entry_point is '/settings'",
+        "outputs/mock-repo/performance-config.json workflow.key_screens includes '/settings' and does NOT include '/packages'",
+        "outputs/config-validation.txt contains 'Validation passed' or 'passed'"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run /sdlc-workflow:performance-baseline on mock repos. Bootstrap: copy files/mock-frontend/ to outputs/mock-repo/ and copy files/mock-backend/ to outputs/mock-backend/. Copy files/mock-frontend/performance/config-pre-discovery-fullstack.json to outputs/mock-repo/performance-config.json. Ensure repositories.backend.path in the config is '../mock-backend' (relative from outputs/mock-repo/). Execute Steps 2–4.8 (discovery + API tracing). Do NOT attempt Steps 8-10. When the skill reaches Step 4.4, do NOT call AskUserQuestion — select workflow #2 'Package Management' and continue. When the skill reaches Step 4.8.6, do NOT call AskUserQuestion — answer 'yes' to continue with the traced endpoints and proceed to write the config. Use grep for backend verification (no Serena). Treat outputs/mock-repo/ as the target repository. Write config to outputs/mock-repo/performance-config.json. After config write, run perf-config.py validate --phase baseline against the config path and save output to outputs/config-validation.txt. Do NOT call MCP tools (Serena, Jira). Do NOT start servers or install dependencies. Do NOT modify files outside outputs/.",
+      "expected_output": "Frontend workflows discovered, API calls traced from Packages.tsx and PackageDetail.tsx, backend endpoints verified via grep, scenarios tagged with type fields, traced_api_endpoints written, POST mutation excluded from scenarios.",
+      "files": [
+        "files/mock-frontend/package.json",
+        "files/mock-frontend/src/App.tsx",
+        "files/mock-frontend/src/pages/Packages.tsx",
+        "files/mock-frontend/src/pages/PackageDetail.tsx",
+        "files/mock-frontend/src/pages/Settings.tsx",
+        "files/mock-frontend/src/components/Home.tsx",
+        "files/mock-frontend/performance/config-pre-discovery-fullstack.json",
+        "files/mock-backend/Cargo.toml",
+        "files/mock-backend/src/handlers/products.rs"
+      ],
+      "assertions": [
+        "outputs/mock-repo/performance-config.json exists",
+        "outputs/mock-repo/performance-config.json scenarios array contains entries with type 'frontend' AND entries with type 'backend'",
+        "outputs/mock-repo/performance-config.json workflow.traced_api_endpoints includes GET endpoints for '/api/v2/packages' and '/api/v2/packages/:id' with verified true",
+        "outputs/mock-repo/performance-config.json workflow.traced_api_endpoints includes the POST endpoint '/api/v2/packages/:id/vulnerabilities'",
+        "The POST /api/v2/packages/:id/vulnerabilities endpoint appears in traced_api_endpoints but NOT in the scenarios array (trace-only for mutating endpoints per Step 4.8.4)",
+        "outputs/mock-repo/performance-config.json metadata.backend_endpoint_discovery_method is 'frontend-trace'",
+        "outputs/config-validation.txt contains 'Validation passed' or 'passed'"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Run /sdlc-workflow:performance-baseline on the mock frontend repo. Bootstrap: copy files/mock-frontend/ to outputs/mock-repo/ but do NOT copy or create any performance config file (no performance-config.json). The skill should halt at Step 2 when config is missing. Write the halt/remediation message to outputs/response.md. Do NOT write outputs/mock-repo/performance-config.json. Do NOT call MCP tools (Serena, Jira). Do NOT start servers. Do NOT modify files outside outputs/.",
+      "expected_output": "Skill detects missing performance config and halts with remediation directing user to run performance-setup first. No config file written.",
+      "files": [
+        "files/mock-frontend/package.json",
+        "files/mock-frontend/src/App.tsx",
+        "files/mock-frontend/src/pages/Packages.tsx",
+        "files/mock-frontend/src/pages/PackageDetail.tsx",
+        "files/mock-frontend/src/pages/Settings.tsx",
+        "files/mock-frontend/src/components/Home.tsx"
+      ],
+      "assertions": [
+        "outputs/response.md exists",
+        "outputs/response.md mentions 'performance-setup' or '/performance-setup' as the remediation step",
+        "outputs/response.md references missing performance config or performance-config.json",
+        "outputs/mock-repo/performance-config.json does NOT exist"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Run /sdlc-workflow:performance-baseline on the mock backend repo. Bootstrap: copy files/mock-backend/ to outputs/mock-backend/. Copy files/mock-backend/performance/config-pre-discovery-backend-only.json to outputs/mock-backend/performance-config.json. Execute ONLY Steps 2–3.6 and Step 4.7 (backend-only endpoint discovery, workflow selection, config write). Do NOT attempt frontend discovery or Steps 8-10. Use grep for endpoint discovery (no Serena). When the skill reaches the Step 3.3 workflow selection prompt, do NOT call AskUserQuestion — select workflow #1 'Package API' (the /api/v2/packages endpoints) and continue executing Steps 3.4, 3.5, 3.6, and 4.7 to completion. Treat outputs/mock-backend/ as the target repository. Write config to outputs/mock-backend/performance-config.json. After config write, run perf-config.py validate --phase baseline against the config path and save output to outputs/config-validation.txt. Do NOT call MCP tools (Serena, Jira). Do NOT start servers. Do NOT modify files outside outputs/.",
+      "expected_output": "Backend endpoints discovered from products.rs via grep, user selects Package API workflow, GET endpoint scenarios populated, no frontend scenarios, config validated.",
+      "files": [
+        "files/mock-backend/Cargo.toml",
+        "files/mock-backend/src/handlers/products.rs",
+        "files/mock-backend/performance/config-pre-discovery-backend-only.json"
+      ],
+      "assertions": [
+        "outputs/mock-backend/performance-config.json exists",
+        "outputs/mock-backend/performance-config.json has metadata.workflow_selected set to true",
+        "outputs/mock-backend/performance-config.json metadata.analysis_scope is 'backend-only'",
+        "outputs/mock-backend/performance-config.json scenarios array includes URLs for GET '/api/v2/packages' and GET '/api/v2/packages/:id' or equivalent dynamic path",
+        "outputs/mock-backend/performance-config.json scenarios array does NOT include the POST '/api/v2/packages/:id/vulnerabilities' endpoint",
+        "outputs/mock-backend/performance-config.json modules array has at least 1 entry referencing handlers/products.rs",
+        "outputs/config-validation.txt contains 'Validation passed' or 'passed'"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Run /sdlc-workflow:performance-baseline on mock repos. Bootstrap: copy files/mock-frontend/ to outputs/mock-repo/ and copy files/mock-backend/ to outputs/mock-backend/. Copy files/mock-frontend/performance/config-pre-discovery-fullstack.json to outputs/mock-repo/performance-config.json. Ensure repositories.backend.path is '../mock-backend'. Execute Steps 2–4.8 (discovery + API tracing). Do NOT attempt Steps 8-10. When the skill reaches Step 4.4, do NOT call AskUserQuestion — select workflow #2 'Package Management' and continue. When the skill reaches Step 4.8.6, do NOT call AskUserQuestion — answer 'skip backend' to downgrade to frontend-only analysis, then write the config. Treat outputs/mock-repo/ as the target repository. Write config to outputs/mock-repo/performance-config.json. After config write, run perf-config.py validate against the config path and save output to outputs/config-validation.txt. Do NOT call MCP tools (Serena, Jira). Do NOT start servers. Do NOT modify files outside outputs/.",
+      "expected_output": "Full-stack discovery and tracing complete, user skips backend measurement at Step 4.8.6, analysis_scope downgraded to frontend-only, backend scenarios removed, frontend scenarios retained.",
+      "files": [
+        "files/mock-frontend/package.json",
+        "files/mock-frontend/src/App.tsx",
+        "files/mock-frontend/src/pages/Packages.tsx",
+        "files/mock-frontend/src/pages/PackageDetail.tsx",
+        "files/mock-frontend/src/pages/Settings.tsx",
+        "files/mock-frontend/src/components/Home.tsx",
+        "files/mock-frontend/performance/config-pre-discovery-fullstack.json",
+        "files/mock-backend/Cargo.toml",
+        "files/mock-backend/src/handlers/products.rs"
+      ],
+      "assertions": [
+        "outputs/mock-repo/performance-config.json exists",
+        "outputs/mock-repo/performance-config.json metadata.analysis_scope is 'frontend-only'",
+        "outputs/mock-repo/performance-config.json metadata.metric_type is 'frontend'",
+        "outputs/mock-repo/performance-config.json scenarios array has NO entries with type 'backend'",
+        "outputs/mock-repo/performance-config.json scenarios array includes frontend route URLs for '/packages' and a package detail route",
+        "outputs/config-validation.txt contains 'Validation passed' or 'passed'"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Run /sdlc-workflow:performance-baseline on the mock frontend repo. Bootstrap: copy files/mock-frontend/ to outputs/mock-repo/. Copy files/mock-frontend/performance/config-workflow-selected-incomplete.json to outputs/mock-repo/performance-config.json. This config has metadata.workflow_selected=true but workflow.name, workflow.entry_point, and workflow.key_screens are all null/empty. The skill should halt at Step 2.0 and prompt the user to re-discover or enter workflow details manually. The halt message in outputs/response.md must be prose markdown — explain that workflow_selected is true but workflow fields (name, entry_point, key_screens) are null/empty, and offer two options: reset workflow_selected to false to re-discover, or manually enter workflow details. Do NOT dump raw JSON config into response.md. Do NOT proceed with null workflow data. Do NOT overwrite the config with incomplete workflow fields. Do NOT call MCP tools (Serena, Jira). Do NOT start servers. Do NOT modify files outside outputs/.",
+      "expected_output": "Skill detects workflow_selected=true with missing workflow fields and halts with prompt to reset workflow_selected or enter details manually. No partial config write with null workflow data.",
+      "files": [
+        "files/mock-frontend/package.json",
+        "files/mock-frontend/src/App.tsx",
+        "files/mock-frontend/src/pages/Packages.tsx",
+        "files/mock-frontend/src/pages/PackageDetail.tsx",
+        "files/mock-frontend/src/pages/Settings.tsx",
+        "files/mock-frontend/src/components/Home.tsx",
+        "files/mock-frontend/performance/config-workflow-selected-incomplete.json"
+      ],
+      "assertions": [
+        "outputs/response.md exists",
+        "outputs/response.md mentions workflow_selected or missing workflow data (name, entry_point, or key_screens)",
+        "outputs/response.md offers re-discover or manual entry options (references resetting workflow_selected or entering workflow details)",
+        "outputs/mock-repo/performance-config.json workflow.name is null or empty"
+      ]
+    }
+  ]
+}

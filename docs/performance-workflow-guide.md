@@ -6,7 +6,7 @@ Quick reference for using the performance optimization workflow in sdlc-workflow
 
 ## Overview
 
-**Purpose:** Measure, analyze, and improve frontend application performance using automated metrics collection, anti-pattern detection, and Jira-integrated planning.
+**Purpose:** Measure, analyze, and improve cold-start page load and API endpoint performance across full-stack applications using automated metrics collection, anti-pattern detection, and Jira-integrated planning.
 
 **When to use:**
 - ✅ Feature is functionally complete but has performance issues
@@ -39,7 +39,7 @@ setup (infrastructure only) → baseline (workflow discovery + metrics) → anal
 
 | Step | Skill | Purpose | Output |
 |---|---|---|---|
-| 1 | `performance-setup` | Initialize infrastructure (dirs, settings, backend config) | Minimal `.claude/performance-config.json` (no workflow) |
+| 1 | `performance-setup` | Initialize infrastructure (dirs, settings, backend config) | Minimal `performance-config.json` (no workflow) |
 | 2 | `performance-baseline` | **Discover workflows**, **select workflow**, **select mode**, capture metrics | `baseline-report.md` with Core Web Vitals, config updated with workflow |
 | 3 | `performance-analyze-module` | **Inspect source code** to detect anti-patterns | `workflow-analysis-report.md` with findings |
 | 4 | `performance-plan-optimization` | **Read analysis report** and create Jira tasks | Jira Epic + Tasks, `optimization-plan.md` |
@@ -123,7 +123,7 @@ git checkout main && git pull
 
 Each optimization task creates an isolated report file for audit trail and parallel-safe development:
 
-**Location:** `.claude/performance/optimization-results/{jira-key}-{timestamp}.md`
+**Location:** `performance/optimization-results/{jira-key}-{timestamp}.md`
 
 **Contents:**
 - Performance impact table (baseline → after optimization → delta)

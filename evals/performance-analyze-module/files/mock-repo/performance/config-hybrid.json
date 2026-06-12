@@ -1,0 +1,94 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created": "2026-06-01T10:00:00Z",
+    "last_updated": "2026-06-01T10:00:00Z",
+    "workflow_selected": true,
+    "baseline_captured": true,
+    "baseline_mode": "hybrid",
+    "baseline_timestamp": "2026-06-01T10:00:00Z",
+    "baseline_commit_sha": "abc123",
+    "capture_target": "localhost",
+    "capture_base_url": null,
+    "backend_available": true,
+    "analysis_scope": "full-stack",
+    "backend_endpoint_discovery_method": "frontend-trace",
+    "serena_status": "not-configured",
+    "metric_type": "hybrid"
+  },
+  "repositories": {
+    "frontend": {
+      "name": "mock-dashboard-app",
+      "path": ".",
+      "framework": "React",
+      "bundler": "vite"
+    },
+    "backend": {
+      "name": "mock-product-api",
+      "path": "../mock-backend",
+      "framework": "actix-web",
+      "serena_instance": null,
+      "api_base_path": "/api/v2",
+      "available": true,
+      "last_validated": "2026-06-01T10:00:00Z"
+    }
+  },
+  "workflow": {
+    "name": "dashboard",
+    "entry_point": "/dashboard",
+    "key_screens": ["/dashboard"],
+    "complexity": "Moderate",
+    "selected_on": "2026-06-01T10:00:00Z",
+    "traced_api_endpoints": [
+      {"path": "/api/v2/products", "method": "GET", "frontend_source": "src/hooks/useProducts.ts:25", "backend_handler": "src/handlers/products.rs:list_products", "verified": true},
+      {"path": "/api/v2/products/:id", "method": "GET", "frontend_source": "src/pages/Dashboard.tsx:15", "backend_handler": "src/handlers/products.rs:get_product_details", "verified": true}
+    ]
+  },
+  "scenarios": [
+    {"name": "dashboard", "url": "/dashboard", "description": "Main dashboard page", "type": "frontend"},
+    {"name": "api-get-products", "url": "/api/v2/products", "description": "API called by dashboard", "type": "backend"},
+    {"name": "api-get-product-detail", "url": "/api/v2/products/:id", "description": "API called by dashboard", "type": "backend"}
+  ],
+  "modules": [
+    {"name": "Dashboard", "entry_point": "src/pages/Dashboard.tsx"}
+  ],
+  "baseline_settings": {
+    "iterations": 20,
+    "warmup_runs": 2
+  },
+  "optimization_targets": {
+    "frontend": {
+      "lcp": {"baseline": 3.2, "latest": 3.2, "target": 2.5, "unit": "seconds"},
+      "fcp": {"baseline": 2.1, "latest": 2.1, "target": 1.8, "unit": "seconds"},
+      "dom_interactive": {"baseline": 4.5, "latest": 4.5, "target": 3.5, "unit": "seconds"},
+      "total_load_time": {"baseline": 5.8, "latest": 5.8, "target": 4.0, "unit": "seconds"}
+    },
+    "backend": {
+      "response_time_p95": {"baseline": 180, "latest": 180, "target": 200, "unit": "ms"},
+      "response_time_p99": {"baseline": 420, "latest": 420, "target": 500, "unit": "ms"},
+      "throughput": {"baseline": 120, "latest": 120, "target": 100, "unit": "req/sec"},
+      "error_rate": {"baseline": 0.05, "latest": 0.05, "target": 0.1, "unit": "%"},
+      "db_query_time_p95": {"baseline": 35, "latest": 35, "target": 50, "unit": "ms"}
+    }
+  },
+  "analysis_assumptions": {
+    "bandwidth_mbps": 5,
+    "api_latency_ms": 100,
+    "reflow_cost_ms": 5,
+    "cache_hit_rate": 0.8,
+    "chain_depth": 3,
+    "db_latency_ms": 10
+  },
+  "dev_environment": {
+    "frontend": {"command": "npm run dev", "source": "package.json", "port": 3000, "command_approved": true, "last_validated": null},
+    "backend": {"command": "cargo run", "source": "Cargo.toml", "port": 8080, "command_approved": true, "last_validated": null}
+  },
+  "directories": {
+    "baselines": "performance/baselines/",
+    "analysis": "performance/analysis/",
+    "plans": "performance/plans/",
+    "optimization_results": "performance/optimization-results/",
+    "verification": "performance/verification/",
+    "test_data": "performance/test-data/"
+  }
+}

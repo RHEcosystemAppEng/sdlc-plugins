@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Performance configuration manager for sdlc-workflow performance skills.
 
-Manages .claude/performance-config.json — the structured configuration file
+Manages performance-config.json — the structured configuration file
 used by all performance skills (performance-setup, performance-baseline,
 performance-analyze-module, performance-plan-optimization, implement-task, verify-pr).
 
@@ -28,7 +28,7 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 
-DEFAULT_CONFIG_PATH = ".claude/performance-config.json"
+DEFAULT_CONFIG_PATH = "performance-config.json"
 
 DEFAULT_CONFIG = {
     "metadata": {
@@ -71,6 +71,7 @@ DEFAULT_CONFIG = {
         "key_screens": [],
         "complexity": None,
         "selected_on": None,
+        "traced_api_endpoints": [],
     },
     "scenarios": [],
     "modules": [],
@@ -102,19 +103,28 @@ DEFAULT_CONFIG = {
         "db_latency_ms": 10,
     },
     "dev_environment": {
-        "command": None,
-        "source": None,
-        "port": None,
-        "command_approved": False,
-        "last_validated": None,
+        "frontend": {
+            "command": None,
+            "source": None,
+            "port": None,
+            "command_approved": False,
+            "last_validated": None,
+        },
+        "backend": {
+            "command": None,
+            "source": None,
+            "port": None,
+            "command_approved": False,
+            "last_validated": None,
+        },
     },
     "directories": {
-        "baselines": ".claude/performance/baselines/",
-        "analysis": ".claude/performance/analysis/",
-        "plans": ".claude/performance/plans/",
-        "optimization_results": ".claude/performance/optimization-results/",
-        "verification": ".claude/performance/verification/",
-        "test_data": ".claude/performance/test-data/",
+        "baselines": "performance/baselines/",
+        "analysis": "performance/analysis/",
+        "plans": "performance/plans/",
+        "optimization_results": "performance/optimization-results/",
+        "verification": "performance/verification/",
+        "test_data": "performance/test-data/",
     },
 }
 
@@ -472,12 +482,51 @@ def cmd_validate(args: argparse.Namespace) -> None:
                     errors.append(f"scenarios[{i}].name is empty")
                 if not s.get("url"):
                     errors.append(f"scenarios[{i}].url is empty")
+                st = s.get("type")
+                if st is not None and st not in ("frontend", "backend"):
+                    errors.append(f"scenarios[{i}].type must be 'frontend' or 'backend', got '{st}'")
+
+        scope = config.get("metadata", {}).get("analysis_scope", "frontend-only")
+        if scope in ("full-stack", "full-stack-monorepo") and scenarios:
+            types_found = {s.get("type", "frontend") for s in scenarios}
+            if "backend" not in types_found:
+                errors.append(
+                    "full-stack scope requires at least one scenario with type='backend'"
+                    " — run baseline Step 4.8 or use 'skip backend' to downgrade to frontend-only"
+                )
+            traced = config.get("workflow", {}).get("traced_api_endpoints", [])
+            if traced:
+                traced_paths = {e["path"] for e in traced if "path" in e}
+                backend_urls = {s["url"] for s in scenarios if s.get("type") == "backend" and s.get("url")}
+                orphans = backend_urls - traced_paths
+                if orphans:
+                    errors.append(f"Backend scenarios not in traced_api_endpoints: {orphans}")
 
         dev = config.get("dev_environment", {})
-        port = dev.get("port")
-        if port is not None:
-            if not isinstance(port, int) or port < 1 or port > 65535:
-                errors.append(f"dev_environment.port must be integer 1-65535, got {port}")
+        # Determine which components need a valid port based on scope
+        if scope in ("backend-only",):
+            components_needed = ["backend"]
+        elif scope in ("full-stack", "full-stack-monorepo"):
+            components_needed = ["frontend", "backend"]
+        else:
+            components_needed = ["frontend"]
+        # Support flat dev_environment (backward compat): flat config is valid
+        # for single-component scopes, but hybrid requires nested structure
+        is_flat = "command" in dev and "frontend" not in dev and "backend" not in dev
+        if is_flat and len(components_needed) > 1:
+            errors.append("dev_environment uses flat format but analysis_scope requires both frontend and backend — re-run /performance-setup")
+        elif is_flat:
+            port = dev.get("port")
+            if port is not None:
+                if not isinstance(port, int) or port < 1 or port > 65535:
+                    errors.append(f"dev_environment.port must be integer 1-65535, got {port}")
+        else:
+            for comp in components_needed:
+                comp_dev = dev.get(comp, {})
+                port = comp_dev.get("port")
+                if port is not None:
+                    if not isinstance(port, int) or port < 1 or port > 65535:
+                        errors.append(f"dev_environment.{comp}.port must be integer 1-65535, got {port}")
 
         bs = config.get("baseline_settings", {})
         iters = bs.get("iterations", 0)

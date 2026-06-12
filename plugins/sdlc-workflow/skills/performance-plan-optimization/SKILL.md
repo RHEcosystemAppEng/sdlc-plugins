@@ -22,7 +22,7 @@ if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then echo "❌ sdlc-workflo
 
 ## Guardrails
 
-- Creates files in `.claude/performance/plans/` only -- does NOT modify source code
+- Creates files in `performance/plans/` only -- does NOT modify source code
 - Requires an existing `workflow-analysis-report.md` from analyze-module
 - All RECOMMEND and CAUTION optimizations get Jira tasks (none silently skipped)
 - All cross-functional impacts documented in Epic description
@@ -34,11 +34,11 @@ if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then echo "❌ sdlc-workflo
 
 ## Step 1 -- Determine Target Repository
 
-Use user-provided path or current working directory. Verify repository type matches `metadata.analysis_scope` in `.claude/performance-config.json`.
+Use user-provided path or current working directory. Verify repository type matches `metadata.analysis_scope` in `performance-config.json`.
 
 ## Step 2 -- Verify Performance Configuration
 
-Read `.claude/performance-config.json`. Stop if missing. Extract: selected workflow name, target directories (plans directory location).
+Read `performance-config.json`. Stop if missing. Extract: selected workflow name, target directories (plans directory location).
 
 ## Step 3 -- Resolve Analysis Report Path
 
@@ -53,7 +53,7 @@ Read the analysis report. Validate in order:
 1. **Report exists** -- if not, halt: run `/sdlc-workflow:performance-analyze-module` first
 2. **Anti-Pattern Analysis section present** -- if not, halt: report incomplete, re-run analyze-module
 3. **Validation artifact exists** -- read `{analysis_dir}/findings-validation.json`; if missing, halt: re-run analyze-module
-4. **Run validation checklist** -- apply rules A1-A6 and R1-R5 from [Finding Validation](../performance/finding-validation.md) against artifact + report. Output checklist table. If any rule FAIL, halt
+4. **Run validation checklist** -- apply rules A1-A7 and R1-R5 from [Finding Validation](../performance/finding-validation.md) against artifact + report. Accept schema_version `"1.0"` or `"1.1"`. Output checklist table. If any rule FAIL, halt
 5. **Reject unvalidated** -- if report header shows `Validation Status: not validated`, halt
 6. **Zero actionable findings:**
 
@@ -139,7 +139,75 @@ For each optimization, document: performance benefit (quantified), impact scope/
 - Caching: `operation_time * cache_hit_rate`
 - Over-fetching fix: `(unused_fields / total_fields) * response_size_kb`
 
-Store all impact analysis data for Steps 6-9.
+Store all impact analysis data for Steps 5.5-9.
+
+### Step 5.5 -- Database Migration Script Generation
+
+**Guard:** Runs when any RECOMMEND or CAUTION finding has anti-pattern type in: Missing Index, Sequential Scan, Nested Loop, Row Estimate Mismatch, Unused JOINs, Inefficient Queries, SQL Duplication. Key off anti-pattern type, not step numbers — covers findings from both static analysis (Steps 7.6, 7.6.1, 7.6.4, 7.6.5) and live analysis (Step 9.7.4).
+
+**Skip when:** no database-related findings exist among RECOMMEND/CAUTION dispositions.
+
+#### Step 5.5.1 -- Read CONVENTIONS.md
+
+**Mandatory.** Read the target repository's `CONVENTIONS.md`. If CONVENTIONS.md is missing, halt with: "CONVENTIONS.md is required for database migration planning. Document migration patterns (naming, index naming, file structure, FK index policy) before proceeding."
+
+Extract migration-related conventions: naming patterns, file structure, index naming, transaction handling, FK index policy, rollback requirements. Scan 2-3 existing migration files in the repository to validate conventions match practice.
+
+Any migration pattern found in existing files but NOT documented in CONVENTIONS.md → flag as a recommended convention addition in the plan output.
+
+#### Step 5.5.2 -- Detect Migration Framework
+
+Read `repositories.backend.framework` from config. Map to migration tool and path pattern:
+
+| Framework | Migration Tool | Path Pattern |
+|---|---|---|
+| Rust (SeaORM) | SeaORM Migration | `migration/src/m{YYYYMMDD}_{HHMMSS}_{name}.rs` |
+| Rust (Diesel) | Diesel | `migrations/{date}_{name}/up.sql` + `down.sql` |
+| Rust (sqlx) | sqlx migrate | `migrations/{timestamp}_{name}.sql` |
+| Python (Django) | Django | `{app}/migrations/{NNNN}_{name}.py` |
+| Python (SQLAlchemy) | Alembic | `alembic/versions/{rev}_{name}.py` |
+| Java (Spring) | Flyway | `src/main/resources/db/migration/V{N}__{name}.sql` |
+| Node (TypeORM) | TypeORM | `src/migration/{timestamp}-{name}.ts` |
+| Node (Prisma) | Prisma | `prisma/migrations/{timestamp}_{name}/migration.sql` |
+
+If the detected framework is not in the table, default to raw SQL migration files and document the limitation.
+
+#### Step 5.5.3 -- Generate Manual Verification Artifacts
+
+For each database finding, produce raw SQL artifacts the user can run directly against their database:
+
+- **Before SQL** — the current query, with its EXPLAIN ANALYZE output if live analysis (Step 9.7) was performed
+- **After SQL** — the optimized query for manual `EXPLAIN ANALYZE` verification
+- **Migration up SQL** — the DDL change (e.g., `CREATE INDEX CONCURRENTLY ...` for production use)
+- **Migration down SQL** — the rollback DDL (e.g., `DROP INDEX IF EXISTS ...`)
+
+Manual verification SQL recommends `CREATE INDEX CONCURRENTLY` for production safety. Framework migration scripts (Step 5.5.4) do not use CONCURRENTLY because most migration runners wrap in transactions where CONCURRENTLY is invalid.
+
+- **Storage impact queries** — for each migration, include before/after size queries so the user can measure storage cost:
+  - Queries must show: total relation size, table data size, total index size, and per-index size breakdown.
+  - Derive SQL dialect from the migration framework detected in Step 5.5.2 (e.g., PostgreSQL for SeaORM/Diesel/sqlx, MySQL for TypeORM with MySQL). Example for PostgreSQL: `pg_total_relation_size()`, `pg_relation_size()`, `pg_indexes_size()`, `pg_stat_user_indexes`.
+  - If the finding's reason mentions the table was not found in migration files, prepend a warning: "Confirm table name before running — table not found in migration DDL."
+
+#### Step 5.5.4 -- Generate Framework Migration Script
+
+Produce the migration in the framework's idiomatic format, following CONVENTIONS.md patterns from Step 5.5.1. This is the source code that implement-task will write to the codebase.
+
+Include before/after comments referencing the raw SQL from Step 5.5.3.
+
+#### Step 5.5.5 -- Present to User
+
+For each migration, present both layers:
+
+1. **Manual verification block:** Before SQL + EXPLAIN output, After SQL, Migration up/down SQL (with CONCURRENTLY), and verification command (`EXPLAIN ANALYZE {optimized_query}`)
+2. **Source code block:** Framework migration script that implement-task will apply
+3. **Storage impact block:** Before/after size queries for the affected table(s)
+
+#### Step 5.5.6 -- Safety Checks
+
+Verify for each migration:
+- No column drops or data loss operations (DELETE, TRUNCATE, ALTER COLUMN DROP)
+- Rollback/down migration is non-destructive
+- Migration follows CONVENTIONS.md patterns
 
 ## Step 6 -- Group Optimizations into Logical Tasks
 
@@ -151,7 +219,9 @@ Group only **RECOMMEND** and **CAUTION** optimizations into tasks. CONDITIONAL/D
 
 **Layer 1 -- Frontend:** 1A Bundle Size (splitting, tree shaking, lazy loading) | 1B Render (memoization, virtual scrolling, layout thrashing) | 1C Resource (async/defer scripts, parallel loading, image optimization)
 
-**Layer 2 -- Backend** (when configured): 2A Query (N+1, deep chain N+1, pagination, indexes) | 2B Response (over-fetching, wasted computation, caching)
+**Layer 2 -- Backend** (when configured): 2A Query (N+1, deep chain N+1, pagination, indexes, query rewrites) | 2B Response (over-fetching, wasted computation, caching)
+
+Database migration findings (Missing Index, Sequential Scan, Unused JOINs, Inefficient Queries, SQL Duplication) are grouped under Layer 2A with the `db-migration` label in addition to `performance-optimization`. Index-related findings go into one migration task; query rewrite findings go into a separate task. Each migration task includes the generated migration script (from Step 5.5.4) in Implementation Notes and the manual verification artifacts (from Step 5.5.3) in the Database Migration extension section.
 
 **Layer 3 -- Integration:** 3A API Communication (batch calls, parallel fetching, client-side caching)
 
@@ -177,7 +247,7 @@ Read the plan template from `$plugin_root/skills/performance/performance-plan.te
 
 ### Step 7.3 -- Calculate Expected Impact
 
-Based on `metric_type`: sum estimated improvements across all optimizations, calculate percentage reduction, use conservative (lower bound) estimates.
+Based on `metric_type`: sum estimated improvements across all optimizations, calculate percentage reduction, use conservative (lower bound) estimates. Summed impact is a rough upper bound — individual improvements are not necessarily additive. Present as "estimated up to X improvement" not "will save X."
 
 ### Step 7.4 -- Calculate Total Effort
 
@@ -233,6 +303,8 @@ Read the task template from `$plugin_root/skills/performance/optimization-task.t
 
 Do NOT copy all workflow-level metrics into every task.
 
+**Unit conversion:** `optimization_targets` stores frontend metrics in seconds; reports and Jira tasks use milliseconds. Multiply by 1000 when populating task Baseline/Target Metrics from config values.
+
 ### Step 9.2 -- Create Task via Jira
 
 **MCP first**, same fallback flow as Epic (Step 8.2).
@@ -244,7 +316,9 @@ mcp__atlassian__createJiraIssue(
 )
 ```
 
-**Labels:** layer = "frontend" | "backend" | "integration". Category = "bundle-size" | "render-optimization" | "resource-optimization" | "query-optimization" | "response-optimization" | "api-communication".
+**Labels:** layer = "frontend" | "backend" | "integration". Category = "bundle-size" | "render-optimization" | "resource-optimization" | "query-optimization" | "response-optimization" | "api-communication" | "db-migration".
+
+For `db-migration` tasks: include both `performance-optimization` and `db-migration` labels. The `performance-optimization` label maintains Epic grouping; the `db-migration` label enables task type detection in implement-task and verify-pr.
 
 ### Step 9.3 -- Set Epic as Parent
 
@@ -286,7 +360,7 @@ Report to the user:
 >
 > **Workflow:** {workflow-name}
 > **Expected Impact:** {metric improvements by metric_type}
-> **Plan:** `.claude/performance/plans/optimization-plan.md`
+> **Plan:** `performance/plans/optimization-plan.md`
 > **Epic:** {epic-key} -- "Performance Optimization: {workflow-name}"
 > **Tasks:** {task-count} tasks (list each key + summary)
 > **Effort:** {total-effort-days} days
@@ -294,7 +368,7 @@ Report to the user:
 > **Next Steps:**
 > 1. Review plan and tasks with your team
 > 2. Implement: `/sdlc-workflow:implement-task {task-key}` (performance sections auto-detected)
-> 3. After each task, re-baseline: `/sdlc-workflow:performance-baseline`
+> 3. After each task's PR merges to the target branch, re-baseline on the target branch: `/sdlc-workflow:performance-baseline`
 
 If Jira was skipped, adjust: note plan saved locally, Jira not created.
 
