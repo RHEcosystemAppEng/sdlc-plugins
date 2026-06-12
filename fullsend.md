@@ -9,6 +9,7 @@ Run sdlc-workflow skills inside secure sandboxes via [fullsend](https://github.c
 - GCP credentials for Vertex AI (or Anthropic API key) — Claude Code needs LLM API access from inside the sandbox
 - Jira API token — skills read/write Jira issues via REST API (MCP is not available inside the sandbox)
 - GitHub token — skills read PRs and post comments via `gh` CLI
+- Python `jsonschema` package on the runner — the `validation_loop` validates agent output against the JSON schema before the post_script runs (`pip install jsonschema`)
 
 ## Quick start (local mode)
 
