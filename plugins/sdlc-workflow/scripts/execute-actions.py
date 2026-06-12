@@ -69,30 +69,42 @@ def build_issue_url(key: str) -> str:
     return f"{server}/browse/{key}"
 
 
-def execute_create_subtask(action: dict, registry: dict) -> None:
+def _create_and_register(action: dict, registry: dict, *,
+                        project_key: str, issue_type: str,
+                        parent: str | None = None, label: str = "issue") -> None:
     ref = action["ref"]
-    parent = resolve_refs(action["parent"], registry)
     summary = resolve_refs(action["summary"], registry)
     labels = action["labels"]
     description_adf = resolve_refs_in_obj(action["description_adf"], registry)
 
     try:
         result = _jira_mod.create_issue(
-            project_key=parent.split("-")[0],
+            project_key=project_key,
             summary=summary,
-            issue_type="Sub-task",
+            issue_type=issue_type,
             parent=parent,
             description_adf=description_adf,
             labels=labels,
         )
     except SystemExit:
-        print(f"  Failed to create sub-task: {summary}", file=sys.stderr)
+        print(f"  Failed to create {label}: {summary}", file=sys.stderr)
         sys.exit(1)
 
     key = result.get("key", "")
     url = build_issue_url(key)
     registry[ref] = {"key": key, "url": url}
-    print(f"  Created sub-task: {key} (ref: {ref})")
+    print(f"  Created {label}: {key} (ref: {ref})")
+
+
+def execute_create_subtask(action: dict, registry: dict) -> None:
+    parent = resolve_refs(action["parent"], registry)
+    _create_and_register(
+        action, registry,
+        project_key=parent.split("-")[0],
+        issue_type="Sub-task",
+        parent=parent,
+        label="sub-task",
+    )
 
 
 def execute_create_link(action: dict, registry: dict) -> None:
@@ -132,32 +144,17 @@ def execute_post_pr_reply(action: dict, registry: dict) -> None:
 
 
 def execute_create_root_cause_task(action: dict, registry: dict) -> None:
-    ref = action["ref"]
-    summary = resolve_refs(action["summary"], registry)
-    labels = action["labels"]
-    description_adf = resolve_refs_in_obj(action["description_adf"], registry)
-
     project_key = os.environ.get("JIRA_PROJECT_KEY", "")
     if not project_key:
         print("JIRA_PROJECT_KEY is required for root-cause task creation", file=sys.stderr)
         sys.exit(1)
 
-    try:
-        result = _jira_mod.create_issue(
-            project_key=project_key,
-            summary=summary,
-            issue_type="Task",
-            description_adf=description_adf,
-            labels=labels,
-        )
-    except SystemExit:
-        print(f"  Failed to create root-cause task: {summary}", file=sys.stderr)
-        sys.exit(1)
-
-    key = result.get("key", "")
-    url = build_issue_url(key)
-    registry[ref] = {"key": key, "url": url}
-    print(f"  Created root-cause task: {key} (ref: {ref})")
+    _create_and_register(
+        action, registry,
+        project_key=project_key,
+        issue_type="Task",
+        label="root-cause task",
+    )
 
 
 def execute_post_comment(action: dict, registry: dict) -> None:
