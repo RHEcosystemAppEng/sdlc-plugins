@@ -56,7 +56,11 @@ def jira_client(*args: str) -> dict:
         capture_output=True, text=True
     )
     if result.returncode != 0:
-        print(f"jira-client.py {args[0]} failed: {result.stderr}", file=sys.stderr)
+        print(f"jira-client.py {args[0]} failed:", file=sys.stderr)
+        if result.stdout.strip():
+            print(result.stdout, file=sys.stderr)
+        if result.stderr.strip():
+            print(result.stderr, file=sys.stderr)
         sys.exit(1)
     if result.stdout.strip():
         return json.loads(result.stdout)
