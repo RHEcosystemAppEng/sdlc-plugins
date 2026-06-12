@@ -22,7 +22,8 @@ set -euo pipefail
 : "${JIRA_API_TOKEN:?JIRA_API_TOKEN is required}"
 
 # 2. Validate JIRA_ISSUE_ID format
-if [[ ! "${JIRA_ISSUE_ID}" =~ ^[A-Z]+-[0-9]+$ ]]; then
+# https://confluence.atlassian.com/adminjiraserver/changing-the-project-key-format-938847081.html
+if [[ ! "${JIRA_ISSUE_ID}" =~ ^[A-Z][A-Z0-9_]+-[0-9]+$ ]]; then
   echo "ERROR: JIRA_ISSUE_ID '${JIRA_ISSUE_ID}' does not match expected format (e.g., TC-4741)"
   exit 1
 fi
