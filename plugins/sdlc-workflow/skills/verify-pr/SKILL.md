@@ -936,7 +936,7 @@ jira.create_issue_link(type="Relates", inwardIssue=<root-cause-task-id>, outward
 ```json
 {
   "type": "create_link",
-  "link_type": "Relates",
+  "link_type": "Related",
   "inward": "{{rc-N.key}}",
   "outward": "<parent-task-id>"
 }
