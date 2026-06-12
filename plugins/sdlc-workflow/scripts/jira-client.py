@@ -606,6 +606,15 @@ def get_project_metadata(project_key: str) -> Dict[str, Any]:
 # CLI Interface
 # =============================================================================
 
+def _parse_json_arg(value: str, flag_name: str) -> Any:
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Invalid JSON in --{flag_name}: {e.msg}", file=sys.stderr)
+        print(f"Position: line {e.lineno}, column {e.colno}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main(argv=None):
     """CLI entry point with subcommand dispatch.
 
@@ -690,14 +699,7 @@ def main(argv=None):
 
     elif args.command == 'create_issue':
         labels = args.labels.split(',') if args.labels else None
-        description_adf = None
-        if args.description_adf:
-            try:
-                description_adf = json.loads(args.description_adf)
-            except json.JSONDecodeError as e:
-                print(f"ERROR: Invalid JSON in --description-adf: {e.msg}", file=sys.stderr)
-                print(f"Position: line {e.lineno}, column {e.colno}", file=sys.stderr)
-                sys.exit(1)
+        description_adf = _parse_json_arg(args.description_adf, "description-adf") if args.description_adf else None
         result = create_issue(
             args.project,
             args.summary,
@@ -710,25 +712,12 @@ def main(argv=None):
         )
 
     elif args.command == 'update_issue':
-        try:
-            fields = json.loads(args.fields_json)
-        except json.JSONDecodeError as e:
-            print(f"❌ Invalid JSON in --fields-json: {e.msg}", file=sys.stderr)
-            print(f"Position: line {e.lineno}, column {e.colno}", file=sys.stderr)
-            print("Ensure your JSON is properly formatted with quotes around strings.", file=sys.stderr)
-            sys.exit(1)
+        fields = _parse_json_arg(args.fields_json, "fields-json")
         update_issue(args.issue_key, fields)
         result = {"updated": True}
 
     elif args.command == 'add_comment':
-        comment_adf = None
-        if args.comment_adf:
-            try:
-                comment_adf = json.loads(args.comment_adf)
-            except json.JSONDecodeError as e:
-                print(f"ERROR: Invalid JSON in --comment-adf: {e.msg}", file=sys.stderr)
-                print(f"Position: line {e.lineno}, column {e.colno}", file=sys.stderr)
-                sys.exit(1)
+        comment_adf = _parse_json_arg(args.comment_adf, "comment-adf") if args.comment_adf else None
         result = add_comment(args.issue_key, comment_md=args.comment_md, comment_adf=comment_adf)
 
     elif args.command == 'transition_issue':
