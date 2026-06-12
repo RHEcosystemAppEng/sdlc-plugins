@@ -88,10 +88,6 @@ def execute_create_subtask(action: dict, registry: dict) -> None:
     labels = action["labels"]
     description_adf = resolve_refs_in_obj(action["description_adf"], registry)
 
-    label_args = []
-    for label in labels:
-        label_args.extend(["--labels", label])
-
     result = jira_client(
         "create_issue",
         "--project", parent.split("-")[0],
@@ -99,7 +95,7 @@ def execute_create_subtask(action: dict, registry: dict) -> None:
         "--issue-type", "Sub-task",
         "--parent", parent,
         "--description-adf", json.dumps(description_adf),
-        *label_args,
+        "--labels", ",".join(labels),
     )
     key = result.get("key", "")
     url = build_issue_url(key)
@@ -142,11 +138,8 @@ def execute_create_root_cause_task(action: dict, registry: dict) -> None:
 
     project_key = os.environ.get("JIRA_PROJECT_KEY", "")
     if not project_key:
-        print("WARNING: JIRA_PROJECT_KEY not set", file=sys.stderr)
-
-    label_args = []
-    for label in labels:
-        label_args.extend(["--labels", label])
+        print("JIRA_PROJECT_KEY is required for root-cause task creation", file=sys.stderr)
+        sys.exit(1)
 
     result = jira_client(
         "create_issue",
@@ -154,7 +147,7 @@ def execute_create_root_cause_task(action: dict, registry: dict) -> None:
         "--summary", summary,
         "--issue-type", "Task",
         "--description-adf", json.dumps(description_adf),
-        *label_args,
+        "--labels", ",".join(labels),
     )
     key = result.get("key", "")
     url = build_issue_url(key)
