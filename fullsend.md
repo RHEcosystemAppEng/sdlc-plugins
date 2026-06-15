@@ -93,12 +93,13 @@ All paths are relative to `plugins/sdlc-workflow/`.
 | `sandboxes/base/Dockerfile.hummingbird` | Alternative image based on Red Hat Hummingbird (near-zero CVE) | For environments that require RPM-based images. Self-contained — installs all tools via `dnf` from official repos (Anthropic, GitHub, Hummingbird). |
 | `sandboxes/base/bootstrap-plugin-cache.sh` | Generates Claude Code marketplace cache structure at build time | Claude Code auto-discovers plugins from `$CLAUDE_CONFIG_DIR/plugins/` only if the marketplace cache JSON files exist. This script replicates the structure that fullsend's `bootstrapPlugins()` Go function creates at runtime, but baked into the image so no host-side plugin upload is needed. |
 | `sandboxes/base/claude-code.repo` | Anthropic's official RPM repo definition for Claude Code | Only used by `Dockerfile.hummingbird`. The default Dockerfile inherits Claude Code from the fullsend base image. |
-| `harness/verify-pr.yaml` | Fullsend harness config for the verify-pr skill | Declares the image, policy, env file mounts, and timeout. Fullsend reads this to know how to create the sandbox, what credentials to inject, and how long the agent can run. |
+| `providers/jira.yaml` | OpenShell provider for Jira credentials | The gateway proxy swaps opaque placeholder tokens for real `JIRA_EMAIL` and `JIRA_API_TOKEN` at the HTTP layer. Credentials never enter the sandbox ([ADR-0025](https://github.com/fullsend-ai/fullsend/blob/main/docs/ADRs/0025-provider-credential-delivery-for-sandboxed-agents.md), tier 2). |
+| `providers/github.yaml` | OpenShell provider for GitHub token | Uses the built-in `github` provider type. The gateway injects `GH_TOKEN` as an opaque placeholder, swapped transparently when `gh` CLI makes API calls. |
+| `harness/verify-pr.yaml` | Fullsend harness config for the verify-pr skill | Declares the image, policy, providers, env file mounts, and timeout. Fullsend reads this to know how to create the sandbox, what credentials to inject, and how long the agent can run. |
 | `agents/verify-pr.md` | Agent prompt with YAML frontmatter | Fullsend launches Claude Code with `--agent verify-pr` which loads this file as the system prompt. The YAML frontmatter is required — without it Claude Code treats the file as a generic prompt and ignores the instructions. The agent reads `JIRA_ISSUE_ID` from the environment and invokes the skill. |
 | `policies/verify-pr.yaml` | Sandbox network/filesystem policy | Controls which endpoints the sandbox can reach and whether the filesystem is read-only or read-write. Each network policy entry requires a `name:` field (OpenShell supervisor crashes without it), prefix wildcards only (`*.googleapis.com`, not `*-pattern.domain`), and `**/binary` double-star globs for binary paths. These constraints were discovered by testing against OpenShell and verified against fullsend's production policies. |
 | `env/gcp-vertex.env` | Vertex AI env var template | Expanded at runtime from the secrets file via fullsend's `host_files` with `expand: true`. Sets `CLAUDE_CODE_USE_VERTEX=1` and points `GOOGLE_APPLICATION_CREDENTIALS` to the uploaded credential file at `/tmp/gcp-creds.json`. |
-| `env/jira.env` | Jira REST API env var template | MCP servers are not available inside the sandbox, so skills fall back to the Jira REST API using these env vars. Also carries `JIRA_ISSUE_ID` which the agent prompt reads to know which task to verify. |
-| `env/github.env` | GitHub token env var template | The `GH_TOKEN` must be explicitly injected — it is not automatically inherited from the host environment. Without it, skills cannot post PR comments or read review feedback. |
+| `env/jira.env` | Jira non-credential config | Carries `JIRA_SERVER_URL` (for URL construction) and `JIRA_ISSUE_ID` (task identifier). Credentials (`JIRA_EMAIL`, `JIRA_API_TOKEN`) are injected by the Jira provider, not this file. |
 | `schemas/verify-pr-result.schema.json` | JSON Schema for verify-pr structured output | Defines the action types, cross-reference format, and report structure. Validated by fullsend's `validation_loop` before the post_script runs. |
 | `scripts/pre-verify-pr.sh` | Pre_script for verify-pr | Validates inputs before sandbox creation: checks required env vars, JIRA_ISSUE_ID format, issue existence, and PR linkage. Fails fast to avoid wasting sandbox compute time. |
 | `scripts/post-verify-pr.sh` | Post_script for verify-pr | Shell wrapper that finds `agent-result.json` and delegates to `execute-actions.py`. Runs on the trusted runner after sandbox is destroyed. |
@@ -403,6 +404,22 @@ MCP servers are not available inside the sandbox — they run as separate proces
 that require localhost network access and configuration that doesn't transfer
 into the container. Skills detect MCP unavailability and fall back to the Jira
 REST API v3 using env vars (`JIRA_SERVER_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`).
+
+### Credential delivery tiers
+
+Per [ADR-0025](https://github.com/fullsend-ai/fullsend/blob/main/docs/ADRs/0025-provider-credential-delivery-for-sandboxed-agents.md),
+credentials use the highest isolation tier possible:
+
+| Service | Tier | Model | Credentials in sandbox? |
+|---|---|---|---|
+| Jira | 2 | OpenShell provider (`providers/jira.yaml`) | No — gateway proxy swaps placeholder tokens |
+| GitHub | 2 | OpenShell provider (`providers/github.yaml`) | No — gateway proxy swaps placeholder tokens |
+| GCP Vertex AI | 4 | Host file (`${GOOGLE_APPLICATION_CREDENTIALS}`) | Yes — file-based auth requires local JWT signing |
+
+Tier 1 (prefetch + post-process with zero credential access) is partially
+achieved: the pre_script pre-fetches the Jira issue, and the post_script
+handles all writes. The sandbox still needs runtime GitHub API access for
+PR diff, reviews, and CI status.
 
 ## Comparison with fullsend canonical patterns
 
