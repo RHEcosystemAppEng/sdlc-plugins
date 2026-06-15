@@ -1,0 +1,45 @@
+name: Build sandbox image
+
+on:
+  push:
+    branches: [run-in-fullsend]
+    paths:
+      - 'plugins/sdlc-workflow/**'
+      - '.github/workflows/build-sandbox-image.yml'
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository_owner }}/sdlc-plugins/sdlc-base
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Log in to GHCR
+        uses: redhat-actions/podman-login@v1
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        uses: redhat-actions/buildah-build@v2
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          tags: latest ${{ github.sha }}
+          containerfiles: plugins/sdlc-workflow/sandboxes/base/Dockerfile
+          context: .
+
+      - name: Push to GHCR
+        uses: redhat-actions/push-to-registry@v2
+        with:
+          image: ${{ env.IMAGE_NAME }}
+          tags: latest ${{ github.sha }}
+          registry: ${{ env.REGISTRY }}
