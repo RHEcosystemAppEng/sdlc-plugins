@@ -95,7 +95,7 @@ In sandbox mode, the pre_script fetches task data on the trusted runner and
 mounts it into the sandbox. Read the pre-fetched data:
 
 ```bash
-cat /tmp/workspace/.pre-script/verify-pr-input.json | python3 -m json.tool > /dev/null 2>&1 && echo "Pre-fetched data available" || echo "ERROR: Pre-fetched data missing or invalid"
+cat /sandbox/workspace/.pre-script/verify-pr-input.json | python3 -m json.tool > /dev/null 2>&1 && echo "Pre-fetched data available" || echo "ERROR: Pre-fetched data missing or invalid"
 ```
 
 If the file exists and contains valid JSON:
