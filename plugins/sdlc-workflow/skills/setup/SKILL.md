@@ -279,8 +279,8 @@ Ask the user for one or more version streams. For each stream, collect:
 2. **Konflux release repo URL** — the git repository URL (e.g.,
    `git.downstream.example.com/my-org/product-release.0.4.z`)
 3. **Local path** — the user's local clone path to the Konflux release repo
-4. **Security matrix path** — the path to security-matrix.md within the repo
-   (default: `security-matrix.md`)
+4. **Security matrix path** — the path to security-matrix.md relative to the project
+   working directory (e.g., `docs/security-matrix-2.2.x.md`)
 
 ### Step 8.3 – Collect Source Repositories
 
@@ -304,11 +304,11 @@ Present the planned Security Configuration section to the user for review before
 ### Step 8.5 – Scaffold security-matrix.md
 
 For each Version Stream configured above, check if a `security-matrix.md` file exists
-at the specified path within the Konflux release repo.
+at the specified path within the project working directory.
 
 - **If it does NOT exist**: Read `security-matrix.md` from `docs/templates/` and offer
-  to write it to the configured path. The user must confirm each file.
-- **If it DOES exist**: Report "security-matrix.md already exists in <stream> — skipping."
+  to write it to the configured path in the project directory. The user must confirm each file.
+- **If it DOES exist**: Report "security-matrix.md already exists at <path> — skipping."
 
 ### Step 8.6 – Populate supportability matrix (Optional)
 

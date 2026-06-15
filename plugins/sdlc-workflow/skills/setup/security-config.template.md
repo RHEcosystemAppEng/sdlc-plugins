@@ -39,16 +39,17 @@
 ### Version Streams
 
 <!-- TODO: Add one row per version stream. Each stream maps to a Konflux release
-     repo that contains a security-matrix.md file. The skill follows these entries
-     to discover all supported versions.
-     - Konflux Release Repo: the git repository URL (shared across users, used in
-       security-matrix.md Forward Pointers)
-     - Local Path: the user's local clone path (used by git show for lock file inspection)
-     - Security Matrix Path: the path to security-matrix.md within the repo
+     repo and a local security-matrix.md file. The skill reads these entries to
+     discover all supported versions.
+     - Konflux Release Repo: the git repository URL (used by git show for lock file
+       inspection and fallback matrix reads)
+     - Local Path: the user's local clone path to the Konflux release repo
+     - Security Matrix Path: the path to security-matrix.md relative to the project
+       working directory
 
      Example:
-       | 2.1.x | git.downstream.example.com/my-org/product-release.0.3.z | /path/to/product-release.0.3.z | security-matrix.md |
-       | 2.2.x | git.downstream.example.com/my-org/product-release.0.4.z | /path/to/product-release.0.4.z | security-matrix.md | -->
+       | 2.1.x | git.downstream.example.com/my-org/product-release.0.3.z | /path/to/product-release.0.3.z | docs/security-matrix-2.1.x.md |
+       | 2.2.x | git.downstream.example.com/my-org/product-release.0.4.z | /path/to/product-release.0.4.z | docs/security-matrix-2.2.x.md | -->
 
 | Stream | Konflux Release Repo | Local Path | Security Matrix Path |
 |---|---|---|---|

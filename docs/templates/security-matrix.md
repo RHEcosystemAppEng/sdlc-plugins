@@ -1,8 +1,8 @@
 # Security Matrix Template
 
-<!-- TODO: Copy this template into each Konflux release repo (e.g., product-release.0.4.z)
-     and fill in the sections below. Each release repo owns one version stream's supportability
-     matrix and includes a forward pointer to the next stream for newer versions.
+<!-- TODO: Copy this template into the project working directory at the path specified in
+     your Security Configuration's Version Streams table (e.g., docs/security-matrix-2.2.x.md)
+     and fill in the sections below. Each file covers one version stream's supportability matrix.
 
      The triage-security skill reads this file to determine which product versions ship a given
      dependency version, enabling automated CVE impact analysis across supported releases. -->
@@ -58,15 +58,6 @@ This Konflux release repo covers the **{{version-stream}}** product version stre
 | Ecosystem | Repository | Lock File | Check Command | Upstream Branch |
 |-----------|------------|-----------|---------------|-----------------|
 | {{ecosystem}} | {{repository}} | {{lock-file}} | `git show <commit>:{{lock-file}}` | {{upstream-branch}} |
-
-## Forward Pointer
-
-<!-- TODO: Point to the next version stream's repo. The triage-security skill
-     follows this chain to discover all supported streams.
-     Format: Next stream: `<stream>` at `<repo-url>`
-     If this is the latest stream, state that explicitly. -->
-
-Next stream: `{{next-stream}}` at `{{next-stream-repo-url}}`
 
 ---
 
