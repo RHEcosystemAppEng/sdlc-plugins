@@ -47,12 +47,13 @@ Do **not** use for:
 ## Guardrails
 
 - **This skill is Jira-only for output**, with one exception: it may write to
-  `security-matrix.md` in Konflux release repos to populate or update the
-  supportability matrix (see Step 2.1). All other mutations go through Jira.
-- **Read-only source access.** Source repositories are accessed only via
-  `git show <commit>:<path>` for lock file inspection. No checkouts, no branch switches,
-  no file modifications. Konflux release repos may be written to only for
-  `security-matrix.md` updates.
+  local `security-matrix.md` files in the project working directory to populate
+  or update the supportability matrix (see Step 2.1). All other mutations go
+  through Jira.
+- **Read-only source access.** Source repositories and Konflux release repos are
+  accessed only via `git show <commit>:<path>` for lock file inspection and
+  fallback matrix reads. No checkouts, no branch switches, no file modifications
+  outside local `security-matrix.md` files.
 - **Every Jira mutation requires confirmation.** Present the proposed change and rationale
   to the engineer; wait for explicit approval before executing. Never perform bulk or
   silent Jira writes.
@@ -60,8 +61,8 @@ Do **not** use for:
   impact assessment must come from actual `git show` output or Jira API responses — never
   invented or assumed.
 - **Do NOT use Edit, Write, or Bash tools** to change files — except for
-  `security-matrix.md` in Konflux release repos (see Step 2.1). Only use Bash for
-  read-only `git show` commands and JIRA REST API fallback scripts.
+  local `security-matrix.md` files in the project working directory (see Step 2.1).
+  Only use Bash for read-only `git show` commands and JIRA REST API fallback scripts.
 - If any step fails (e.g., Jira MCP unavailable, lock file not found, repo not cloned),
   stop and inform the user rather than attempting alternative actions.
 
@@ -298,14 +299,14 @@ flowchart TD
 ## Step 2 – Version Impact Analysis
 
 This step determines which supported product versions actually ship the vulnerable
-dependency. It loads the supportability matrix from Konflux release repos, detects
-the development stream, extracts dependency versions from lock files at pinned
-commits, builds the version impact table, and checks for upstream fixes.
+dependency. It loads the supportability matrix from local files (with Konflux repo
+fallback), detects the development stream, extracts dependency versions from lock
+files at pinned commits, builds the version impact table, and checks for upstream fixes.
 
 Read `version-impact-analysis.md` for the detailed procedures (Steps 2.1–2.5).
 
 **Sub-steps:**
-- **2.1** – Load the supportability matrix from all Konflux release repos
+- **2.1** – Load the supportability matrix from local files (with Konflux repo fallback)
 - **2.2** – Detect the development stream via unreleased Jira versions
 - **2.3** – Extract dependency versions from lock files at pinned commits
 - **2.3.5** – Trace the dependency chain for remediation context
@@ -505,10 +506,10 @@ MUST include the Comment Footnote (see above).
 13. **Version impact evidence uses pinned commits only.** For released versions,
     always use the exact commit from the supportability matrix, never HEAD or any
     branch tip. This ensures the analysis reflects what was actually shipped.
-14. **Forward pointers are mandatory for full coverage.** When reading
-    `security-matrix.md`, always follow forward pointers to the next stream's repo.
-    Do not stop at the first repo — the full version landscape may span multiple
-    repos.
+14. **Enumerate all streams from the Version Streams table.** Each row in the
+    Version Streams table identifies a stream directly — read the corresponding
+    local `security-matrix.md` at the configured path. Do not rely on forward
+    pointers between files.
 15. **Every Jira comment MUST include the Comment Footnote.** No exceptions — this
     applies to all comments: Affects Versions corrections, duplicate notifications,
     EOL closures, already-fixed closures, cross-stream notices, remediation task
