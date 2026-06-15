@@ -1470,3 +1470,24 @@ has any Jira API access.
 
 Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>"
 ```
+
+---
+
+### Task 12: Move to tier 2 — OpenShell providers for Jira and GitHub credentials
+
+Move from tier 4 (credentials inside sandbox) to tier 2 (OpenShell providers
+proxy credentials via the gateway). The gateway swaps opaque placeholder tokens
+for real credentials at the HTTP layer — credentials never enter the sandbox.
+
+Per [ADR-0025](https://github.com/fullsend-ai/fullsend/blob/main/docs/ADRs/0025-provider-credential-delivery-for-sandboxed-agents.md),
+tier 2 is the recommended model for services with static API key/token auth.
+GCP Vertex AI stays at tier 4 (file-based auth with local JWT signing cannot
+use providers).
+
+**Files:**
+- Create: `plugins/sdlc-workflow/providers/jira.yaml`
+- Create: `plugins/sdlc-workflow/providers/github.yaml`
+- Modify: `plugins/sdlc-workflow/harness/verify-pr.yaml` — add `providers:`, remove tokens from env
+- Modify: `plugins/sdlc-workflow/env/jira.env` — remove `JIRA_EMAIL`, `JIRA_API_TOKEN`
+- Modify: `plugins/sdlc-workflow/env/github.env` — remove `GH_TOKEN`
+- Modify: `fullsend.md` — document provider usage and tier classification
