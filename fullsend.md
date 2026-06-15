@@ -42,15 +42,23 @@ use a separate file for per-run variables like `JIRA_ISSUE_ID`:
 
 ```bash
 # secrets.env — long-lived credentials
+# GCP (tier 4 — file-based auth, must be on sandbox filesystem)
 ANTHROPIC_VERTEX_PROJECT_ID=my-project
 GOOGLE_CLOUD_PROJECT=my-project
 CLOUD_ML_REGION=global
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa-key.json
+# Issue tracker (tier 2 — provider proxies credentials via gateway)
 JIRA_SERVER_URL=https://myorg.atlassian.net
 JIRA_EMAIL=me@example.com
 JIRA_API_TOKEN=my-jira-token
+JIRA_PROJECT_KEY=TC
+# GitHub (tier 2 — provider proxies credentials via gateway)
 GH_TOKEN=my-github-token
 ```
+
+Jira and GitHub credentials are read by the providers and post_script on the
+trusted runner — they never enter the sandbox. GCP credentials must be on the
+sandbox filesystem (tier 4) because Vertex AI auth requires local JWT signing.
 
 ```bash
 # task.env — per-run variables
@@ -108,15 +116,32 @@ All paths are relative to `plugins/sdlc-workflow/`.
 
 ## Adding a new skill
 
-Each skill needs 3 files. The env templates are shared across all skills — only
-add a new env file if the skill requires variables not already covered.
+Each skill needs up to 7 files. Some are shared across skills (providers,
+executor, image), others are skill-specific. The checklist below covers
+everything needed for a tier-2 skill with structured output.
 
-### 1. Agent prompt — `agents/<skill>.md`
+### Shared files (reuse as-is)
 
-YAML frontmatter is required — without it, Claude Code treats the file as a
-generic prompt rather than an agent definition, and the startup instructions
-are ignored. The agent receives "Run the agent task" as the user message from
-fullsend and must read env vars to determine what to do.
+These already exist and apply to all skills — do not create copies:
+
+| File | Shared because |
+|---|---|
+| `providers/jira.yaml` | Same Jira credentials for all skills |
+| `providers/github.yaml` | Same GitHub token for all skills |
+| `scripts/execute-actions.py` | Generic action executor — extend if new action types needed |
+| `scripts/validate-output-schema.sh` | Generic schema validator from fullsend |
+| `scripts/jira-client.py` | Jira REST API client used by pre/post scripts |
+| `env/gcp-vertex.env` | Vertex AI config — same for all skills |
+| `env/jira.env` | Non-credential Jira config (`JIRA_SERVER_URL`, `JIRA_ISSUE_ID`) |
+| Image (`sdlc-base:latest`) | All skills share the same image |
+
+### Skill-specific files (create for each new skill)
+
+#### 1. Agent prompt — `agents/<skill>.md`
+
+YAML frontmatter is required. The agent receives "Run the agent task" from
+fullsend and must read env vars to determine what to do. After the skill
+completes, it verifies the structured output file exists.
 
 ```markdown
 ---
@@ -133,7 +158,7 @@ pre-installed.
 
 ## Startup procedure
 
-1. Read the relevant environment variable:
+1. Read the `JIRA_ISSUE_ID` environment variable:
    ```bash
    echo $JIRA_ISSUE_ID
    ```
@@ -143,23 +168,34 @@ pre-installed.
    /sdlc-workflow:<skill> <issue-id>
    ```
 
+3. After the skill completes, verify the output file exists:
+   ```bash
+   ls -la $FULLSEND_OUTPUT_DIR/agent-result.json
+   ```
+
 ## Constraints
 
-- <list constraints relevant to this skill>
+- Do not call issue tracker write APIs directly — the skill writes
+  structured JSON output for the post_script to process.
+- Do not post GitHub comments directly — the post_script handles this.
+- <list additional constraints specific to this skill>
 ```
 
-### 2. Harness — `harness/<skill>.yaml`
+#### 2. Harness — `harness/<skill>.yaml`
 
-Defines the image, policy, env files, and timeout. All skills share the same
-image — the policy (not the image) controls per-skill network and filesystem
-access. Security is enabled so fullsend runs pre-agent scans (context injection
-detection, secret scanning) using the tools baked into the fullsend base image.
+Declares the full execution pipeline: providers for credential isolation,
+pre_script for input validation, validation_loop for output checking, and
+post_script for executing write operations on the trusted runner.
 
 ```yaml
 agent: agents/<skill>.md
 model: opus
 image: ghcr.io/mrizzi/sdlc-plugins/sdlc-base:latest
 policy: policies/<skill>.yaml
+
+providers:
+  - jira
+  - github
 
 security:
   enabled: true
@@ -171,46 +207,69 @@ host_files:
   - src: env/jira.env
     dest: /tmp/workspace/.env.d/jira.env
     expand: true
-  - src: env/github.env
-    dest: /tmp/workspace/.env.d/github.env
-    expand: true
   - src: ${GOOGLE_APPLICATION_CREDENTIALS}
     dest: /tmp/gcp-creds.json
   - src: ${GCP_OIDC_TOKEN_FILE}
     dest: /tmp/gcp-oidc-token
     optional: true
+  - src: /tmp/fullsend-pre-output/<skill>-input.json
+    dest: /tmp/workspace/.pre-script/<skill>-input.json
+    optional: true
+
+validation_loop:
+  script: scripts/validate-output-schema.sh
+  max_iterations: 2
+
+pre_script: scripts/pre-<skill>.sh
+post_script: scripts/post-<skill>.sh
+
+runner_env:
+  JIRA_SERVER_URL: "${JIRA_SERVER_URL}"
+  JIRA_EMAIL: "${JIRA_EMAIL}"
+  JIRA_API_TOKEN: "${JIRA_API_TOKEN}"
+  JIRA_PROJECT_KEY: "${JIRA_PROJECT_KEY}"
+  GH_TOKEN: "${GH_TOKEN}"
+  FULLSEND_OUTPUT_SCHEMA: "${FULLSEND_DIR}/schemas/<skill>-result.schema.json"
+  FULLSEND_OUTPUT_FILE: "agent-result.json"
 
 timeout_minutes: 30
 ```
 
-### 3. Policy — `policies/<skill>.yaml`
+Key points:
+- `providers:` references shared provider names — credentials never enter
+  the sandbox (tier 2, [ADR-0025](https://github.com/fullsend-ai/fullsend/blob/main/docs/ADRs/0025-provider-credential-delivery-for-sandboxed-agents.md))
+- `host_files` mounts pre-fetched task data from the pre_script (optional
+  — the skill falls back to API calls if the file is missing)
+- `runner_env` credentials are for the post_script on the trusted runner,
+  not injected into the sandbox
+- `FULLSEND_OUTPUT_SCHEMA` uses `${FULLSEND_DIR}` to resolve relative to
+  `--fullsend-dir`
 
-Defines which network endpoints and filesystem paths the skill can access.
-Start from the verify-pr policy and adjust based on what the skill needs:
+#### 3. Policy — `policies/<skill>.yaml`
 
+Start from the verify-pr policy and adjust. The policy controls per-skill
+network and filesystem access — the image is shared across all skills.
+
+**Filesystem:**
 - **Read-only skills** (plan-feature, verify-pr, define-feature): set
-  `include_workdir: false` and list workspace in `read_only`. This prevents
-  the skill from modifying code — the sandbox enforces it via Landlock LSM.
-- **Read-write skills** (implement-task, setup): set `include_workdir: true`
-  and list workspace in `read_write`. The skill can modify files, but network
-  access is still constrained by the policy.
-- **GitHub write access**: add a `github_git` policy entry with port 22 for
-  SSH push. Only implement-task needs this.
-- **Figma access**: add a `figma` policy entry for `api.figma.com`. Only
-  plan-feature needs this (to read design mockups).
-- **Package registries**: add `npm_registry`, `crates_io`, `pypi` entries.
-  Only implement-task needs these (to install dependencies for building/testing).
+  `include_workdir: false`. The sandbox enforces this via Landlock LSM.
+- **Read-write skills** (implement-task): set `include_workdir: true`.
 
-Policy format constraints discovered during testing:
+**Network — adjust these entries per skill:**
+- `claude_code` — always required (LLM API access)
+- `jira_read` — for skills that read issues at runtime (e.g., root-cause
+  investigation). Remove if the skill only uses pre-fetched data.
+- `github_read` — for skills that read PR data via `gh` CLI
+- `github_git` — add for skills that push commits (port 22, SSH)
+- `figma` — add for skills that read Figma designs (`api.figma.com`)
+- `npm_registry`, `crates_io`, `pypi` — add for skills that install
+  packages during builds
 
-- Every network policy entry requires a `name:` field — the OpenShell sandbox
-  supervisor crashes silently without it
-- Only prefix wildcards work (`*.googleapis.com`) — mid-string wildcards
-  (`*-aiplatform.googleapis.com`) cause the supervisor to crash
-- Binary paths must use `**/binary` double-star globs — absolute paths
-  (`/usr/local/bin/claude`) don't match inside the sandbox
-- `landlock: compatibility: best_effort` is required — without it Landlock
-  may block sandbox startup depending on the kernel version
+**Format constraints (OpenShell-specific):**
+- Every entry requires a `name:` field (supervisor crashes without it)
+- Prefix wildcards only (`*.googleapis.com`, not `*-pattern.domain`)
+- Binary paths use `**/binary` double-star globs
+- `landlock: compatibility: best_effort` is required
 
 ```yaml
 version: 1
@@ -252,21 +311,108 @@ network_policies:
     binaries:
       - { path: "**/claude" }
       - { path: "**/node" }
-  jira:
-    name: jira
+  jira_read:
+    name: jira-read
     endpoints:
       - { host: "*.atlassian.net", port: 443 }
     binaries:
       - { path: "**/claude" }
       - { path: "**/python3" }
-  github_api:
-    name: github-api
+  github_read:
+    name: github-read
     endpoints:
       - { host: api.github.com, port: 443 }
     binaries:
       - { path: "**/claude" }
       - { path: "**/gh" }
 ```
+
+#### 4. Output schema — `schemas/<skill>-result.schema.json`
+
+Defines the structured JSON output the agent produces. The `validation_loop`
+validates against this schema before the post_script runs. Use the same
+action types as verify-pr (`create_subtask`, `create_link`, `post_pr_reply`,
+`create_root_cause_task`, `post_comment`, `post_report`). If the skill needs
+new action types, add them to the schema and extend `execute-actions.py`.
+
+See `schemas/verify-pr-result.schema.json` as the reference.
+
+#### 5. Input schema — `schemas/<skill>-input.schema.json`
+
+Defines the tracker-agnostic pre-fetched data the pre_script writes into the
+sandbox. The schema normalizes tracker-specific data (Jira, GitHub Issues,
+etc.) into a common format:
+
+- `task_id` — issue key (e.g., `TC-4741`, `#42`)
+- `task.summary`, `task.description`, `task.status`, `task.labels`,
+  `task.issue_links`, `task.custom_fields` — normalized fields
+- `pr_url` — PR URL from the task's custom field
+- `source.tracker` — tracker type (`jira`, `github`)
+- `source.raw` — full original API response
+
+See `schemas/verify-pr-input.schema.json` as the reference. Most skills
+can reuse the same input schema since the task data structure is shared.
+
+#### 6. Pre_script — `scripts/pre-<skill>.sh`
+
+Runs on the trusted runner before sandbox creation. Responsibilities:
+
+1. **Validate inputs** — check required env vars, issue ID format
+2. **Verify issue exists** — fail fast before burning sandbox compute
+3. **Pre-fetch task data** — fetch the full issue and write a
+   tracker-agnostic JSON file to `/tmp/fullsend-pre-output/<skill>-input.json`
+4. **Extract PR/branch URL** — from the task's custom fields
+
+The pre_script uses `runner_env` credentials (expanded from `--env-file`).
+These credentials are for the pre_script and post_script only — they never
+enter the sandbox.
+
+See `scripts/pre-verify-pr.sh` as the reference. Most skills can share the
+same pre_script logic since the input validation and pre-fetching are
+identical — only the output filename differs.
+
+#### 7. Post_script — `scripts/post-<skill>.sh`
+
+Runs on the trusted runner after sandbox cleanup. Reads the agent's
+`agent-result.json`, delegates to `execute-actions.py` for action processing.
+
+See `scripts/post-verify-pr.sh` as the reference. Most skills can share the
+same post_script since the action executor is generic — it processes any
+action types defined in the output schema.
+
+### Testing a new skill
+
+1. **Build the image** (only if skill files changed):
+   ```bash
+   podman build -f plugins/sdlc-workflow/sandboxes/base/Dockerfile \
+     -t ghcr.io/mrizzi/sdlc-plugins/sdlc-base:latest .
+   ```
+
+2. **Clean up stale providers** (if a previous run left them):
+   ```bash
+   openshell provider delete jira github 2>/dev/null || true
+   ```
+
+3. **Create a disposable clone** of the target repo:
+   ```bash
+   rm -rf /tmp/my-repo-clone && git clone <repo-url> /tmp/my-repo-clone
+   ```
+
+4. **Run fullsend**:
+   ```bash
+   fullsend run <skill> \
+     --fullsend-dir plugins/sdlc-workflow \
+     --target-repo /tmp/my-repo-clone \
+     --env-file secrets.env \
+     --env-file <(echo "JIRA_ISSUE_ID=<issue-id>")
+   ```
+
+5. **Verify the pipeline**:
+   - Pre_script: "Input validation passed"
+   - Providers: "Provider ready: jira" and "Provider ready: github"
+   - Agent: exits with code 0
+   - Validation: "PASS: output validated against schema"
+   - Post_script: actions executed successfully
 
 ## Deployment modes
 
