@@ -106,7 +106,7 @@ All paths are relative to `plugins/sdlc-workflow/`.
 | `harness/verify-pr.yaml` | Fullsend harness config for the verify-pr skill | Declares the image, policy, providers, env file mounts, and timeout. Fullsend reads this to know how to create the sandbox, what credentials to inject, and how long the agent can run. |
 | `agents/verify-pr.md` | Agent prompt with YAML frontmatter | Fullsend launches Claude Code with `--agent verify-pr` which loads this file as the system prompt. The YAML frontmatter is required — without it Claude Code treats the file as a generic prompt and ignores the instructions. The agent reads `JIRA_ISSUE_ID` from the environment and invokes the skill. |
 | `policies/verify-pr.yaml` | Sandbox network/filesystem policy | Controls which endpoints the sandbox can reach and whether the filesystem is read-only or read-write. Each network policy entry requires a `name:` field (OpenShell supervisor crashes without it), prefix wildcards only (`*.googleapis.com`, not `*-pattern.domain`), and `**/binary` double-star globs for binary paths. These constraints were discovered by testing against OpenShell and verified against fullsend's production policies. |
-| `env/gcp-vertex.env` | Vertex AI env var template | Expanded at runtime from the secrets file via fullsend's `host_files` with `expand: true`. Sets `CLAUDE_CODE_USE_VERTEX=1` and points `GOOGLE_APPLICATION_CREDENTIALS` to the uploaded credential file at `/tmp/gcp-creds.json`. |
+| `env/gcp-vertex.env` | Vertex AI env var template | Expanded at runtime from the secrets file via fullsend's `host_files` with `expand: true`. Sets `CLAUDE_CODE_USE_VERTEX=1` and points `GOOGLE_APPLICATION_CREDENTIALS` to the uploaded credential file at `/tmp/.gcp-credentials.json`. |
 | `env/jira.env` | Jira non-credential config | Carries `JIRA_SERVER_URL` (for URL construction) and `JIRA_ISSUE_ID` (task identifier). Credentials (`JIRA_EMAIL`, `JIRA_API_TOKEN`) are injected by the Jira provider, not this file. |
 | `schemas/verify-pr-result.schema.json` | JSON Schema for verify-pr structured output | Defines the action types, cross-reference format, and report structure. Validated by fullsend's `validation_loop` before the post_script runs. |
 | `scripts/pre-verify-pr.sh` | Pre_script for verify-pr | Validates inputs before sandbox creation: checks required env vars, JIRA_ISSUE_ID format, issue existence, and PR linkage. Fails fast to avoid wasting sandbox compute time. |
@@ -202,18 +202,18 @@ security:
 
 host_files:
   - src: env/gcp-vertex.env
-    dest: /tmp/workspace/.env.d/gcp-vertex.env
+    dest: /sandbox/workspace/.env.d/gcp-vertex.env
     expand: true
   - src: env/jira.env
-    dest: /tmp/workspace/.env.d/jira.env
+    dest: /sandbox/workspace/.env.d/jira.env
     expand: true
   - src: ${GOOGLE_APPLICATION_CREDENTIALS}
-    dest: /tmp/gcp-creds.json
+    dest: /tmp/.gcp-credentials.json
   - src: ${GCP_OIDC_TOKEN_FILE}
-    dest: /tmp/gcp-oidc-token
+    dest: /sandbox/workspace/.gcp-oidc-token
     optional: true
   - src: /tmp/fullsend-pre-output/<skill>-input.json
-    dest: /tmp/workspace/.pre-script/<skill>-input.json
+    dest: /sandbox/workspace/.pre-script/<skill>-input.json
     optional: true
 
 validation_loop:
@@ -473,18 +473,18 @@ security:
 
 host_files:
   - src: env/gcp-vertex.env
-    dest: /tmp/workspace/.env.d/gcp-vertex.env
+    dest: /sandbox/workspace/.env.d/gcp-vertex.env
     expand: true
   - src: env/jira.env
-    dest: /tmp/workspace/.env.d/jira.env
+    dest: /sandbox/workspace/.env.d/jira.env
     expand: true
   - src: env/github.env
-    dest: /tmp/workspace/.env.d/github.env
+    dest: /sandbox/workspace/.env.d/github.env
     expand: true
   - src: ${GOOGLE_APPLICATION_CREDENTIALS}
-    dest: /tmp/gcp-creds.json
+    dest: /tmp/.gcp-credentials.json
   - src: ${GCP_OIDC_TOKEN_FILE}
-    dest: /tmp/gcp-oidc-token
+    dest: /sandbox/workspace/.gcp-oidc-token
     optional: true
 
 allowed_remote_resources:
