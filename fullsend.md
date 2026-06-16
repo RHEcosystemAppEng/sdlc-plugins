@@ -508,6 +508,50 @@ fullsend run verify-pr \
   --env-file secrets.env
 ```
 
+### CI mode — GitHub Actions via workflow_dispatch
+
+Run verify-pr in CI using the `fullsend-verify-pr` workflow. This follows
+the per-repo manual install pattern from
+[rhdh-fullsend](https://github.com/redhat-developer/rhdh-fullsend/blob/main/docs/repo-onboarding.md)
+Method 2.
+
+The workflow fetches skill files from sdlc-plugins at a pinned commit SHA
+at runtime — zero file duplication. It checks out fullsend upstream defaults,
+overlays sdlc-plugins skill files (harness, agents, policies, providers,
+schemas, scripts, env), authenticates via WIF, and runs the agent via
+fullsend's composite action. No shim, no mint, no built-in agents.
+
+The target repo commits only `.fullsend/config.yaml` and the workflow file.
+All skill files come from sdlc-plugins at runtime. This scales to any
+target repo without copying files.
+
+**Prerequisites — GitHub repo secrets:**
+
+GCP secrets must already exist (`GCP_WIF_PROVIDER`, `GCP_PROJECT_ID`,
+`GCP_CLOUD_ML_REGION`). Create the Jira secrets:
+
+```bash
+gh secret set JIRA_SERVER_URL --repo <owner/repo>
+gh secret set JIRA_EMAIL --repo <owner/repo>
+gh secret set JIRA_API_TOKEN --repo <owner/repo>
+gh secret set JIRA_PROJECT_KEY --repo <owner/repo>
+```
+
+**Trigger:**
+
+```bash
+gh workflow run fullsend-verify-pr.yml \
+  --repo <owner/repo> \
+  --ref run-in-fullsend \
+  --field jira_issue_id=<issue-id>
+```
+
+**Updating the pinned version:** the sdlc-plugins commit SHA is in the
+`SDLC_PLUGINS_REF` env var at the top of the workflow. Bump it when
+sdlc-plugins publishes skill updates. Renovate/Dependabot can automate this.
+
+See `.github/workflows/fullsend-verify-pr.yml` for the workflow definition.
+
 ### Keeping target repos up to date
 
 When sdlc-plugins publishes a new version, target repos need to bump three
