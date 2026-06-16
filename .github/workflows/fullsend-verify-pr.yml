@@ -11,87 +11,22 @@ concurrency:
   group: fullsend-verify-pr
   cancel-in-progress: false
 
-env:
-  SDLC_PLUGINS_REF: run-in-fullsend
-
 jobs:
   verify-pr:
-    runs-on: ubuntu-latest
+    uses: mrizzi/sdlc-plugins/.github/workflows/reusable-verify-pr.yml@run-in-fullsend
+    with:
+      jira_issue_id: ${{ inputs.jira_issue_id }}
+      gcp_region: ${{ secrets.GCP_CLOUD_ML_REGION }}
+    secrets:
+      FULLSEND_GCP_WIF_PROVIDER: ${{ secrets.GCP_WIF_PROVIDER }}
+      FULLSEND_GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+      JIRA_SERVER_URL: ${{ secrets.JIRA_SERVER_URL }}
+      JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
+      JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
     permissions:
       contents: read
       id-token: write
       issues: write
       pull-requests: write
       packages: read
-
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Checkout fullsend upstream defaults
-        uses: actions/checkout@v6
-        with:
-          repository: fullsend-ai/fullsend
-          ref: v0
-          path: .defaults
-          fetch-depth: 1
-          sparse-checkout: |
-            .github/actions/
-            .github/scripts/
-            internal/scaffold/fullsend-repo/
-            action.yml
-
-      - name: Checkout sdlc-plugins skill files
-        uses: actions/checkout@v6
-        with:
-          repository: mrizzi/sdlc-plugins
-          ref: ${{ env.SDLC_PLUGINS_REF }}
-          path: .sdlc-plugins
-          fetch-depth: 1
-          sparse-checkout: plugins/sdlc-workflow/
-
-      - name: Prepare workspace (upstream defaults + sdlc-plugins overlay)
-        run: |
-          set -euo pipefail
-          SRC=".defaults/internal/scaffold/fullsend-repo"
-          for dir in agents skills schemas harness plugins policies scripts env providers; do
-            if [[ -d "${SRC}/${dir}" ]]; then
-              mkdir -p "${dir}"
-              cp -r "${SRC}/${dir}/." "${dir}/"
-            fi
-          done
-          PLUGIN=".sdlc-plugins/plugins/sdlc-workflow"
-          for dir in agents harness policies providers schemas scripts env; do
-            if [[ -d "${PLUGIN}/${dir}" ]]; then
-              mkdir -p "${dir}"
-              cp -r "${PLUGIN}/${dir}/." "${dir}/"
-            fi
-          done
-
-      - name: Setup GCP credentials
-        uses: google-github-actions/auth@v2
-        with:
-          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
-          project_id: ${{ secrets.GCP_PROJECT_ID }}
-
-      - name: Stage GCP credentials for sandbox
-        run: cp "$GOOGLE_APPLICATION_CREDENTIALS" .gcp-credentials.json
-
-      - name: Run verify-pr agent
-        uses: ./.defaults/
-        env:
-          JIRA_ISSUE_ID: ${{ inputs.jira_issue_id }}
-          JIRA_SERVER_URL: ${{ secrets.JIRA_SERVER_URL }}
-          JIRA_EMAIL: ${{ secrets.JIRA_EMAIL }}
-          JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-          JIRA_PROJECT_KEY: ${{ secrets.JIRA_PROJECT_KEY }}
-          GH_TOKEN: ${{ github.token }}
-          ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
-          CLOUD_ML_REGION: ${{ secrets.GCP_CLOUD_ML_REGION }}
-          GOOGLE_CLOUD_PROJECT: ${{ secrets.GCP_PROJECT_ID }}
-        with:
-          agent: verify-pr
-          target-repo: .
-
-      - name: Clean up staged credentials
-        if: always()
-        run: rm -f .gcp-credentials.json
