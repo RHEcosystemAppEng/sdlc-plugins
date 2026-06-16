@@ -508,22 +508,36 @@ fullsend run verify-pr \
   --env-file secrets.env
 ```
 
-### CI mode — GitHub Actions via workflow_dispatch
+### CI mode — GitHub Actions via reusable workflow
 
-Run verify-pr in CI using the `fullsend-verify-pr` workflow. This follows
-the per-repo manual install pattern from
+Run verify-pr in CI using a reusable workflow + thin shim pattern, matching
+fullsend's own `reusable-triage.yml` architecture. This follows
 [rhdh-fullsend](https://github.com/redhat-developer/rhdh-fullsend/blob/main/docs/repo-onboarding.md)
 Method 2.
 
-The workflow fetches skill files from sdlc-plugins at a pinned commit SHA
-at runtime — zero file duplication. It checks out fullsend upstream defaults,
-overlays sdlc-plugins skill files (harness, agents, policies, providers,
-schemas, scripts, env), authenticates via WIF, and runs the agent via
-fullsend's composite action. No shim, no mint, no built-in agents.
+**Architecture:**
 
-The target repo commits only `.fullsend/config.yaml` and the workflow file.
-All skill files come from sdlc-plugins at runtime. This scales to any
-target repo without copying files.
+```
+sdlc-plugins/.github/workflows/
+├── reusable-verify-pr.yml    # workflow_call — full pipeline
+└── fullsend-verify-pr.yml    # workflow_dispatch — thin shim
+```
+
+The **reusable workflow** (`reusable-verify-pr.yml`) handles the full
+pipeline: checkout fullsend upstream defaults at a pinned tag (v0.17.0),
+checkout sdlc-plugins skill files as an overlay layer, prepare the
+workspace, authenticate via fullsend's `setup-gcp` action (WIF +
+`prepare-sandbox-credentials.sh` for OIDC token rewriting), set up agent
+env vars via `setup-agent-env.sh` (strips `VERIFY_PR_` prefix), checkout
+the target repo into `target-repo/`, and run the agent via fullsend's
+composite action.
+
+The **thin shim** (`fullsend-verify-pr.yml`) is a `workflow_dispatch`
+trigger that calls the reusable workflow, mapping repo secrets to the
+expected input/secret names.
+
+Other repos adopt verify-pr by creating just the thin shim pointing to
+the reusable workflow. No file duplication, no custom GCP auth.
 
 **Prerequisites — GitHub repo secrets:**
 
@@ -546,11 +560,13 @@ gh workflow run fullsend-verify-pr.yml \
   --field jira_issue_id=<issue-id>
 ```
 
-**Updating the pinned version:** the sdlc-plugins commit SHA is in the
-`SDLC_PLUGINS_REF` env var at the top of the workflow. Bump it when
-sdlc-plugins publishes skill updates. Renovate/Dependabot can automate this.
+**Updating skill files:** the `sdlc_plugins_ref` input on the reusable
+workflow defaults to `run-in-fullsend`. Target repos can override it to
+pin to a specific commit SHA for reproducibility. The `fullsend_ai_ref`
+input pins the fullsend upstream version (default `v0.17.0`).
 
-See `.github/workflows/fullsend-verify-pr.yml` for the workflow definition.
+See `.github/workflows/reusable-verify-pr.yml` and
+`.github/workflows/fullsend-verify-pr.yml`.
 
 ### Keeping target repos up to date
 
@@ -636,7 +652,8 @@ permalinked to fullsend commit `58cc443`.
 | Plugin loading | `plugins:` field — marketplace cache created at runtime | Baked into image at build time | Diverges | **Interim**: same root cause as skills loading — `plugins:` field does not support URL references today, so build-time baking is the only option without duplication. **Target**: converges with skills loading when [fullsend#2113](https://github.com/fullsend-ai/fullsend/issues/2113) is resolved. | [customizing-agents.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/guides/user/customizing-agents.md), [ADR-0038](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0038-universal-harness-access.md) |
 | Pre/post scripts | `pre_script` + `post_script` for split-trust | `post_script` executes structured JSON actions from sandbox output | ✓ | **Converged**: sandbox produces `agent-result.json` with ordered actions. `post_script` resolves `{{ref.key}}` placeholders and executes writes (Jira sub-tasks, PR replies, report posting). `validation_loop` validates output against JSON schema before post_script runs. | [architecture.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/architecture.md), [security-threat-model.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/problems/security-threat-model.md) |
 | Validation loop | `validation_loop:` with script + `max_iterations` | `validation_loop` validates `agent-result.json` against `verify-pr-result.schema.json` | ✓ | **Converged**: uses fullsend's standard `validate-output-schema.sh` with the verify-pr JSON schema. Up to 2 iterations if first output fails validation. | [customizing-agents.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/guides/user/customizing-agents.md), [architecture.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/architecture.md) |
-| Config directory | Dedicated `.fullsend` repo per org | Two modes: local (`--fullsend-dir plugins/sdlc-workflow`) and remote (per-repo `.fullsend/` with URL refs) | Diverges | **Local mode**: plugin dir as `--fullsend-dir` for sdlc-plugins developers. **Remote mode**: per-repo `.fullsend/` with URL-referenced agent/policy + custom image on GHCR. Hashes and image tag bumped by Renovate/Dependabot. **Target**: standard `fullsend-code` image + plugin via URL when [fullsend#2113](https://github.com/fullsend-ai/fullsend/issues/2113) is resolved. | [ADR-0003](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0003-org-config-repo-convention.md), [ADR-0035](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0035-layered-content-resolution.md), [ADR-0038](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0038-universal-harness-access.md) |
+| CI reusable workflow | `reusable-<role>.yml` + thin shim | `reusable-verify-pr.yml` + `fullsend-verify-pr.yml` | ✓ | **Converged**: follows `reusable-triage.yml` pattern. Uses `setup-gcp` action for WIF + `prepare-sandbox-credentials.sh`, `setup-agent-env.sh` for env prefix stripping, `target-repo/` checkout. Other repos adopt by creating the thin shim only. | [reusable-triage.yml](https://github.com/fullsend-ai/fullsend/blob/v0.17.0/.github/workflows/reusable-triage.yml) |
+| Config directory | Dedicated `.fullsend` repo per org | Three modes: local (`--fullsend-dir`), remote (URL refs), CI (reusable workflow) | Diverges | **Local mode**: plugin dir as `--fullsend-dir`. **Remote mode**: per-repo `.fullsend/` with URL-referenced agent/policy. **CI mode**: reusable workflow fetches skill files at runtime. **Target**: standard `fullsend-code` image + plugin via URL when [fullsend#2113](https://github.com/fullsend-ai/fullsend/issues/2113) is resolved. | [ADR-0003](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0003-org-config-repo-convention.md), [ADR-0035](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0035-layered-content-resolution.md), [ADR-0038](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0038-universal-harness-access.md) |
 | Layered resolution | Three-tier: upstream < org < per-repo | Single layer — no overrides | Diverges | **Keep**: per-repo `.fullsend/` with URL refs is the correct tier for external skills consumed across multiple orgs. Org-level `.fullsend` repo with `customized/` is possible but requires copying files on each release — Renovate on per-repo URL refs is lower maintenance. | [ADR-0035](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0035-layered-content-resolution.md) |
 | AGENTS.md | Auto-loaded from target repo | Not shipped | Diverges | **Converge now**: recommend target repos create symlink `AGENTS.md → CLAUDE.md`. Verified that fullsend preserves symlinks through upload/download cycle (`UploadDir` uses `tar` without `--dereference`, `sanitizeDownload` allows relative in-repo symlinks, `hasAgentsMD` detects symlink as existing file). Document in fullsend.md. | [customizing-with-agents-md.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/guides/user/customizing-with-agents-md.md), [ADR-0020](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/ADRs/0020-composable-single-responsibility-agents-with-individual-sandboxes.md) |
 | `.agents/skills/` convention | Skills in `.agents/skills/` + symlink to `.claude/skills/` | Skills in `skills/` (Claude Code plugin format) | Different convention | **Keep**: Claude Code plugin format (`plugin.json` + `skills/`) predates `.agents/skills/`. Both are valid for different discovery mechanisms. No benefit converting — Claude Code discovers plugins via marketplace cache, not `.agents/skills/`. | [customizing-with-skills.md](https://github.com/fullsend-ai/fullsend/blob/58cc443/docs/guides/user/customizing-with-skills.md) |
