@@ -84,12 +84,20 @@ Dockerfile extends fullsend's base image and bakes the sdlc-workflow plugin into
 this cache so Claude Code auto-discovers the skills — no `--plugin-dir` flag needed
 at runtime.
 
+**CI pipeline:** The image is automatically built and pushed to GHCR on every
+push to `run-in-fullsend` that changes plugin files. The pipeline builds
+multi-arch (`linux/amd64` + `linux/arm64`) images using Red Hat actions
+(`buildah-build`, `podman-login`, `push-to-registry`). PR builds validate
+without pushing.
+
+See `.github/workflows/build-sandbox-image.yml`.
+
+**Local build** (for development/testing):
+
 ```bash
 podman build -f plugins/sdlc-workflow/sandboxes/base/Dockerfile \
   -t ghcr.io/mrizzi/sdlc-plugins/sdlc-base:latest .
 ```
-
-The image only needs rebuilding when the plugin's skills or shared files change.
 
 ## File inventory
 
@@ -285,8 +293,8 @@ filesystem_policy:
     - /dev/urandom
     - /etc
     - /opt
-    - /sandbox
   read_write:
+    - /sandbox
     - /tmp
     - /dev/null
 
