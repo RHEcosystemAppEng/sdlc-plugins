@@ -223,11 +223,35 @@ Group only **RECOMMEND** and **CAUTION** optimizations into tasks. CONDITIONAL/D
 
 Database migration findings (Missing Index, Sequential Scan, Unused JOINs, Inefficient Queries, SQL Duplication) are grouped under Layer 2A with the `db-migration` label in addition to `performance-optimization`. Index-related findings go into one migration task; query rewrite findings go into a separate task. Each migration task includes the generated migration script (from Step 5.5.4) in Implementation Notes and the manual verification artifacts (from Step 5.5.3) in the Database Migration extension section.
 
+**Strategic materialization promotion:** When the analysis report's Strategic Optimizations section (S1, S2, ...) identifies a materialized view, denormalized table, or pre-computed column that would eliminate a join chain appearing in 2+ N+1/query findings (cross-reference by finding ID in the analysis report's prioritized findings table, e.g., F1, F2, ...), promote it to a **separate db-migration task** under Layer 2A with the `db-migration` label. The task description must include: the target table schema (columns, types, constraints), the source query being materialized, the migration script (up/down) generated via Step 5.5, and which findings it resolves (by ID). This task should be sequenced before the N+1 fix tasks that depend on it, since the materialized table simplifies those fixes.
+
 **Layer 3 -- Integration:** 3A API Communication (batch calls, parallel fetching, client-side caching)
 
 ### Task Structure
 
 Each task includes: summary ("{Category}: {Description}"), description, files to modify, baseline/target metrics, acceptance criteria, performance test requirements, dependencies.
+
+### N+1 Loop Elimination Mandate
+
+When a task addresses an N+1 or sequential-loop finding, the task's Implementation Notes MUST:
+
+1. **Identify the outermost iteration boundary** — the specific loop (`for`/`while`/`.map`), its location (function, file, line), and the data source it iterates over. If `loop_origin` is present in the finding (from analyze-module Step 7.3), use it directly. If `loop_origin` is not available (older analysis runs), inspect the finding's code location and trace outward to the enclosing loop using Serena or Grep.
+2. **State explicitly:** "This loop must be eliminated or replaced with a batch operation that processes all items together. Adding batch helpers inside the loop body while retaining the sequential loop is insufficient — it reduces per-iteration cost but preserves the O(N) sequential query pattern."
+3. **Specify the batch entry point** — which function should accept all items at once and process them in bulk (e.g., "Replace `for matched in rows { resolve_sbom_cpe(matched, ...) }` with a single `batch_resolve_sbom_cpes(rows, ...)` call").
+
+This ensures implement-task understands that the loop itself is the optimization target, not just the code inside it.
+
+### Pre-Fetch Mandate for Concurrent Per-Item Queries
+
+When a task addresses a `Pre-Fetchable Concurrent Queries` finding (from analyze-module Step 7.3.1), the task's Implementation Notes MUST:
+
+1. **Identify the data accessed per-item** — which DB entities or queries are called inside the concurrent body, and what keys they use (e.g., `sbom_id`, `node_id`, `checksum_value`).
+2. **Design a pre-fetch cache** — specify a cache struct that holds the pre-fetched data (e.g., `HashMap<(Uuid, String), Vec<Model>>`). The cache should be:
+   - Built once before the concurrent processing starts (immutable after construction — no locks during concurrent reads)
+   - Scoped to the request lifetime (dropped at end of request, no TTL management)
+   - Populated via batch queries (1-3 queries total, not per-item)
+3. **Specify the integration point** — where the pre-fetch call should be inserted (before the concurrent iteration starts), how the cache should be passed to the concurrent body (e.g., `Arc<Cache>` cloned per task), and how per-item code should use the cache (cache-first with DB fallback for cache misses).
+4. **State explicitly:** "The per-item DB queries inside the concurrent iteration must be replaced with cache lookups. The concurrent structure itself (`buffer_unordered`, `Promise.all`, etc.) should be preserved — only the DB calls inside it should be eliminated."
 
 ### Task Sequencing
 
@@ -294,6 +318,13 @@ For each grouped task from Step 6:
 ### Step 9.1 -- Task Description
 
 Read the task template from `$plugin_root/skills/performance/optimization-task.template.md` and populate with: repository, description, files to modify, baseline/target metrics (by metric_type), implementation notes, cross-functional impact assessment (decision, scope, severity, detection method, confidence, affected workflows/components, risk factors, safeguards if CAUTION, testing requirements), acceptance criteria, performance test requirements, dependencies.
+
+**Query safety constraints from CONVENTIONS.md:** When generating Implementation Notes for tasks that involve batch queries or dynamic SQL, search the target repository's `CONVENTIONS.md` for documented query safety patterns:
+- Parameter limit handling (e.g., PostgreSQL's 65535 bind parameter limit)
+- Chunking utilities (e.g., `chunked_with`, `batch_execute`)
+- Preferred SQL patterns for bulk operations (e.g., `UNNEST` arrays vs inline `VALUES` clauses vs `Condition::any()` chains)
+
+If CONVENTIONS.md documents a utility for parameter-safe batching (e.g., `trustify_common::db::chunk::chunked_with`), reference it by path in the Implementation Notes and state: "All batch queries MUST use `{utility}` or an equivalent parameter-safe pattern. Do not generate unbounded parameter lists (inline `VALUES` with 2*N params or `Condition::any()` with N compound filters) — these will hit PostgreSQL's 65535 parameter limit at scale."
 
 **Target Metrics scoping:** When populating the Target Metrics section of each task, include ONLY the metrics that the specific optimization is expected to affect:
 - Bundle size tasks: only frontend size metrics (bundle size, transfer size)

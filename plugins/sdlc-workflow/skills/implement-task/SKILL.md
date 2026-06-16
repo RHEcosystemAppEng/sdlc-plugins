@@ -513,6 +513,13 @@ code (utilities, helpers, shared modules). If they do, use or extend the existin
 discover additional reusable code during implementation that was not listed, prefer reusing it
 over creating duplicated logic.
 
+**Prefer idiomatic types:** Before building behavior manually on a general-purpose container
+(e.g., sort + dedup on a list), check if the language's standard library has a type that
+provides that behavior directly (e.g., `BTreeSet` for sorted unique elements, `set` for
+uniqueness, `map`/`dict` for keyed lookup). Use the type that matches the actual requirement.
+When indexed access, insertion order, or duplicates are needed, the general-purpose container
+is correct.
+
 **Follow conventions:** Apply the conventions discovered during Step 4's convention conformance
 analysis. When writing new code, match the patterns found in sibling files rather than inventing
 new approaches. If any Implementation Notes or task instructions conflict with a discovered
@@ -736,8 +743,6 @@ If any criterion cannot be met, stop and explain to the user.
 **Do not proceed to Step 9-Perf until functional tests pass.** Fix failures and re-run.
 
 ## Step 9 – Self-Verification
-
-**If `task_type = performance`:** Skip to **Step 9-Perf** (Performance Testing Phase) below.
 
 Before committing, verify that all changes are in scope and free of common errors.
 
@@ -1124,9 +1129,40 @@ When `task_type = db-migration`, verify each migration file created:
 
 Do NOT require `CONCURRENTLY` in framework migration files — most migration runners wrap in transactions where `CONCURRENTLY` is invalid. `CONCURRENTLY` belongs in the manual verification SQL only.
 
+### Root cause elimination check (performance tasks only)
+
+When `task_type = performance` or `task_type = db-migration`, verify that the specific
+root cause described in the task is actually eliminated:
+
+1. **Extract root cause pattern**: re-read the task's **Description** section and identify
+   the stated root cause (e.g., "iterates sequentially over all matched SBOM rows",
+   "loads ALL matching nodes into memory then slices", "per-node DB query in loop").
+   Extract the concrete code pattern described (function name, loop structure, query
+   call site).
+2. **Search for root cause pattern**: search for the root cause pattern in the files
+   named in the task's **Files to Modify** section and any files matching the root
+   cause function name — not only files in `git diff --name-only`. The failure mode
+   this check catches is precisely the case where the root cause loop was *not*
+   modified (new batch code was added elsewhere while the original sequential code
+   remained untouched). Use Grep or Serena `search_for_pattern`.
+3. **Evaluate**:
+   - **Pattern eliminated**: proceed silently.
+   - **Pattern still present**: flag to the user: "The root cause pattern described in
+     the task — `{pattern}` at `{file}:{line}` — still exists after implementation.
+     The implementation added optimizations inside the pattern but did not eliminate
+     the pattern itself. This may mean the optimization is incomplete." Present
+     options: (1) Refactor to eliminate the pattern, (2) Proceed — the remaining
+     pattern is acceptable, (3) Stop for review.
+   - **Pattern moved/renamed**: if the pattern was refactored but an equivalent
+     sequential structure exists, flag it the same way.
+
+Do not auto-block — present the finding and let the user decide. This check catches
+the class of error where batch helpers are added inside a sequential loop without
+eliminating the loop itself.
+
 ## Step 9-Perf – Performance Testing Phase
 
-**Runs only when `task_type = performance` or `task_type = db-migration`.** Standard tasks skip this entire section.
+**Runs after Step 9 when `task_type = performance` or `task_type = db-migration`.** Standard tasks skip this section. Performance and db-migration tasks complete Step 9 (self-verification, CI checks, scope containment) first, then continue here for metric verification.
 
 **CONVENTIONS.md cross-reference:** The regression thresholds, performance test commands, and CI check commands extracted from CONVENTIONS.md in Step 4 apply throughout this phase. If CONVENTIONS.md defines custom regression thresholds (e.g., under a "Performance Thresholds" or "Regression Limits" section), use those instead of the defaults in Step 9-Perf.4. If CONVENTIONS.md defines performance test commands, run them after functional tests and before metrics capture.
 

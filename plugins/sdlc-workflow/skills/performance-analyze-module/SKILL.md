@@ -269,6 +269,37 @@ Read handler implementation. Search for query patterns inside loops:
 
 **Partial mitigation:** Sequential outer loop with concurrent inner calls — classify as N+1 with note about inner concurrency.
 
+**Loop origin identification:** For each N+1 finding, identify the **outermost loop that drives the query multiplication** — not just the inner query call site. Record:
+- `loop_function`: the function containing the loop (name, file, line)
+- `loop_variable`: what is being iterated (e.g., `rows`, `items`, `matches`)
+- `loop_source`: what produces the iteration set (e.g., "result of `load_graphs_query`", "parameter `rows: Vec<Row>`")
+- `loop_nesting`: whether the N+1 query is in the outermost loop or a nested inner loop
+
+Include this as `loop_origin` in the finding output. This distinguishes "the loop itself must be eliminated" from "only the inner query needs batching."
+
+### Step 7.3.1 – Detect Pre-Fetchable Concurrent Query Patterns
+
+Concurrent execution patterns (`buffer_unordered`, `Promise.all`, `asyncio.gather`, etc.) are correctly exempt from N+1 classification — they don't cause sequential latency stacking. However, they can still generate **O(N) DB queries** when each concurrent task makes per-item database calls. These are pre-fetch opportunities: the per-item queries could be replaced by a single batch pre-fetch before the concurrent processing starts.
+
+**Detection:** This check runs as part of deep chain analysis (Step 7.6.2) when a concurrent iteration construct is encountered — it is placed here for classification context, but executes during Step 7.6.2's recursive tracing. For each concurrent iteration pattern found, check whether the concurrent body contains DB queries:
+
+| Framework | Concurrent Per-Item Pattern |
+|---|---|
+| Rust | `stream::iter(items).map(async \|item\| { Entity::find().filter(...item...).one(conn).await }).buffer_unordered(n)` |
+| Rust | `stream::iter(items).map(async \|item\| { resolve_something(item.id, conn).await }).buffer_unordered(n)` |
+| JS | `Promise.all(items.map(async item => { await db.model.findOne({...item...}) }))` |
+| Python | `asyncio.gather(*[fetch_one(item.id) for item in items])` |
+| Java | `items.parallelStream().map(item -> repository.findById(item.getId()))` |
+
+**Classification:** Flag as anti-pattern type `Pre-Fetchable Concurrent Queries` with severity based on the query count:
+- High: >50 concurrent per-item queries (estimated from collection size × queries per item)
+- Medium: 10-50 concurrent per-item queries
+- Low: <10 concurrent per-item queries
+
+**Finding output:** Include `prefetch_opportunity: true`, the concurrent construct (e.g., `buffer_unordered(self.concurrency)`), the per-item queries (function names and DB entities accessed), and the data source that produces the iteration set. This is consumed by plan-optimization to generate a pre-fetch mandate.
+
+**Distinguish from fixed-set concurrency:** Do NOT flag concurrent execution over a **fixed, small set** of known operations (e.g., `tokio::try_join!(query_a, query_b, query_c)` or `Promise.all([fetchUser(), fetchProfile(), fetchSettings()])`). Only flag concurrent iteration over a **dynamic collection** whose size scales with input data.
+
 ### Step 7.4 – Detect Missing Pagination
 
 Check if collection endpoints (`Vec<T>`, `List<T>`) have pagination parameters (`page`, `limit`, `offset`) and query methods (`.limit()`, `.offset()`, `setMaxResults()`).

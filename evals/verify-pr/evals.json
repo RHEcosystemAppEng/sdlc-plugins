@@ -115,6 +115,22 @@
         "The skill does NOT modify any code files — it only reads, verifies, creates sub-task descriptions, and reports (constraint 1.11)",
         "Non-eval checks (Scope Containment, Sensitive Patterns, Acceptance Criteria) are unaffected by eval processing — Scope Containment compares the diff files against the task's Files to Modify, Sensitive Patterns scans the diff for secrets, and Acceptance Criteria evaluates each criterion against the diff content independently of the eval results"
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "Verify PR #801 for task TC-9107. The task description is in task-performance.md, the PR diff is in pr-diff-performance.md, the target repository structure is in repo-backend.md, the optimization result report is in optimization-result-mock.md (treat it as if located at performance/optimization-results/TC-9107-2026-06-15.md), and the project's performance-config.json is in perf-config-mock.json. There are no review comments on this PR and all CI checks pass. Write your verification report to outputs/report.md. For each acceptance criterion, write your detailed reasoning to outputs/criterion-N.md (where N is the criterion number).",
+      "expected_output": "A verification report that includes performance-specific rows (Target Achievement, Environment Match, Baseline Re-run) in addition to standard verification rows. Target Achievement should be PASS since all target metrics are met (Response Time p95 150ms < 200ms target, Queries 3 < 5 target). Environment Match should be MATCH since both config and report use localhost (capture_target: null). The report should include a Performance Results section with the before/after comparison table.",
+      "files": ["files/task-performance.md", "files/pr-diff-performance.md", "files/optimization-result-mock.md", "files/repo-backend.md", "files/perf-config-mock.json"],
+      "assertions": [
+        "The report or verification process identifies the task as task_type = performance based on the performance-optimization label or the presence of Baseline Metrics, Target Metrics, and Performance Test Requirements sections (SKILL.md lines 139-140)",
+        "The report contains a Target Achievement row with PASS — all target metrics (Response Time p95 < 200ms, Queries per request < 5) are met in the optimization result (150ms, 3 queries)",
+        "The report contains an Environment Match row with MATCH — both performance-config.json capture_target (null/localhost) and the optimization result report capture_target (null) match",
+        "The report contains a Baseline Re-run row with SKIPPED or N/A — no live environment is available for re-running the baseline in the eval context",
+        "The report includes a Performance Results section with the before/after comparison table showing baseline (850ms, ~200 queries) vs current (150ms, 3 queries) metrics",
+        "The report still contains standard verification rows (Scope Containment, Acceptance Criteria, Sensitive Patterns) — performance-specific steps add to, not replace, standard verification",
+        "Scope Containment is PASS — all files in the diff (advisory/service/advisory.rs, sbom/service/sbom.rs, tests/api/sbom_advisory_batch.rs) match the task's Files to Modify and Files to Create",
+        "The skill does NOT modify any code files — it only reads, verifies, and reports (constraint 1.11)"
+      ]
     }
   ]
 }
