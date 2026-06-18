@@ -33,6 +33,7 @@ Read the project's CLAUDE.md file. If it exists, parse it for:
 - `## Repository Registry` table — record each Repository name already listed
 - `## Jira Configuration` list — record which fields already have values
 - `## Code Intelligence` section — record which Serena instances are already documented
+- `## Bug Configuration` section — record whether it exists and which fields are populated
 - `## Security Configuration` section — record whether it exists and which fields are populated
 
 If the file doesn't exist, note that everything needs to be created.
@@ -229,13 +230,74 @@ For each section in the `CONVENTIONS.md` template, replace the `{{placeholder}}`
 
 Present the populated `CONVENTIONS.md` to the user for review before writing. Clearly show the content that will be written. Only write the file after the user approves.
 
-## Step 8 – Security Configuration (Optional)
+## Step 8 – Scaffold Bug Configuration
+
+Check if `## Bug Configuration` already exists in CLAUDE.md with all three required
+fields populated (Bug issue type ID, Bug template, Bug-to-Task link type) and none
+contain `{{placeholder}}` markers.
+
+- **If it exists and is fully populated**: Report "Bug Configuration is up to date"
+  and skip to Step 9.
+- **If it exists but contains `{{placeholder}}` markers**: Treat it as not yet populated
+  and proceed to the discovery steps below (skip scaffolding the section heading since
+  it already exists).
+- **If it does NOT exist**: Proceed to discover and scaffold all three fields below.
+
+### Step 8.1 – Discover Bug Issue Type ID
+
+Use the same MCP-first-with-REST-fallback pattern from Step 3:
+
+1. Try `getJiraProjectIssueTypesMetadata` via MCP to list issue types for the project.
+2. Look for an issue type named "Bug" in the results and extract its ID.
+3. If MCP fails, follow the REST API fallback flow from Step 3.2.
+4. If auto-discovery fails entirely, ask the user for the Bug issue type ID manually.
+
+### Step 8.2 – Ask for Bug Template Path
+
+Ask the user for the path where the bug template file should be placed in the target
+project. Offer a default:
+
+> "Where should the bug template file be placed? (default: `docs/bug-template.md`)"
+
+### Step 8.3 – Ask for Bug-to-Task Link Type
+
+Retrieve available issue link types:
+
+1. Try `getIssueLinkTypes` via MCP (or `python3 scripts/jira-client.py get_link_types`
+   as REST fallback).
+2. Display the available link types to the user.
+3. Ask the user which link type to use for linking Bugs to Tasks. Offer a default:
+
+> "Which link type should be used to link Bug issues to their remediation Tasks?
+> (default: Blocks)"
+
+### Step 8.4 – Copy Bug Template
+
+Check if the bug template file already exists at the user-specified path in the
+target project.
+
+- **If it does NOT exist**: Read `docs/templates/bug-template.md` from the plugin's
+  templates directory and write its content to the user-specified path in the target
+  project. Report "Created <path> from template."
+- **If it DOES exist**: Report "Bug template already exists at <path> — skipping"
+  and preserve the user's customized version.
+
+### Step 8.5 – Write Bug Configuration
+
+Write the `## Bug Configuration` section to CLAUDE.md with the gathered values.
+Follow the template structure from `project-config.template.md`. Present the planned
+changes to the user for review before writing.
+
+If the section already exists but has placeholder markers, replace only the placeholder
+content, preserving any surrounding text.
+
+## Step 9 – Security Configuration (Optional)
 
 Check if `## Security Configuration` already exists in CLAUDE.md with all required
 fields populated (no `{{placeholder}}` markers remaining).
 
 - **If it exists and is fully populated**: Report "Security Configuration is up to date"
-  and skip to Step 9.
+  and skip to Step 10.
 - **If it exists but contains `{{placeholder}}` markers**: Treat it as not yet populated
   and proceed to the fill-in prompt below (skip scaffolding since the section already exists).
 - **If it does NOT exist**: Ask the user whether they want to enable security triage
@@ -244,9 +306,9 @@ fields populated (no `{{placeholder}}` markers remaining).
 > "Would you like to enable security triage for this project? This configures the
 > triage-security skill to perform CVE impact analysis across supported product versions."
 
-If the user declines, skip to Step 9. If the user accepts, proceed below.
+If the user declines, skip to Step 10. If the user accepts, proceed below.
 
-### Step 8.1 – Collect Product Lifecycle fields
+### Step 9.1 – Collect Product Lifecycle fields
 
 Ask the user for the following fields:
 
@@ -271,7 +333,7 @@ Ask the user for the following fields:
 
    If the user skips, leave the placeholder empty in the template.
 
-### Step 8.2 – Collect Version Streams
+### Step 9.2 – Collect Version Streams
 
 Ask the user for one or more version streams. For each stream, collect:
 
@@ -282,7 +344,7 @@ Ask the user for one or more version streams. For each stream, collect:
 4. **Security matrix path** — the path to security-matrix.md relative to the project
    working directory (e.g., `docs/security-matrix-2.2.x.md`)
 
-### Step 8.3 – Collect Source Repositories
+### Step 9.3 – Collect Source Repositories
 
 Ask the user for one or more source repositories whose dependencies are tracked
 for CVE analysis. For each repository, collect:
@@ -290,7 +352,7 @@ for CVE analysis. For each repository, collect:
 1. **Repository name** — short name (e.g., `backend`, `frontend-ui`)
 2. **URL** — the repository URL
 
-### Step 8.4 – Scaffold Security Configuration
+### Step 9.4 – Scaffold Security Configuration
 
 Read `security-config.template.md` from this skill's directory and replace the
 `{{placeholder}}` markers with the values gathered above.
@@ -301,7 +363,7 @@ replace only the placeholder content, preserving any surrounding text.
 
 Present the planned Security Configuration section to the user for review before writing.
 
-### Step 8.5 – Scaffold security-matrix.md
+### Step 9.5 – Scaffold security-matrix.md
 
 For each Version Stream configured above, check if a `security-matrix.md` file exists
 at the specified path within the project working directory.
@@ -310,7 +372,7 @@ at the specified path within the project working directory.
   to write it to the configured path in the project directory. The user must confirm each file.
 - **If it DOES exist**: Report "security-matrix.md already exists at <path> — skipping."
 
-### Step 8.6 – Populate supportability matrix (Optional)
+### Step 9.6 – Populate supportability matrix (Optional)
 
 After scaffolding or confirming security-matrix.md files exist, ask the user:
 
@@ -318,7 +380,7 @@ After scaffolding or confirming security-matrix.md files exist, ask the user:
 > release repo's git history to discover versions, image digests, build dates, and
 > source commits."
 
-If the user declines, skip to Step 9. The matrix can be populated later on demand
+If the user declines, skip to Step 10. The matrix can be populated later on demand
 by `/triage-security` during CVE investigation.
 
 If the user accepts, for each Version Stream:
@@ -333,7 +395,7 @@ If the user accepts, for each Version Stream:
    `security-matrix.md`
 4. Present the populated matrix to the user for review before writing
 
-## Step 9 – Validate
+## Step 10 – Validate
 
 After writing, read the CLAUDE.md back and verify:
 - `# Project Configuration` heading exists
@@ -342,6 +404,8 @@ After writing, read the CLAUDE.md back and verify:
 - `## Code Intelligence` documents the `mcp__<instance>__<tool>` naming convention
 - `## Code Intelligence` has a `### Limitations` subheading
 - `docs/constraints.md` exists in the target project
+- (If scaffolded) `## Bug Configuration` contains: Bug issue type ID, Bug template path, Bug-to-Task link type
+- (If scaffolded) The bug template file exists at the configured Bug template path
 - (If scaffolded) `## Security Configuration` contains `### Product Lifecycle` with all four required fields (VEX Justification is optional)
 - (If scaffolded) `## Security Configuration` contains `### Version Streams` with at least one row
 - (If scaffolded) `## Security Configuration` contains `### Source Repositories` with at least one row
