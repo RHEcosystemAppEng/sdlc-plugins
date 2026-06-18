@@ -30,3 +30,9 @@ is `{{serena-instance-name}}`:
 ### Limitations
 
 - `{{serena-instance-name}}`: {{limitation-description}}
+
+## Bug Configuration
+
+- Bug issue type ID: {{bug-issue-type-id}}
+- Bug template: {{bug-template-path}}
+- Bug-to-Task link type: {{bug-task-link-type}}
