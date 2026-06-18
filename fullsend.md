@@ -542,23 +542,33 @@ the reusable workflow. No file duplication, no custom GCP auth.
 **Prerequisites — GitHub repo secrets:**
 
 GCP secrets must already exist (`GCP_WIF_PROVIDER`, `GCP_PROJECT_ID`,
-`GCP_CLOUD_ML_REGION`). Create the Jira secrets:
+`GCP_CLOUD_ML_REGION`). Create the Jira and GitHub secrets:
 
 ```bash
 gh secret set JIRA_SERVER_URL --repo <owner/repo>
 gh secret set JIRA_EMAIL --repo <owner/repo>
 gh secret set JIRA_API_TOKEN --repo <owner/repo>
 gh secret set JIRA_PROJECT_KEY --repo <owner/repo>
+gh secret set GH_TOKEN --repo <owner/repo>
 ```
+
+`GH_TOKEN` is a fine-grained PAT with **Pull requests: Read and write**
+on the target repos where PRs will be verified. Required when the mint
+is not configured, because `github.token` is scoped to the workflow's
+repo and cannot comment on PRs in other repos. When the mint is adopted,
+this secret can be removed (the minted token provides cross-repo access).
 
 **Trigger:**
 
 ```bash
 gh workflow run fullsend-verify-pr.yml \
   --repo <owner/repo> \
-  --ref run-in-fullsend \
   --field jira_issue_id=<issue-id>
 ```
+
+Note: `--ref` is only needed when the workflow file is not on the default
+branch (e.g., `--ref run-in-fullsend` for sdlc-plugins during the spike).
+Target repos with the workflow merged to `main` do not need `--ref`.
 
 **Updating skill files:** the `sdlc_plugins_ref` input on the reusable
 workflow defaults to `run-in-fullsend`. Target repos can override it to
