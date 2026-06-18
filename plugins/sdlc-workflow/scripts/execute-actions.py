@@ -143,6 +143,23 @@ def execute_post_pr_reply(action: dict, registry: dict) -> None:
     print(f"  Posted PR reply on comment {comment_id}")
 
 
+def execute_post_pr_comment(action: dict, registry: dict) -> None:
+    repo = action["repo"]
+    pr_number = action["pr_number"]
+    body = resolve_refs(action["body"], registry)
+
+    result = subprocess.run(
+        ["gh", "api",
+         f"repos/{repo}/issues/{pr_number}/comments",
+         "-f", f"body={body}"],
+        capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"gh api failed: {result.stderr}", file=sys.stderr)
+        sys.exit(1)
+    print(f"  Posted PR comment on #{pr_number}")
+
+
 def execute_create_root_cause_task(action: dict, registry: dict) -> None:
     project_key = os.environ.get("JIRA_PROJECT_KEY", "")
     if not project_key:
@@ -199,6 +216,7 @@ EXECUTORS = {
     "create_subtask": execute_create_subtask,
     "create_link": execute_create_link,
     "post_pr_reply": execute_post_pr_reply,
+    "post_pr_comment": execute_post_pr_comment,
     "create_root_cause_task": execute_create_root_cause_task,
     "post_comment": execute_post_comment,
 }
