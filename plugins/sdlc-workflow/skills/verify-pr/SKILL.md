@@ -716,7 +716,9 @@ When a review body contains multiple classified suggestions (sub-identifiers), p
 a single standalone comment that lists all classifications together rather than one
 comment per sub-identifier.
 
-**Sandbox mode:** Instead of calling `gh api`, add an action for each reply:
+**Sandbox mode:** Instead of calling `gh api`, add an action for each reply.
+
+For **inline comment threads** (have a `comment_id`), use `post_pr_reply`:
 
 ```json
 {
@@ -725,6 +727,17 @@ comment per sub-identifier.
   "pr_number": <pr-number>,
   "comment_id": <comment-id>,
   "body": "<reply body with {{subtask-N.key}} and {{subtask-N.url}} placeholders if referencing a sub-task>"
+}
+```
+
+For **review body items** (no `comment_id`), use `post_pr_comment`:
+
+```json
+{
+  "type": "post_pr_comment",
+  "repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "body": "<comment body>"
 }
 ```
 ### Step 6f – Idempotency Guarantees
