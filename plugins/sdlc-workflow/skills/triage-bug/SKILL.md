@@ -1,9 +1,9 @@
 ---
 name: triage-bug
 description: >-
-  Investigate a Jira Bug, identify root cause through codebase analysis, and produce
-  a linked Task that implement-task can consume. The Task front-loads a reproducer test
-  as the first acceptance criterion. Parallels plan-feature in the bug lifecycle pipeline.
+  Use when a Jira Bug issue needs investigation to identify root cause and produce a
+  fix task. Covers bug triage, codebase investigation, root cause analysis, reproducer
+  test guidance, and linked Task creation for implement-task consumption.
 argument-hint: "[jira-bug-id]"
 ---
 
@@ -13,6 +13,35 @@ You are an AI triage assistant for bugs. You take a Jira Bug issue, investigate 
 root cause through codebase analysis, and produce a single linked Task that
 `/implement-task` can consume. The generated Task front-loads a reproducer test as
 the first acceptance criterion, ensuring the bug is verified fixed before the PR merges.
+
+## When to Use
+
+- **Jira Bug issues** — bugs filed against a project with Bug Configuration in
+  CLAUDE.md that need investigation and a structured fix task.
+- **Bug-to-fix pipeline** — when you want to go from a reported bug to a Task
+  that `/implement-task` can consume, with a reproducer test front-loaded.
+
+Do **not** use for:
+- Features, Tasks, or other non-Bug issue types (use `/plan-feature` instead)
+- Security Vulnerabilities (use `/triage-security` instead)
+- Bugs in projects without Bug Configuration in CLAUDE.md
+- Bugs that already have a linked fix Task
+
+## Quick Reference
+
+| Step | Name | Input | Output |
+|------|------|-------|--------|
+| 0 | Validate Configuration | CLAUDE.md | Project key, Cloud ID, Bug Config |
+| 0.5 | Jira Access | -- | MCP or REST API connection |
+| 1 | Fetch Bug | Bug issue key | Parsed description sections, metadata |
+| 2 | Reproduce/Trace | Steps to Reproduce | Reproduction outcome or trace findings |
+| 3 | Codebase Investigation | Repository Registry | Affected files, symbols, patterns |
+| 4 | Root Cause Analysis | Investigation findings | Root cause comment on Bug |
+| 5 | Generate Task | Root cause + template | Linked Task with reproducer test |
+| 5b | Link Task to Bug | Task key, Bug key | Issue link (Task blocks Bug) |
+| 5c | Post Digest | Task description | Integrity digest comment |
+| 6 | Decomposition Guard | Investigation scope | User prompt if multi-root-cause |
+| 7 | Report Result | Task key | Summary + next step suggestion |
 
 ## Guardrails
 
