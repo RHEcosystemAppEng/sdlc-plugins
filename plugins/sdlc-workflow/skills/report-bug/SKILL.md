@@ -147,14 +147,39 @@ Examine the arguments provided to the skill to determine the invocation mode.
 
 ### Programmatic mode
 
-If the arguments contain structured input with multiple template sections (identified by
-section headings matching those in the bug template's Required Sections table), use
-**programmatic mode**. This mode is intended for callers such as `verify-pr` that provide
-all bug data upfront.
+If the arguments contain structured input with a `Summary` line and multiple template
+sections (identified by section headings matching those in the bug template's Required
+Sections table), use **programmatic mode**. This mode is intended for callers such as
+`verify-pr` that provide all bug data upfront.
+
+Programmatic input format — a `Summary:` line followed by section names as headings:
+
+```
+Summary: Advisor upload fails with 500 when filename contains spaces
+
+Description:
+Uploading an advisory with spaces in the filename causes an internal server error.
+
+Steps to reproduce:
+1. Navigate to Advisories > Upload
+2. Select a file named "my advisory.json"
+3. Click Upload
+
+Expected Result:
+The advisory is uploaded successfully.
+
+Actual Result:
+A 500 Internal Server Error is returned. The server log shows a path-parsing failure.
+```
+
+Section headings in the input (e.g., `Description:`, `Steps to reproduce:`) are matched
+case-insensitively against the **Section** column in the bug template's Required and
+Optional Sections tables.
 
 In programmatic mode:
-- Parse the structured input to extract each section's content, matching against the
-  section names from the bug template.
+- Extract the `Summary:` line as the Bug title. If missing, ask the caller to provide it.
+- Parse the remaining structured input to extract each section's content, matching against
+  the section names from the bug template.
 - Validate that all required sections (from the Required Sections table) are present.
 - If any required section is missing, inform the caller which sections are missing and
   **stop execution** — do not create a partial bug report.
@@ -179,8 +204,7 @@ If the user provided a summary as the skill argument, confirm it with them:
 
 The summary should be concise and descriptive (typically under 100 characters).
 
-In programmatic mode, the summary must be provided in the structured input. If missing,
-ask the caller to provide it.
+In programmatic mode, the summary is extracted from the `Summary:` line (see Step 1).
 
 ## Step 3 – Collect Template Sections
 
@@ -208,9 +232,38 @@ Skipped sections will not appear as empty headings in the final description.
 ## Step 4 – Preview and Confirm
 
 Compose the full Bug description from all collected sections. Use the **Heading Format**
-values from the bug template verbatim as the section headings. For example, if the
-template specifies `### **Issue Description**` as the heading format for the Description
-section, use exactly `### **Issue Description**` in the composed description.
+values from the bug template verbatim as the section headings.
+
+For example, given a bug template with these rows:
+
+| Section | Heading Format |
+|---------|----------------|
+| Description | `### **Issue Description**` |
+| Steps to reproduce | `### **Steps to Reproduce**` |
+| Expected Result | `### **Expected Result**` |
+| Actual Result | `### **Actual Result**` |
+
+The composed description would look like:
+
+```markdown
+### **Issue Description**
+
+Uploading an advisory with spaces in the filename causes an internal server error.
+
+### **Steps to Reproduce**
+
+1. Navigate to Advisories > Upload
+2. Select a file named "my advisory.json"
+3. Click Upload
+
+### **Expected Result**
+
+The advisory is uploaded successfully.
+
+### **Actual Result**
+
+A 500 Internal Server Error is returned. The server log shows a path-parsing failure.
+```
 
 **Omit** any optional sections the user skipped — do not include empty headings.
 
