@@ -53,7 +53,7 @@ rm -f /tmp/fullsend-pre-jira-stderr.txt
 echo "Jira issue verified: ${JIRA_ISSUE_ID}"
 
 # 4. Extract PR URL from custom field (best-effort)
-PR_URL=$(echo "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" extract-pr-url 2>/dev/null || echo "")
+PR_URL=$(printf '%s\n' "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" extract-pr-url 2>/dev/null || echo "")
 
 if [[ -n "${PR_URL}" ]]; then
   echo "PR linked: ${PR_URL}"
@@ -65,7 +65,7 @@ fi
 PRE_OUTPUT_DIR="/tmp/fullsend-pre-output"
 mkdir -p "${PRE_OUTPUT_DIR}"
 
-echo "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" transform \
+printf '%s\n' "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" transform \
   "${JIRA_ISSUE_ID}" "${PR_URL}" > "${PRE_OUTPUT_DIR}/verify-pr-input.json"
 
 echo "Pre-fetched data written to ${PRE_OUTPUT_DIR}/verify-pr-input.json"
