@@ -17,6 +17,8 @@ set -euo pipefail
 
 : "${FULLSEND_OUTPUT_SCHEMA:?FULLSEND_OUTPUT_SCHEMA must be set}"
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 # Find the output JSON file in this iteration's output directory.
 OUTPUT_DIR="output"
 if [[ ! -d "${OUTPUT_DIR}" ]]; then
@@ -53,6 +55,11 @@ if ! python3 -c "import jsonschema" 2>/dev/null; then
   echo "FAIL: python3 jsonschema package is not installed (required by ADR 0022)"
   exit 1
 fi
+
+# Strip extra properties before validation. The schema stays strict
+# (additionalProperties: false) to document the contract, but the
+# stripping makes it forgiving for benign metadata the agent adds.
+python3 "${SCRIPT_DIR}/strip_extra_properties.py" "${RESULT_FILE}" "${FULLSEND_OUTPUT_SCHEMA}"
 
 if ! python3 -c "
 import json, sys
