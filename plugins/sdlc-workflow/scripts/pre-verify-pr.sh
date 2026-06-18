@@ -53,24 +53,7 @@ rm -f /tmp/fullsend-pre-jira-stderr.txt
 echo "Jira issue verified: ${JIRA_ISSUE_ID}"
 
 # 4. Extract PR URL from custom field (best-effort)
-PR_URL=$(echo "${ISSUE_JSON}" | python3 -c "
-import json, sys
-issue = json.load(sys.stdin)
-field = issue.get('fields', {}).get('customfield_10875')
-if not field:
-    print('')
-    sys.exit(0)
-if isinstance(field, str):
-    print(field)
-elif isinstance(field, dict):
-    # ADF format — extract URL from inlineCard
-    for block in field.get('content', []):
-        for inline in block.get('content', []):
-            if inline.get('type') == 'inlineCard':
-                print(inline.get('attrs', {}).get('url', ''))
-                sys.exit(0)
-    print('')
-" 2>/dev/null || echo "")
+PR_URL=$(echo "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" extract-pr-url 2>/dev/null || echo "")
 
 if [[ -n "${PR_URL}" ]]; then
   echo "PR linked: ${PR_URL}"
@@ -82,40 +65,8 @@ fi
 PRE_OUTPUT_DIR="/tmp/fullsend-pre-output"
 mkdir -p "${PRE_OUTPUT_DIR}"
 
-python3 -c "
-import json, sys
-
-issue = json.loads(sys.argv[1])
-fields = issue.get('fields', {})
-
-output = {
-    'task_id': sys.argv[2],
-    'task': {
-        'summary': fields.get('summary', ''),
-        'description': fields.get('description', {}),
-        'status': (fields.get('status') or {}).get('name', ''),
-        'labels': fields.get('labels', []),
-        'issue_links': [
-            {
-                'type': (link.get('type') or {}).get('name', ''),
-                'direction': 'inward' if 'inwardIssue' in link else 'outward',
-                'key': (link.get('inwardIssue') or link.get('outwardIssue') or {}).get('key', '')
-            }
-            for link in fields.get('issuelinks', [])
-        ],
-        'custom_fields': {
-            k: v for k, v in fields.items()
-            if k.startswith('customfield_')
-        }
-    },
-    'pr_url': sys.argv[3],
-    'source': {
-        'tracker': 'jira',
-        'raw': issue
-    }
-}
-json.dump(output, sys.stdout, indent=2)
-" "${ISSUE_JSON}" "${JIRA_ISSUE_ID}" "${PR_URL}" > "${PRE_OUTPUT_DIR}/verify-pr-input.json"
+echo "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" transform \
+  "${JIRA_ISSUE_ID}" "${PR_URL}" > "${PRE_OUTPUT_DIR}/verify-pr-input.json"
 
 echo "Pre-fetched data written to ${PRE_OUTPUT_DIR}/verify-pr-input.json"
 echo "Input validation passed"
