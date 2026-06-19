@@ -22,19 +22,35 @@
        cannot be auto-discovered via Jira metadata. To find it, inspect a closed
        Vulnerability issue that has it set and look for the custom field. Leave blank
        if your project does not use VEX Justification.
+     - Upstream Affected Component custom field: the Jira custom field ID that stores
+       the upstream library name on Vulnerability issues (e.g., "customfield_10632").
+       Used by Step 4.3 for cross-CVE overlap detection. Leave blank to skip overlap
+       detection.
+     - PS Component custom field: the Jira custom field ID that stores the PS Component
+       identifier on Vulnerability issues (e.g., "customfield_10669"). Used together
+       with the Upstream Affected Component field for cross-CVE overlap filtering.
+     - Stream custom field: the Jira custom field ID that stores the stream identifier
+       on Vulnerability issues (e.g., "customfield_10832"). Used together with the
+       Upstream Affected Component field for cross-CVE overlap filtering.
 
      Example:
        Product pages URL: https://lifecycle.example.com/products/myproduct
        Jira version prefix: MYPRODUCT
        Vulnerability issue type ID: 10001
        Component label pattern: pscomponent:
-       VEX Justification custom field: customfield_00000 -->
+       VEX Justification custom field: customfield_00000
+       Upstream Affected Component custom field: customfield_10632
+       PS Component custom field: customfield_10669
+       Stream custom field: customfield_10832 -->
 
 - Product pages URL: {{product-pages-url}}
 - Jira version prefix: {{jira-version-prefix}}
 - Vulnerability issue type ID: {{vulnerability-issue-type-id}}
 - Component label pattern: {{component-label-pattern}}
 - VEX Justification custom field: {{vex-justification-field-id}}
+- Upstream Affected Component custom field: {{upstream-affected-component-field-id}}
+- PS Component custom field: {{ps-component-field-id}}
+- Stream custom field: {{stream-field-id}}
 
 ### Version Streams
 

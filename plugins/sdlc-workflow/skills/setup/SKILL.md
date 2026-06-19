@@ -395,6 +395,39 @@ Ask the user for the following fields:
 
    If the user skips, leave the placeholder empty in the template.
 
+6. **Upstream Affected Component custom field** _(optional)_ — the custom field ID that
+   stores the upstream library name on Vulnerability issues (e.g., `customfield_10632`).
+   Used by Step 4.3 for cross-CVE overlap detection. Ask the user:
+
+   > "Do you have an Upstream Affected Component custom field on Vulnerability issues?
+   > This field stores the upstream library name (e.g., 'axios', 'webpack') and enables
+   > cross-CVE overlap detection. Provide the custom field ID, or leave blank to skip
+   > overlap detection."
+
+   If the user skips, leave the placeholder empty in the template.
+
+7. **PS Component custom field** _(optional)_ — the custom field ID that stores the
+   PS Component identifier on Vulnerability issues (e.g., `customfield_10669`).
+   Used together with the Upstream Affected Component field for cross-CVE overlap
+   filtering. Ask the user:
+
+   > "Do you have a PS Component custom field on Vulnerability issues? This field
+   > stores the product component identifier (e.g., 'pscomponent:org/image-name')
+   > and is used to filter cross-CVE overlap results. Provide the custom field ID,
+   > or leave blank."
+
+   If the user skips, leave the placeholder empty in the template.
+
+8. **Stream custom field** _(optional)_ — the custom field ID that stores the stream
+   identifier on Vulnerability issues (e.g., `customfield_10832`). Used together with
+   the Upstream Affected Component field for cross-CVE overlap filtering. Ask the user:
+
+   > "Do you have a Stream custom field on Vulnerability issues? This field stores
+   > the stream identifier (e.g., 'rhtpa-2.2') and is used to filter cross-CVE
+   > overlap results. Provide the custom field ID, or leave blank."
+
+   If the user skips, leave the placeholder empty in the template.
+
 ### Step 9.2 – Collect Version Streams
 
 Ask the user for one or more version streams. For each stream, collect:

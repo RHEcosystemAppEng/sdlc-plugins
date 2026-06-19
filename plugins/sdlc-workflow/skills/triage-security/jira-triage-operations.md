@@ -165,24 +165,32 @@ Search for Vulnerability issues that affect the **same upstream component** as t
 current issue, regardless of CVE ID. This detects cases where a different CVE's
 remediation already bumped the library past the current CVE's fix threshold.
 
+**Prerequisite:** This step requires the Upstream Affected Component custom field,
+PS Component custom field, and Stream custom field to be configured in Security
+Configuration (Step 0). If any of these fields are not configured, skip this step
+entirely.
+
 1. **Extract the Upstream Affected Component** from the current issue's
-   `customfield_10632` field (already fetched in Step 1 with `fields=["*all"]`).
-   If the field is empty or not present, skip this step — cross-CVE overlap
-   detection requires the component field to be populated.
+   `<upstream-affected-component-field>` (already fetched in Step 1 with
+   `fields=["*all"]`). If the field is empty or not present, skip this step —
+   cross-CVE overlap detection requires the component field to be populated.
 
 2. **Search for related CVE Jiras** with the same component value:
 
    ```
    jira.search_jql(
-     "project = <project-key> AND issuetype = <vulnerability-issue-type-id> AND cf[10632] ~ '<component-value>' AND key != <current-issue-key>",
-     fields: ["summary", "status", "labels", "issuelinks", "customfield_10632", "customfield_10669", "customfield_10832"]
+     "project = <project-key> AND issuetype = <vulnerability-issue-type-id> AND cf[<upstream-affected-component-field-number>] ~ '<component-value>' AND key != <current-issue-key>",
+     fields: ["summary", "status", "labels", "issuelinks", "<upstream-affected-component-field>", "<ps-component-field>", "<stream-field>"]
    )
    ```
 
-3. **Filter results** to matching PS Component (`customfield_10669`) and Stream
-   (`customfield_10832`) values. Only issues that share the same PS Component
-   and Stream as the current issue are relevant — different components or
-   streams are tracked separately.
+   Where `<upstream-affected-component-field-number>` is the numeric portion of the
+   configured field ID (e.g., `10632` from `customfield_10632`).
+
+3. **Filter results** to matching PS Component (`<ps-component-field>`) and Stream
+   (`<stream-field>`) values. Only issues that share the same PS Component and
+   Stream as the current issue are relevant — different components or streams are
+   tracked separately.
 
 4. **Traverse issue links** on each matching CVE Jira. For each match, inspect
    its `issuelinks` array for linked remediation Tasks (link type `"Depend"` —
