@@ -93,7 +93,7 @@ Based on lock file analysis at pinned commits from security-matrix.md.
 Scoped to stream <stream> per issue suffix.")
 ```
 
-## Step 4 – Duplicate and Sibling Check
+## Step 4 – Duplicate, Sibling, and Overlap Check
 
 Search for sibling Vulnerability issues with the same CVE label:
 
@@ -157,7 +157,70 @@ one issue per stream intentionally. For each different-stream sibling:
    | TC-5678 ← | 2.2.x  | New         | MYPRODUCT 2.2.0, MYPRODUCT 2.2.1 |
    ```
 
-**If no siblings found**, proceed to Step 5.
+**If no siblings found**, proceed to Step 4.3.
+
+### 4.3 – Cross-CVE overlap detection
+
+Search for Vulnerability issues that affect the **same upstream component** as the
+current issue, regardless of CVE ID. This detects cases where a different CVE's
+remediation already bumped the library past the current CVE's fix threshold.
+
+1. **Extract the Upstream Affected Component** from the current issue's
+   `customfield_10632` field (already fetched in Step 1 with `fields=["*all"]`).
+   If the field is empty or not present, skip this step — cross-CVE overlap
+   detection requires the component field to be populated.
+
+2. **Search for related CVE Jiras** with the same component value:
+
+   ```
+   jira.search_jql(
+     "project = <project-key> AND issuetype = <vulnerability-issue-type-id> AND cf[10632] ~ '<component-value>' AND key != <current-issue-key>",
+     fields: ["summary", "status", "labels", "issuelinks", "customfield_10632", "customfield_10669", "customfield_10832"]
+   )
+   ```
+
+3. **Filter results** to matching PS Component (`customfield_10669`) and Stream
+   (`customfield_10832`) values. Only issues that share the same PS Component
+   and Stream as the current issue are relevant — different components or
+   streams are tracked separately.
+
+4. **Traverse issue links** on each matching CVE Jira. For each match, inspect
+   its `issuelinks` array for linked remediation Tasks (link type `"Depend"` —
+   the same link type used when `triage-security` creates remediation tasks).
+   Fetch each linked remediation Task to inspect its description.
+
+5. **Compare remediation coverage.** For each remediation Task found, extract
+   the dependency version bump from its description (the target version the
+   library is bumped to). Compare this version against the current CVE's fix
+   threshold (from Step 1's Data Extraction — the "fixed version" field):
+
+   - If the remediation task's bump version **meets or exceeds** the current
+     CVE's fix threshold: the existing remediation already covers this CVE.
+   - If the bump version is **below** the fix threshold: the existing
+     remediation does not cover this CVE.
+
+6. **Present findings** to the engineer:
+
+   - **If a covering remediation exists:**
+     ```
+     Existing remediation task [task-key] (from [related-CVE-ID]) already bumps
+     [library] to [version], which meets or exceeds this CVE's fix threshold
+     ([fix-version]). No new remediation task needed.
+
+     Recommendation: Close this issue — the fix is already covered by [task-key].
+     ```
+   - **If related CVEs exist but no covering remediation:**
+     ```
+     Related CVE Jiras found for [component] in the same stream:
+
+     | Related CVE | Issue | Remediation Task | Bump Version | Covers This CVE? |
+     |-------------|-------|------------------|--------------|------------------|
+     | CVE-YYYY-XXXXX | TC-1234 | TC-1235 | 1.2.3 | No (threshold: 1.3.0) |
+
+     No existing remediation covers this CVE's fix threshold. Proceeding with
+     new remediation task creation.
+     ```
+   - **If no related CVEs found for this component:** proceed silently to Step 5.
 
 ## Step 5 – Version Lifecycle Check
 

@@ -39,7 +39,7 @@ Do **not** use for:
 | 1 | Data Extraction | Vulnerability issue key | CVE ID, library, affected range, remote links |
 | 2 | Version Impact Analysis | security-matrix.md, lock files | Version impact table |
 | 3 | Affects Versions Correction | Version impact table, Jira versions | Corrected Affects Versions |
-| 4 | Duplicate/Sibling Check | JQL search (sibling issues) | Duplicate detection, issue links |
+| 4 | Duplicate, Sibling, and Overlap Check | JQL search (sibling issues), component field search | Duplicate detection, issue links, cross-CVE overlap |
 | 5 | Version Lifecycle Check | Product pages URL | EOL status per version |
 | 6 | Already Fixed Check | Resolved sibling issues | Already-fixed detection |
 | 7 | Remediation | Impact analysis results | Remediation tasks or close recommendation |
@@ -327,9 +327,11 @@ Read `jira-triage-operations.md` for the detailed procedures.
 - **Step 3** – Affects Versions Correction: discover available Jira versions
   dynamically, compare against the version impact table, and correct with
   engineer confirmation
-- **Step 4** – Duplicate and Sibling Check: search for sibling Vulnerability
-  issues with the same CVE, classify as same-stream duplicates or cross-stream
-  companions, link related issues
+- **Step 4** – Duplicate, Sibling, and Overlap Check: search for sibling
+  Vulnerability issues with the same CVE, classify as same-stream duplicates
+  or cross-stream companions, link related issues, and detect cross-CVE overlap
+  where a different CVE's remediation already covers the current CVE's fix
+  threshold
 - **Step 5** – Version Lifecycle Check: verify affected versions are still
   within support lifecycle via the Product pages URL
 - **Step 6** – Already Fixed Check: cross-reference resolved sibling issues
