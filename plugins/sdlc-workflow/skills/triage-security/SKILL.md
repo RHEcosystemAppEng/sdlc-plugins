@@ -117,6 +117,15 @@ Extract the following from the configuration for use in later steps:
 - **VEX Justification custom field** _(optional)_ — from Security Configuration (e.g.,
   `customfield_00000`). If configured, used in Steps 6 and 7 when closing issues as
   "Not a Bug". If not configured, close with resolution only, without the VEX field.
+- **Upstream Affected Component custom field** _(optional)_ — from Security Configuration
+  (e.g., `customfield_10632`). If configured, used in Step 4.3 for cross-CVE overlap
+  detection. If not configured, Step 4.3 is skipped entirely.
+- **PS Component custom field** _(optional)_ — from Security Configuration (e.g.,
+  `customfield_10669`). Used with the Upstream Affected Component field for cross-CVE
+  overlap filtering in Step 4.3.
+- **Stream custom field** _(optional)_ — from Security Configuration (e.g.,
+  `customfield_10832`). Used with the Upstream Affected Component field for cross-CVE
+  overlap filtering in Step 4.3.
 - **Version Streams** — Konflux release repo URLs and local paths from Security Configuration
 - **Source Repositories** — source repo names and URLs from Security Configuration
 
