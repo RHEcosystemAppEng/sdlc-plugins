@@ -55,6 +55,47 @@ flowchart TD
 
 **Jira state transitions:** New → In Progress (implement-task) → In Review (implement-task) → Done (human merge)
 
+### Bug Lifecycle Overview
+
+The bug lifecycle uses two entry-point skills (`report-bug` and `triage-bug`) that
+feed into the existing `implement-task` and `verify-pr` phases.
+
+```mermaid
+flowchart TD
+    subgraph Report Phase
+        report["/report-bug"]
+    end
+
+    subgraph Triage Phase
+        triage["/triage-bug PROJ-456"]
+    end
+
+    subgraph Implement Phase
+        implement_fix["/implement-task PROJ-457"]
+    end
+
+    subgraph Verify Phase
+        verify_fix["/verify-pr PROJ-457"]
+        merge_decision{"Human decides\nto merge"}
+    end
+
+    report -->|"Bug created in Jira"| triage
+    triage -->|"Fix Task created in Jira\n(linked to Bug)"| implement_fix
+    implement_fix -->|"Branch + PR created\n(status: In Review)"| verify_fix
+    verify_fix --> merge_decision
+    merge_decision -->|Merged| done["Done"]
+
+    classDef skill fill:#4a90d9,stroke:#2c5f8a,color:#fff
+    classDef human fill:#f5a623,stroke:#c47d10,color:#fff
+    classDef state fill:#7ed321,stroke:#5a9e18,color:#fff
+
+    class report,triage,implement_fix,verify_fix skill
+    class merge_decision human
+    class done state
+```
+
+**Jira state transitions:** New → In Progress (implement-task) → In Review (implement-task) → Done (human merge)
+
 ---
 
 ## Prerequisite: Setup
@@ -284,48 +325,7 @@ Triages a Jira Vulnerability issue (CVE-based, auto-created by PSIRT) with full 
 
 ---
 
-### Bug Lifecycle
-
-The bug lifecycle uses two entry-point skills (`report-bug` and `triage-bug`) that
-feed into the existing `implement-task` and `verify-pr` phases.
-
-```mermaid
-flowchart TD
-    subgraph Report Phase
-        report["/report-bug"]
-    end
-
-    subgraph Triage Phase
-        triage["/triage-bug PROJ-456"]
-    end
-
-    subgraph Implement Phase
-        implement_fix["/implement-task PROJ-457"]
-    end
-
-    subgraph Verify Phase
-        verify_fix["/verify-pr PROJ-457"]
-        merge_decision{"Human decides\nto merge"}
-    end
-
-    report -->|"Bug created in Jira"| triage
-    triage -->|"Fix Task created in Jira\n(linked to Bug)"| implement_fix
-    implement_fix -->|"Branch + PR created\n(status: In Review)"| verify_fix
-    verify_fix --> merge_decision
-    merge_decision -->|Merged| done["Done"]
-
-    classDef skill fill:#4a90d9,stroke:#2c5f8a,color:#fff
-    classDef human fill:#f5a623,stroke:#c47d10,color:#fff
-    classDef state fill:#7ed321,stroke:#5a9e18,color:#fff
-
-    class report,triage,implement_fix,verify_fix skill
-    class merge_decision human
-    class done state
-```
-
-**Jira state transitions:** New → In Progress (implement-task) → In Review (implement-task) → Done (human merge)
-
-#### Report Phase
+### Report Phase
 
 **Skill:** `/sdlc-workflow:report-bug`
 
@@ -360,7 +360,7 @@ programmatically from other skills.
 - All description content must come from user input — no fabrication
 - Issue is never created without user preview and approval
 
-#### Triage Phase (Bug)
+### Triage Phase (Bug)
 
 **Skill:** `/sdlc-workflow:triage-bug`
 
