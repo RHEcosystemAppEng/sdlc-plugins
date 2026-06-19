@@ -531,6 +531,6 @@ Present the outcome to the user:
 - If the Bug description is incomplete (missing required sections), stop and inform the user — do not attempt to investigate without structured input.
 - Keep the generated Task scoped to a single fix — use the Decomposition Guard (Step 6) when multiple independent fixes are needed.
 - The reproducer test must always be the first acceptance criterion and first test requirement.
-- Every Jira comment must include the Comment Footnote.
+- Every Jira comment must include the Comment Footnote, except for the description digest comment defined in Step 5c.
 - Every created task must include the `ai-generated-jira` label.
 - Reference the Bug issue key in the Task's Implementation Notes for traceability.
