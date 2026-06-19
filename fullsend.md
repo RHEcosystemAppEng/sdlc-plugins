@@ -117,7 +117,8 @@ All paths are relative to `plugins/sdlc-workflow/`.
 | `env/gcp-vertex.env` | Vertex AI env var template | Expanded at runtime from the secrets file via fullsend's `host_files` with `expand: true`. Sets `CLAUDE_CODE_USE_VERTEX=1` and points `GOOGLE_APPLICATION_CREDENTIALS` to the uploaded credential file at `/tmp/.gcp-credentials.json`. |
 | `env/jira.env` | Jira non-credential config | Carries `JIRA_SERVER_URL` (for URL construction) and `JIRA_ISSUE_ID` (task identifier). Credentials (`JIRA_EMAIL`, `JIRA_API_TOKEN`) are injected by the Jira provider, not this file. |
 | `schemas/verify-pr-result.schema.json` | JSON Schema for verify-pr structured output | Defines the action types, cross-reference format, and report structure. Validated by fullsend's `validation_loop` before the post_script runs. |
-| `scripts/pre-verify-pr.sh` | Pre_script for verify-pr | Validates inputs before sandbox creation: checks required env vars, JIRA_ISSUE_ID format, issue existence, and PR linkage. Fails fast to avoid wasting sandbox compute time. |
+| `scripts/pre-verify-pr.sh` | Pre_script for verify-pr | Validates inputs before sandbox creation: checks required env vars, JIRA_ISSUE_ID format, issue existence, and PR linkage. Fails fast to avoid wasting sandbox compute time. Delegates Python logic to `pre_verify_pr.py`. |
+| `scripts/pre_verify_pr.py` | Pre-script Python module | Extracts PR URL from Jira custom fields (ADF or string) and transforms Jira issue JSON into the tracker-agnostic input schema. Called by `pre-verify-pr.sh` via stdin pipe. |
 | `scripts/post-verify-pr.sh` | Post_script for verify-pr | Shell wrapper that finds `agent-result.json` and delegates to `execute-actions.py`. Runs on the trusted runner after sandbox is destroyed. |
 | `scripts/execute-actions.py` | Action executor | Processes the ordered actions array, resolves `{{ref.key}}` placeholders as Jira entities are created, calls `jira-client.py` and `gh` CLI for all write operations. |
 | `scripts/validate-output-schema.sh` | Output schema validator | Strips extra properties then validates JSON against the schema using Python's `jsonschema`. The stripping is schema-driven (not hardcoded) via `strip_extra_properties.py`. Used by `validation_loop`. |
@@ -141,6 +142,7 @@ These already exist and apply to all skills — do not create copies:
 | `scripts/validate-output-schema.sh` | Schema validator with property stripping via `strip_extra_properties.py` |
 | `scripts/strip_extra_properties.py` | Generic recursive property stripper — works with any schema |
 | `scripts/jira-client.py` | Jira REST API client used by pre/post scripts |
+| `scripts/pre_verify_pr.py` | Pre-script Python module for Jira data extraction |
 | `env/gcp-vertex.env` | Vertex AI config — same for all skills |
 | `env/jira.env` | Non-credential Jira config (`JIRA_SERVER_URL`, `JIRA_ISSUE_ID`) |
 | Image (`sdlc-base:latest`) | All skills share the same image |
@@ -342,7 +344,7 @@ network_policies:
 Defines the structured JSON output the agent produces. The `validation_loop`
 validates against this schema before the post_script runs. Use the same
 action types as verify-pr (`create_subtask`, `create_link`, `post_pr_reply`,
-`create_root_cause_task`, `post_comment`, `post_report`). If the skill needs
+`post_pr_comment`, `create_root_cause_task`, `post_comment`, `post_report`). If the skill needs
 new action types, add them to the schema and extend `execute-actions.py`.
 
 See `schemas/verify-pr-result.schema.json` as the reference.
@@ -426,8 +428,7 @@ action types defined in the output schema.
 
 ## Deployment modes
 
-There are two ways to run sdlc-workflow skills via fullsend, depending on
-whether the user has sdlc-plugins cloned locally.
+There are three ways to run sdlc-workflow skills via fullsend.
 
 ### Local mode — for sdlc-plugins developers
 
