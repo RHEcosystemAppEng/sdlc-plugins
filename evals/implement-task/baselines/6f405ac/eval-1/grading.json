@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "The conventions.md file explicitly references analyzing sibling code from multiple relevant files: 'Endpoint handler conventions (from endpoints/get.rs, endpoints/list.rs in advisory/ and sbom/)' references advisory/endpoints/get.rs; 'Service conventions (from service/advisory.rs, service/sbom.rs)' references advisory/service/advisory.rs; 'Model struct conventions (from model/summary.rs, model/details.rs in advisory/ and sbom/)' references advisory/model/summary.rs; 'Error type: AppError enum in common/src/error.rs' references common/src/error.rs. All 4 listed files are explicitly mentioned as sources for convention analysis. The plan.md also references 'modules/fundamental/src/advisory/model/summary.rs for the severity field' and 'common/src/error.rs' in its Cross-Section Reference Consistency section."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md lists exactly 3 files to modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs. It lists exactly 3 files to create: advisory/model/severity_summary.rs, advisory/endpoints/severity_summary.rs, tests/api/advisory_summary.rs. The plan explicitly notes 'No Changes Needed' for server/src/main.rs, confirming no unrelated files are modified. The 6 file description outputs (file-1 through file-6) correspond exactly to these 6 files. No additional files outside this scope are listed for modification or creation."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md 'Files to Create' section lists: '4. modules/fundamental/src/advisory/model/severity_summary.rs -- SeveritySummary response struct', '5. modules/fundamental/src/advisory/endpoints/severity_summary.rs -- GET handler for /api/v2/sbom/{id}/advisory-summary', '6. tests/api/advisory_summary.rs -- Integration tests for the new endpoint'. These correspond to file-4-description.md (severity_summary.rs model, CREATE), file-5-description.md (severity_summary.rs endpoint handler, CREATE), and file-6-description.md (advisory_summary.rs test file, CREATE)."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md 'Files to Modify' section lists: '1. modules/fundamental/src/advisory/service/advisory.rs -- Add severity_summary method to AdvisoryService', '2. modules/fundamental/src/advisory/endpoints/mod.rs -- Register the new severity summary route', '3. modules/fundamental/src/advisory/model/mod.rs -- Add pub mod severity_summary; to register the new model module'. These correspond to file-1-description.md (MODIFY), file-2-description.md (MODIFY), and file-3-description.md (MODIFY)."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Commit Message section shows: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' as the subject line (follows type(scope): description format), with body text explaining the changes, and footer 'Implements TC-9201'. This follows Conventional Commits format with TC-9201 referenced in the footer."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md states 'With trailer: `--trailer=\"Assisted-by: Claude Code\"`' immediately after the commit message block."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Branch Operations section shows: 'git checkout main', 'git pull', 'git checkout -b TC-9201'. This creates branch TC-9201 and uses 'main' as the base branch. The PR Creation section also references '--base main'. conventions.md Step 1 shows 'Target Branch: main'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md identifies both patterns explicitly: (1) Error handling - 'Return type: All handlers return Result<Json<T>, AppError>' and 'Error handling: Use .context(\"descriptive message\") wrapping on fallible operations; return AppError (defined in common/src/error.rs)' and 'Methods return Result<T, anyhow::Error> or equivalent with .context() wrapping'. (2) Module structure - 'Directory layout: Each domain module follows model/ + service/ + endpoints/ structure' and 'mod.rs files: Each subdirectory has a mod.rs that re-exports or registers submodules'. Additional patterns are also identified including route registration conventions, model struct conventions, and import organization."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "conventions.md Step 1 -- Parse Jira Task explicitly lists 'Target Branch: main'. plan.md Branch Operations section references 'git checkout main' as the first step. plan.md PR Creation section shows 'gh pr create --base main'."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "plan.md has a dedicated section 'Description Digest Verification (Step 1.5)' with the text: 'WARNING: No description digest found -- skipping integrity check. This task may have been created before digest tracking was introduced.' conventions.md also contains the same section under 'Step 1.5 -- Verify Description Integrity' with the same warning message. Both show that execution proceeds (not blocked) when no digest is found, with a warning instead."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

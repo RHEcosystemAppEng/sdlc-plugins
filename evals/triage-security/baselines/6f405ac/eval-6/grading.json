@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+      "passed": true,
+      "evidence": "discovery-listing.md explicitly states 'Values extracted from Security Configuration in CLAUDE.md' and lists 'Project key: TC' and 'Vulnerability issue type ID: 10024'. Both JQL queries use these values: Query 1: 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged)' and Query 2: 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status = New'. These match the Security Configuration in claude-md-security-config.md (line 19: 'Project key: TC', line 49: 'Vulnerability issue type ID: 10024')."
+    },
+    {
+      "text": "Two separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged) and one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New) (§1.48)",
+      "passed": true,
+      "evidence": "discovery-listing.md contains two distinct queries under '## Query 1: Untriaged Issues' with JQL 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged) ORDER BY status ASC, created DESC' and '## Query 2: Triaged but still New' with JQL 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status = New ORDER BY created DESC'. Both queries match the required structure exactly."
+    },
+    {
+      "text": "Results are grouped into two clearly separated lists: Untriaged issues and Triaged but still New issues",
+      "passed": true,
+      "evidence": "discovery-listing.md has two clearly separated sections: '## Query 1: Untriaged Issues' (line 17) listing 4 issues (TC-9001, TC-9002, TC-9003, TC-9004) and '## Query 2: Triaged but still New' (line 41) listing 1 issue (TC-9010). Sections are separated by horizontal rules (---). status-handling.md also mirrors this separation with '## Untriaged Issues (Query 1)' and '## Triaged but Still New Issues (Query 2)'."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": true,
+      "evidence": "All tables in discovery-listing.md have columns: Key, Status, CVE ID, Summary, Created. For example TC-9001 row: 'TC-9001 | New | CVE-2026-40112 | h2 - HTTP/2 rapid reset vulnerability [rhtpa-2.2] | 2026-06-08'. All 5 issues (TC-9001, TC-9002, TC-9003, TC-9004, TC-9010) include all five required fields."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "status-handling.md shows: TC-9001 (New) 'Handling: Proceed with full triage (Steps 1-7)'; TC-9002 (New) 'Handling: Proceed with full triage (Steps 1-7)'; TC-9004 (New) 'Handling: Proceed with full triage (Steps 1-7)'; TC-9003 (In Progress) 'Handling: **Warning required.** This issue is already in `In Progress`. It may be actively worked on.' with options to proceed or skip. The summary table confirms: TC-9003 has 'Warn: already in progress, ask to proceed or skip' and 'Confirmation Needed? Yes'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
