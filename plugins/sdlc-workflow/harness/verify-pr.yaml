@@ -1,0 +1,45 @@
+agent: agents/verify-pr.md
+model: opus
+image: ghcr.io/mrizzi/sdlc-plugins/sdlc-base:latest-run-in-fullsend
+policy: policies/verify-pr.yaml
+
+providers:
+  - jira
+  - github
+
+security:
+  enabled: true
+
+host_files:
+  - src: env/gcp-vertex.env
+    dest: /sandbox/workspace/.env.d/gcp-vertex.env
+    expand: true
+  - src: env/jira.env
+    dest: /sandbox/workspace/.env.d/jira.env
+    expand: true
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/.gcp-credentials.json
+  - src: ${GCP_OIDC_TOKEN_FILE}
+    dest: /sandbox/workspace/.gcp-oidc-token
+    optional: true
+  - src: /tmp/fullsend-pre-output/verify-pr-input.json
+    dest: /sandbox/workspace/.pre-script/verify-pr-input.json
+    optional: true
+
+validation_loop:
+  script: scripts/validate-output-schema.sh
+  max_iterations: 2
+
+pre_script: scripts/pre-verify-pr.sh
+post_script: scripts/post-verify-pr.sh
+
+runner_env:
+  JIRA_SERVER_URL: "${JIRA_SERVER_URL}"
+  JIRA_EMAIL: "${JIRA_EMAIL}"
+  JIRA_API_TOKEN: "${JIRA_API_TOKEN}"
+  JIRA_PROJECT_KEY: "${JIRA_PROJECT_KEY}"
+  GH_TOKEN: "${GH_TOKEN}"
+  FULLSEND_OUTPUT_SCHEMA: "${FULLSEND_DIR}/schemas/verify-pr-result.schema.json"
+  FULLSEND_OUTPUT_FILE: "agent-result.json"
+
+timeout_minutes: 30

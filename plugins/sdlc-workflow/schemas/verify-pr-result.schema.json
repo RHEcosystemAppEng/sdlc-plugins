@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "verify-pr-result.schema.json",
+  "title": "Verify PR Agent Result",
+  "description": "Structured output from the verify-pr agent. Validated by fullsend's validation_loop before the post_script runs.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["report", "actions"],
+  "properties": {
+    "report": { "$ref": "#/$defs/report" },
+    "actions": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/action" }
+    }
+  },
+  "$defs": {
+    "report": {
+      "type": "object",
+      "required": ["jira_issue_id", "pr_repo", "pr_number", "commit_sha", "overall", "table_md", "report_md", "report_adf", "plugin_version"],
+      "additionalProperties": false,
+      "properties": {
+        "jira_issue_id": { "type": "string", "pattern": "^[A-Z]+-[0-9]+$" },
+        "pr_repo": { "type": "string", "pattern": "^[a-zA-Z0-9._-]+/[a-zA-Z0-9._-]+$" },
+        "pr_number": { "type": "integer", "minimum": 1 },
+        "commit_sha": { "type": "string", "pattern": "^[0-9a-f]{7,40}$" },
+        "overall": { "type": "string", "enum": ["PASS", "WARN", "FAIL"] },
+        "table_md": { "type": "string", "minLength": 1 },
+        "report_md": { "type": "string", "minLength": 1 },
+        "report_adf": { "type": "object" },
+        "plugin_version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string", "enum": ["create_subtask", "create_link", "post_pr_reply", "post_pr_comment", "create_root_cause_task", "post_comment", "post_report"] }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "create_subtask" } } },
+          "then": {
+            "required": ["type", "ref", "parent", "summary", "labels", "description_adf"],
+            "properties": {
+              "type": {},
+              "ref": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+              "parent": { "type": "string", "pattern": "^[A-Z]+-[0-9]+$" },
+              "summary": { "type": "string", "minLength": 1, "maxLength": 255 },
+              "labels": { "type": "array", "items": { "type": "string" } },
+              "description_adf": { "type": "object" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "create_link" } } },
+          "then": {
+            "required": ["type", "link_type", "inward", "outward"],
+            "properties": {
+              "type": {},
+              "link_type": { "type": "string", "enum": ["Blocks", "Related"] },
+              "inward": { "type": "string", "minLength": 1 },
+              "outward": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "post_pr_reply" } } },
+          "then": {
+            "required": ["type", "repo", "pr_number", "comment_id", "body"],
+            "properties": {
+              "type": {},
+              "repo": { "type": "string" },
+              "pr_number": { "type": "integer", "minimum": 1 },
+              "comment_id": { "type": "integer", "minimum": 1 },
+              "body": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "post_pr_comment" } } },
+          "then": {
+            "required": ["type", "repo", "pr_number", "body"],
+            "properties": {
+              "type": {},
+              "repo": { "type": "string" },
+              "pr_number": { "type": "integer", "minimum": 1 },
+              "body": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "create_root_cause_task" } } },
+          "then": {
+            "required": ["type", "ref", "summary", "labels", "description_adf"],
+            "properties": {
+              "type": {},
+              "ref": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+              "summary": { "type": "string", "minLength": 1, "maxLength": 255 },
+              "labels": { "type": "array", "items": { "type": "string" } },
+              "description_adf": { "type": "object" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "post_comment" } } },
+          "then": {
+            "required": ["type", "issue", "body_adf"],
+            "properties": {
+              "type": {},
+              "issue": { "type": "string", "minLength": 1 },
+              "body_adf": { "type": "object" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "post_report" } } },
+          "then": {
+            "required": ["type"],
+            "properties": {
+              "type": {}
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  }
+}

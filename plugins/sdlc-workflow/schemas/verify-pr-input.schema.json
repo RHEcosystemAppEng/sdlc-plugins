@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "verify-pr-input.schema.json",
+  "title": "Verify PR Pre-Script Input",
+  "description": "Pre-fetched task data written by the pre_script and mounted into the sandbox. The skill reads this instead of calling the issue tracker API directly.",
+  "type": "object",
+  "required": ["task_id", "task", "pr_url"],
+  "additionalProperties": false,
+  "properties": {
+    "task_id": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Issue tracker task ID (e.g., TC-4741, #42)"
+    },
+    "task": {
+      "type": "object",
+      "required": ["summary", "description", "status", "labels"],
+      "properties": {
+        "summary": { "type": "string", "minLength": 1 },
+        "description": {
+          "type": "object",
+          "description": "Task description in the issue tracker's native format (e.g., ADF for Jira)"
+        },
+        "status": { "type": "string" },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "issue_links": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "type": { "type": "string" },
+              "direction": { "type": "string", "enum": ["inward", "outward"] },
+              "key": { "type": "string" }
+            }
+          },
+          "description": "Related issues (parent, blocks, relates)"
+        },
+        "custom_fields": {
+          "type": "object",
+          "description": "Tracker-specific custom field values"
+        }
+      }
+    },
+    "pr_url": {
+      "type": "string",
+      "description": "PR URL extracted from the task, or empty if not linked"
+    },
+    "source": {
+      "type": "object",
+      "description": "Raw issue tracker response for fields not captured above",
+      "properties": {
+        "tracker": { "type": "string", "description": "Issue tracker type (e.g., jira, github)" },
+        "raw": { "type": "object", "description": "Full raw API response" }
+      }
+    }
+  }
+}

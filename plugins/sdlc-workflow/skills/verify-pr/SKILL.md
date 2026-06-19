@@ -58,6 +58,57 @@ Before attempting any JIRA operations throughout this skill, determine the acces
 
 Refer to `shared/jira-rest-fallback.md` for complete implementation details.
 
+## Step 0.6 – Sandbox Mode Detection
+
+Check whether the `FULLSEND_OUTPUT_DIR` environment variable is set:
+
+```bash
+echo ${FULLSEND_OUTPUT_DIR:-not-set}
+```
+
+If set, this skill is running inside a fullsend sandbox. Switch to **sandbox mode**:
+- Do NOT call Jira write APIs (create_issue, add_comment, create_link, transition_issue) directly
+- Do NOT post GitHub PR comments or replies directly
+- Instead, accumulate all write operations as actions in a JSON structure
+- At the end of execution, write the complete result to `$FULLSEND_OUTPUT_DIR/agent-result.json`
+
+If not set, execute in **interactive mode** (current behavior — call APIs directly).
+
+Throughout the remaining steps, when you encounter a write operation:
+- **Interactive mode:** execute it directly (existing behavior)
+- **Sandbox mode:** add it to the actions array instead
+
+Initialize the actions accumulator as an in-memory JSON structure:
+
+```json
+{
+  "report": {},
+  "actions": []
+}
+```
+
+## Step 0.7 – Load Pre-Fetched Data (sandbox mode only)
+
+**Skip this step in interactive mode.**
+
+In sandbox mode, the pre_script fetches task data on the trusted runner and
+mounts it into the sandbox. Read the pre-fetched data:
+
+```bash
+cat /sandbox/workspace/.pre-script/verify-pr-input.json | python3 -m json.tool > /dev/null 2>&1 && echo "Pre-fetched data available" || echo "ERROR: Pre-fetched data missing or invalid"
+```
+
+If the file exists and contains valid JSON:
+- Read the `task` field — this contains summary, description, status, labels,
+  issue links, and custom fields
+- Read the `pr_url` field — this is the PR URL from the task's custom field
+- Read `source.raw` if you need the full original issue tracker response
+- **Skip Steps 1 (Fetch and Parse Jira Task) and 2 (Identify PR)** — use the
+  pre-fetched data instead
+
+If the file does not exist or is invalid, log a warning and proceed with
+Steps 1 and 2 as a fallback (fetch from the issue tracker API directly).
+
 ## Inputs
 
 The user will provide a Jira issue ID for a task that has an associated PR.
@@ -112,7 +163,11 @@ Append these two nodes at the end of the ADF document's `content` array.
 
 ## Step 1 – Fetch and Parse Jira Task
 
-Use:
+**If pre-fetched data was loaded in Step 0.7:** Read `task.description` from
+the pre-fetched JSON. The description is in the issue tracker's native format
+(ADF for Jira). If you need the full raw response, read `source.raw`.
+
+**Otherwise:** Fetch the task from the issue tracker:
 
 jira.get_issue(<jira-issue-id>)
 
@@ -132,8 +187,13 @@ If any required section is missing or the description doesn't follow the templat
 
 ## Step 2 – Identify PR
 
-Look up the **Git Pull Request custom field** ID from the project's **Jira Configuration**
-section in CLAUDE.md (the field is listed as `Git Pull Request custom field: <field-id>`).
+**If pre-fetched data was loaded in Step 0.7:** Read `pr_url` from the
+pre-fetched JSON. If non-empty, extract the PR number and repository from
+the URL. If empty, ask the user to provide the PR URL.
+
+**Otherwise:** Look up the **Git Pull Request custom field** ID from the project's
+**Jira Configuration** section in CLAUDE.md (the field is listed as
+`Git Pull Request custom field: <field-id>`).
 
 If the custom field is configured, read its value from the Jira issue. If the field is empty
 or not configured, ask the user to provide the PR URL.
@@ -501,6 +561,30 @@ After creating each sub-task, create a "Blocks" issue link from the sub-task to 
 
 jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
+**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`, add `create_subtask` and `create_link` actions to the accumulator. Use this pattern for all sub-task types (review feedback, CI failure, eval failure):
+
+```json
+{
+  "type": "create_subtask",
+  "ref": "subtask-N",
+  "parent": "<parent-task-id>",
+  "summary": "<summary>",
+  "labels": ["ai-generated-jira", "<category-label>"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Blocks",
+  "inward": "{{subtask-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
+Use incrementing refs: `subtask-1`, `subtask-2`, etc. The `{{subtask-N.key}}` placeholder is resolved by the post_script when the sub-task is actually created. Set `<category-label>` to `review-feedback` for review and CI sub-tasks, or `eval-failure` for eval sub-tasks.
+
 #### CI failure sub-tasks
 
 Process `create-sub-task` actions from the Correctness sub-agent. For each action:
@@ -526,6 +610,8 @@ Process `create-sub-task` actions from the Correctness sub-agent. For each actio
 
 3. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
+
+**Sandbox mode:** Use the `create_subtask` + `create_link` pattern from the review feedback sandbox mode section above, with labels `["ai-generated-jira", "review-feedback"]`.
 
 #### Eval failure sub-tasks
 
@@ -569,6 +655,8 @@ and sub-task creation below.
 
 4. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
+
+**Sandbox mode:** Use the `create_subtask` + `create_link` pattern from the review feedback sandbox mode section above, with labels `["ai-generated-jira", "eval-failure"]`.
 
 ### Step 6e – Reply to Review Comments
 
@@ -636,6 +724,30 @@ When a review body contains multiple classified suggestions (sub-identifiers), p
 a single standalone comment that lists all classifications together rather than one
 comment per sub-identifier.
 
+**Sandbox mode:** Instead of calling `gh api`, add an action for each reply.
+
+For **inline comment threads** (have a `comment_id`), use `post_pr_reply`:
+
+```json
+{
+  "type": "post_pr_reply",
+  "repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "comment_id": <comment-id>,
+  "body": "<reply body with {{subtask-N.key}} and {{subtask-N.url}} placeholders if referencing a sub-task>"
+}
+```
+
+For **review body items** (no `comment_id`), use `post_pr_comment`:
+
+```json
+{
+  "type": "post_pr_comment",
+  "repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "body": "<comment body>"
+}
+```
 ### Step 6f – Idempotency Guarantees
 
 Idempotency is enforced **within** Step 4a's mandatory enumeration, not as a
@@ -699,11 +811,15 @@ universal knowledge (eval design patterns apply across repos) and classify as
 method-based skill gaps in the implement-task phase.
 
 The sub-agent receives these inputs:
-1. **Parent Feature description** — fetched by following the "incorporates" issue link
-   from the current task back to the Feature issue. Use:
+1. **Parent Feature description** — find the "incorporates" issue link from the
+   current task to the Feature issue. If pre-fetched data was loaded in Step 0.7,
+   read `task.issue_links` to find the link with type "Incorporates" and direction
+   "inward", then fetch the Feature issue. Otherwise use:
    ```
    jira.get_issue(<task-id>) → find issue link with type "incorporates" (inward) → jira.get_issue(<feature-id>)
    ```
+   Note: the Feature issue itself still requires a direct API call — only the
+   current task's data is pre-fetched.
 2. **Task description** — the structured description parsed in Step 1
 3. **Review comments** — the code change requests that triggered sub-tasks in Step 6d
 4. **Relevant code** — the files on the PR branch related to each flagged defect
@@ -861,6 +977,27 @@ Link the root-cause task to the parent task:
 
 jira.create_issue_link(type="Relates", inwardIssue=<root-cause-task-id>, outwardIssue=<parent-task-id>)
 
+**Sandbox mode:** Instead of calling `jira.create_issue`, add actions:
+
+```json
+{
+  "type": "create_root_cause_task",
+  "ref": "rc-N",
+  "summary": "Root-cause: <description>",
+  "labels": ["ai-generated-jira", "root-cause"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Related",
+  "inward": "{{rc-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
 #### Action 2 – Post the root-cause analysis as a comment
 
 After creating the task, post a Jira comment on the newly created root-cause task
@@ -877,6 +1014,16 @@ The comment must include:
 
 Include the **Comment Footnote** at the end of the comment (see the Comment Footnote
 section at the top of this skill for the required ADF format).
+
+**Sandbox mode:** Instead of calling `jira.add_comment`, add an action:
+
+```json
+{
+  "type": "post_comment",
+  "issue": "{{rc-N.key}}",
+  "body_adf": <pre-rendered ADF object with root-cause analysis and Comment Footnote>
+}
+```
 
 ### Step 7c – Idempotency Check
 
@@ -999,6 +1146,46 @@ Include the Comment Footnote at the end of the Jira comment.
 
 **Important:** This skill does NOT merge the PR and does NOT transition the Jira issue.
 The report is informational — a human reviewer decides whether to merge.
+
+### Sandbox Mode Output
+
+**Sandbox mode only:** Instead of posting directly, populate the `report` object and add a `post_report` action:
+
+Populate the report:
+
+```json
+{
+  "jira_issue_id": "<issue-id>",
+  "pr_repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "commit_sha": "<short-sha>",
+  "overall": "PASS|WARN|FAIL",
+  "table_md": "<markdown verification table>",
+  "report_md": "<full GitHub PR comment body with markdown footnote>",
+  "report_adf": <full Jira comment ADF with Comment Footnote>,
+  "plugin_version": "<version from plugin.json>"
+}
+```
+
+Add the final action:
+
+```json
+{ "type": "post_report" }
+```
+
+Write the complete accumulated JSON to the output file:
+
+```bash
+cat > $FULLSEND_OUTPUT_DIR/agent-result.json << 'RESULT_EOF'
+<the complete JSON with report and all actions>
+RESULT_EOF
+```
+
+Verify the file was written:
+
+```bash
+python3 -m json.tool $FULLSEND_OUTPUT_DIR/agent-result.json > /dev/null && echo "Output validated"
+```
 
 ## Important Rules
 

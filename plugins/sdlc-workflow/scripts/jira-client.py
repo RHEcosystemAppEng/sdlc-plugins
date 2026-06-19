@@ -414,13 +414,15 @@ def get_issue(issue_key: str, fields: str = "*all") -> Dict[str, Any]:
 def create_issue(
     project_key: str,
     summary: str,
-    description_md: str,
-    issue_type: str,
+    description_md: Optional[str] = None,
+    issue_type: str = "",
     labels: Optional[List[str]] = None,
     assignee_id: Optional[str] = None,
-    custom_fields: Optional[Dict[str, Any]] = None
+    custom_fields: Optional[Dict[str, Any]] = None,
+    description_adf: Optional[Dict[str, Any]] = None,
+    parent: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Create JIRA issue with markdown description.
+    """Create JIRA issue with markdown or ADF description.
 
     Args:
         project_key: Project key (e.g., TC)
@@ -430,18 +432,31 @@ def create_issue(
         labels: Optional list of labels
         assignee_id: Optional assignee account ID
         custom_fields: Optional custom field values (field_id: value)
+        description_adf: Pre-rendered ADF description (overrides description_md)
+        parent: Optional parent issue key for sub-tasks
 
     Returns:
         Created issue object with key and ID
     """
+    # Prefer ADF over markdown
+    if description_adf:
+        description = description_adf
+    elif description_md:
+        description = markdown_to_adf(description_md)
+    else:
+        description = {"type": "doc", "version": 1, "content": []}
+
     data = {
         "fields": {
             "project": {"key": project_key},
             "summary": summary,
-            "description": markdown_to_adf(description_md),
+            "description": description,
             "issuetype": {"id": issue_type} if issue_type.isdigit() else {"name": issue_type},
         }
     }
+
+    if parent:
+        data["fields"]["parent"] = {"key": parent}
 
     if labels:
         data["fields"]["labels"] = labels
@@ -469,17 +484,30 @@ def update_issue(
     make_request('PUT', f"issue/{issue_key}", data)
 
 
-def add_comment(issue_key: str, comment_md: str) -> Dict[str, Any]:
+def add_comment(
+    issue_key: str,
+    comment_md: Optional[str] = None,
+    comment_adf: Optional[Dict[str, Any]] = None
+) -> Dict[str, Any]:
     """Add comment to JIRA issue.
 
     Args:
         issue_key: Issue key (e.g., TC-123)
         comment_md: Comment text in markdown (auto-converted to ADF)
+        comment_adf: Pre-rendered ADF comment (overrides comment_md)
 
     Returns:
         Created comment object
     """
-    data = {"body": markdown_to_adf(comment_md)}
+    # Prefer ADF over markdown
+    if comment_adf:
+        body = comment_adf
+    elif comment_md:
+        body = markdown_to_adf(comment_md)
+    else:
+        body = {"type": "doc", "version": 1, "content": []}
+
+    data = {"body": body}
     return make_request('POST', f"issue/{issue_key}/comment", data)
 
 
@@ -578,6 +606,15 @@ def get_project_metadata(project_key: str) -> Dict[str, Any]:
 # CLI Interface
 # =============================================================================
 
+def _parse_json_arg(value: str, flag_name: str) -> Any:
+    try:
+        return json.loads(value)
+    except json.JSONDecodeError as e:
+        print(f"ERROR: Invalid JSON in --{flag_name}: {e.msg}", file=sys.stderr)
+        print(f"Position: line {e.lineno}, column {e.colno}", file=sys.stderr)
+        sys.exit(1)
+
+
 def main(argv=None):
     """CLI entry point with subcommand dispatch.
 
@@ -605,9 +642,11 @@ def main(argv=None):
     create_issue_parser = subparsers.add_parser('create_issue', help='Create new issue')
     create_issue_parser.add_argument('--project', required=True, help='Project key')
     create_issue_parser.add_argument('--summary', required=True, help='Issue summary')
-    create_issue_parser.add_argument('--description-md', required=True, help='Description in markdown')
+    create_issue_parser.add_argument('--description-md', help='Description in markdown')
+    create_issue_parser.add_argument('--description-adf', help='Issue description as raw ADF JSON (overrides --description-md)')
     create_issue_parser.add_argument('--issue-type', required=True, help='Issue type ID or name')
     create_issue_parser.add_argument('--labels', help='Comma-separated labels')
+    create_issue_parser.add_argument('--parent', help='Parent issue key for sub-tasks')
     create_issue_parser.add_argument('--assignee-id', help='Assignee account ID')
 
     # update_issue
@@ -618,7 +657,8 @@ def main(argv=None):
     # add_comment
     add_comment_parser = subparsers.add_parser('add_comment', help='Add comment to issue')
     add_comment_parser.add_argument('issue_key', help='Issue key')
-    add_comment_parser.add_argument('--comment-md', required=True, help='Comment in markdown')
+    add_comment_parser.add_argument('--comment-md', help='Comment in markdown')
+    add_comment_parser.add_argument('--comment-adf', help='Comment body as raw ADF JSON (overrides --comment-md)')
 
     # transition_issue
     transition_parser = subparsers.add_parser('transition_issue', help='Transition issue status')
@@ -659,28 +699,26 @@ def main(argv=None):
 
     elif args.command == 'create_issue':
         labels = args.labels.split(',') if args.labels else None
+        description_adf = _parse_json_arg(args.description_adf, "description-adf") if args.description_adf else None
         result = create_issue(
             args.project,
             args.summary,
-            args.description_md,
-            args.issue_type,
+            description_md=args.description_md,
+            issue_type=args.issue_type,
             labels=labels,
-            assignee_id=args.assignee_id
+            assignee_id=args.assignee_id,
+            description_adf=description_adf,
+            parent=args.parent
         )
 
     elif args.command == 'update_issue':
-        try:
-            fields = json.loads(args.fields_json)
-        except json.JSONDecodeError as e:
-            print(f"❌ Invalid JSON in --fields-json: {e.msg}", file=sys.stderr)
-            print(f"Position: line {e.lineno}, column {e.colno}", file=sys.stderr)
-            print("Ensure your JSON is properly formatted with quotes around strings.", file=sys.stderr)
-            sys.exit(1)
+        fields = _parse_json_arg(args.fields_json, "fields-json")
         update_issue(args.issue_key, fields)
         result = {"updated": True}
 
     elif args.command == 'add_comment':
-        result = add_comment(args.issue_key, args.comment_md)
+        comment_adf = _parse_json_arg(args.comment_adf, "comment-adf") if args.comment_adf else None
+        result = add_comment(args.issue_key, comment_md=args.comment_md, comment_adf=comment_adf)
 
     elif args.command == 'transition_issue':
         transition_issue(args.issue_key, args.transition_id)
