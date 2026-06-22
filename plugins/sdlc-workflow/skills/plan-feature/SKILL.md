@@ -526,6 +526,8 @@ the impact map comment). Include:
 - The selected mode (`feature-branch` or `direct-to-main`)
 - The rationale: which atomicity indicators were found (or that none were found)
 - For `feature-branch` mode: which specific tasks are interdependent and why
+- For `feature-branch` mode: note that the `workflow:feature-branch` label will be
+  applied to the feature issue in Step 6a
 
 Use:
 
