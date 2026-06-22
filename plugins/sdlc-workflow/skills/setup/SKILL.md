@@ -32,6 +32,7 @@ Read the project's CLAUDE.md file. If it exists, parse it for:
 - `# Project Configuration` heading
 - `## Repository Registry` table — record each Repository name already listed
 - `## Jira Configuration` list — record which fields already have values
+- `### Jira Field Defaults` subsection under Jira Configuration — record whether it exists and which fields are populated
 - `## Code Intelligence` section — record which Serena instances are already documented
 - `## Bug Configuration` section — record whether it exists and which fields are populated
 - `## Security Configuration` section — record whether it exists and which fields are populated
@@ -210,9 +211,80 @@ the planned changes to the user for review before writing.
 If the section already exists but has placeholder markers, replace only the
 placeholder content, preserving any surrounding text.
 
-## Step 4 – Code Intelligence
+## Step 4 – Jira Field Defaults
 
-If `## Code Intelligence` already exists and covers all Serena instances from the Repository Registry, report "Code Intelligence is up to date" and skip to Step 5.
+If `### Jira Field Defaults` already exists under `## Jira Configuration` with all four
+fields populated (Default priority, fixVersion scope, Prompt for priority, Prompt for
+fixVersion) and none contain `{{placeholder}}` markers, report "Jira Field Defaults is
+up to date" and skip to Step 5.
+
+If `## Jira Configuration` does not exist yet (Step 3 was skipped or not completed),
+skip to Step 5 — this subsection depends on Jira Configuration being present.
+
+Otherwise, proceed to discover available values and configure the defaults.
+
+### Step 4.1 – Discover Available Priorities and fixVersions
+
+Use `getJiraIssueTypeMetaWithFields` to fetch the available field values for the
+Feature issue type:
+
+```
+jira.getJiraIssueTypeMetaWithFields(cloudId, projectIdOrKey, issueTypeId)
+```
+
+Where:
+- `cloudId` is from the Jira Configuration
+- `projectIdOrKey` is the Project key from the Jira Configuration
+- `issueTypeId` is the Feature issue type ID from the Jira Configuration
+
+From the response, extract:
+- **Available priorities** from `priority.allowedValues` — list each priority name
+- **Available fixVersions** from `fixVersions.allowedValues` — list each version name
+
+If MCP fails, follow the same REST API fallback pattern from Step 3.2. If REST API
+is also unavailable, ask the user to provide the values manually.
+
+### Step 4.2 – Ask User for Defaults
+
+Present the discovered values and ask the user to configure each field:
+
+1. **Default priority**: Show the list of available priorities and ask which one to
+   use as the default pre-selection. The user may also choose "none" (no default).
+
+2. **fixVersion scope**: Ask whether fixVersion should apply at the "feature" level
+   only, "task" level only, or "both". Default: "both".
+
+3. **Prompt for priority**: Ask whether define-feature should prompt users for
+   priority. Default: true.
+
+4. **Prompt for fixVersion**: Ask whether define-feature should prompt users for
+   fixVersion. Default: true.
+
+### Step 4.3 – Write Jira Field Defaults
+
+If `### Jira Field Defaults` already exists but has placeholder markers or incomplete
+values, replace only the changed fields, preserving any surrounding text. This follows
+the setup skill's existing idempotency pattern.
+
+If `### Jira Field Defaults` does not exist, add the subsection under
+`## Jira Configuration`, before any other subsections (such as
+`### REST API Credentials`).
+
+Use the template format from `project-config.template.md`:
+
+```markdown
+### Jira Field Defaults
+- Default priority: <selected-priority>
+- fixVersion scope: <selected-scope>
+- Prompt for priority: <true|false>
+- Prompt for fixVersion: <true|false>
+```
+
+Present the planned changes to the user for review before writing.
+
+## Step 5 – Code Intelligence
+
+If `## Code Intelligence` already exists and covers all Serena instances from the Repository Registry, report "Code Intelligence is up to date" and skip to Step 6.
 
 If the section doesn't exist, generate it with:
 1. The standard tool naming convention explanation: tools are called as `mcp__<instance>__<tool>`.
@@ -221,7 +293,7 @@ If the section doesn't exist, generate it with:
 
 If the section exists but new Serena instances were added in Step 2, ask the user if the new instances have any known limitations and add them under `### Limitations`.
 
-## Step 5 – Write Configuration
+## Step 6 – Write Configuration
 
 Compose the updated `# Project Configuration` section with its subsections.
 
@@ -235,14 +307,14 @@ Present the planned changes to the user for review before writing. Clearly show 
 
 After the user approves, write the changes.
 
-## Step 6 – Copy Constraints Template
+## Step 7 – Copy Constraints Template
 
 Check if `docs/constraints.md` already exists in the target project.
 
 - **If it does NOT exist**: Read `constraints.template.md` from this skill's directory and write its content to `docs/constraints.md` in the target project. Report "Created docs/constraints.md from template."
 - **If it DOES exist**: Report "Constraints document already exists — skipping" and preserve the user's customized version.
 
-## Step 7 – Scaffold CONVENTIONS.md
+## Step 8 – Scaffold CONVENTIONS.md
 
 For each repository in the **Repository Registry**, check if a `CONVENTIONS.md` file exists at the repository root (using the **Path** column from the Registry table).
 
@@ -292,20 +364,20 @@ For each section in the `CONVENTIONS.md` template, replace the `{{placeholder}}`
 
 Present the populated `CONVENTIONS.md` to the user for review before writing. Clearly show the content that will be written. Only write the file after the user approves.
 
-## Step 8 – Scaffold Bug Configuration
+## Step 9 – Scaffold Bug Configuration
 
 Check if `## Bug Configuration` already exists in CLAUDE.md with all three required
 fields populated (Bug issue type ID, Bug template, Bug-to-Task link type) and none
 contain `{{placeholder}}` markers.
 
 - **If it exists and is fully populated**: Report "Bug Configuration is up to date"
-  and skip to Step 9.
+  and skip to Step 10.
 - **If it exists but contains `{{placeholder}}` markers**: Treat it as not yet populated
   and proceed to the discovery steps below (skip scaffolding the section heading since
   it already exists).
 - **If it does NOT exist**: Proceed to discover and scaffold all three fields below.
 
-### Step 8.1 – Discover Bug Issue Type ID
+### Step 9.1 – Discover Bug Issue Type ID
 
 Use the same MCP-first-with-REST-fallback pattern from Step 3:
 
@@ -314,14 +386,14 @@ Use the same MCP-first-with-REST-fallback pattern from Step 3:
 3. If MCP fails, follow the REST API fallback flow from Step 3.2.
 4. If auto-discovery fails entirely, ask the user for the Bug issue type ID manually.
 
-### Step 8.2 – Ask for Bug Template Path
+### Step 9.2 – Ask for Bug Template Path
 
 Ask the user for the path where the bug template file should be placed in the target
 project. Offer a default:
 
 > "Where should the bug template file be placed? (default: `docs/bug-template.md`)"
 
-### Step 8.3 – Ask for Bug-to-Task Link Type
+### Step 9.3 – Ask for Bug-to-Task Link Type
 
 Retrieve available issue link types:
 
@@ -333,7 +405,7 @@ Retrieve available issue link types:
 > "Which link type should be used to link Bug issues to their remediation Tasks?
 > (default: Blocks)"
 
-### Step 8.4 – Copy Bug Template
+### Step 9.4 – Copy Bug Template
 
 Check if the bug template file already exists at the user-specified path in the
 target project.
@@ -344,7 +416,7 @@ target project.
 - **If it DOES exist**: Report "Bug template already exists at <path> — skipping"
   and preserve the user's customized version.
 
-### Step 8.5 – Write Bug Configuration
+### Step 9.5 – Write Bug Configuration
 
 Write the `## Bug Configuration` section to CLAUDE.md with the gathered values.
 Follow the template structure from `project-config.template.md`. Present the planned
@@ -353,13 +425,13 @@ changes to the user for review before writing.
 If the section already exists but has placeholder markers, replace only the placeholder
 content, preserving any surrounding text.
 
-## Step 9 – Security Configuration (Optional)
+## Step 10 – Security Configuration (Optional)
 
 Check if `## Security Configuration` already exists in CLAUDE.md with all required
 fields populated (no `{{placeholder}}` markers remaining).
 
 - **If it exists and is fully populated**: Report "Security Configuration is up to date"
-  and skip to Step 10.
+  and skip to Step 11.
 - **If it exists but contains `{{placeholder}}` markers**: Treat it as not yet populated
   and proceed to the fill-in prompt below (skip scaffolding since the section already exists).
 - **If it does NOT exist**: Ask the user whether they want to enable security triage
@@ -368,9 +440,9 @@ fields populated (no `{{placeholder}}` markers remaining).
 > "Would you like to enable security triage for this project? This configures the
 > triage-security skill to perform CVE impact analysis across supported product versions."
 
-If the user declines, skip to Step 10. If the user accepts, proceed below.
+If the user declines, skip to Step 11. If the user accepts, proceed below.
 
-### Step 9.1 – Collect Product Lifecycle fields
+### Step 10.1 – Collect Product Lifecycle fields
 
 Ask the user for the following fields:
 
@@ -428,7 +500,7 @@ Ask the user for the following fields:
 
    If the user skips, leave the placeholder empty in the template.
 
-### Step 9.2 – Collect Version Streams
+### Step 10.2 – Collect Version Streams
 
 Ask the user for one or more version streams. For each stream, collect:
 
@@ -439,7 +511,7 @@ Ask the user for one or more version streams. For each stream, collect:
 4. **Security matrix path** — the path to security-matrix.md relative to the project
    working directory (e.g., `docs/security-matrix-2.2.x.md`)
 
-### Step 9.3 – Collect Source Repositories
+### Step 10.3 – Collect Source Repositories
 
 Ask the user for one or more source repositories whose dependencies are tracked
 for CVE analysis. For each repository, collect:
@@ -447,7 +519,7 @@ for CVE analysis. For each repository, collect:
 1. **Repository name** — short name (e.g., `backend`, `frontend-ui`)
 2. **URL** — the repository URL
 
-### Step 9.4 – Scaffold Security Configuration
+### Step 10.4 – Scaffold Security Configuration
 
 Read `security-config.template.md` from this skill's directory and replace the
 `{{placeholder}}` markers with the values gathered above.
@@ -458,7 +530,7 @@ replace only the placeholder content, preserving any surrounding text.
 
 Present the planned Security Configuration section to the user for review before writing.
 
-### Step 9.5 – Scaffold security-matrix.md
+### Step 10.5 – Scaffold security-matrix.md
 
 For each Version Stream configured above, check if a `security-matrix.md` file exists
 at the specified path within the project working directory.
@@ -467,7 +539,7 @@ at the specified path within the project working directory.
   to write it to the configured path in the project directory. The user must confirm each file.
 - **If it DOES exist**: Report "security-matrix.md already exists at <path> — skipping."
 
-### Step 9.6 – Populate supportability matrix (Optional)
+### Step 10.6 – Populate supportability matrix (Optional)
 
 After scaffolding or confirming security-matrix.md files exist, ask the user:
 
@@ -475,7 +547,7 @@ After scaffolding or confirming security-matrix.md files exist, ask the user:
 > release repo's git history to discover versions, image digests, build dates, and
 > source commits."
 
-If the user declines, skip to Step 10. The matrix can be populated later on demand
+If the user declines, skip to Step 11. The matrix can be populated later on demand
 by `/triage-security` during CVE investigation.
 
 If the user accepts, for each Version Stream:
@@ -490,12 +562,13 @@ If the user accepts, for each Version Stream:
    `security-matrix.md`
 4. Present the populated matrix to the user for review before writing
 
-## Step 10 – Validate
+## Step 11 – Validate
 
 After writing, read the CLAUDE.md back and verify:
 - `# Project Configuration` heading exists
 - `## Repository Registry` contains a table with columns: Repository, Role, Serena Instance, Path
 - `## Jira Configuration` contains at minimum: Project key, Cloud ID, Feature issue type ID
+- (If configured) `### Jira Field Defaults` subsection contains valid field values
 - `## Code Intelligence` documents the `mcp__<instance>__<tool>` naming convention
 - `## Code Intelligence` has a `### Limitations` subheading
 - `docs/constraints.md` exists in the target project

@@ -101,6 +101,17 @@ When Atlassian MCP is unavailable due to organizational policies, skills can fal
 
 **Important**: Credentials are only collected when MCP fails and user explicitly chooses to use REST API fallback. Skills always prompt before using REST API, even if credentials are already stored.
 
+#### Optional subsection: Jira Field Defaults
+
+Configures default behavior for priority and fixVersion fields when creating Jira issues. All fields are optional — projects without this subsection continue to work; skills treat missing config as "prompt for everything, no defaults."
+
+| Field | Description | Type | Default | Example |
+|---|---|---|---|---|
+| Default priority | Priority to pre-select when prompting | String (Jira priority name) | _(none — no pre-selection)_ | `Normal` |
+| fixVersion scope | Whether fixVersion applies at feature level, task level, or both | `feature` \| `task` \| `both` | `both` | `both` |
+| Prompt for priority | Whether to prompt users for priority during define-feature | Boolean | `true` | `true` |
+| Prompt for fixVersion | Whether to prompt users for fixVersion during define-feature | Boolean | `true` | `true` |
+
 #### Structure
 
 ```markdown
@@ -111,6 +122,12 @@ When Atlassian MCP is unavailable due to organizational policies, skills can fal
 - Feature issue type ID: 10001
 - Git Pull Request custom field: customfield_10001
 - GitHub Issue custom field: customfield_10002
+
+### Jira Field Defaults
+- Default priority: Normal
+- fixVersion scope: both
+- Prompt for priority: true
+- Prompt for fixVersion: true
 
 ### REST API Credentials (MCP Fallback)
 - Server URL: https://mycompany.atlassian.net
@@ -126,6 +143,8 @@ When Atlassian MCP is unavailable due to organizational policies, skills can fal
 - "If a Git Pull Request custom field is configured, update it with the PR URL."
 - "If a GitHub Issue custom field is configured, read it from the Jira issue and add a `Closes` reference to the PR description."
 - "If Atlassian MCP fails, always prompt user to use REST API fallback. If user chooses REST API, check for `.env` file in repository root first (recommended), then fallback to CLAUDE.md REST API Credentials subsection (legacy). If credentials present, use them; if absent, collect credentials from user and optionally store them in .env file."
+- "`define-feature` reads `Default priority` and `Prompt for priority` to pre-populate the priority prompt or skip it entirely. It reads `Prompt for fixVersion` to decide whether to prompt for fixVersion."
+- "`plan-feature` reads `fixVersion scope` to determine which created issues receive the fixVersion field: `feature` applies it only to the Feature issue, `task` applies it only to child Tasks, and `both` applies it to both."
 
 ---
 
@@ -347,6 +366,7 @@ the contract:
 - [ ] `## Code Intelligence` documents the `mcp__<instance>__<tool>` naming convention
 - [ ] `## Code Intelligence` lists any per-instance limitations under a `### Limitations` subheading
 - [ ] All Serena instance names in the Registry match those referenced in Code Intelligence limitations
+- [ ] (If present) `### Jira Field Defaults` subsection under `## Jira Configuration` contains valid field values
 - [ ] (If present) `## Hierarchy Configuration` contains Default epic grouping strategy with a valid value (by-repository, by-sub-feature, trivial, none)
 - [ ] (If present) `## Security Configuration` contains `### Product Lifecycle` with all four required fields (VEX Justification is optional)
 - [ ] (If present) `## Security Configuration` contains `### Version Streams` with at least one row

@@ -14,6 +14,13 @@
 - Git Pull Request custom field: {{custom-field-id}}
 - GitHub Issue custom field: {{custom-field-id}}
 
+### Jira Field Defaults
+
+- Default priority: {{default-priority}}
+- fixVersion scope: {{fixversion-scope}}
+- Prompt for priority: {{prompt-for-priority}}
+- Prompt for fixVersion: {{prompt-for-fixversion}}
+
 ## Code Intelligence
 
 Tools are prefixed by Serena instance name: `mcp__<instance>__<tool>`.
