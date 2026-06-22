@@ -643,6 +643,13 @@ If any convention reference fails this checklist, fix it before finalizing the
 task description. Do not proceed to Step 6 with non-compliant convention
 references.
 
+**Completeness check:** If CONVENTIONS.md was discovered in Step 3 and contains
+at least one convention, verify that at least one non-bookend task includes a
+convention reference with an `Applies:` rationale. If no task contains any
+convention reference at all, convention enrichment was skipped — go back and
+apply the convention-aware enrichment process (above) to each task before
+proceeding. Convention enrichment is not optional when conventions exist.
+
 ### Eval coverage propagation
 
 For each task, apply the eval coverage propagation from
