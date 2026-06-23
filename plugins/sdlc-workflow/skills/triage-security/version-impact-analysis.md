@@ -152,8 +152,11 @@ For each version in the aggregated matrix (plus the development stream):
    (e.g., `2.2.2 = retag of 2.2.1`), **skip** the version check and carry forward
    the result from the retagged version. Note in the output: "same as [version]".
 
-5. **Compare** each extracted dependency version against the CVE's affected range
-   to determine whether that product version is affected.
+5. **Compare** each extracted dependency version against the enriched fix threshold
+   from Step 1.5. When Step 1.5 produced a cross-validated fix threshold (from MITRE
+   CVE API or OSV.dev), use that value instead of the Jira description's affected
+   range. If Step 1.5 was skipped or both external APIs were unavailable, fall back
+   to the Jira description's affected range.
 
 ### 2.3.5 – Dependency chain context
 
