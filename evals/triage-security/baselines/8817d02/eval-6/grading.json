@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+      "passed": true,
+      "evidence": "In discovery-listing.md, Query 1 (line 15) uses 'project = TC AND issuetype = 10024' and Query 2 (line 46) uses the same. The file explicitly documents provenance: 'project = TC -- from Jira Configuration: Project key' and 'issuetype = 10024 -- from Security Configuration > Product Lifecycle: Vulnerability issue type ID'. These match the values in claude-md-security-config.md (Project key: TC on line 19, Vulnerability issue type ID: 10024 on line 49)."
+    },
+    {
+      "text": "Two separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged) and one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New) (§1.48)",
+      "passed": true,
+      "evidence": "In discovery-listing.md, Query 1 (line 15): 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged) ORDER BY status ASC, created DESC' — filters untriaged issues. Query 2 (line 46): 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status = New ORDER BY created DESC' — filters triaged-but-still-New issues. Both queries are clearly separate sections with distinct JQL."
+    },
+    {
+      "text": "Results are grouped into two clearly separated lists: Untriaged issues and Triaged but still New issues",
+      "passed": true,
+      "evidence": "In discovery-listing.md, results are organized under '## Query 1: Untriaged Issues' (line 10) with 4 issues in tables, separated by a '---' divider, followed by '## Query 2: Triaged but still New (stale issues)' (line 39) with 1 issue in a table. The two groups are clearly separated with distinct headers and visual dividers."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": true,
+      "evidence": "In discovery-listing.md, Query 1 tables show Issue Key, CVE ID, Summary, and Created columns. Status is shown via section headers: 'Status: New (3 issues)' grouping TC-9001, TC-9002, TC-9004 and 'Status: In Progress (1 issue)' grouping TC-9003. Query 2 table shows the same columns for TC-9010, with status implicit from the query title (status = New). Additionally, status-handling.md lines 70-76 provide a summary table with explicit Status column for every issue (TC-9001: New, TC-9002: New, TC-9003: In Progress, TC-9004: New, TC-9010: New (stale)). All five fields are present for each issue across the outputs."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "In status-handling.md: TC-9001 (line 14): 'Handling Decision: Proceed with full triage (default path)', Status: New. TC-9002 (line 22): 'Handling Decision: Proceed with full triage (default path)', Status: New. TC-9004 (line 42): 'Handling Decision: Proceed with full triage (default path)', Status: New. TC-9003 (lines 29-35): Status: In Progress, 'Handling Decision: Warn the user before proceeding', Warning message: 'This issue is already in In Progress. It may be actively worked on.' with options to proceed or skip. The summary table (line 73) confirms: TC-9003 has 'Warn user, ask to proceed or skip' and 'Engineer confirmation required'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

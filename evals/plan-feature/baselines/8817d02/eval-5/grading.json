@@ -1,0 +1,70 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan determines feature-branch workflow mode (not direct-to-main) based on the atomicity constraints in the feature description",
+      "passed": true,
+      "evidence": "impact-map.md contains a 'Workflow Mode Decision' section stating 'Selected mode: feature-branch' with detailed rationale citing three atomicity indicators: (1) coordinated schema migrations, (2) breaking API changes, and (3) explicit atomicity requirement from the feature's non-functional requirements."
+    },
+    {
+      "text": "A bookend task with Bookend Type create-branch is generated as the first task in the plan",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md is the first task and contains '## Bookend Type\n\ncreate-branch' (lines 15-17). Its title is 'Task 1 — Create feature branch TC-9005 from main'."
+    },
+    {
+      "text": "A bookend task with Bookend Type merge-branch is generated as the last task in the plan",
+      "passed": true,
+      "evidence": "task-8-merge-feature-branch.md is the last task (task 8 of 8) and contains '## Bookend Type\n\nmerge-branch' (lines 17-19). Its title is 'Task 8 — Merge feature branch TC-9005 to main'."
+    },
+    {
+      "text": "All intermediate tasks (between the create-branch and merge-branch bookend tasks) have Target Branch set to TC-9005",
+      "passed": true,
+      "evidence": "All six intermediate tasks (2-7) have '## Target Branch\n\nTC-9005': task-2 (line 13), task-3 (line 13), task-4 (line 13), task-5 (line 13), task-6 (line 13), task-7 (line 13)."
+    },
+    {
+      "text": "The create-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md contains '## Target Branch\n\nmain' (lines 11-13)."
+    },
+    {
+      "text": "The merge-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-8-merge-feature-branch.md contains '## Target Branch\n\nmain' (lines 11-13)."
+    },
+    {
+      "text": "All intermediate tasks list the create-branch bookend task as a dependency",
+      "passed": true,
+      "evidence": "All six intermediate tasks list Task 1 as a dependency: task-2 line 72 ('Depends on: Task 1'), task-3 line 59 ('Depends on: Task 1'), task-4 line 61 ('Depends on: Task 1'), task-5 line 57 ('Depends on: Task 1'), task-6 line 61 ('Depends on: Task 1'), task-7 line 57 ('Depends on: Task 1')."
+    },
+    {
+      "text": "The merge-branch bookend task lists all intermediate tasks as dependencies",
+      "passed": true,
+      "evidence": "task-8-merge-feature-branch.md lists all six intermediate tasks as dependencies (lines 37-42): Task 2, Task 3, Task 4, Task 5, Task 6, and Task 7."
+    },
+    {
+      "text": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "passed": true,
+      "evidence": "Bookend tasks (1, 8) are exempt from Files to Modify/Create and Implementation Notes per the grading note; they have Repository, Target Branch, Bookend Type, Description, Acceptance Criteria, Test Requirements. All intermediate tasks (2-7) have Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, and Test Requirements. Task 2 has both Files to Create and Files to Modify. Tasks 3-7 have Files to Modify. Tasks 4, 5, 6, 7 omit Files to Create entirely (the assertion requires 'at least one of')."
+    },
+    {
+      "text": "The plan includes a workflow:feature-branch label decision to be applied to the feature issue",
+      "passed": true,
+      "evidence": "impact-map.md contains 'Label: workflow:feature-branch' (line 31), within the Workflow Mode Decision section that explains the rationale for choosing feature-branch mode."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": false,
+      "evidence": "Each task file contains a sha256-md: hash at the end (e.g., task-1: 'sha256-md:9c5e8bfb9a81a70709c9f6d9adffe1c67ecfa0aae08c61007d5a0878c65d8ae6'). All hashes are 64 lowercase hex characters prefixed with sha256-md:. However, the required marker format is '[sdlc-workflow] Description digest: sha256-md:<hash>' and none of the task files use this full marker format — they contain only the bare 'sha256-md:<hash>' without the '[sdlc-workflow] Description digest:' prefix. The impact-map.md also has a bare hash. No evidence of the prescribed comment format being used."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "None of the 8 task files or the impact-map.md contain any convention sections, convention applicability rationale, or 'Applies: task modifies' text. There is no evidence of convention-aware enrichment having been performed. A grep for 'convention', 'Convention', and 'applicab' across all output files found only incidental references to project conventions (e.g., 'per the project convention') but no structured convention applicability sections with the prescribed rationale format."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 2,
+    "total": 12,
+    "pass_rate": 0.8333333333333334
+  }
+}

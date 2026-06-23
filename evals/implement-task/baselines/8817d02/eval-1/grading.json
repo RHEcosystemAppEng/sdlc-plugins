@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "In plan.md Step 4 ('Understand the Code'), the plan explicitly lists inspecting: (1) 'advisory/endpoints/get.rs' under 'Existing endpoint siblings', (2) 'advisory/service/advisory.rs' under 'Existing service siblings' with methods 'fetch, list, search', (3) 'advisory/model/summary.rs' under 'Existing model siblings'. Additionally, conventions.md references 'common/src/error.rs' under 'Error Handling'. All 4 files are mentioned."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": false,
+      "evidence": "The plan in Step 6 lists the 3 files to modify and 3 files to create correctly. However, under 'Documentation Impact', the plan states: 'docs/api.md should be updated to document the new GET /api/v2/sbom/{id}/advisory-summary endpoint'. While Step 9 acknowledges this would be 'flagged as out-of-scope for user approval', the plan nonetheless includes updating docs/api.md as part of the implementation, which is outside the declared Files to Modify and Files to Create sections."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": false,
+      "evidence": "The plan in Step 6 lists creating: (1) 'modules/fundamental/src/advisory/model/severity_summary.rs' (file-4-description.md), (2) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs' (file-5-description.md), (3) 'tests/api/advisory_summary.rs'. However, only files 4 and 5 have corresponding file description outputs. The plan references 'outputs/file-6-description.md' for the test file, but file-6-description.md does not exist in the outputs directory. Only file-1 through file-5 descriptions were produced. The test file creation is described at a high level in Step 7 but the detailed file description is missing."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "Plan.md Step 6 'Files to Modify' lists: (1) 'modules/fundamental/src/advisory/service/advisory.rs' - detailed in file-1-description.md, (2) 'modules/fundamental/src/advisory/endpoints/mod.rs' - detailed in file-2-description.md, (3) 'modules/fundamental/src/advisory/model/mod.rs' - detailed in file-3-description.md. All three files have corresponding detailed file description outputs."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Plan.md Step 10 shows the commit message: 'feat(advisory): add severity aggregation service and endpoint' which follows Conventional Commits format (type=feat, scope=advisory, description). The footer includes 'Implements TC-9201' which references the Jira ticket."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "Plan.md Step 10 explicitly states: 'With trailer: `--trailer=\"Assisted-by: Claude Code\"`'"
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "Plan.md Step 5 shows: 'git checkout main' and 'git checkout -b TC-9201'. The branch name is TC-9201. Step 10 shows 'gh pr create --base main' referencing the target branch. The Task Summary section also states 'Target Branch: main' and 'Branch Name: TC-9201'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md explicitly documents both patterns: (1) Under 'Error Handling': 'Central AppError enum that implements IntoResponse for Axum. All service and handler errors are wrapped using .context() for descriptive error chains.' Under 'Endpoint Patterns': 'All handlers return Result<Json<T>, AppError>'. (2) Under 'Module Structure': 'Each domain module follows a strict model/ + service/ + endpoints/ directory structure'."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "Plan.md Task Summary section states 'Target Branch: main'. Step 1 states 'Parsed the structured description and extracted: ... Target Branch: main'. Step 5 shows 'git checkout main' as the starting point. Step 10 shows '--base main' in the PR creation command."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "Plan.md Step 1.5 is titled 'Description Digest Verification' and states: 'No description digest comment found (this is an eval with no Jira API access). Following backward compatibility protocol:' followed by the quoted warning: 'No description digest found -- skipping integrity check. This task may have been created before digest tracking was introduced.' Then: 'Proceeding normally without blocking.'"
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 2,
+    "total": 10,
+    "pass_rate": 0.8
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation identifies two independent root causes: (1) convention reference formatter using wrong case transform, (2) task creation using Feature issue type ID instead of Task (Steps 2-4)",
+      "passed": true,
+      "evidence": "investigation.md clearly identifies both root causes. Root Cause 1 (lines 88-95, 106-111): 'The convention reference formatter in shared/convention-utils.md applies a kebab-case transform to CONVENTIONS.md section headings when generating §-prefixed references' -- produces '§migration-patterns' instead of '§Migration Patterns'. Root Cause 2 (lines 97-102, 113-118): 'The task creation logic in plan-feature/SKILL.md Step 6a creates issues using the Feature issue type ID (10142) instead of the Task issue type ID.' Both are identified through code-path tracing in Step 2 (lines 55-84) and analyzed in Steps 3-4."
+    },
+    {
+      "text": "Decomposition Guard is triggered because the two root causes are in different modules/code paths (Step 6)",
+      "passed": true,
+      "evidence": "investigation.md lines 120-129 contain an 'Independence Assessment' section that explicitly states: 'The two root causes are independent' with four supporting reasons: (1) 'Different modules: Root Cause 1 is in shared/convention-utils.md (shared utility); Root Cause 2 is in plan-feature/SKILL.md Step 6a (skill-specific logic).' (2) 'Different code paths: Root Cause 1 affects the convention reference formatting pipeline; Root Cause 2 affects the Jira issue creation pipeline.' Line 129: 'Because these are independent root causes in different modules affecting different code paths, the Decomposition Guard (Step 6) is triggered.' decomposition-guard.md (line 8) also states: 'These root causes are in different modules and affect independent code paths.'"
+    },
+    {
+      "text": "Decomposition Guard presents both issues with their affected files/modules (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md lines 4-7 present both issues with their affected files/modules: Issue 1: 'Convention Reference Case Transform (shared/convention-utils.md) -- The convention reference formatter applies kebab-case transform to section headings instead of preserving the original title case'. Issue 2: 'Task Creation Issue Type Mismatch (plan-feature/SKILL.md Step 6a) -- The task creation logic reads the Feature issue type ID (10142) from Jira Configuration instead of the Task issue type ID'."
+    },
+    {
+      "text": "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md lines 10-14 present two options: '1. Proceed -- create a single Task covering all fixes' and '2. Split -- I recommend creating separate Bugs for each independent issue, then triaging each one individually'. Followed by 'Choose (1/2):' on line 14."
+    },
+    {
+      "text": "The skill does NOT silently create a single Task bundling both fixes — it waits for user input (Step 6 stop rule)",
+      "passed": true,
+      "evidence": "The decomposition-guard.md file ends with 'Choose (1/2):' on line 14, indicating the skill stopped and is waiting for user input. No Task was created in Jira -- there is no evidence in either output file of a Jira issue creation API call or a Task key being returned. The investigation.md file concludes with 'A single Task should not be created without user confirmation' (line 129), confirming the stop rule was respected."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

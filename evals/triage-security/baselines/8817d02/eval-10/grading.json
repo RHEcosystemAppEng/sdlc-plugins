@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 7 Case A creates standard remediation tasks for the current stream (rhtpa-2.2) with standard labels ['ai-generated-jira', 'Security', 'CVE-2026-55123'] and 'Depend' link to TC-8020",
+      "passed": true,
+      "evidence": "In remediation.md, Case A creates two tasks for stream rhtpa-2.2. Task 1 (upstream backport) uses labels: [\"ai-generated-jira\", \"Security\", \"CVE-2026-55123\"] (line 23) and links to TC-8020 with type \"Depend\" (lines 73-80: jira.create_link(inwardIssue: \"TC-8020\", outwardIssue: <upstream-task-key>, type: \"Depend\")). Task 2 (downstream propagation) uses the same labels (line 89) and also links to TC-8020 with type \"Depend\" (lines 148-151). cross-stream.md Link Summary table confirms: TC-8020 -> upstream-task (rhtpa-2.2) = Depend, TC-8020 -> downstream-task (rhtpa-2.2) = Depend."
+    },
+    {
+      "text": "Step 7 Case B detects that stream rhtpa-2.1 is also affected but has no CVE Jira — creates proactive preemptive remediation tasks (§1.60)",
+      "passed": true,
+      "evidence": "In remediation.md lines 156-158: 'Cross-stream version impact analysis shows that stream rhtpa-2.1 also ships tokio 1.40.0, which is within the affected range (< 1.42.0). A JQL search for sibling CVE Jiras with label CVE-2026-55123 returns no results for stream rhtpa-2.1 -- no CVE Jira exists for that stream.' It then creates two preemptive remediation tasks (Preemptive Task 1 on line 162 and Preemptive Task 2 on line 238). cross-stream.md line 11 confirms: rhtpa-2.1 CVE Jira exists? = NO. The version-impact.md line 30 also states: 'Stream rhtpa-2.1 is outside the scope of TC-8020 but is also affected. This triggers Case B (cross-stream impact / proactive remediation) in Step 7.'"
+    },
+    {
+      "text": "Preemptive tasks for stream rhtpa-2.1 include the 'security-preemptive' label alongside standard labels: ['ai-generated-jira', 'Security', 'CVE-2026-55123', 'security-preemptive']",
+      "passed": true,
+      "evidence": "In remediation.md, Preemptive Task 1 (line 172): labels: [\"ai-generated-jira\", \"Security\", \"CVE-2026-55123\", \"security-preemptive\"]. Preemptive Task 2 (line 249): labels: [\"ai-generated-jira\", \"Security\", \"CVE-2026-55123\", \"security-preemptive\"]. cross-stream.md also confirms in the table for both preemptive tasks: Labels = 'ai-generated-jira, Security, CVE-2026-55123, security-preemptive'."
+    },
+    {
+      "text": "Preemptive tasks are linked to the originating CVE Jira TC-8020 with 'Related' link type (not 'Depend') because the originating CVE belongs to a different stream",
+      "passed": true,
+      "evidence": "In remediation.md, Preemptive Task 1 link (lines 228-233): jira.create_link(inwardIssue: \"TC-8020\", outwardIssue: <preemptive-upstream-task-key>, type: \"Related\"). Preemptive Task 2 link (lines 305-309): jira.create_link(inwardIssue: \"TC-8020\", outwardIssue: <preemptive-downstream-task-key>, type: \"Related\"). cross-stream.md Link Summary confirms: TC-8020 -> preemptive-upstream-task (rhtpa-2.1) = Related, TC-8020 -> preemptive-downstream-task (rhtpa-2.1) = Related. cross-stream.md line 106 explicitly states: 'Preemptive tasks use \"Related\" links to TC-8020 (not \"Depend\"), because TC-8020 belongs to a different stream.'"
+    },
+    {
+      "text": "Preemptive task descriptions include a preemptive remediation prefix noting TC-8020 (stream rhtpa-2.2) as the originating CVE",
+      "passed": true,
+      "evidence": "In remediation.md, Preemptive Task 1 description (lines 189-192): '> **Preemptive remediation**: This task was created proactively from cross-stream > impact analysis of TC-8020 (stream rhtpa-2.2). > No stream-specific CVE Jira exists yet for this stream. When PSIRT creates one, > this task will be linked and the `security-preemptive` label removed.' Preemptive Task 2 description (lines 265-268) contains the identical prefix. Both explicitly reference TC-8020 and stream rhtpa-2.2 as the originating CVE."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

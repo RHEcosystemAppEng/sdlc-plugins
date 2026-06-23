@@ -1,0 +1,45 @@
+# my-project
+
+A web application for managing inventory.
+
+## Documentation
+
+- [docs/architecture.md](docs/architecture.md) — System architecture overview
+- [docs/api.md](docs/api.md) — REST API reference
+
+## Getting Started
+
+1. Clone the repository
+2. Run `npm install`
+3. Run `npm start`
+
+# Project Configuration
+
+## Repository Registry
+
+| Repository | Role | Serena Instance | Path |
+|---|---|---|---|
+
+No repositories configured — no Serena instances are available.
+
+## Jira Configuration
+
+- Project key: MYPROJ
+- Cloud ID: abc123
+- Feature issue type ID: 10001
+
+## Code Intelligence
+
+No Serena MCP servers are configured. Code intelligence is not available.
+
+When Serena instances are added, tools follow the `mcp__<instance>__<tool>` naming convention.
+
+### Limitations
+
+No limitations known — no Serena instances configured.
+
+## Bug Configuration
+
+- Bug issue type ID: 10001
+- Bug template: docs/bug-template.md
+- Bug-to-Task link type: Blocks

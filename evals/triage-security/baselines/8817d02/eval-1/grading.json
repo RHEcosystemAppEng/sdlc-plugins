@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 11-17: CVE ID = CVE-2026-31812, Vulnerable library = quinn-proto, Affected version range = 'versions before 0.11.14 (< 0.11.14)', Fixed version = 0.11.14. All four fields are correctly extracted."
+    },
+    {
+      "text": "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 35-37: 'The vulnerable library is quinn-proto, which is a Rust crate. This maps to the Cargo ecosystem as configured in the stream's security-matrix.md Ecosystem Mappings table.' Ecosystem explicitly identified as Cargo with rationale based on library identity."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the security-matrix.md supportability matrix — no versions are skipped (Important Rule 4)",
+      "passed": true,
+      "evidence": "version-impact.md lines 44-52: The version impact table lists all 7 versions from the supportability matrix: 2.1.0, 2.1.1 (from stream 2.1.x) and 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4 (from stream 2.2.x). These match exactly the versions listed in the supportability matrix sections (lines 8-21). No versions are skipped."
+    },
+    {
+      "text": "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+      "passed": true,
+      "evidence": "version-impact.md lines 28-36: Dependency extraction uses specific pinned tags from the matrix: v0.3.8, v0.3.12, v0.4.5, v0.4.8, v0.4.9, v0.4.11, v0.4.12. Each row shows 'git show <tag>:Cargo.lock' with the specific tag, not branch HEAD. These tags correspond to the 'backend' column values in the supportability matrix tables."
+    },
+    {
+      "text": "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+      "passed": true,
+      "evidence": "version-impact.md line 34: Tag v0.4.9 is identified as '_(retag of v0.4.8)_' and marked 'Skipped -- same as v0.4.8'. Line 50: Version 2.2.2 shows quinn-proto as '--' with 'YES' affected status and note 'retag of 2.2.1 (same as 2.2.1: 0.11.12)'. The retag is identified and its affected status is correctly carried forward from 2.2.1."
+    },
+    {
+      "text": "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md lines 53-56: 'Current:  [RHTPA 2.0.0]' / 'Proposed: [RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]'. The diff is clearly shown. Lines 59-63 explain each change: removes RHTPA 2.0.0 (invalid), adds 2.2.0/2.2.1/2.2.2 (affected), excludes 2.2.3/2.2.4 (fixed). This is a lock-file-verified correction replacing the PSIRT-assigned version."
+    },
+    {
+      "text": "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+      "passed": true,
+      "evidence": "affects-versions.md lines 53-56: The proposed correction uses version names 'RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2' rather than hardcoded Jira IDs. Lines 17-23: The Jira ID column shows '(dynamic)' for all versions. Lines 69-74: The mutation template uses '<RHTPA-2.2.0-jira-id>' placeholders that 'would be resolved dynamically from Step 3.1 discovery.' Version names from the matrix are used throughout."
+    },
+    {
+      "text": "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+      "passed": true,
+      "evidence": "remediation.md: Task 1 (lines 36-37): Repository = 'backend', Target Branch = 'release/0.4.z'. Lines 69-73: Acceptance Criteria with checklist items. Task 2 (lines 100-106): Repository = 'rhtpa-release.0.4.z', Target Branch = 'main'. Lines 127-128: Acceptance Criteria checklist. Lines 155-161: Dependency linkage with Blocks link between upstream and downstream tasks. All four required elements (Repository, Target Branch, acceptance criteria, dependency linkage) are present."
+    },
+    {
+      "text": "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+      "passed": true,
+      "evidence": "remediation.md: Task 1 (line 19) is 'Upstream Backport (2.2.x)' targeting backend repo on release/0.4.z. Task 2 (line 84) is 'Downstream Propagation (2.2.x)' targeting rhtpa-release.0.4.z. Lines 155-161: Blocks link created between upstream and downstream: 'jira.create_link(inwardIssue: <upstream-task-key>, outwardIssue: <downstream-task-key>, type: \"Blocks\")'. Two-task pattern with Blocks dependency is correctly implemented for Cargo ecosystem."
+    },
+    {
+      "text": "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
+      "passed": true,
+      "evidence": "All mutations are consistently prefixed with 'PROPOSED'. affects-versions.md line 65: 'PROPOSED Jira Mutation (requires engineer confirmation)'. affects-versions.md line 79: 'PROPOSED Comment'. remediation.md line 22: 'PROPOSED Jira creation'. remediation.md line 139: 'PROPOSED Linkage'. remediation.md line 361: 'PROPOSED: Add ai-cve-triaged label'. remediation.md line 369: 'PROPOSED: Transition TC-8001 to In Progress'. remediation.md line 339: 'PROPOSED Cross-Stream Impact Comment'. No mutations are presented as executed actions."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

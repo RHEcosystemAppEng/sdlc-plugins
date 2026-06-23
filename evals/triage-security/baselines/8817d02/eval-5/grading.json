@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 34-36: 'Vulnerable library: **openssl-libs** -- this is an RPM system package (not a Cargo/npm/Go source dependency)' / 'Ecosystem: **RPM**' / 'Lock file: `rpms.lock.yaml` (configured in the 2.2.x stream's Ecosystem Mappings table)'. The ecosystem is correctly identified as RPM based on the library name openssl-libs, explicitly noting it is not Cargo."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md lines 42-51 contain the version impact table with all five 2.2.x versions: 2.2.0 (3.0.7-25.el9_3, YES), 2.2.1 (3.0.7-27.el9_4, YES), 2.2.2 (retag of 2.2.1, YES), 2.2.3 (3.0.7-28.el9_4, NO), 2.2.4 (3.0.7-28.el9_4, NO). Line 17 states 'Ecosystem: RPM. Lock file: `rpms.lock.yaml`.' and line 20 shows 'Simulated `git show <tag>:rpms.lock.yaml | grep openssl-libs` results' confirming rpms.lock.yaml is used for version extraction."
+    },
+    {
+      "text": "Dependency chain context classifies the package origin as explicit install because openssl-libs is present in rpms.lock.yaml, not inherited from the base image (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md lines 33-38 under '## 2.3.5 -- Dependency Chain Context': 'rpms.lock.yaml confirms: openssl-libs present in lock file at each tag' and 'Origin: **explicit install** (package is present in rpms.lock.yaml, not just inherited from base image)'. The classification is explicit install with the correct reasoning."
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 7 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md line 7: 'Since this is an RPM ecosystem (system package), a **single remediation task** is created (no upstream backport needed).' Line 19: '### Jira Issue Creation (RPM single-task pattern)'. Only one remediation task is proposed for the scoped 2.2.x stream targeting rhtpa-release.0.4.z. The preemptive 2.1.x task (line 115+) is a separate Case B cross-stream concern, not part of a two-task upstream/downstream split."
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 7 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md lines 34-83 contain the task description with sections: '## Repository' (rhtpa-release.0.4.z), '## Target Branch' (main), '## Description' (CVE details and affected versions), '## Implementation Notes' (update steps), '## Acceptance Criteria' (2 checkboxes). No '## Files to Modify' section is present, consistent with remediation-templates.md line 186: 'Files to Modify and Files to Create are intentionally omitted.' The format matches task-description-template.md structure."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

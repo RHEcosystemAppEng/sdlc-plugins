@@ -1,0 +1,6 @@
+- **Project key**: TC
+- **Summary**: Add SBOM dependency graph visualization
+- **Issue type ID**: 10142
+- **Labels**: ["ai-generated-jira"]
+- **Assignee**: self (current user)
+- **Description**: (composed description from preview — all 9 sections included: Feature Overview, Background and Strategic Fit, Goals, Requirements, Non-Functional Requirements, Use Cases (User Experience & Workflow), Customer Considerations, Customer Information/Supportability, Documentation Considerations)
