@@ -1,0 +1,70 @@
+{
+  "assertion_results": [
+    {
+      "text": "Tasks target both 'trustify-backend' and 'trustify-ui' repositories with at least one task per repo",
+      "passed": true,
+      "evidence": "Tasks 2, 3, 4 have '## Repository\\ntrustify-backend'. Tasks 5, 6, 7 have '## Repository\\ntrustify-ui'. Both repos have at least one task. Bookend tasks 1 and 8 also list 'trustify-backend' as their Repository."
+    },
+    {
+      "text": "Backend tasks have lower task numbers than the frontend tasks that depend on them",
+      "passed": true,
+      "evidence": "Backend tasks are 2, 3, 4. Frontend tasks are 5, 6, 7. Task 5 (frontend) depends on Task 3 (backend). Task 6 depends on Task 5 which depends on Task 3. Task 7 depends on Task 6. All backend task numbers (2, 3, 4) are lower than all frontend task numbers (5, 6, 7)."
+    },
+    {
+      "text": "UI-facing frontend tasks (pages, components) reference Figma design context mentioning specific PatternFly components and visual specifications — API-layer frontend tasks (API types, client functions, hooks) are exempt from this requirement",
+      "passed": true,
+      "evidence": "Task 6 (SbomComparePage, UI-facing) references Figma extensively: 'Figma reference: The comparison view uses a full-page layout with a header toolbar and vertically stacked collapsible diff sections (see figma-context.md)' and specifies PatternFly components: 'PatternFly Select (single, typeahead)', 'PatternFly primary Button', 'PatternFly Dropdown', 'PatternFly ExpandableSection with count Badge', 'PatternFly composable Table', 'PatternFly EmptyState with CodeBranchIcon', 'PatternFly Skeleton'. Badge colors are specified per section. Task 5 (API types/client/hook) is API-layer and exempt. Task 7 (tests) references PatternFly component accessibility attributes but is test-focused."
+    },
+    {
+      "text": "Cross-repo dependency ordering is enforced: either at least one frontend task explicitly depends on a backend task in its Dependencies section, or all tasks target a shared feature branch where backend tasks have lower task numbers than frontend tasks (implicit ordering via feature-branch workflow)",
+      "passed": true,
+      "evidence": "Task 5 (trustify-ui) explicitly depends on Task 3 (trustify-backend): 'Depends on: Task 3 -- SBOM comparison REST endpoint (defines the API contract)'. Additionally, all intermediate tasks target feature branch TC-9003, and backend tasks (2, 3, 4) have lower numbers than frontend tasks (5, 6, 7)."
+    },
+    {
+      "text": "Frontend tasks reference paths from repo-frontend.md; backend tasks reference paths from repo-backend.md",
+      "passed": true,
+      "evidence": "Backend tasks (2, 3, 4) reference paths under modules/fundamental/src/sbom/, common/src/error.rs, tests/api/ — all from repo-backend.md. Frontend tasks (5, 6, 7) reference paths under src/api/, src/hooks/, src/pages/, src/components/, src/routes.tsx, tests/mocks/, tests/e2e/ — all from repo-frontend.md."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "Task 1: '## Repository\\ntrustify-backend' (single). Task 2: '## Repository\\ntrustify-backend'. Task 3: '## Repository\\ntrustify-backend'. Task 4: '## Repository\\ntrustify-backend'. Task 5: '## Repository\\ntrustify-ui'. Task 6: '## Repository\\ntrustify-ui'. Task 7: '## Repository\\ntrustify-ui'. Task 8: '## Repository\\ntrustify-backend'. Each has exactly one repo name."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": false,
+      "evidence": "Task 1 (create-branch bookend) has Target Branch, Description, and Acceptance Criteria but lacks a Test Requirements section. Task 8 (merge-branch bookend) has Target Branch, Description, Acceptance Criteria and Dependencies but lacks a Test Requirements section. While the template says 'Omit sections that don't apply', the assertion explicitly states 'every generated task description' must contain these four sections. Tasks 2-7 all contain Target Branch, Description, Acceptance Criteria, and Test Requirements."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the corresponding mock repository structure manifests (repo-backend.md or repo-frontend.md), not invented paths",
+      "passed": true,
+      "evidence": "All Files to Modify paths exist in the manifests: Task 2 modifies 'modules/fundamental/src/sbom/model/mod.rs' and 'modules/fundamental/src/sbom/service/mod.rs' (both in repo-backend.md). Task 3 modifies 'modules/fundamental/src/sbom/endpoints/mod.rs' (in repo-backend.md). Task 5 modifies 'src/api/models.ts' and 'src/api/rest.ts' (both in repo-frontend.md). Task 6 modifies 'src/routes.tsx' (in repo-frontend.md). Task 7 modifies 'tests/mocks/handlers.ts' (in repo-frontend.md). Files to Create are new files in existing manifest directories: e.g., 'modules/fundamental/src/sbom/model/compare.rs' is in the same directory as existing model files (summary.rs, details.rs) per repo-backend.md. 'src/pages/SbomComparePage/SbomComparePage.tsx' follows the existing page directory pattern from repo-frontend.md. 'src/hooks/useSbomComparison.ts' follows the hooks directory pattern. No paths reference invented or non-existent directory structures."
+    },
+    {
+      "text": "Implementation Notes in every non-bookend task reference specific file paths and code patterns from the repository, not abstract or generic guidance — bookend tasks (create-branch, merge-branch) are exempt as they omit Implementation Notes by design",
+      "passed": true,
+      "evidence": "Task 2 references: 'modules/fundamental/src/sbom/', 'modules/fundamental/src/sbom/../package/model/summary.rs', 'modules/fundamental/src/advisory/model/summary.rs', 'modules/fundamental/src/sbom/service/sbom.rs', 'modules/fundamental/src/advisory/service/advisory.rs', 'common/src/error.rs'. Task 3 references: 'modules/fundamental/src/sbom/endpoints/', 'get.rs and list.rs', 'endpoints/mod.rs'. Task 4 references: 'tests/api/sbom.rs', 'tests/api/advisory.rs'. Task 5 references: 'src/api/models.ts', 'src/api/rest.ts', 'src/hooks/', 'src/api/client.ts', 'src/hooks/useSbomById.ts'. Task 6 references: 'src/hooks/useSboms.ts', 'src/components/SeverityBadge.tsx', 'src/components/EmptyStateCard.tsx', 'src/components/FilterToolbar.tsx'. Task 7 references: 'src/pages/SbomListPage/SbomListPage.test.tsx', 'tests/mocks/handlers.ts', 'tests/mocks/fixtures/sbom-comparison.json', 'tests/e2e/sbom-list.spec.ts'. Bookend tasks 1 and 8 omit Implementation Notes as expected. All non-bookend tasks contain specific file paths and code patterns."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section — either all set to 'main' (direct-to-main workflow) or bookend tasks set to 'main' with intermediate tasks set to the feature issue ID (feature-branch workflow)",
+      "passed": true,
+      "evidence": "Task 1 (create-branch bookend): '## Target Branch\\nmain'. Task 2: '## Target Branch\\nTC-9003'. Task 3: '## Target Branch\\nTC-9003'. Task 4: '## Target Branch\\nTC-9003'. Task 5: '## Target Branch\\nTC-9003'. Task 6: '## Target Branch\\nTC-9003'. Task 7: '## Target Branch\\nTC-9003'. Task 8 (merge-branch bookend): '## Target Branch\\nmain'. This matches the feature-branch workflow pattern: bookend tasks target 'main', intermediate tasks target 'TC-9003'."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": true,
+      "evidence": "All 8 tasks contain digest comments: Task 1: 'sha256-md:d2a0154c29625b0e1e57ec2265ba48492d6fb8cf0472d81b8277a56240dc233f' (64 hex chars). Task 2: 'sha256-md:6b8caf66157f4de25297619997f7a166b07302ffd5b517e90abf6aecec7fe539' (64 hex chars). Task 3: 'sha256-md:47f88d6e6cccc82efd641a0fdd0f5037121d0cf842e2bec23f8b480266aa7092' (64 hex chars). Task 4: 'sha256-md:87727b3f3b6ece52564223137468bf92a8c8b3af5959a10ac57f7d8c0f4419d0' (64 hex chars). Task 5: 'sha256-md:3a6d8e5c72bb3e89153f367bab6146deb06311287164b10b8644aa155324c824' (64 hex chars). Task 6: 'sha256-md:3f2bf825508e2a37932a7f7b7ff3068bebb6c6cb4f23eef3d582db48ec220bc6' (64 hex chars). Task 7: 'sha256-md:57efc2efca2a7440fb6c57d964bdc5f27f79c8ae8ec99741854089868486e696' (64 hex chars). Task 8: 'sha256-md:364b2be98dd75706fe0fc86a160eee679028bccc15a51002011af51846b191c8' (64 hex chars). All use the format '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>'."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "None of the task descriptions contain any convention-aware enrichment. There are no references to CONVENTIONS.md sections with the prescribed 'Applies: task modifies <file> matching the convention's <scope>' rationale format in any of the 8 tasks' Implementation Notes. The repo-backend.md mentions a CONVENTIONS.md file exists, and repo-frontend.md mentions a CONVENTIONS.md file exists, but no convention references appear in any task description. Convention enrichment appears to have been entirely omitted."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 2,
+    "total": 12,
+    "pass_rate": 0.8333333333333334
+  }
+}

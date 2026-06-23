@@ -1,0 +1,70 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan determines feature-branch workflow mode (not direct-to-main) based on the atomicity constraints in the feature description",
+      "passed": true,
+      "evidence": "impact-map.md line 8: 'Selected mode: feature-branch'. The rationale references atomicity constraints: 'Coordinated schema migrations', 'Tightly coupled components', 'Cross-cutting refactors', and quotes the feature description: 'All changes must land together' and 'Migration must be atomic.'"
+    },
+    {
+      "text": "A bookend task with Bookend Type create-branch is generated as the first task in the plan",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md contains '## Bookend Type\\ncreate-branch' (lines 10-11). It is Task 1 in the task sequence table in impact-map.md (line 38)."
+    },
+    {
+      "text": "A bookend task with Bookend Type merge-branch is generated as the last task in the plan",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md contains '## Bookend Type\\nmerge-branch' (lines 10-11). It is Task 7, the last task in the task sequence table in impact-map.md (line 44)."
+    },
+    {
+      "text": "All intermediate tasks (between the create-branch and merge-branch bookend tasks) have Target Branch set to TC-9005",
+      "passed": true,
+      "evidence": "All intermediate tasks (2-6) have '## Target Branch\\nTC-9005': task-2 line 8, task-3 line 8, task-4 line 8, task-5 line 8, task-6 line 8."
+    },
+    {
+      "text": "The create-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md lines 7-8: '## Target Branch\\nmain'"
+    },
+    {
+      "text": "The merge-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md lines 7-8: '## Target Branch\\nmain'"
+    },
+    {
+      "text": "All intermediate tasks list the create-branch bookend task as a dependency",
+      "passed": true,
+      "evidence": "All intermediate tasks (2-6) list Task 1 as a dependency: task-2 line 42: 'Depends on: Task 1', task-3 line 43: 'Depends on: Task 1', task-4 line 51: 'Depends on: Task 1', task-5 line 45: 'Depends on: Task 1', task-6 line 43: 'Depends on: Task 1'."
+    },
+    {
+      "text": "The merge-branch bookend task lists all intermediate tasks as dependencies",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md lines 26-30 lists all five intermediate tasks: 'Depends on: Task 2', 'Depends on: Task 3', 'Depends on: Task 4', 'Depends on: Task 5', 'Depends on: Task 6'."
+    },
+    {
+      "text": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "passed": true,
+      "evidence": "Bookend tasks (task-1, task-7) have Repository, Target Branch, Description, Acceptance Criteria, Test Requirements (exempt from Files to Modify/Create and Implementation Notes per grading rules). Intermediate tasks all have: Repository (all have 'trustify-backend'), Target Branch (all have 'TC-9005'), Description, at least one of Files to Modify or Files to Create (task-2 has both, task-3 has Files to Modify, task-4 has Files to Modify, task-5 has Files to Modify, task-6 has Files to Modify), Implementation Notes, Acceptance Criteria, Test Requirements."
+    },
+    {
+      "text": "The plan includes a workflow:feature-branch label decision to be applied to the feature issue",
+      "passed": true,
+      "evidence": "impact-map.md line 18: 'A `workflow:feature-branch` label should be applied to the feature issue TC-9005.'"
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": true,
+      "evidence": "All 7 task files contain a description digest line with the correct format. task-1: 'sha256-md:4131636120bd053fb98394b88f37434ec2d49a51a6e5556d80b52091d5c6e12a' (64 hex chars). task-2: 'sha256-md:90e504167b3906866767bd603740fe63dc6602700a44b0cb428baf576177a8fd'. task-3: 'sha256-md:74e66ba059b583c9e75db928d7b57c38f74d46b5a8859938e64a882a7d64c05d'. task-4: 'sha256-md:643161acfe0c9d82bf5c9d0931c34fdb68e9efff58d8ab55363ff0ac3351d3ce'. task-5: 'sha256-md:42bce8bca7eb26a3f3d31bf527a005a00a188aa8c226420f4b5706a9d1a01b0b'. task-6: 'sha256-md:19690964a8df2912a1117e7c2a8ef88c8203760ca8da132d225cbfa06125c0ad'. task-7: 'sha256-md:05bf6a8e96151d3effa7414beabc1dcd5c2239a56c5e892b00074cbc6f1dde33'. All are exactly 64 lowercase hex characters prefixed by 'sha256-md:' in the correct marker format."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "Tasks with conventions included show proper applicability rationale in the prescribed format. task-4 line 25: 'Applies: task modifies `modules/fundamental/src/advisory/endpoints/list.rs` matching the convention's `.rs` endpoint file scope.' task-5 line 21: 'Applies: task modifies `modules/ingestor/src/graph/advisory/mod.rs` matching the convention's `.rs` file scope.' task-6 line 19: 'Applies: task modifies `tests/api/advisory.rs` matching the convention's `.rs` test file scope.' These follow the prescribed format naming specific files and scopes. No inapplicable conventions are listed with 'Not applicable' annotations. Tasks that don't include conventions (task-2 for migration, task-3 for entities) don't have any 'Not applicable' markers either."
+    }
+  ],
+  "summary": {
+    "passed": 12,
+    "failed": 0,
+    "total": 12,
+    "pass_rate": 1.0
+  }
+}
