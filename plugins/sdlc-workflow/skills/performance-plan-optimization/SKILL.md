@@ -253,6 +253,16 @@ When a task addresses a `Pre-Fetchable Concurrent Queries` finding (from analyze
 3. **Specify the integration point** — where the pre-fetch call should be inserted (before the concurrent iteration starts), how the cache should be passed to the concurrent body (e.g., `Arc<Cache>` cloned per task), and how per-item code should use the cache (cache-first with DB fallback for cache misses).
 4. **State explicitly:** "The per-item DB queries inside the concurrent iteration must be replaced with cache lookups. The concurrent structure itself (`buffer_unordered`, `Promise.all`, etc.) should be preserved — only the DB calls inside it should be eliminated."
 
+### Query Restructuring Mandate
+
+When a task addresses a `Cross-Table OR Filter` (7.6.7), `Load-All-Then-Search` (7.6.8), or `Inefficient Queries` (7.6) finding that involves decomposing a single query with cross-table OR/ILIKE conditions into per-entity queries, the task's Implementation Notes MUST:
+
+1. **Document the original query pattern** — the single query with cross-table OR conditions, which tables are joined, and why the optimizer abandons indexes (e.g., OR across LEFT JOINed tables forces sequential scan).
+2. **Specify the decomposed pattern** — how many per-entity branches, and what each branch's join/filter scope is (e.g., "node branch: base table only, no joins; cpe branch: base table → cpe_ref → cpe; purl branch: base table → purl_ref → qualified_purl").
+3. **Define the result merging strategy** — for subquery paths: UNION DISTINCT via query builder folding; for materialized paths: in-application sort + dedup on the composite key.
+4. **State the equivalence constraint explicitly:** "The decomposed queries MUST return the same result set as the original single query for both bare queries (e.g., `q=openssl`) and field-qualified queries (e.g., `q=name~openssl`). Field-qualified queries must route to the correct single branch without behavioral change. Verify equivalence with the repository's existing integration test harness."
+5. **Specify edge case handling** — each branch applies the filter to its column set; branches whose columns do not match the query fields fail filter parsing and are silently excluded. When all branches fail, the original combined column set must be used to produce the user-facing error message. When at least one branch succeeds but returns zero rows, the result is empty (not an error).
+
 ### Task Sequencing
 
 1. Quick wins first (low effort, high impact)

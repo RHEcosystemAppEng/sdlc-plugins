@@ -67,6 +67,40 @@
         "outputs/jira-epic.json does NOT exist",
         "outputs/jira-tasks.json does NOT exist"
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "Run /sdlc-workflow:performance-plan-optimization. Bootstrap: copy files/mock-backend-scale/ to outputs/mock-backend-scale/. Copy files/config-backend-query.json to outputs/mock-backend-scale/performance-config.json, files/analysis-report-query.md to outputs/mock-backend-scale/performance/analysis/workflow-analysis-report.md, files/findings-validation-query.json to outputs/mock-backend-scale/performance/analysis/findings-validation.json, and files/conventions-rust.md to outputs/mock-backend-scale/CONVENTIONS.md. Treat outputs/mock-backend-scale/ as the target repository. Write the optimization plan to outputs/mock-backend-scale/performance/plans/optimization-plan.md. Mock Jira: write Epic to outputs/jira-epic.json and tasks to outputs/jira-tasks.json (JSON array with summary, description, labels fields). Do NOT call Jira MCP, Serena, or any external services. Do NOT modify files outside outputs/. This is a backend-only analysis with query restructuring findings (Cross-Table OR, Late Pagination, Unbounded Iteration, Redundant Indexes, Recursive CTE).",
+      "expected_output": "An optimization plan with 3-5 tasks. The Cross-Table OR task (F1) must follow the Query Restructuring Mandate: Implementation Notes must specify the decomposed pattern (per-entity branches), equivalence constraint, and edge case handling. The task's Test Requirements must include equivalence tests and edge case tests per the template rules. The Redundant Index task (F4) must have db-migration label. The Recursive CTE finding (F5) should be CAUTION or DEFER since it was downgraded.",
+      "files": [
+        "files/config-backend-query.json",
+        "files/analysis-report-query.md",
+        "files/findings-validation-query.json",
+        "files/conventions-rust.md",
+        "files/mock-backend-scale/Cargo.toml",
+        "files/mock-backend-scale/src/lib.rs",
+        "files/mock-backend-scale/src/handlers/mod.rs",
+        "files/mock-backend-scale/src/handlers/search.rs",
+        "files/mock-backend-scale/src/handlers/components.rs",
+        "files/mock-backend-scale/src/handlers/ancestor_walker.rs",
+        "files/mock-backend-scale/src/handlers/deep_service.rs",
+        "files/mock-backend-scale/src/handlers/data_loader.rs",
+        "files/mock-backend-scale/src/models/mod.rs",
+        "files/mock-backend-scale/migration/m001_create_tables.rs",
+        "files/mock-backend-scale/migration/m002_add_indexes.rs"
+      ],
+      "assertions": [
+        "outputs/mock-backend-scale/performance/plans/optimization-plan.md exists",
+        "outputs/jira-tasks.json exists and contains between 3 and 5 task entries",
+        "At least one task in outputs/jira-tasks.json has description mentioning 'decomposed' or 'per-entity' or 'per-branch' (Query Restructuring Mandate point 2)",
+        "At least one task in outputs/jira-tasks.json has description mentioning 'equivalence' or 'same result set' (Query Restructuring Mandate point 4)",
+        "At least one task in outputs/jira-tasks.json has description mentioning 'edge case' or 'all branches fail' or 'single branch' (Query Restructuring Mandate point 5)",
+        "At least one task in outputs/jira-tasks.json has Test Requirements or Acceptance Criteria mentioning 'equivalence' (template rule for query decomposition tasks)",
+        "At least one task in outputs/jira-tasks.json has labels containing both 'performance-optimization' and 'db-migration'",
+        "outputs/jira-epic.json exists and contains labels including 'ai-generated-jira'",
+        "Every task in outputs/jira-tasks.json has label 'ai-generated-jira'",
+        "Every task in outputs/jira-tasks.json has a layer label 'backend'"
+      ]
     }
   ]
 }

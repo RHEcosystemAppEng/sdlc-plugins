@@ -1,0 +1,91 @@
+{
+  "_comment": "SYNTHETIC TEST DATA — DO NOT USE IN PRODUCTION",
+  "schema_version": "1.1",
+  "generated_at": "2026-06-15T12:00:00Z",
+  "workflow": "component-search",
+  "validation_run": true,
+  "statistics": {
+    "submitted": 5,
+    "confirmed": 4,
+    "confirmed_low_confidence": 0,
+    "downgraded": 1,
+    "discarded": 0
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "anti_pattern": "Cross-Table OR Filter",
+      "step": "7.6.7",
+      "file": "src/handlers/search.rs",
+      "line": 31,
+      "detection_method": "Grep",
+      "evidence_excerpt": "sbom_node::Entity.columns().add_columns(cpe::Entity.columns()).add_columns(qualified_purl::Entity.columns()) with filtering_with(query.q, q_columns()) across LEFT JOINed tables",
+      "checks": {"9.1-B": "PASS", "9.1-B2": "PASS"},
+      "disposition": "Confirmed",
+      "confidence": "High",
+      "severity": "High",
+      "timeline": "1-3 days",
+      "reason": "Bare-value filter generates ILIKE OR across sbom_node, cpe, and qualified_purl columns from LEFT JOINed tables. PostgreSQL abandons GIN trigram index on sbom_node.name when OR spans LEFT JOINed entities, forcing sequential scan on 38 GB table."
+    },
+    {
+      "id": "F2",
+      "anti_pattern": "Late Pagination",
+      "step": "7.4.1",
+      "file": "src/handlers/components.rs",
+      "line": 52,
+      "detection_method": "Grep",
+      "evidence_excerpt": "paginate_array(&enriched, paginated.offset, paginated.limit) applied after loading all results into memory",
+      "checks": {"9.1-B": "PASS", "9.1-B2": "PASS"},
+      "disposition": "Confirmed",
+      "confidence": "High",
+      "severity": "High",
+      "timeline": "1-3 days",
+      "reason": "Pagination parameters exist at API layer but paginate_array() applies them after loading and enriching all components into memory. All rows are fetched and processed before slicing."
+    },
+    {
+      "id": "F3",
+      "anti_pattern": "Unbounded Query-Driving Iteration",
+      "step": "7.3.2",
+      "file": "src/handlers/components.rs",
+      "line": 32,
+      "detection_method": "Grep",
+      "evidence_excerpt": "for component in &all_components { component_detail::Entity::find_by_id(component.id).one(db).await? ... vendor::Entity::find().filter(...).all(db).await? }",
+      "checks": {"9.1-B": "PASS", "9.1-B2": "PASS"},
+      "disposition": "Confirmed",
+      "confidence": "High",
+      "severity": "High",
+      "timeline": "1-3 days",
+      "reason": "Loop iterates unbounded query result (no .take() or size guard). Each iteration executes 2 DB queries (find_by_id + vendor filter). Total query count = 2N where N is unbounded."
+    },
+    {
+      "id": "F4",
+      "anti_pattern": "Redundant Database Indexes",
+      "step": "7.6.4.1",
+      "file": "migration/m002_add_indexes.rs",
+      "line": 8,
+      "detection_method": "Grep",
+      "evidence_excerpt": "CREATE INDEX idx_sbom_node_sbom_id_node_id ON sbom_node(sbom_id, node_id) duplicates primary key sbom_node_pkey(sbom_id, node_id)",
+      "checks": {"9.1-B": "PASS", "9.1-B2": "PASS"},
+      "disposition": "Confirmed",
+      "confidence": "High",
+      "severity": "Medium",
+      "timeline": "1-4 hours",
+      "reason": "Btree index idx_sbom_node_sbom_id_node_id has identical column set to sbom_node_pkey. Duplicate index wastes 52 GB disk and competes for buffer cache."
+    },
+    {
+      "id": "F5",
+      "anti_pattern": "Recursive CTE Risk",
+      "step": "7.6.2",
+      "file": "src/handlers/ancestor_walker.rs",
+      "line": 15,
+      "detection_method": "Grep",
+      "evidence_excerpt": "WITH RECURSIVE ancestors AS (...) on item_relates_to_item junction table with depth limit 50",
+      "checks": {"9.1-B": "PASS", "9.1-B2": "PASS"},
+      "disposition": "Downgraded",
+      "confidence": "Medium",
+      "severity": "Medium",
+      "timeline": "1-3 days",
+      "reason": "Recursive CTE on junction table item_relates_to_item (383M rows) has depth limit 50. Depth limit exists but is generous for a junction table. Downgraded from High to Medium because depth limit prevents runaway recursion."
+    }
+  ]
+}
