@@ -39,7 +39,7 @@ Do **not** use for:
 | 1 | Data Extraction | Vulnerability issue key | CVE ID, library, affected range, remote links |
 | 2 | Version Impact Analysis | security-matrix.md, lock files | Version impact table |
 | 3 | Affects Versions Correction | Version impact table, Jira versions | Corrected Affects Versions |
-| 4 | Duplicate, Sibling, and Overlap Check | JQL search (sibling issues), component field search | Duplicate detection, issue links, cross-CVE overlap |
+| 4 | Duplicate, Sibling, Overlap, and Reconciliation Check | JQL search (sibling issues), component field search, preemptive task search | Duplicate detection, issue links, cross-CVE overlap, preemptive task reconciliation |
 | 5 | Version Lifecycle Check | Product pages URL | EOL status per version |
 | 6 | Already Fixed Check | Resolved sibling issues | Already-fixed detection |
 | 7 | Remediation | Impact analysis results | Remediation tasks or close recommendation |
@@ -336,11 +336,11 @@ Read `jira-triage-operations.md` for the detailed procedures.
 - **Step 3** – Affects Versions Correction: discover available Jira versions
   dynamically, compare against the version impact table, and correct with
   engineer confirmation
-- **Step 4** – Duplicate, Sibling, and Overlap Check: search for sibling
-  Vulnerability issues with the same CVE, classify as same-stream duplicates
-  or cross-stream companions, link related issues, and detect cross-CVE overlap
-  where a different CVE's remediation already covers the current CVE's fix
-  threshold
+- **Step 4** – Duplicate, Sibling, Overlap, and Reconciliation Check: search for
+  sibling Vulnerability issues with the same CVE, classify as same-stream
+  duplicates or cross-stream companions, link related issues, detect cross-CVE
+  overlap where a different CVE's remediation already covers the current CVE's
+  fix threshold, and reconcile with existing preemptive remediation tasks
 - **Step 5** – Version Lifecycle Check: verify affected versions are still
   within support lifecycle via the Product pages URL
 - **Step 6** – Already Fixed Check: cross-reference resolved sibling issues
@@ -380,24 +380,48 @@ are affected:
   (see Remediation Task Creation below).
 - Link each Task to the Vulnerability issue.
 
-### Case B: Cross-stream impact notice
+### Case B: Cross-stream impact — proactive remediation
 
 If the version impact analysis reveals that **other streams** (outside this
-issue's scope) are also affected, add a comment to the current issue noting
-the cross-stream impact. Do **not** create new Vulnerability issues or
-remediation tasks for those other streams — PSIRT manages per-stream
-Vulnerability tracking.
+issue's scope) are also affected:
 
-Example comment:
-```
-Cross-stream impact: [library] [affected-range] also affects stream(s)
-[other-stream-1], [other-stream-2] based on lock file analysis.
-These streams are tracked by companion issues (see Related links)
-or may require separate PSIRT triage.
-```
+1. **Post the cross-stream impact comment** (existing behavior):
+   ```
+   Cross-stream impact: [library] [affected-range] also affects stream(s)
+   [other-stream-1], [other-stream-2] based on lock file analysis.
+   These streams are tracked by companion issues (see Related links)
+   or may require separate PSIRT triage.
+   ```
 
-This is informational only — the engineer and PSIRT decide next steps for
-other streams.
+2. **Check for existing CVE Jiras** for each affected stream. Search for
+   sibling Vulnerability issues with the same CVE label and a matching stream
+   suffix (reuse the JQL from Step 4).
+
+3. **For each affected stream without its own CVE Jira**, create proactive
+   remediation tasks using the same templates as Case A, but with the
+   preemptive variant (see `remediation-templates.md` — Preemptive Task
+   Variant):
+   - Labels include `security-preemptive` alongside standard labels
+   - Link type is "Related" (not "Depend") to the originating CVE Jira
+   - Description includes a preemptive remediation prefix noting the
+     originating CVE and stream
+
+4. **For streams that already have a CVE Jira**, skip task creation — those
+   streams will be triaged through their own CVE issue.
+
+5. **Add comment** to the originating CVE Jira listing the preemptive tasks:
+   ```
+   Preemptive remediation tasks created for streams without CVE Jiras:
+   - [stream-1]: [task-key-1] (security-preemptive)
+   - [stream-2]: [task-key-2] (security-preemptive)
+
+   These tasks use the "Related" link type and carry the security-preemptive
+   label. When PSIRT creates stream-specific CVE Jiras, Step 4.4
+   reconciliation will link them and remove the label.
+   ```
+
+Do **not** create new Vulnerability issues — PSIRT manages per-stream
+Vulnerability tracking. Only create remediation **Tasks**.
 
 ### Case C: No supported versions affected
 

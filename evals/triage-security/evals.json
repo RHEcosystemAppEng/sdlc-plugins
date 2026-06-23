@@ -122,6 +122,32 @@
         "Step 4.3 compares the remediation task's bump version (5.96.1) against the current CVE's fix threshold (5.98.0) and determines the fix does NOT cover this CVE",
         "The overlap table is presented to the engineer showing TC-8012 and TC-8013 with 'Covers This CVE? = No' — the triage proceeds to create new remediation tasks rather than recommending closure"
       ]
+    },
+    {
+      "id": 10,
+      "prompt": "Triage Vulnerability issue TC-8020. The issue details are in vuln-issue-cross-stream-preemptive.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has stream suffix [rhtpa-2.2] and the cross-stream version impact analysis shows stream rhtpa-2.1 is also affected (tokio 1.40.0, threshold 1.42.0). A JQL search for sibling CVE Jiras with label CVE-2026-55123 returns no results for stream rhtpa-2.1 — no CVE Jira exists for that stream. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data, write outputs/version-impact.md with the version impact table showing cross-stream impact, write outputs/remediation.md with the remediation tasks for the current stream (Case A) and the preemptive tasks for the other stream (Case B), and write outputs/cross-stream.md with the cross-stream impact comment and preemptive task details.",
+      "expected_output": "A triage analysis where Step 7 Case A creates standard remediation tasks for the current stream (rhtpa-2.2), and Step 7 Case B creates proactive preemptive remediation tasks for stream rhtpa-2.1 (which has no CVE Jira). The preemptive tasks include the security-preemptive label and use a 'Related' link to the originating CVE Jira TC-8020.",
+      "files": ["files/vuln-issue-cross-stream-preemptive.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 7 Case A creates standard remediation tasks for the current stream (rhtpa-2.2) with standard labels ['ai-generated-jira', 'Security', 'CVE-2026-55123'] and 'Depend' link to TC-8020",
+        "Step 7 Case B detects that stream rhtpa-2.1 is also affected but has no CVE Jira — creates proactive preemptive remediation tasks (§1.60)",
+        "Preemptive tasks for stream rhtpa-2.1 include the 'security-preemptive' label alongside standard labels: ['ai-generated-jira', 'Security', 'CVE-2026-55123', 'security-preemptive']",
+        "Preemptive tasks are linked to the originating CVE Jira TC-8020 with 'Related' link type (not 'Depend') because the originating CVE belongs to a different stream",
+        "Preemptive task descriptions include a preemptive remediation prefix noting TC-8020 (stream rhtpa-2.2) as the originating CVE"
+      ]
+    },
+    {
+      "id": 11,
+      "prompt": "Triage Vulnerability issue TC-8021. The issue details are in vuln-issue-preemptive-reconciliation.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has stream suffix [rhtpa-2.1]. A JQL search for tasks with labels 'security-preemptive' and 'CVE-2026-55123' returns TC-8022 (a preemptive remediation task for rhtpa-2.1 created from prior triage of TC-8020). Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data, write outputs/reconciliation.md with the Step 4.4 preemptive task reconciliation analysis, and write outputs/triage-outcome.md explaining how the existing preemptive task was reconciled.",
+      "expected_output": "A triage analysis where Step 4.4 detects existing preemptive task TC-8022 for CVE-2026-55123 in stream rhtpa-2.1. The reconciliation links the new CVE Jira TC-8021 to TC-8022 with 'Depend', removes the 'security-preemptive' label from TC-8022, and skips new remediation task creation in Step 7.",
+      "files": ["files/vuln-issue-preemptive-reconciliation.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 4.4 searches for preemptive tasks using JQL with labels 'security-preemptive' and 'CVE-2026-55123' (§1.60)",
+        "Step 4.4 filters results to match the current stream (rhtpa-2.1) by checking the task summary for the stream name",
+        "Step 4.4 links the new CVE Jira TC-8021 to the preemptive task TC-8022 with 'Depend' link type (standard remediation linkage)",
+        "Step 4.4 removes the 'security-preemptive' label from TC-8022 — the task is now a standard remediation task linked to a proper CVE Jira",
+        "Step 7 skips remediation task creation for this stream because Step 4.4 reconciliation already linked an existing task"
+      ]
     }
   ]
 }

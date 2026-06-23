@@ -223,6 +223,71 @@ task = jira.create_issue(
 )
 ```
 
+## Preemptive Task Variant
+
+When Step 7 Case B identifies affected streams that lack their own CVE Jira,
+create proactive remediation tasks using the same templates as Case A but with
+these differences:
+
+### Labels
+
+Add `security-preemptive` to the labels array to distinguish proactive tasks
+from standard remediation:
+
+```
+labels: ["ai-generated-jira", "Security", "<CVE-ID>", "security-preemptive"]
+```
+
+### Description prefix
+
+Prepend a note to the Description section of the task template:
+
+```
+> **Preemptive remediation**: This task was created proactively from cross-stream
+> impact analysis of [originating-CVE-Jira-key] (stream [originating-stream]).
+> No stream-specific CVE Jira exists yet for this stream. When PSIRT creates one,
+> this task will be linked and the `security-preemptive` label removed.
+```
+
+### Link type
+
+Link preemptive tasks to the originating CVE Jira with "Related" (not "Depend"),
+because the originating CVE belongs to a different stream:
+
+```
+jira.create_link(
+  inwardIssue: <originating-cve-jira-key>,
+  outwardIssue: <preemptive-task-key>,
+  type: "Related"
+)
+```
+
+### Creation pseudocode
+
+```
+# Source dependency ecosystems — preemptive variant
+upstream_task = jira.create_issue(
+  projectKey: "<project-key>",
+  issueTypeName: "Task",
+  summary: "Remediate CVE-YYYY-XXXXX: bump [library] to [fixed-version] ([stream])",
+  description: <upstream-task-description-with-preemptive-prefix>,
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>", "security-preemptive"]
+)
+
+# System package ecosystems — preemptive variant
+task = jira.create_issue(
+  projectKey: "<project-key>",
+  issueTypeName: "Task",
+  summary: "Remediate CVE-YYYY-XXXXX: update [package-name] to [fixed-version] ([stream])",
+  description: <system-package-task-description-with-preemptive-prefix>,
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>", "security-preemptive"]
+)
+```
+
+Downstream propagation subtasks (for source dependency ecosystems) also receive
+the `security-preemptive` label and use the same "Related" link to the
+originating CVE Jira.
+
 ## Jira Linkage
 
 After creating remediation tasks:
