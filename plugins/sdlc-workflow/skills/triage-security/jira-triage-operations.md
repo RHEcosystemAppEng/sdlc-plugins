@@ -2,8 +2,8 @@
 
 This companion file contains the detailed procedures for Steps 3–6 of the
 triage-security skill. These steps handle Affects Versions correction,
-duplicate and sibling detection, version lifecycle checks, and already-fixed
-detection.
+duplicate and sibling detection, cross-CVE overlap detection, preemptive task
+reconciliation, version lifecycle checks, and already-fixed detection.
 
 ## Step 3 – Affects Versions Correction
 
@@ -228,7 +228,64 @@ entirely.
      No existing remediation covers this CVE's fix threshold. Proceeding with
      new remediation task creation.
      ```
-   - **If no related CVEs found for this component:** proceed silently to Step 5.
+   - **If no related CVEs found for this component:** proceed silently to Step 4.4.
+
+### 4.4 – Preemptive task reconciliation
+
+When triaging a new CVE Jira for a specific stream, check whether a proactive
+remediation task already exists for this CVE and stream (created by a prior
+Step 7 Case B run on a different stream's CVE Jira).
+
+1. **Search for preemptive tasks** matching the current CVE:
+
+   ```
+   jira.search_jql(
+     "project = <project-key> AND issuetype = Task AND labels = 'security-preemptive' AND labels = '<CVE-ID>' ORDER BY created DESC",
+     fields: ["summary", "status", "labels", "issuelinks"]
+   )
+   ```
+
+2. **Filter results** to tasks whose summary contains the current issue's stream
+   name (e.g., the stream suffix from the issue summary). A preemptive task
+   created for stream `rhtpa-2.1` will have `(rhtpa-2.1)` in its summary.
+
+3. **If a matching preemptive task is found:**
+
+   a. **Link** the new CVE Jira to the preemptive task with "Depend" (standard
+      remediation linkage):
+      ```
+      jira.create_link(
+        inwardIssue: <current-cve-jira-key>,
+        outwardIssue: <preemptive-task-key>,
+        type: "Depend"
+      )
+      ```
+   b. **Remove the `security-preemptive` label** from the task — it is now
+      linked to a proper CVE Jira:
+      ```
+      current_labels = <preemptive-task-labels>
+      updated_labels = current_labels.filter(l => l != "security-preemptive")
+      jira.edit_issue(<preemptive-task-key>, fields={
+        "labels": updated_labels
+      })
+      ```
+   c. **Inform the engineer:**
+      ```
+      Existing preemptive remediation task [task-key] found for this CVE and
+      stream. Created from cross-stream analysis of [originating-CVE-Jira]
+      (linked via "Related").
+
+      Actions taken:
+      - Linked [current-cve-key] → [task-key] with "Depend"
+      - Removed "security-preemptive" label from [task-key]
+
+      The preemptive task is now a standard remediation task for this CVE Jira.
+      Skipping new remediation task creation in Step 7.
+      ```
+   d. **Record the reconciliation** — mark that remediation already exists for
+      this stream so Step 7 skips task creation for it.
+
+4. **If no matching preemptive task found:** proceed silently to Step 5.
 
 ## Step 5 – Version Lifecycle Check
 

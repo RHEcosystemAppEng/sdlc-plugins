@@ -70,6 +70,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.58 | `triage-security` MUST check existing issuelinks before creating sibling "Related" links — MUST NOT create a link if one already exists between the two issues. | `triage-security/jira-triage-operations.md` — Step 4.2 |
 | 1.59 | `triage-security` MUST search for related CVE Jiras by Upstream Affected Component (`customfield_10632`) in Step 4.3 and check existing remediation tasks before creating new ones. | `triage-security/jira-triage-operations.md` — Step 4.3 |
 | 1.60 | `verify-pr` MUST compare eval assertion failures against base branch eval baselines before creating subtasks — only regressions (assertions that pass at baseline but fail on the PR) trigger subtask creation. | `verify-pr/SKILL.md` — Step 6d (Eval failure sub-tasks), `verify-pr/style-conventions.md` — Check 5 |
+| 1.61 | `triage-security` MUST create proactive remediation tasks with `security-preemptive` label for affected streams without CVE Jiras (Step 7 Case B) and MUST reconcile when stream-specific CVE Jiras arrive by linking the CVE and removing the label (Step 4.4). | `triage-security/SKILL.md` — Step 7 Case B, `triage-security/jira-triage-operations.md` — Step 4.4 |
 
 ### Prior Art — Cross-phase integrity (§1.33–1.35)
 
@@ -163,6 +164,6 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9)
 - `plugins/sdlc-workflow/skills/report-bug/SKILL.md` — Guardrails (§1.50–1.51), Step 4 Preview and Confirm (§1.52)
 - `plugins/sdlc-workflow/skills/triage-bug/SKILL.md` — Guardrails (§1.53–1.54), Step 5 Front-load reproducer test (§1.55), Step 4 Post root cause comment (§1.56), Step 6 Decomposition Guard (§1.57)
-- `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.37, §1.38, §1.47), Step 0 (§1.49), Step 1 Ecosystem detection (§1.48), Step 1 Data Extraction (§1.49), Step 2.1 (§1.47), Step 2.2 (§1.42), Step 2.3 (§1.48), Step 2.4 (§1.44), Step 7 (§1.43), Important Rules (§1.38–§1.43, §1.45, §1.46), Remediation Task Creation (§1.46)
-- `plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md` — Step 4.2 Idempotent sibling linking (§1.58), Step 4.3 Cross-CVE overlap detection (§1.59)
+- `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.37, §1.38, §1.47), Step 0 (§1.49), Step 1 Ecosystem detection (§1.48), Step 1 Data Extraction (§1.49), Step 2.1 (§1.47), Step 2.2 (§1.42), Step 2.3 (§1.48), Step 2.4 (§1.44), Step 7 (§1.43), Step 7 Case B (§1.61), Important Rules (§1.38–§1.43, §1.45, §1.46), Remediation Task Creation (§1.46)
+- `plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md` — Step 4.2 Idempotent sibling linking (§1.58), Step 4.3 Cross-CVE overlap detection (§1.59), Step 4.4 Proactive reconciliation (§1.61)
 - `docs/methodology.md` — Core Principles (§2.1, §3.2, §5.5)
