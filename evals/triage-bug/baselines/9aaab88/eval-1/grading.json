@@ -1,0 +1,55 @@
+{
+  "assertion_results": [
+    {
+      "text": "Bug parsing correctly extracts all four required sections (Description, Steps to Reproduce, Expected Result, Actual Result) using the heading formats from bug-template-mock.md (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md contains a 'Required Sections (all present)' table showing all four required sections with their correct heading formats matching bug-template-mock.md: '### **Issue Description**' (Yes), '### **Steps to Reproduce**' (Yes), '### **Expected Result**' (Yes), '### **Actual Result**' (Yes). Additionally, the 'Parsed Sections' area includes the full extracted content for each: 'Issue Description', 'Steps to Reproduce', 'Expected Result', and 'Actual Result'."
+    },
+    {
+      "text": "Bug validation confirms the issue type ID (10020) matches the Bug issue type ID from Bug Configuration (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md line 8 states 'Issue Type: Bug (ID: 10020)'. The eval's Bug Configuration in claude-md-bug-config.md line 34 states 'Bug issue type ID: 10020'. The parsing output records the issue type ID as 10020, which matches the Bug Configuration. The template validation section confirms all required sections are present, indicating validation passed."
+    },
+    {
+      "text": "Investigation identifies the trailing-whitespace heading extraction as the root cause — line[3:] does not strip whitespace (Steps 2-3)",
+      "passed": true,
+      "evidence": "investigation.md Step 2 code-path trace (lines 17-21) shows: 'section_name = line[3:]  # Extracts heading text after \"## \"' and explains 'When the heading line is ## Migration Patterns  \\n, the extraction at line[3:] produces \"Migration Patterns  \" (with trailing spaces) as the section name.' Step 3 (line 64) states: 'The line section_name = line[3:] does not call .strip() on the extracted heading text.'"
+    },
+    {
+      "text": "Root cause comment includes: what is broken (heading extraction does not strip trailing whitespace), where it is broken (plan-feature convention lookup), and how to verify the fix (reproducer test with whitespace in heading) (Step 4)",
+      "passed": true,
+      "evidence": "root-cause.md includes: (1) WHAT: 'The plan-feature skill's convention heading parser extracts section names from CONVENTIONS.md using line[3:] without stripping trailing whitespace' (lines 9-10); (2) WHERE: 'plugins/sdlc-workflow/skills/plan-feature/SKILL.md -- convention heading extraction logic' (line 19); (3) HOW TO VERIFY: 'Reproducer Strategy' section (lines 39-46) describes creating a CONVENTIONS.md fixture with trailing whitespace on a heading line and asserting the generated task includes the convention reference."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md Acceptance Criteria section (lines 64-68): The first criterion (line 65) is '[ ] Reproducer test: a test with a CONVENTIONS.md fixture containing trailing whitespace on a heading (e.g., ## Migration Patterns  ) demonstrates that the convention is correctly matched and included in the generated task's Implementation Notes (fails before fix, passes after)'. This precedes the fix criteria on lines 66-68."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST test requirement — with explicit assertion guidance derived from the Steps to Reproduce (Step 5 Test Requirements ordering)",
+      "passed": true,
+      "evidence": "task-description.md Test Requirements section (lines 70-72): The first requirement (line 71) is '[ ] Reproducer test: create a CONVENTIONS.md fixture with trailing whitespace on at least one heading line (e.g., ## Migration Patterns   with two trailing spaces). Run the plan-feature convention conformance analysis against a feature matching that convention. Assert the generated task's Implementation Notes contain Per CONVENTIONS.md Migration Patterns: reference. This test must fail before the fix and pass after.' This includes explicit assertion guidance ('Assert the generated task's Implementation Notes contain Per CONVENTIONS.md Migration Patterns: reference') derived from the Steps to Reproduce which describe inspecting the generated task's Implementation Notes."
+    },
+    {
+      "text": "Task description includes a Bug Context section with Bug key (ACME-500), Steps to Reproduce, Expected/Actual Result, and Root Cause summary (Step 5 Bug Context extension)",
+      "passed": true,
+      "evidence": "task-description.md lines 74-80 contain a '## Bug Context' section with: Bug key 'ACME-500' (line 76), Steps to Reproduce (line 77), Expected Result (line 78), Actual Result (line 79), and Root Cause summary (line 80: 'The heading extraction logic line[3:] does not strip trailing whitespace, causing the stored section name to include trailing spaces. The subsequent exact-match lookup fails silently because the query key has no trailing spaces while the stored key does.')."
+    },
+    {
+      "text": "Task description sets Target Branch to main (Step 5 Target Branch)",
+      "passed": true,
+      "evidence": "task-description.md line 18: '## Target Branch' followed by line 19: 'main'."
+    },
+    {
+      "text": "Task description output includes ai-generated-jira in the Jira API metadata block showing it would be passed as a label to jira.create_issue (Step 5 Task creation)",
+      "passed": true,
+      "evidence": "task-description.md lines 1-12 contain a Jira API metadata block: '<!-- Jira API Metadata Block\\njira.create_issue parameters:\\n  project: ACME\\n  issuetype: Task\\n  labels:\\n    - ai-generated-jira\\n  summary: \"Fix convention heading parser to strip trailing whitespace in plan-feature skill\"\\n  link:\\n    type: Blocks\\n    inward_issue: <created-task-key>\\n    outward_issue: ACME-500\\n-->'. The label 'ai-generated-jira' is present under the labels field."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9,
+    "pass_rate": 1.0
+  }
+}

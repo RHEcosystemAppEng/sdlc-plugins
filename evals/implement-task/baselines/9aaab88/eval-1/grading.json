@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "In plan.md Step 4 ('Understand the Code'), the plan explicitly lists files to inspect: (1) 'modules/fundamental/src/advisory/service/advisory.rs' — 'Would use mcp__serena_backend__get_symbols_overview to see existing AdvisoryService methods', (2) 'modules/fundamental/src/advisory/endpoints/get.rs' — 'Primary sibling for the new endpoint handler. Would inspect via get_symbols_overview', (3) 'modules/fundamental/src/advisory/model/summary.rs' — 'Sibling for the new model struct. Would inspect AdvisorySummary to understand: field types, derive macros, the severity field structure'. That is 3 of the 4 listed files."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "In plan.md Step 9 ('Self-Verification / Scope Containment'), the plan lists exactly 6 files: 3 CREATE (severity_summary.rs model, severity_summary.rs endpoint, advisory_summary.rs tests) and 3 MODIFY (advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs). The plan explicitly states: 'All within scope of Files to Modify and Files to Create. No out-of-scope changes.' Step 6 enumerates the same 6 files (3 to create, 3 to modify). No additional files outside scope are modified."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "Plan.md Step 6 lists 3 files to create: (1) 'modules/fundamental/src/advisory/model/severity_summary.rs' — New SeveritySummary response struct, (2) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs' — GET handler for the new endpoint, (3) 'tests/api/advisory_summary.rs' — Integration tests. Each has a corresponding file-N-description.md (file-1, file-2, file-3) with detailed implementation."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "Plan.md Step 6 lists 3 files to modify: (4) 'modules/fundamental/src/advisory/service/advisory.rs' — Add severity_summary method, (5) 'modules/fundamental/src/advisory/endpoints/mod.rs' — Register the new route, (6) 'modules/fundamental/src/advisory/model/mod.rs' — Register the new model module. Each has a corresponding file-N-description.md (file-4, file-5, file-6) with detailed changes."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Plan.md Step 10 shows the commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' (type=feat, scope=advisory, description follows). The footer contains 'Implements TC-9201'. This follows Conventional Commits format and references the Jira key in the footer."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": false,
+      "evidence": "The commit message in plan.md Step 10 does not include '--trailer=Assisted-by: Claude Code' or any mention of the Assisted-by trailer. The commit command shown is just the message text without any trailer flag."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "Plan.md Step 5 shows: 'git checkout main / git pull / git checkout -b TC-9201'. The branch is named 'TC-9201' matching the Jira key. Step 10 shows 'gh pr create --base main' referencing main as the target branch. The task summary at the top also states 'Target Branch: main'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md explicitly documents both patterns: (1) Under 'Error Handling': 'All handlers return Result<T, AppError> with .context() wrapping. AppError is defined in common/src/error.rs and implements IntoResponse'. (2) Under 'Module Structure': 'Each domain module follows model/ + service/ + endpoints/ structure'. Additionally, many more patterns are identified including naming conventions, response types, path parameter extraction, etc."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "Plan.md Task Summary section explicitly states 'Target Branch: main'. Step 1 (Task Parsing) lists 'Target Branch: main' in the parsed sections. Step 5 starts with 'git checkout main'. Step 10 shows 'gh pr create --base main'. The target branch 'main' is consistently referenced throughout."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": false,
+      "evidence": "Plan.md Step 1.5 ('Description Integrity Verification') mentions checking for the digest: 'Would fetch comments via jira.get_issue_comments(TC-9201) and search for [sdlc-workflow] Description digest: marker. Compare stored digest with computed digest using scripts/sha256-digest.py.' However, it does NOT mention the backward compatibility behavior of proceeding with a warning when no digest is found. It only says 'Since this is an eval, we note this step would be performed.' The specific behavior of proceeding with a warning rather than blocking is not addressed."
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 2,
+    "total": 10,
+    "pass_rate": 0.8
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+      "passed": true,
+      "evidence": "In data-extraction.md lines 7-13: CVE ID = CVE-2026-31812, Vulnerable library = quinn-proto, Affected version range = 'versions before 0.11.14 (< 0.11.14)', Fixed version = 0.11.14. All four fields are correctly extracted."
+    },
+    {
+      "text": "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+      "passed": true,
+      "evidence": "In data-extraction.md lines 31-34: 'Library: quinn-proto (Rust crate)', 'Ecosystem: **Cargo**', 'Lock file: Cargo.lock'. The ecosystem is correctly identified as Cargo based on the library being a Rust crate."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the security-matrix.md supportability matrix — no versions are skipped (Important Rule 4)",
+      "passed": true,
+      "evidence": "In version-impact.md lines 37-43, the Version Impact Table includes all 7 versions: 2.1.0, 2.1.1 (from 2.1.x stream) and 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4 (from 2.2.x stream). Lines 7-8 confirm '2.1.x stream: security-matrix.md at rhtpa-release.0.3.z (2 versions)' and '2.2.x stream: security-matrix.md at rhtpa-release.0.4.z (5 versions)' — totaling 7 versions, all present in the table."
+    },
+    {
+      "text": "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+      "passed": true,
+      "evidence": "In version-impact.md line 12: 'Lock file data extracted via `git show <tag>:Cargo.lock | grep -A2 'name = \"quinn-proto\"'` for each pinned source commit'. Each version row includes a specific Build Tag: v0.3.8, v0.3.12, v0.4.5, v0.4.8, v0.4.9, v0.4.11, v0.4.12. The Source column confirms extraction at specific tags (e.g., 'Cargo.lock at v0.3.8'), not branch HEAD."
+    },
+    {
+      "text": "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+      "passed": true,
+      "evidence": "In version-impact.md line 41: '2.2.2 | 2.2.x | -- | YES | retag of 2.2.1 (same as 2.2.1)'. Version 2.2.2 is identified as a retag (quinn-proto shown as '--'), marked YES for affected, and the notes explicitly state 'retag of 2.2.1 (same as 2.2.1)', carrying forward the affected status from 2.2.1."
+    },
+    {
+      "text": "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+      "passed": true,
+      "evidence": "In affects-versions.md lines 39-42: 'Current:  [RHTPA 2.0.0]' / 'Proposed: [RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]'. This clearly shows a diff replacing PSIRT-assigned RHTPA 2.0.0 with lock-file-verified versions. Line 44 confirms: 'PSIRT assigned \"RHTPA 2.0.0\" which does not correspond to any supported release. Lock file analysis shows quinn-proto < 0.11.14 is present in versions 2.2.0, 2.2.1, and 2.2.2'."
+    },
+    {
+      "text": "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+      "passed": true,
+      "evidence": "In affects-versions.md lines 39-42, the proposed correction uses version names: 'RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2'. In the Jira mutation on lines 49-55, the version IDs use placeholders '<RHTPA-2.2.0-jira-id>' rather than hardcoded IDs. The Jira version table on lines 9-17 also shows Jira ID as '(dynamic)' for all versions, indicating IDs are to be resolved at runtime from version names, not hardcoded."
+    },
+    {
+      "text": "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+      "passed": true,
+      "evidence": "In remediation.md: Task 1 (upstream backport) includes Repository: 'rhtpa-backend' (line 36), Target Branch: 'release/0.4.z' (line 40), Acceptance Criteria with checklist (lines 69-72). Task 2 (downstream propagation) includes Repository: 'rhtpa-release.0.4.z' (line 102), Target Branch: 'main' (line 106), Acceptance Criteria with checklist (lines 127-128). Dependency linkage is shown on lines 144-148 with a Blocks link between upstream and downstream tasks: 'jira.create_link(inwardIssue: <upstream-task-key>, outwardIssue: <downstream-task-key>, type: \"Blocks\")'."
+    },
+    {
+      "text": "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+      "passed": true,
+      "evidence": "In remediation.md line 13: 'Cargo (source dependency) -- requires **two tasks** per affected stream: upstream backport + downstream propagation with Blocks dependency'. Task 1 is 'Upstream Backport (2.2.x stream)' (line 17) and Task 2 is 'Downstream Propagation (2.2.x stream)' (line 85). The Blocks dependency is created on lines 144-148: 'jira.create_link(inwardIssue: <upstream-task-key>, outwardIssue: <downstream-task-key>, type: \"Blocks\")'."
+    },
+    {
+      "text": "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
+      "passed": true,
+      "evidence": "Throughout the outputs, actions are framed as proposals: affects-versions.md line 45: 'Proposed correction'; line 47: 'Proposed Jira mutation (pending engineer confirmation)'; line 57: 'Proposed comment (pending engineer confirmation)'. remediation.md line 19: 'Proposed Jira Issue Creation'; line 91: 'Proposed Jira Issue Creation'; line 142: 'Proposed Linkage'; line 355: 'Proposed actions (pending engineer confirmation)'. Line 357 uses 'Correct Affects Versions' with an arrow showing the change, and line 361 uses 'Transition TC-8001 to In Progress' — all under the heading 'Proposed actions (pending engineer confirmation)'. No executed mutations are recorded."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}
