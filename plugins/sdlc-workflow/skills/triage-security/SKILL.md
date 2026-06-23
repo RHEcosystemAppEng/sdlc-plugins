@@ -37,6 +37,7 @@ Do **not** use for:
 | 0 | Validate Configuration | CLAUDE.md | Project key, Cloud ID, Security Config |
 | 0.5 | Jira Access | -- | MCP or REST API connection |
 | 1 | Data Extraction | Vulnerability issue key | CVE ID, library, affected range, remote links |
+| 1.5 | External CVE Data Enrichment | CVE ID | Structured version ranges, cross-validated fix thresholds |
 | 2 | Version Impact Analysis | security-matrix.md, lock files | Version impact table |
 | 3 | Affects Versions Correction | Version impact table, Jira versions | Corrected Affects Versions |
 | 4 | Duplicate, Sibling, Overlap, and Reconciliation Check | JQL search (sibling issues), component field search, preemptive task search | Duplicate detection, issue links, cross-CVE overlap, preemptive task reconciliation |
@@ -304,6 +305,73 @@ flowchart TD
     F --> I["Remediation: 1 task\n(Konflux repo)"]
     G --> I
 ```
+
+## Step 1.5 – External CVE Data Enrichment
+
+After extracting data from the Jira description, query external CVE databases for
+structured vulnerability data. This is not a fallback — external sources are **always**
+queried to supplement and cross-validate the Jira description data.
+
+### 1. MITRE CVE API
+
+Query the MITRE CVE API for the authoritative CVE record:
+
+```
+WebFetch(url: "https://cveawg.mitre.org/api/cve/<CVE-ID>",
+  prompt: "Extract the affected products, version ranges, and fixed versions
+  from the CVE record. Return structured data: product name, affected version
+  range (lessThan, lessThanOrEqual), and fixed version.")
+```
+
+Parse the `affected[].versions[].lessThan` or `affected[].versions[].lessThanOrEqual`
+fields for precise fix thresholds.
+
+### 2. OSV.dev API
+
+Query the OSV.dev database for ecosystem-specific version range data:
+
+```
+WebFetch(url: "https://api.osv.dev/v1/vulns/<CVE-ID>",
+  prompt: "Extract the affected packages, ecosystem, version ranges (introduced,
+  fixed, last_affected), and severity from the OSV record.")
+```
+
+Parse `affected[].ranges[].events` for `introduced` and `fixed` version markers.
+
+### 3. Cross-validation
+
+Compare external fix thresholds against the values parsed from the Jira description
+in Step 1:
+
+- **Agreement**: use the structured external data as the authoritative fix threshold
+  for Step 2.3 comparisons. The external data takes precedence because it provides
+  machine-readable version constraints rather than prose-parsed ranges.
+- **Disagreement**: present both sources to the engineer in a comparison table and
+  ask which to use before proceeding:
+
+  ```
+  Fix threshold comparison for <CVE-ID> (<library>):
+
+  | Source          | Affected range | Fixed version |
+  |-----------------|----------------|---------------|
+  | Jira description| < 0.11.14      | 0.11.14       |
+  | MITRE CVE API   | < 0.11.13      | 0.11.13       |
+  | OSV.dev         | < 0.11.14      | 0.11.14       |
+
+  The Jira description and OSV.dev agree, but MITRE reports a different threshold.
+  Which fix threshold should be used for version impact analysis?
+  ```
+
+- **Unavailable**: if an external API returns an error (HTTP 404, timeout, network
+  failure), log a warning and fall back to the Jira description data for that source.
+  If **both** external APIs are unavailable, proceed with Jira description data only
+  and note the degraded confidence:
+
+  > "⚠ External CVE databases unavailable — using Jira description data only.
+  > Fix threshold confidence is reduced."
+
+The enriched fix threshold (from this step) is passed to Step 2.3 for use in version
+impact comparisons.
 
 ## Step 2 – Version Impact Analysis
 

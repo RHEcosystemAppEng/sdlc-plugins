@@ -148,6 +148,19 @@
         "Step 4.4 removes the 'security-preemptive' label from TC-8022 — the task is now a standard remediation task linked to a proper CVE Jira",
         "Step 7 skips remediation task creation for this stream because Step 4.4 reconciliation already linked an existing task"
       ]
+    },
+    {
+      "id": 12,
+      "prompt": "Triage Vulnerability issue TC-8030. The issue details are in vuln-issue-enrichment.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has stream suffix [rhtpa-2.2]. The Jira description says affected versions are 'versions prior to the fix' with no precise threshold. The mock MITRE CVE API response (included in the fixture) shows lessThan 0.4.8 and the mock OSV.dev response shows fixed at 0.4.8. Do NOT actually call Jira MCP, git show, WebFetch, or any external tools. Instead, use the mock API responses embedded in the fixture file and write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data from Step 1, write outputs/enrichment.md with the Step 1.5 external CVE data enrichment analysis including the cross-validation table, write outputs/version-impact.md with the version impact table from Step 2 using the enriched fix threshold, and write outputs/remediation.md with the remediation task descriptions.",
+      "expected_output": "A triage analysis where Step 1 extracts imprecise version data from the Jira description ('versions prior to the fix'), Step 1.5 queries MITRE CVE API and OSV.dev to obtain precise fix threshold (0.4.8), the cross-validation table shows agreement between the two external sources, and Step 2.3 uses the enriched threshold (0.4.8) for version impact comparisons.",
+      "files": ["files/vuln-issue-enrichment.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 1 extracts imprecise affected range from the Jira description — the description lacks a specific version threshold (Step 1 Data Extraction)",
+        "Step 1.5 queries MITRE CVE API and extracts lessThan 0.4.8 as the fix threshold from the affected[].versions[] field (§1.62)",
+        "Step 1.5 queries OSV.dev API and extracts fixed version 0.4.8 from the affected[].ranges[].events field (§1.62)",
+        "Step 1.5 cross-validation shows agreement between MITRE and OSV.dev — the enriched fix threshold (0.4.8) is used as the authoritative value for Step 2.3",
+        "Step 2.3 version impact comparison uses the enriched fix threshold (0.4.8) from Step 1.5, not the imprecise Jira description data"
+      ]
     }
   ]
 }
