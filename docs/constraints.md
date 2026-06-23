@@ -69,6 +69,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.57 | `triage-bug` MUST flag multi-root-cause bugs for decomposition rather than silently creating a single Task that bundles unrelated fixes. | `triage-bug/SKILL.md` — Step 6 (Decomposition Guard) |
 | 1.58 | `triage-security` MUST check existing issuelinks before creating sibling "Related" links — MUST NOT create a link if one already exists between the two issues. | `triage-security/jira-triage-operations.md` — Step 4.2 |
 | 1.59 | `triage-security` MUST search for related CVE Jiras by Upstream Affected Component (`customfield_10632`) in Step 4.3 and check existing remediation tasks before creating new ones. | `triage-security/jira-triage-operations.md` — Step 4.3 |
+| 1.60 | `verify-pr` MUST compare eval assertion failures against base branch eval baselines before creating subtasks — only regressions (assertions that pass at baseline but fail on the PR) trigger subtask creation. | `verify-pr/SKILL.md` — Step 6d (Eval failure sub-tasks), `verify-pr/style-conventions.md` — Check 5 |
 
 ### Prior Art — Cross-phase integrity (§1.33–1.35)
 
@@ -154,11 +155,11 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/shared/task-description-template.md` — Rules (§4.12)
 - `plugins/sdlc-workflow/shared/description-digest-protocol.md` — Digest format and verification procedure (§1.33, §1.34, §1.35)
 - `plugins/sdlc-workflow/shared/convention-applicability-rules.md` — File-type applicability matching logic (§1.36, §4.13)
-- `plugins/sdlc-workflow/skills/verify-pr/SKILL.md` — Step 4a (§1.10), Step 4a.1 (§1.28, §1.29), Step 4d (§1.12, §1.25), Important Rules (§1.11, §1.13, §1.22, §1.23, §1.25, §1.26), Step 5b (§1.14), Step 5 (§1.26), Step 6a (§1.30), Step 6d (§1.31), Step 7 (§1.32), Step 14 (§1.19)
+- `plugins/sdlc-workflow/skills/verify-pr/SKILL.md` — Step 4a (§1.10), Step 4a.1 (§1.28, §1.29), Step 4d (§1.12, §1.25), Important Rules (§1.11, §1.13, §1.22, §1.23, §1.25, §1.26), Step 5b (§1.14), Step 5 (§1.26), Step 6a (§1.30), Step 6d (§1.31, §1.60), Step 7 (§1.32), Step 14 (§1.19)
 - `plugins/sdlc-workflow/skills/verify-pr/intent-alignment.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/security.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/correctness.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
-- `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md` — Check 1 Convention applicability (§1.36), Check 2 (§1.16), Check 3 (§1.17), Check 4 (§1.18, §1.19, §1.20, §1.21), Check 5 (§1.30), Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
+- `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md` — Check 1 Convention applicability (§1.36), Check 2 (§1.16), Check 3 (§1.17), Check 4 (§1.18, §1.19, §1.20, §1.21), Check 5 (§1.30, §1.60), Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9)
 - `plugins/sdlc-workflow/skills/report-bug/SKILL.md` — Guardrails (§1.50–1.51), Step 4 Preview and Confirm (§1.52)
 - `plugins/sdlc-workflow/skills/triage-bug/SKILL.md` — Guardrails (§1.53–1.54), Step 5 Front-load reproducer test (§1.55), Step 4 Post root cause comment (§1.56), Step 6 Decomposition Guard (§1.57)

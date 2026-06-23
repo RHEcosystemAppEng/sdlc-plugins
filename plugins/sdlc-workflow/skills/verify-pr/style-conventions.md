@@ -346,6 +346,34 @@ run-evals skill's summary script and follows this format:
 If no "Failed Assertions" section exists (pre-enhancement format or all
 assertions pass), extract only the pass/fail counts from the summary table.
 
+#### 5c.1 — Baseline Comparison
+
+For each skill with eval results, compare the PR's failing assertions against the
+base branch eval baselines to classify each failure as a regression or pre-existing.
+
+1. **Discover baselines**: check if a baseline exists at
+   `evals/<skill>/baselines/latest/`. Follow the same glob pattern used by the
+   correctness sub-agent (Check 3b) for baseline discovery.
+
+2. **Read baseline per-eval results**: if the `baselines/latest/` directory exists,
+   read the per-eval summary table from `baselines/latest/summary.md` to get
+   per-eval pass/fail counts at baseline. Alternatively, read
+   `baselines/latest/<eval-id>/grading.json` for each eval with failures to check
+   whether specific assertions also failed at baseline.
+
+3. **Classify each failing assertion**:
+   - **regression** — the assertion passes at baseline but fails on the PR branch,
+     or no baseline exists for the skill (conservative default — treat unknown as new)
+   - **pre-existing** — the assertion also fails at baseline
+
+4. **Include classification in evidence**: alongside each failing assertion detail
+   (assertion text and evidence), add a `classification` field with the value
+   `regression` or `pre-existing`. This classification is consumed by the
+   orchestrator's Step 6d to gate subtask creation.
+
+The verdict logic in 5d is unchanged — PASS/WARN/N/A semantics are not affected.
+The classification enriches the evidence without changing the verdict.
+
 #### 5d — Produce Verdict
 
 - **PASS** — eval results exist and all assertions pass (0 failures across all evals)
@@ -353,7 +381,7 @@ assertions pass), extract only the pass/fail counts from the summary table.
 - **N/A** — no eval result reviews found in the PR
 
 Evidence: per-eval pass rates, overall pass rate, and any failing assertion
-details (assertion text and evidence for each failure).
+details (assertion text, evidence, and baseline classification for each failure).
 
 ## Output Format
 

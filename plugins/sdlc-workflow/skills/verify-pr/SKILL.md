@@ -534,9 +534,17 @@ Process eval assertion failures from the Style/Conventions sub-agent's Check 5
 proceed if Eval Quality is WARN (i.e., at least one assertion failed). If Eval
 Quality is PASS or N/A, skip this section entirely.
 
-1. **Group by eval ID:** Group failing assertions by eval ID (e.g., all failures
-   from eval-3 become one sub-task). Each eval with at least one failing assertion
-   gets one sub-task. The sub-task summary should include the eval ID and a brief
+Additionally, only create sub-tasks for assertions classified as **regression** by
+the Style/Conventions sub-agent's Check 5 baseline comparison (step 5c.1). If all
+failing assertions are classified as **pre-existing**, skip sub-task creation
+entirely and note the pre-existing failures in the verification report summary as
+informational (e.g., "WARN (N pre-existing, no regressions)" in the Test Quality
+details column). Only assertions classified as **regression** proceed to grouping
+and sub-task creation below.
+
+1. **Group by eval ID:** Group regression-classified failing assertions by eval ID
+   (e.g., all regression failures from eval-3 become one sub-task). Each eval with
+   at least one regression failure gets one sub-task. The sub-task summary should include the eval ID and a brief
    description of the failure category, e.g., "Fix eval-3 assertion failures:
    convention upgrade eligibility, sub-task creation".
 
