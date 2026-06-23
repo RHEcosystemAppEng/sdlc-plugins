@@ -191,3 +191,4 @@ Follows all base template rules (from `shared/task-description-template.md`), pl
   - FCP: ≤ 1.8s
   - DOM Interactive: ≤ 3.5s
 - Improvement percentages help communicate expected impact clearly
+- For query decomposition tasks (Cross-Table OR Filter, Load-All-Then-Search, or Inefficient Queries findings involving query splitting), **Test Requirements** MUST include equivalence tests (decomposed queries return the same result set as the original) and edge case tests (single-branch success, all-branch error path, cross-branch dedup)

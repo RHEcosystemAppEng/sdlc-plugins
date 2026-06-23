@@ -135,6 +135,61 @@
         "outputs/mock-repo/performance/analysis/workflow-analysis-report.md does NOT exist",
         "outputs/mock-repo/performance/analysis/findings-validation.json does NOT exist"
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "Run /sdlc-workflow:performance-analyze-module on mock-backend-scale. Bootstrap: copy files/mock-backend-scale/ to outputs/mock-backend-scale/. Copy files/mock-backend-scale/performance/config-backend-only.json to outputs/mock-backend-scale/performance-config.json. Copy baselines to outputs/mock-backend-scale/performance/baselines/. Write analysis artifacts to outputs/mock-backend-scale/performance/analysis/. Do NOT call Serena (use grep). Do NOT run live SQL. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/. Mark frontend steps and Step 9.7 as not_applicable (backend-only). The backend contains these planted patterns: (1) search.rs: Cross-Table OR Filter — .columns().add_columns() with filtering_with() across LEFT JOINed entities, (2) data_loader.rs: Load-All-Then-Search — loads all items by category then .iter().find() with search_term that was available before the query, (3) components.rs: Unbounded Query-Driving Iteration — for loop over unbounded query result with DB queries per item and no .take() guard, (4) components.rs: Late Pagination — paginate_array() applied after loading all results, (5) migration/m001_create_tables.rs: Redundant Index — PK on (sbom_id, node_id) plus duplicate btree index on same columns, (6) deep_service.rs: 4-level delegation chain requiring chain depth auto-extension (chain_depth=3 is too shallow), (7) ancestor_walker.rs: WITH RECURSIVE on item_relates_to_item junction table with depth limit 50. Run Steps 6.B, 7 (including 7.3.2, 7.4.1, 7.6.2, 7.6.4.1, 7.6.7, 7.6.8), and 9. Treat outputs/mock-backend-scale/ as the target repository.",
+      "expected_output": "All 7 planted patterns should be detected. Cross-Table OR, Late Pagination, Unbounded Iteration, Redundant Indexes, and Load-All-Then-Search should have Confirmed findings. The query ledger should contain a recursive CTE entry for item_relates_to_item and entries from deep_service.rs at depth > 3 (proving auto-extension worked). At least 5 confirmed findings total.",
+      "files": [
+        "files/mock-backend-scale/performance/config-backend-only.json",
+        "files/mock-backend-scale/performance/baselines/benchmark-results.json",
+        "files/mock-backend-scale/Cargo.toml",
+        "files/mock-backend-scale/src/lib.rs",
+        "files/mock-backend-scale/src/models/mod.rs",
+        "files/mock-backend-scale/src/handlers/mod.rs",
+        "files/mock-backend-scale/src/handlers/search.rs",
+        "files/mock-backend-scale/src/handlers/data_loader.rs",
+        "files/mock-backend-scale/src/handlers/components.rs",
+        "files/mock-backend-scale/src/handlers/deep_service.rs",
+        "files/mock-backend-scale/src/handlers/ancestor_walker.rs",
+        "files/mock-backend-scale/migration/m001_create_tables.rs",
+        "files/mock-backend-scale/migration/m002_add_indexes.rs"
+      ],
+      "assertions": [
+        "outputs/mock-backend-scale/performance/analysis/findings-validation.json contains a finding with anti_pattern 'Cross-Table OR Filter' and disposition 'Confirmed'",
+        "outputs/mock-backend-scale/performance/analysis/findings-validation.json contains a finding with anti_pattern 'Late Pagination' and disposition 'Confirmed'",
+        "outputs/mock-backend-scale/performance/analysis/findings-validation.json contains a finding with anti_pattern 'Unbounded Query-Driving Iteration' and disposition 'Confirmed'",
+        "outputs/mock-backend-scale/performance/analysis/findings-validation.json contains a finding with anti_pattern 'Redundant Database Indexes' and disposition 'Confirmed'",
+        "outputs/mock-backend-scale/performance/analysis/findings-validation.json contains a finding with anti_pattern 'Load-All-Then-Search' and disposition 'Confirmed'",
+        "outputs/mock-backend-scale/performance/analysis/query-ledger.json contains an entry with is_recursive_cte true or is_recursive_cte: true, and target_table containing 'item_relates_to_item'",
+        "outputs/mock-backend-scale/performance/analysis/query-ledger.json contains entries from deep_service.rs at depth greater than 3 (proving chain depth auto-extension worked)",
+        "outputs/mock-backend-scale/performance/analysis/findings-validation.json statistics show at least 5 confirmed findings"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Run /sdlc-workflow:performance-analyze-module on mock-backend-fp-scale. Bootstrap: copy files/mock-backend-fp-scale/ to outputs/mock-backend-fp-scale/. Copy files/mock-backend-fp-scale/performance/config-backend-only.json to outputs/mock-backend-fp-scale/performance-config.json. Copy baselines to outputs/mock-backend-fp-scale/performance/baselines/. Write analysis artifacts to outputs/mock-backend-fp-scale/performance/analysis/. Do NOT call Serena (use grep). Do NOT run live SQL. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/. Mark frontend steps and Step 9.7 as not_applicable (backend-only). The backend contains patterns that should NOT be flagged as anti-patterns: (1) valid_or.rs: OR across INNER JOINed small reference table (status_code) — optimizer handles INNER JOIN OR well, should not be flagged as Cross-Table OR, (2) graph_builder.rs: load all nodes then build petgraph and run Dijkstra — graph traversal IS the output, should be Discarded by Load-All-Then-Search guard, (3) bounded_loop.rs: loop with .take(100) before iteration — NOT unbounded, (4) db_pagination.rs: pagination via .limit().offset() on the query — correct placement, NOT late pagination, (5) migration/m001_create_tables.rs: single-column index (name) + composite index (name, category_id) — different query coverage, NOT redundant. Run Steps 6.B, 7 (including 7.3.2, 7.4.1, 7.6.2, 7.6.4.1, 7.6.7, 7.6.8), and 9. Treat outputs/mock-backend-fp-scale/ as the target repository.",
+      "expected_output": "All false-positive patterns should be correctly handled: INNER JOIN OR not flagged, graph_builder discarded by traversal guard, bounded loop not flagged, DB pagination not flagged, prefix indexes not flagged. The graph_builder finding should have disposition Discarded with reason mentioning graph traversal.",
+      "files": [
+        "files/mock-backend-fp-scale/performance/config-backend-only.json",
+        "files/mock-backend-fp-scale/performance/baselines/benchmark-results.json",
+        "files/mock-backend-fp-scale/Cargo.toml",
+        "files/mock-backend-fp-scale/src/lib.rs",
+        "files/mock-backend-fp-scale/src/models/mod.rs",
+        "files/mock-backend-fp-scale/src/handlers/mod.rs",
+        "files/mock-backend-fp-scale/src/handlers/valid_or.rs",
+        "files/mock-backend-fp-scale/src/handlers/graph_builder.rs",
+        "files/mock-backend-fp-scale/src/handlers/bounded_loop.rs",
+        "files/mock-backend-fp-scale/src/handlers/db_pagination.rs",
+        "files/mock-backend-fp-scale/migration/m001_create_tables.rs"
+      ],
+      "assertions": [
+        "outputs/mock-backend-fp-scale/performance/analysis/findings-validation.json does NOT contain a confirmed finding with anti_pattern 'Cross-Table OR Filter' (INNER JOIN OR is not flagged or is Discarded)",
+        "outputs/mock-backend-fp-scale/performance/analysis/findings-validation.json contains a finding for graph_builder.rs with disposition 'Discarded' and reason mentioning 'graph traversal' or 'full structure' or 'petgraph' or 'BFS' or 'Dijkstra'",
+        "outputs/mock-backend-fp-scale/performance/analysis/findings-validation.json does NOT contain a confirmed finding for bounded_loop.rs (take(100) guard recognized)",
+        "outputs/mock-backend-fp-scale/performance/analysis/findings-validation.json does NOT contain a confirmed finding with anti_pattern 'Late Pagination' (DB-level pagination correctly recognized)",
+        "outputs/mock-backend-fp-scale/performance/analysis/findings-validation.json does NOT contain a confirmed finding with anti_pattern 'Redundant Database Indexes' (prefix index with distinct query coverage not flagged)"
+      ]
     }
   ]
 }

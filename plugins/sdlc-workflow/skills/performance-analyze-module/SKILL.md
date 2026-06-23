@@ -81,10 +81,10 @@ Write `{analysis_dir}/analysis-progress.json` based on `(metric_type, backend_av
 
 | metric_type | backend_available | Steps → `pending` | Steps → `not_applicable` |
 |---|---|---|---|
-| `frontend` | any | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.6.1-7.6.6, 8.A-D, 8.F, 9.7 |
-| `backend` | `true` | 6.B, 7.1-7.7, 7.6.1-7.6.6, 9.7 | 5.1-5.3, 6.1-6.9, 8.A-D, 8.F |
-| `hybrid` | `true` | 5.1-5.3, 6.1-6.9, 6.B, 7.1-7.7, 7.6.1-7.6.6, 8.A-D, 8.F, 9.7 | (none) |
-| `hybrid` | `false` | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.6.1-7.6.6, 8.A-D, 8.F, 9.7 |
+| `frontend` | any | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 8.A-D, 8.F, 9.7 |
+| `backend` | `true` | 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 9.7 | 5.1-5.3, 6.1-6.9, 8.A-D, 8.F |
+| `hybrid` | `true` | 5.1-5.3, 6.1-6.9, 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 8.A-D, 8.F, 9.7 | (none) |
+| `hybrid` | `false` | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 8.A-D, 8.F, 9.7 |
 
 Status values: `pending` (not yet run), `done` (completed — requires `findings` count, 0 = "no instances"), `skipped` (runtime scope guard excluded a step that could apply — requires `reason`), `not_applicable` (step does not apply to this `metric_type`/`backend_available` combo — use for all steps initialized as `not_applicable` in the table above), `optional_skipped` (user declined or prerequisites not met — requires `reason`). Use `not_applicable` (not `skipped`) for steps excluded by metric_type at initialization.
 
@@ -147,6 +147,12 @@ All detection steps (6.x and 7.x) classify findings using this table. Each step 
 | Seq Scan (9.7) | >10K rows in loop query | 1K-10K rows or single query | <1K rows |
 | Row Estimate Mismatch (9.7) | >100x mismatch | 10x-100x mismatch | <10x mismatch |
 | Nested Loop on Large Table (9.7) | Inner scan >10K rows | Inner 1K-10K rows | Inner <1K rows |
+| Unbounded Iteration (7.3.2) | No guard + DB queries with multiplier > 1 per iteration | No guard + single DB query per iteration | Guard exists but generous (> 1000) |
+| Cross-Table OR (7.6.7) | OR spans 3+ LEFT JOINed entities on likely-large tables | OR spans 2 LEFT JOINed entities | Small reference tables only |
+| Load-All-Then-Search (7.6.8) | Simple search criteria, known at query time, user-facing | Partially known criteria | Bounded data or reused collection |
+| Late Pagination (7.4.1) | Unbounded load + post-load slice | Bounded load + post-load slice | Small collection or admin-only |
+| Redundant Indexes (7.6.4.1) | Exact duplicate on junction/relationship table | Exact duplicate on regular table | Exact duplicate on small table |
+| Recursive CTE Risk (7.6.2) | Junction table, no depth limit | Junction table, depth limit present | Entity table or tight limit (< 10) |
 
 **Impact formulas** (use throughout):
 - Over-fetching: `(unused/total) × response_size ÷ (bandwidth_mbps × 125000)`
@@ -154,6 +160,7 @@ All detection steps (6.x and 7.x) classify findings using this table. Each step 
 - Waterfall: `chain_time - (slowest × 1.2)`
 - Layout thrashing: `(iterations - 1) × reflow_cost_ms`
 - Caching: `operation_time × cache_hit_rate`
+- Cross-Table OR: heuristic only — "Actual impact depends on table sizes (verify with EXPLAIN in Step 9.7)." Do not produce numeric `impact_ms`
 
 ## Step 6 – Detect Frontend Anti-Patterns
 
@@ -300,9 +307,46 @@ Concurrent execution patterns (`buffer_unordered`, `Promise.all`, `asyncio.gathe
 
 **Distinguish from fixed-set concurrency:** Do NOT flag concurrent execution over a **fixed, small set** of known operations (e.g., `tokio::try_join!(query_a, query_b, query_c)` or `Promise.all([fetchUser(), fetchProfile(), fetchSettings()])`). Only flag concurrent iteration over a **dynamic collection** whose size scales with input data.
 
+### Step 7.3.2 – Detect Unbounded Query-Driving Iteration
+
+Detects loops iterating a query result set of unknown/unbounded size where each iteration triggers DB queries, with no `.take(N)`, `if len > MAX`, or LIMIT guard.
+
+**Detection:** Find loops (`for item in collection`) where `collection` is a query result (Vec from `.all()`, `.fetch_all()`, etc.) and the loop body calls DB queries (direct or via function calls). Check for size guards before the loop.
+
+| Framework | Unbounded Iteration Pattern |
+|---|---|
+| Rust (SeaORM) | `let items = Entity::find().all(conn).await?; for item in items { OtherEntity::find_by_id(item.ref_id).one(conn).await? }` |
+| Rust (sqlx) | `let rows = query!(...).fetch_all(&pool).await?; for row in rows { query!(..., row.id).fetch_one(&pool).await? }` |
+| Java (JPA) | `List<Item> items = repo.findAll(); for (Item i : items) { repo2.findById(i.getRefId()) }` |
+| Python (SQLAlchemy) | `items = session.query(Model).all(); for item in items: session.query(Other).get(item.ref_id)` |
+| Node (TypeORM) | `const items = await repo.find(); for (const i of items) { await repo2.findOne(i.refId) }` |
+
+**NOT unbounded:** Loop has `.take(N)` or `[..N]` before iteration, or an `if collection.len() > MAX { return Err(...) }` guard, or collection comes from a query with explicit `.limit()`.
+
+**Severity:** Classify per severity table.
+
+**Finding output:** Include `loop_source` (what produces the unbounded collection), `guard_check` (present/absent/generous), `query_count_per_iteration`.
+
 ### Step 7.4 – Detect Missing Pagination
 
 Check if collection endpoints (`Vec<T>`, `List<T>`) have pagination parameters (`page`, `limit`, `offset`) and query methods (`.limit()`, `.offset()`, `setMaxResults()`).
+
+### Step 7.4.1 – Late Pagination Detection
+
+If pagination parameters are found (Step 7.4), trace where they are consumed. If they flow into a post-load slicing operation (`paginate_array()`, `[offset..offset+limit]`, `.skip(n).take(n)` on an in-memory collection) rather than into the SQL query (`.limit()`, `.offset()`, `LIMIT $1 OFFSET $2`), flag as "Late Pagination."
+
+| Framework | Late Pagination Pattern |
+|---|---|
+| Rust | `let all = service.load_all(conn).await?; paginated.paginate_array(&all)` |
+| Java | `List<T> all = service.findAll(); return all.subList(offset, offset + limit)` |
+| Python | `all_items = service.get_all(); return all_items[offset:offset+limit]` |
+| Node | `const all = await service.findAll(); return all.slice(offset, offset + limit)` |
+
+**NOT late pagination:** Pagination parameters flow into `.limit()`, `.offset()`, or `LIMIT $1 OFFSET $2` in the SQL query itself.
+
+**Evidence:** Identify both (a) the pagination parameter source and (b) the consumption point. Report the gap: "Pagination exists at API layer but is applied after loading N items into memory."
+
+**Severity:** Classify per severity table.
 
 ### Step 7.5 – Detect Missing Caching
 
@@ -336,6 +380,8 @@ Trace function calls from each handler into service methods, model builders, and
 
 **Depth:** Use `analysis_chain_depth` (default 3) from config.
 
+**Auto-extension on pure delegation:** When the depth limit is reached on a function that consists entirely of delegating to another function — i.e., it calls a single other function and returns its result without transformation (e.g., `self.inner.method(args)`, `self.0.method(args)`) — extend the depth limit by 1 for that call path. Apply recursively up to `chain_depth + 3` (hard cap). This ensures deeply layered architectures (common in Rust with inner/outer service patterns) don't hide the actual query site. **Delegation indicators:** Function body has ≤ 3 statements, the last of which is a return/tail-call to another method. No loops, no conditionals branching to different query paths.
+
 **For each handler**, initialize `call_graph = []`, `visited = {handler}`, `query_ledger = []`, `depth = 0`.
 
 **Recursive tracing:** For each call site in function body, resolve the callee (`self.method` → same impl, `service.method` → resolve type, trait methods → concrete impl). Use Serena `find_symbol`/`find_declaration` when live, grep+Read otherwise.
@@ -350,9 +396,15 @@ For each resolved callee: check cycle/depth limit, read body, apply anti-pattern
 
 After building the query ledger, write `{analysis_dir}/query-ledger.json`. This structured artifact is consumed by Step 9.7 (live SQL analysis) and must exist before Step 9.7 runs.
 
-Schema: `[{query_id, description, source_file, source_line, depth, loop_multiplier, orm_snippet, raw_sql, query_type, is_literal_sql}]`
+Schema: `[{query_id, description, source_file, source_line, depth, loop_multiplier, orm_snippet, raw_sql, query_type, is_literal_sql, is_recursive_cte, target_table, depth_limit, table_pattern}]`
 - `is_literal_sql`: `true` for `query!()` macros, `@Query`, raw SQL strings. `false` for ORM builder chains.
 - `query_type`: SELECT, INSERT, UPDATE, DELETE, or UNKNOWN.
+- `is_recursive_cte`: `true` when raw SQL contains `WITH RECURSIVE`. Default `false`.
+- `target_table`: The table referenced in the recursive CTE's base case (e.g., `package_relates_to_package`). Only set when `is_recursive_cte: true`.
+- `depth_limit`: The depth limit extracted from the SQL (e.g., `100` from `WHERE depth < 100`), or `"none"` if no limit found. Only set when `is_recursive_cte: true`.
+- `table_pattern`: `"junction"` if the target table appears to be a junction/relationship table (compound PK with 2+ FK columns, or table name containing `relates`, `relationship`, `edge`, `link`, `closure`), otherwise `"entity"`. Only set when `is_recursive_cte: true`.
+
+**Recursive CTE risk flagging:** When `is_recursive_cte: true`, flag as a scale risk finding with anti-pattern type `Recursive CTE Risk`. Classify severity per the severity table. Include `target_table`, `depth_limit`, and `table_pattern` in the finding output.
 
 **Outputs:** Call graph (tree format: `endpoint → service → model [file:line] ← N queries`) and query ledger table (per-query: description, source, depth, loop multiplier, conditional†, cache-gated‡, effective count; totals for all and warm-cache).
 
@@ -372,6 +424,19 @@ Cross-reference WHERE/JOIN/ORDER BY columns from query_ledger against migration 
 
 Tables from live EXPLAIN findings (Step 9.7.4) are inherently validated — the query executed successfully against the database.
 
+### Step 7.6.4.1 – Redundant Index Detection
+
+After building the index registry (Step 7.6.4), compare all index entries for the same table. Flag as redundant when:
+
+1. Two indexes have **identical column sets** (regardless of name)
+2. A non-PK index duplicates the primary key columns exactly
+
+**NOT redundant (do not flag):**
+- A shorter single-column index that is a prefix of a multi-column index. The shorter index can be legitimately faster for queries filtering only on that column (smaller index, index-only scans). Only flag prefix indexes as redundant when the query ledger shows zero queries that use the shorter index without also using the additional columns of the longer one.
+- Indexes with different column orderings (different leading columns serve different query patterns).
+
+**Severity:** Classify per severity table. Base severity on table pattern: junction/relationship tables (compound FK columns) are likely large, regular entity tables are medium, small reference/lookup tables are low.
+
 ### Step 7.6.5 – Inter-Query Duplication Detection
 
 Collect raw SQL for all queries in each handler's ledger. Extract CTE names and subquery aliases. Flag CTEs/subqueries appearing in 2+ queries with identical or semantically equivalent SQL bodies. Estimate overhead: `(occurrences - 1) × db_latency_ms`.
@@ -379,6 +444,59 @@ Collect raw SQL for all queries in each handler's ledger. Extract CTE names and 
 ### Step 7.6.6 – Cache Effectiveness Analysis
 
 For endpoints with a confirmed cache AND baseline cache data: partition query_ledger into cache-gated vs cache-bypass queries. If `bypass_ratio > 0.5`, cache-bypass queries dominate — the cache delivers minimal improvement. List the anti-pattern findings producing bypass queries; these must be fixed before cache improvements are worthwhile.
+
+### Step 7.6.7 – Detect Cross-Table OR Filter Patterns
+
+Detects ORM query builders that compose filter expressions across multiple LEFT JOINed entities, producing OR conditions that span tables and defeat index usage.
+
+**Detection:** Find ORM filter-composition calls that register columns from multiple entities. For each:
+
+1. Identify the entities whose columns are registered (e.g., `Entity.columns().add_columns(OtherEntity.columns())`)
+2. Check if those entities are joined via LEFT JOIN in the query builder
+3. If a bare-value filter (no field qualifier) generates ILIKE/OR across ALL registered columns, including columns from LEFT JOINed tables → flag
+
+| Framework | Cross-Table OR Pattern |
+|---|---|
+| Rust (SeaORM) | `.columns().add_columns(other::Entity.columns())` with `.filtering_with(query, columns)` where query has no field qualifier |
+| Rust (Diesel) | `.or_filter()` spanning columns from `.left_join()` tables |
+| Java (JPA) | `CriteriaBuilder.or()` with predicates from joined entities |
+| Python (SQLAlchemy) | `or_()` with columns from `.outerjoin()` tables |
+| Node (TypeORM) | `Or()` conditions spanning `leftJoinAndSelect()` relations |
+
+**NOT cross-table OR:** OR conditions within a single table. OR conditions on INNER JOINed tables (optimizer can handle these better). Explicit field-qualified filters (`q=name~openssl`) targeting a single entity.
+
+**Severity:** Classify per severity table. Infer table size from data model: junction/relationship tables (compound FK columns) are likely large. Reference/lookup tables with simple PKs are likely small.
+
+**Impact estimate:** Label as heuristic: "Estimated overhead: High — cross-table OR on LEFT JOINed tables typically forces sequential scan, defeating indexes. Actual impact depends on table sizes (verify with EXPLAIN in Step 9.7)." Do not produce a numeric `impact_ms` — this anti-pattern's cost is data-volume-dependent and cannot be estimated from source code alone.
+
+### Step 7.6.8 – Detect Load-All-Then-Search
+
+Detects patterns where all data for a key is loaded into memory and then searched/filtered for a specific subset, when the search criteria are known at query time and could be pushed to the database.
+
+**Detection:** Find functions that:
+
+1. Execute a query with only a parent-key filter (`WHERE parent_id = $1`) loading all children
+2. Collect results into a Vec/HashMap/collection
+3. Then search/filter that collection for items matching criteria that were available before the query
+
+The anti-pattern is: the search criteria exist at the call site, but the query doesn't include them.
+
+**Key distinction — what IS and IS NOT this anti-pattern:**
+- **IS:** Load all products for a category → iterate to find products matching a user's search term. The search term was known before the query; it should be a WHERE clause.
+- **IS NOT:** Load all nodes for an SBOM → build a dependency graph → traverse the graph to find ancestors. Graph traversal requires the full structure; the traversal operation itself can't be expressed as a SQL WHERE clause.
+
+| Framework | Load-All-Then-Search Pattern |
+|---|---|
+| Rust (SeaORM/sqlx) | `Entity::find().filter(Column::ParentId.eq(id)).all(conn)` → `.iter().find(\|x\| x.name == search_term)` |
+| Java (JPA) | `findByParentId(id)` → `stream().filter(x -> x.getName().equals(term))` |
+| Python (SQLAlchemy) | `session.query(M).filter_by(parent=id).all()` → `[x for x in results if x.name == term]` |
+
+**False-positive guards:**
+1. If the in-memory structure is used for graph/tree traversal (petgraph operations, BFS/DFS, recursive walks) → **discard**. The full structure is necessary for traversal.
+2. If the loaded data set is used by multiple downstream consumers with different filter criteria → **downgrade to Low**. Pre-loading avoids N separate queries.
+3. If the filter criteria require application logic not expressible in SQL (regex, custom comparators, cross-record calculations) → **discard**.
+
+**Severity:** Classify per severity table.
 
 ### Step 7.7 – Backend Dynamic Performance Testing
 
