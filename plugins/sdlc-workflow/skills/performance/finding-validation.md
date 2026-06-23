@@ -73,6 +73,41 @@ Path: `{analysis_dir}/findings-validation.json`
 | `findings[].reason` | Required for all dispositions |
 | `findings[].explain_data` | Optional. Required when `step` is `"9.7.4"`. Must be absent for non-EXPLAIN findings. Contains: `execution_time_ms`, `planning_time_ms`, `bottleneck_type`, `table`, `estimated_rows`, `actual_rows`, `row_mismatch_ratio` |
 
+## Registered Anti-Pattern Types
+
+The `anti_pattern` field must use one of the following values:
+
+| Anti-Pattern Type | Detection Step | Scope |
+|---|---|---|
+| Over-Fetching | 6.1, 8.A | Frontend / Cross-Layer |
+| N+1 Queries (Frontend) | 6.2 | Frontend |
+| N+1 Queries (Backend) | 7.3 | Backend |
+| Pre-Fetchable Concurrent Queries | 7.3.1 | Backend |
+| Unbounded Query-Driving Iteration | 7.3.2 | Backend |
+| Waterfall Loading | 6.3 | Frontend |
+| Render-Blocking Resources | 6.4 | Frontend |
+| Unused Code | 6.5 | Frontend |
+| Expensive Re-Renders | 6.6 | Frontend |
+| Long Tasks | 6.7 | Frontend |
+| Layout Thrashing | 6.8 | Frontend |
+| Missing Lazy Loading | 6.9 | Frontend |
+| Missing Pagination | 7.4 | Backend |
+| Late Pagination | 7.4.1 | Backend |
+| Missing Caching | 7.5 | Backend |
+| Inefficient Queries | 7.6 | Backend |
+| Unused Table Joins | 7.6.1 | Backend |
+| Missing Database Indexes | 7.6.4 | Backend |
+| Redundant Database Indexes | 7.6.4.1 | Backend |
+| SQL Duplication | 7.6.5 | Backend |
+| Cross-Table OR Filter | 7.6.7 | Backend |
+| Load-All-Then-Search | 7.6.8 | Backend |
+| Recursive CTE Risk | 7.6.2 | Backend |
+| Sequential Scan | 9.7.4 | Backend (EXPLAIN) |
+| Row Estimate Mismatch | 9.7.4 | Backend (EXPLAIN) |
+| Nested Loop on Large Table | 9.7.4 | Backend (EXPLAIN) |
+| Cross-Layer Computation Waste | 8.F | Cross-Layer |
+| Wasted Computation | 7.6.3 | Backend |
+
 ## Disposition ↔ Checks Consistency
 
 | Disposition | Required outcomes |
