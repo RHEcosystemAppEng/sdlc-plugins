@@ -19,6 +19,7 @@ spec = importlib.util.spec_from_file_location("jira_client", jira_client_path)
 jira_client = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(jira_client)
 markdown_to_adf = jira_client.markdown_to_adf
+sanitize_adf = jira_client.sanitize_adf
 
 
 def test_code_block_with_blank_lines():
@@ -195,6 +196,189 @@ After"""
     print("✓ Horizontal rule test passed")
 
 
+def test_sanitize_adf_converts_tasklist_to_bulletlist():
+    """Verifies that taskList/taskItem nodes without localId are converted to bulletList/listItem."""
+    # Given an ADF document with taskList/taskItem nodes missing localId
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {
+                "type": "taskList",
+                "content": [
+                    {
+                        "type": "taskItem",
+                        "attrs": {"state": "TODO"},
+                        "content": [{"type": "text", "text": "First criterion"}]
+                    },
+                    {
+                        "type": "taskItem",
+                        "attrs": {"state": "TODO"},
+                        "content": [{"type": "text", "text": "Second criterion"}]
+                    }
+                ]
+            }
+        ]
+    }
+
+    # When sanitizing the ADF
+    result = sanitize_adf(doc)
+
+    # Then taskList becomes bulletList and taskItems become listItems
+    list_node = result["content"][0]
+    assert list_node["type"] == "bulletList", f"Expected bulletList, got {list_node['type']}"
+    assert "attrs" not in list_node, "bulletList should not have attrs"
+
+    for item in list_node["content"]:
+        assert item["type"] == "listItem", f"Expected listItem, got {item['type']}"
+        assert "attrs" not in item, "listItem should not have attrs"
+
+    assert list_node["content"][0]["content"][0]["text"] == "First criterion"
+    assert list_node["content"][1]["content"][0]["text"] == "Second criterion"
+
+    print("✓ sanitize_adf converts taskList to bulletList test passed")
+
+
+def test_sanitize_adf_preserves_content():
+    """Verifies that taskItem inner content (paragraph and text nodes) is preserved."""
+    # Given a taskItem with nested paragraph content
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {
+                "type": "taskList",
+                "content": [
+                    {
+                        "type": "taskItem",
+                        "attrs": {"state": "TODO"},
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "content": [
+                                    {"type": "text", "text": "Bold text", "marks": [{"type": "strong"}]},
+                                    {"type": "text", "text": " and normal text"}
+                                ]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+
+    # When sanitizing
+    result = sanitize_adf(doc)
+
+    # Then inner content is preserved
+    item = result["content"][0]["content"][0]
+    para = item["content"][0]
+    assert para["type"] == "paragraph"
+    assert para["content"][0]["text"] == "Bold text"
+    assert para["content"][0]["marks"] == [{"type": "strong"}]
+    assert para["content"][1]["text"] == " and normal text"
+
+    print("✓ sanitize_adf preserves content test passed")
+
+
+def test_sanitize_adf_handles_nested_tasklist():
+    """Verifies that nested taskList inside other ADF containers is recursively sanitized."""
+    # Given a taskList nested inside a panel
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {
+                "type": "panel",
+                "attrs": {"panelType": "info"},
+                "content": [
+                    {
+                        "type": "taskList",
+                        "content": [
+                            {
+                                "type": "taskItem",
+                                "attrs": {"state": "TODO"},
+                                "content": [{"type": "text", "text": "Nested item"}]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+
+    # When sanitizing
+    result = sanitize_adf(doc)
+
+    # Then the nested taskList is also converted
+    panel = result["content"][0]
+    assert panel["type"] == "panel", "Panel should remain unchanged"
+    nested_list = panel["content"][0]
+    assert nested_list["type"] == "bulletList", f"Expected bulletList, got {nested_list['type']}"
+    assert nested_list["content"][0]["type"] == "listItem"
+
+    print("✓ sanitize_adf handles nested taskList test passed")
+
+
+def test_sanitize_adf_noop_for_bulletlist():
+    """Verifies that ADF with only bulletList/listItem passes through unchanged."""
+    # Given an ADF document with standard bulletList
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {
+                "type": "bulletList",
+                "content": [
+                    {
+                        "type": "listItem",
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "content": [{"type": "text", "text": "Already a bullet"}]
+                            }
+                        ]
+                    }
+                ]
+            }
+        ]
+    }
+
+    import copy
+    original = copy.deepcopy(doc)
+
+    # When sanitizing
+    result = sanitize_adf(doc)
+
+    # Then the document is unchanged
+    assert result == original, "bulletList document should pass through unchanged"
+
+    print("✓ sanitize_adf no-op for bulletList test passed")
+
+
+def test_create_issue_adf_has_no_tasklist():
+    """Verifies that create_issue() output ADF contains no taskList/taskItem nodes."""
+    # Given markdown with checkbox-style items (the format that triggers the bug)
+    md = "## Acceptance Criteria\n\n- [ ] First criterion\n- [ ] Second criterion"
+
+    # When converting to ADF (same path as create_issue)
+    adf = sanitize_adf(markdown_to_adf(md))
+
+    # Then no taskList or taskItem nodes should exist anywhere in the tree
+    def find_node_types(node):
+        types = {node.get("type")}
+        for child in node.get("content", []):
+            if isinstance(child, dict):
+                types.update(find_node_types(child))
+        return types
+
+    all_types = find_node_types(adf)
+    assert "taskList" not in all_types, "ADF should not contain taskList nodes"
+    assert "taskItem" not in all_types, "ADF should not contain taskItem nodes"
+
+    print("✓ create_issue ADF has no taskList test passed")
+
+
 def run_all_tests():
     """Run all tests and report results."""
     tests = [
@@ -205,6 +389,11 @@ def run_all_tests():
         test_multiple_code_blocks,
         test_nested_structures,
         test_horizontal_rule,
+        test_sanitize_adf_converts_tasklist_to_bulletlist,
+        test_sanitize_adf_preserves_content,
+        test_sanitize_adf_handles_nested_tasklist,
+        test_sanitize_adf_noop_for_bulletlist,
+        test_create_issue_adf_has_no_tasklist,
     ]
 
     failed = []
