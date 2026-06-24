@@ -394,6 +394,35 @@ def parse_inline_formatting(text: str) -> List[Dict[str, Any]]:
     return nodes if nodes else [{"type": "text", "text": text}]
 
 
+def sanitize_adf(doc: Dict[str, Any]) -> Dict[str, Any]:
+    """Sanitize ADF by converting taskList/taskItem nodes to bulletList/listItem.
+
+    The Jira ADF spec requires a localId attribute on taskList and taskItem nodes,
+    but LLMs frequently omit it. Converting to bulletList/listItem avoids the
+    requirement entirely and prevents 400 INVALID_INPUT errors.
+
+    Args:
+        doc: ADF document to sanitize
+
+    Returns:
+        Sanitized ADF document (modified in place and returned)
+    """
+    def walk(node: Dict[str, Any]) -> None:
+        if node.get("type") == "taskList":
+            node["type"] = "bulletList"
+            node.pop("attrs", None)
+        elif node.get("type") == "taskItem":
+            node["type"] = "listItem"
+            node.pop("attrs", None)
+
+        for child in node.get("content", []):
+            if isinstance(child, dict):
+                walk(child)
+
+    walk(doc)
+    return doc
+
+
 # =============================================================================
 # JIRA API Operations
 # =============================================================================
@@ -438,7 +467,7 @@ def create_issue(
         "fields": {
             "project": {"key": project_key},
             "summary": summary,
-            "description": markdown_to_adf(description_md),
+            "description": sanitize_adf(markdown_to_adf(description_md)),
             "issuetype": {"id": issue_type} if issue_type.isdigit() else {"name": issue_type},
         }
     }
@@ -479,7 +508,7 @@ def add_comment(issue_key: str, comment_md: str) -> Dict[str, Any]:
     Returns:
         Created comment object
     """
-    data = {"body": markdown_to_adf(comment_md)}
+    data = {"body": sanitize_adf(markdown_to_adf(comment_md))}
     return make_request('POST', f"issue/{issue_key}/comment", data)
 
 
