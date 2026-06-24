@@ -1,0 +1,55 @@
+{
+  "assertion_results": [
+    {
+      "text": "Bug parsing correctly extracts all four required sections (Description, Steps to Reproduce, Expected Result, Actual Result) using the heading formats from bug-template-mock.md (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md contains all four required sections: '### Issue Description' (lines 18-21), '### Steps to Reproduce' (lines 23-29), '### Expected Result' (lines 31-34), '### Actual Result' (lines 36-39). All four sections have correct content extracted. The validation line (line 59) confirms: 'All required sections present: Issue Description, Steps to Reproduce, Expected Result, Actual Result. Bug description conforms to the template at docs/templates/bug-template.md.' The template bug-template-mock.md defines these four sections with bold heading formats (e.g., '### **Issue Description**'); the output uses non-bold headings but correctly identifies and extracts all four sections as defined by the template."
+    },
+    {
+      "text": "Bug validation confirms the issue type ID (10020) matches the Bug issue type ID from Bug Configuration (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md line 8: '**Issue Type**: Bug (ID: 10020) -- matches Bug Configuration (Bug issue type ID: 10020)'. The output explicitly validates the issue type ID 10020 and confirms it matches the Bug Configuration."
+    },
+    {
+      "text": "Investigation identifies the trailing-whitespace heading extraction as the root cause — line[3:] does not strip whitespace (Steps 2-3)",
+      "passed": true,
+      "evidence": "investigation.md lines 19-20: 'The heading extraction logic... uses: section_name = line[3:]  # Extracts heading text after \"## \". This does NOT call .strip() on the extracted heading text.' Lines 22-24: 'When a heading line contains trailing whitespace (e.g., ## Migration Patterns  \\n), the extracted section name becomes \"Migration Patterns  \" (with trailing spaces).' Line 35: 'The heading extraction at line[3:] is where the behavior diverges from expected. The lack of .strip() causes the exact-match comparison to fail silently.'"
+    },
+    {
+      "text": "Root cause comment includes: what is broken (heading extraction does not strip trailing whitespace), where it is broken (plan-feature convention lookup), and how to verify the fix (reproducer test with whitespace in heading) (Step 4)",
+      "passed": true,
+      "evidence": "root-cause.md line 9: WHAT — 'extracts CONVENTIONS.md section headings using line[3:], which preserves any trailing whitespace from the heading line'. WHERE — 'The plan-feature skill's convention conformance analysis' (line 9) and 'convention-aware task enrichment section: exact-match lookup convention_name in discovered_conventions fails' (line 14). HOW TO VERIFY — lines 22-27: 'Create or extend the eval fixture at evals/plan-feature/files/conventions-mock.md to include a convention section with trailing whitespace on the heading... Assert that the generated task's Implementation Notes include the convention reference... Before the fix, this assertion should fail. After the fix, it should pass.'"
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md Acceptance Criteria section, first item (line 49): '- [ ] A reproducer test exists that uses a CONVENTIONS.md fixture with trailing whitespace on heading lines, demonstrates the convention is silently dropped before the fix, and passes after the fix'. This precedes the fix criteria on lines 50-52 (heading extraction strips whitespace, conventions correctly included, no regression)."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST test requirement — with explicit assertion guidance derived from the Steps to Reproduce (Step 5 Test Requirements ordering)",
+      "passed": true,
+      "evidence": "task-description.md Test Requirements section, first item (line 55): '- [ ] Reproducer test: create an eval fixture evals/plan-feature/files/conventions-trailing-whitespace-mock.md with ## Migration Patterns   (trailing spaces on heading). Run the convention conformance analysis against it and assert the generated task's Implementation Notes include Per CONVENTIONS.md Migration Patterns: add Index::create() for all FK columns. The test must fail before the fix and pass after.' The assertion guidance ('assert... include Per CONVENTIONS.md Migration Patterns: add Index::create() for all FK columns') is explicitly derived from the bug's Steps to Reproduce expected result."
+    },
+    {
+      "text": "Task description includes a Bug Context section with Bug key (ACME-500), Steps to Reproduce, Expected/Actual Result, and Root Cause summary (Step 5 Bug Context extension)",
+      "passed": true,
+      "evidence": "task-description.md lines 63-68: '## Bug Context' section contains: Bug key '[ACME-500](https://mock-jira.example.com/browse/ACME-500)' (line 64); Steps to Reproduce (line 65); Expected Result (line 66); Actual Result (line 67); Root Cause summary (line 68: 'Heading extraction uses line[3:] without .strip(), preserving trailing whitespace...')."
+    },
+    {
+      "text": "Task description sets Target Branch to main (Step 5 Target Branch)",
+      "passed": true,
+      "evidence": "task-description.md line 16: '## Target Branch' followed by line 17: 'main'."
+    },
+    {
+      "text": "Task description output includes ai-generated-jira in the Jira API metadata block showing it would be passed as a label to jira.create_issue (Step 5 Task creation)",
+      "passed": true,
+      "evidence": "task-description.md lines 1-7: '# Jira API Metadata\\nParameters for jira.create_issue:\\n- **Project key**: ACME\\n- **Issue type**: Task\\n- **Labels**: ai-generated-jira'. The label ai-generated-jira is explicitly listed in the Jira API metadata block as a parameter for jira.create_issue."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9,
+    "pass_rate": 1.0
+  }
+}

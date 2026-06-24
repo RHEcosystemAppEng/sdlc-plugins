@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 7 Case A creates standard remediation tasks for the current stream (rhtpa-2.2) with standard labels ['ai-generated-jira', 'Security', 'CVE-2026-55123'] and 'Depend' link to TC-8020",
+      "passed": true,
+      "evidence": "In remediation.md, Case A creates two tasks for stream rhtpa-2.2. Task 1 (upstream backport) has labels: 'ai-generated-jira', 'Security', 'CVE-2026-55123' (line 16-17) and Jira operation: jira.create_link(inwardIssue: \"TC-8020\", outwardIssue: <upstream-task-key>, type: \"Depend\") (line 65). Task 2 (downstream propagation) has the same labels (line 70) and also includes a 'Depend' link to TC-8020: jira.create_link(inwardIssue: \"TC-8020\", outwardIssue: <downstream-task-key>, type: \"Depend\") (line 115). Both tasks are for stream rhtpa-2.2 with the correct standard labels and Depend link type."
+    },
+    {
+      "text": "Step 7 Case B detects that stream rhtpa-2.1 is also affected but has no CVE Jira — creates proactive preemptive remediation tasks (§1.60)",
+      "passed": true,
+      "evidence": "In remediation.md lines 119-121: 'Stream rhtpa-2.1 is also affected (tokio 1.40.0 < 1.42.0 threshold) but has no sibling CVE Jira. JQL search for label CVE-2026-55123 in stream rhtpa-2.1 returned no results. Preemptive remediation tasks are created with the security-preemptive label.' In cross-stream.md lines 14-17: 'Stream rhtpa-2.2: TC-8020 (current issue) -- exists' and 'Stream rhtpa-2.1: No CVE Jira exists -- preemptive remediation required'. Two preemptive tasks are created: upstream backport (line 123-181) and downstream propagation (line 183-236) for stream rhtpa-2.1."
+    },
+    {
+      "text": "Preemptive tasks for stream rhtpa-2.1 include the 'security-preemptive' label alongside standard labels: ['ai-generated-jira', 'Security', 'CVE-2026-55123', 'security-preemptive']",
+      "passed": true,
+      "evidence": "In remediation.md, Preemptive Task 1 (line 127): Labels: 'ai-generated-jira', 'Security', 'CVE-2026-55123', 'security-preemptive'. Jira operation (line 180): labels: [\"ai-generated-jira\", \"Security\", \"CVE-2026-55123\", \"security-preemptive\"]. Preemptive Task 2 (line 187): Labels: 'ai-generated-jira', 'Security', 'CVE-2026-55123', 'security-preemptive'. Jira operation (line 234): labels: [\"ai-generated-jira\", \"Security\", \"CVE-2026-55123\", \"security-preemptive\"]. All four labels are present in the correct order for both preemptive tasks."
+    },
+    {
+      "text": "Preemptive tasks are linked to the originating CVE Jira TC-8020 with 'Related' link type (not 'Depend') because the originating CVE belongs to a different stream",
+      "passed": true,
+      "evidence": "In remediation.md, Preemptive Task 1 Jira operations (line 181): jira.create_link(inwardIssue: \"TC-8020\", outwardIssue: <preemptive-upstream-task-key>, type: \"Related\"). Preemptive Task 2 Jira operations (line 236): jira.create_link(inwardIssue: \"TC-8020\", outwardIssue: <preemptive-downstream-task-key>, type: \"Related\"). Both preemptive tasks use 'Related' (not 'Depend') link type to TC-8020. Cross-stream.md line 42 explicitly explains: 'Link type: \"Related\" (not \"Depend\") to TC-8020, because the originating CVE belongs to a different stream (rhtpa-2.2)'."
+    },
+    {
+      "text": "Preemptive task descriptions include a preemptive remediation prefix noting TC-8020 (stream rhtpa-2.2) as the originating CVE",
+      "passed": true,
+      "evidence": "In remediation.md, Preemptive Task 1 description (lines 140-143): '> **Preemptive remediation**: This task was created proactively from cross-stream > impact analysis of TC-8020 (stream rhtpa-2.2). > No stream-specific CVE Jira exists yet for this stream. When PSIRT creates one, > this task will be linked and the `security-preemptive` label removed.' Preemptive Task 2 description (lines 200-203): identical prefix noting TC-8020 (stream rhtpa-2.2) as the originating CVE. Both preemptive tasks include the prefix as a blockquote at the top of their descriptions."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

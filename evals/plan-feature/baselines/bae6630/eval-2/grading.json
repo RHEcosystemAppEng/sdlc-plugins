@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "Impact map or task descriptions explicitly flag at least 3 ambiguities from the feature description",
+      "passed": true,
+      "evidence": "The impact map (impact-map.md) explicitly flags 5 ambiguities: (1) 'No Performance Targets for Search should be faster', (2) 'No Definition of More Relevant Results', (3) 'Add Filters Is Completely Unspecified', (4) 'Better UI Cannot Be Planned', (5) 'NFR Don't Break Existing Functionality Lacks Specificity'. Each includes specific questions and assumptions. This exceeds the required minimum of 3."
+    },
+    {
+      "text": "Plan acknowledges that 'Better UI' (non-MVP) cannot be planned without design mockups or frontend repository and excludes it from scope",
+      "passed": true,
+      "evidence": "Impact map Ambiguity 4 states: 'The Better UI requirement is marked non-MVP, and this is a backend-only repository (trustify-backend). There is no frontend repository in scope, no design mockups referenced, and no UI specifications provided. This requirement is excluded from this plan entirely.' The Out of Scope table also lists 'Better UI (non-MVP)' with reason: 'No frontend repository in scope; no design mockups available. Cannot be planned for a backend-only repository.'"
+    },
+    {
+      "text": "Tasks still follow the task-description-template.md format despite ambiguous requirements",
+      "passed": true,
+      "evidence": "All 5 task files follow the template structure. Each contains the required sections: Repository, Target Branch, Description, Files to Modify (and Files to Create where applicable), Implementation Notes, Acceptance Criteria, Test Requirements, Dependencies. Optional sections are omitted when not applicable (e.g., API Changes, Verification Commands, Documentation Updates), which is correct per the template rule 'Omit sections that don't apply'."
+    },
+    {
+      "text": "Tasks document assumptions where they fill in missing details, labeled as assumptions pending clarification",
+      "passed": true,
+      "evidence": "All 5 tasks explicitly label assumptions with '**Assumption (pending clarification):**' markers. Examples: Task 1 - 'Assumption (pending clarification): The specific columns available for indexing are inferred from the model summary structs'; Task 2 - 'Assumption (pending clarification): The current search implementation uses LIKE/ILIKE queries'; Task 3 - 'Assumption (pending clarification): Name/title fields are weighted at A (highest)'; Task 4 - 'Assumption (pending clarification): Filters are limited to entity_type, severity, and created_after/created_before'; Task 5 - 'Assumption (pending clarification): Since the feature provides no performance targets (Ambiguity 1), these tests validate functional correctness only'."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "All 5 task files contain '## Repository' as the first section with the single value 'trustify-backend': task-1-add-search-indexes.md line 1-2, task-2-optimize-search-queries.md line 1-2, task-3-search-relevance-ranking.md line 1-2, task-4-add-search-filters.md line 1-2, task-5-search-integration-tests.md line 1-2."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "All 5 task files contain all 4 required sections: '## Target Branch' (set to 'main'), '## Description' (with substantive content), '## Acceptance Criteria' (with checkbox items), '## Test Requirements' (with checkbox items). Verified in: task-1 (lines 4,7,27,35), task-2 (lines 4,7,23,29), task-3 (lines 4,7,25,30), task-4 (lines 4,7,29,37), task-5 (lines 4,7,31,38)."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "All Files to Modify paths exist in repo-backend.md: migration/src/lib.rs, entity/src/sbom.rs, entity/src/advisory.rs, entity/src/package.rs, modules/search/src/service/mod.rs, common/src/db/query.rs, modules/search/src/endpoints/mod.rs, tests/api/search.rs. Files to Create paths follow established patterns: migration/src/m0002_search_indexes/mod.rs follows the pattern of migration/src/m0001_initial/mod.rs; modules/search/src/model/mod.rs follows the model/service/endpoints module pattern seen in other modules. No invented paths found."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Task 1 references 'migration/src/m0001_initial/mod.rs' for migration pattern and specific structs (SbomSummary, AdvisorySummary, PackageSummary) with their file paths. Task 2 references 'modules/search/src/service/mod.rs' for SearchService, 'common/src/db/query.rs' for query helpers, and the Result<T, AppError> with .context() pattern. Task 3 references 'common/src/model/paginated.rs' for PaginatedResults<T>, specific PostgreSQL functions (ts_rank, setweight). Task 4 references 'modules/fundamental/src/sbom/' and 'modules/fundamental/src/advisory/' for the model/service/endpoints pattern, 'common/src/db/query.rs' for shared filtering helpers, 'AdvisorySummary' with its file path. Task 5 references 'tests/api/search.rs', 'tests/api/sbom.rs', 'tests/api/advisory.rs' and the assert_eq!(resp.status(), StatusCode::OK) testing pattern."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "All 5 task files contain '## Target Branch' followed by 'main': task-1 line 4-5, task-2 line 4-5, task-3 line 4-5, task-4 line 4-5, task-5 line 4-5."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": true,
+      "evidence": "All 5 task files contain a Digest section with the correct marker format. Task 1: '[sdlc-workflow] Description digest: sha256-md:4c8524b9b0bd6a199050394a4e3ffb37ac5c56eb9cfa979df54fa16e37e18c55' (64 hex chars). Task 2: 'sha256-md:ca4e56c7c344f93ecb2044bfa67bcc86a5fa1c3a6007ab97d63330d6f87d8756' (64 hex chars). Task 3: 'sha256-md:08f89c24f33d9262d0c82b8083f24925c9a4d329ec89c997c60e60a40468323c' (64 hex chars). Task 4: 'sha256-md:7143215e89dc47960f9ea34ddbb57a1bffae89ebed9eeff27fb8a909668b189d' (64 hex chars). Task 5: 'sha256-md:532ce6944a3ba2891cbc9dc54ea50f256788f89692c97c1d529dfa280a45f4a7' (64 hex chars). All use sha256-md prefix with exactly 64 lowercase hex characters, matching the prescribed format."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "No convention-aware enrichment is present in any task file. None of the 5 task descriptions contain the prescribed 'Per CONVENTIONS.md §...' format or the required 'Applies: task modifies <file> matching the convention's <scope>' rationale. The repo-backend.md lists a CONVENTIONS.md file in the repository root, and the Key Conventions section describes conventions for framework, module pattern, error handling, endpoint registration, response types, query helpers, testing, and caching. These conventions should have been validated for applicability and included with proper rationale format where applicable. Instead, the tasks only informally reference project patterns (e.g., 'per project error handling convention', 'per project testing conventions') without the prescribed format."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 1,
+    "total": 11,
+    "pass_rate": 0.91
+  }
+}
