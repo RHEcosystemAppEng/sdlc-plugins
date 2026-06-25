@@ -146,6 +146,8 @@ Extract:
 - description
 - acceptance criteria
 - links (especially Figma)
+- `priority`: extract `fields.priority.name` and `fields.priority.id` (e.g., `{"name": "Major", "id": "10002"}`). If the priority name is `"Undefined"`, treat it as unset — do not store or propagate it.
+- `fixVersions`: extract the `fields.fixVersions` array (e.g., `[{"name": "RHTPA 1.5.0", "id": "62648"}]`). If the array is empty, treat it as unset.
 
 ## Step 2 – Inspect Figma Design
 
@@ -770,11 +772,29 @@ Use:
 jira.create_issue
 jira.create_subtask
 
-Every created issue **must** include the `ai-generated-jira` label to mark it as AI-generated. Pass the label via:
+Every created issue **must** include the `ai-generated-jira` label to mark it as AI-generated.
+
+Additionally, propagate the Feature's `priority` and `fixVersions` to every created task
+when they are set. Build the `additional_fields` object as follows:
 
 ```
-additional_fields: { "labels": ["ai-generated-jira"] }
+additional_fields: {
+  "labels": ["ai-generated-jira"],
+  "priority": {"name": "<inherited-priority>"},
+  "fixVersions": [{"name": "<inherited-version>"}]
+}
 ```
+
+**Conditional inclusion rules:**
+
+- **`priority`**: include only if the Feature has a priority set (not `"Undefined"` — see Step 1). If the Feature's priority is unset, omit the `priority` key entirely from `additional_fields`.
+- **`fixVersions`**: include only if **both** conditions are met:
+  1. The Feature has a non-empty `fixVersions` array (see Step 1).
+  2. The `fixVersion scope` setting in `### Jira Field Defaults` (under `## Jira Configuration` in CLAUDE.md) includes task-level propagation. Specifically:
+     - If `fixVersion scope` is `"task"` or `"both"`: propagate fixVersions to tasks.
+     - If `fixVersion scope` is `"feature"`: do NOT propagate fixVersions to tasks.
+     - If `### Jira Field Defaults` does not exist or `fixVersion scope` is absent: default to `"both"` (propagate to tasks).
+  If either condition is not met, omit the `fixVersions` key entirely from `additional_fields`.
 
 As each task is created, record a mapping of **task number/title → Jira key** (e.g. "Task 1 — Add CSV endpoint" → PROJ-231). This mapping is needed for link creation below.
 
@@ -889,6 +909,9 @@ Include:
 - tasks created
 - repositories affected
 - short architecture summary
+- inherited field values propagated to tasks (if any):
+  - priority (name and whether it was propagated or omitted because it was "Undefined")
+  - fixVersion (version name(s) and whether they were propagated, omitted because the Feature had none, or omitted because `fixVersion scope` was set to `"feature"`)
 
 ## Important Rules
 
