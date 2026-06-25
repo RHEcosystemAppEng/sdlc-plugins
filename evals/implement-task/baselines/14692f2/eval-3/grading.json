@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md line 20: 'call `apply_filter` from `common/src/db/query.rs` to parse comma-separated values and build the SQL filter clause.' Line 29-30: 'The `apply_filter` function handles both single values and comma-separated multi-value parsing, generating an `IN` clause for multiple values — reuse it directly rather than implementing custom parsing.' reuse-analysis.md section 1: 'Instead of writing custom parsing logic for the comma-separated `license` parameter, the service layer calls `apply_filter` with the raw license string... without any new parsing code.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md line 18: 'following the same pattern as the `severity` field in `modules/fundamental/src/advisory/endpoints/list.rs`'. reuse-analysis.md section 2: 'This file serves as a structural template for the implementation. The exact same pattern is replicated in the package endpoint' with a 4-step breakdown mirroring the advisory severity filter pattern."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md line 29: 'add a JOIN to the `package_license` entity (`entity/src/package_license.rs`)'. Line 61-62: 'entity/src/package_license.rs — The existing package-license entity is reused as-is for the JOIN query. No schema or entity changes needed.' reuse-analysis.md section 3: 'Instead of writing raw SQL for the join, the implementation uses SeaORM\\'s relation-based query builder with this entity' and 'Reuse type: Direct usage — the entity is imported and used in SeaORM query construction. No modifications to the entity definition are needed.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md contains three clearly labeled sections: 'Reuse Candidate 1: common/src/db/query.rs::apply_filter', 'Reuse Candidate 2: modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)', and 'Reuse Candidate 3: entity/src/package_license.rs'. Each section includes 'How it would be reused' subsections with detailed explanations. The summary table confirms all three candidates are covered."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": false,
+      "evidence": "The task's Files to Modify lists: modules/fundamental/src/package/endpoints/list.rs and modules/fundamental/src/package/service/mod.rs. Files to Create lists: tests/api/package_license_filter.rs. The plan's numbered file sections (1, 2, 3) match these exactly. However, the 'Additional Integration Points / Module registration' section in plan.md states: 'If tests/api/package_license_filter.rs is a new test file, it may need to be registered in tests/Cargo.toml as a test target or referenced via mod declaration.' tests/Cargo.toml is not listed in the task's Files to Modify or Files to Create sections, so this proposed modification falls outside the defined scope."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "The plan explicitly reuses apply_filter directly (line 20: 'call `apply_filter` from `common/src/db/query.rs`', line 29-30: 'reuse it directly rather than implementing custom parsing'). The 'No changes needed to' section states: 'common/src/db/query.rs — The existing `apply_filter` function already handles comma-separated multi-value parsing and SQL IN clause generation. No changes needed.' No new utility functions for parsing or filtering are proposed anywhere in the plan or reuse analysis."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.8333333333333334
+  }
+}

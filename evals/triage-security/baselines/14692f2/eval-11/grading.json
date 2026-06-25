@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 4.4 searches for preemptive tasks using JQL with labels 'security-preemptive' and 'CVE-2026-55123' (§1.60)",
+      "passed": true,
+      "evidence": "reconciliation.md lines 8-9 show the JQL query: \"project = TC AND issuetype = Task AND labels = 'security-preemptive' AND labels = 'CVE-2026-55123' ORDER BY created DESC\". Both required labels are present in the query."
+    },
+    {
+      "text": "Step 4.4 filters results to match the current stream (rhtpa-2.1) by checking the task summary for the stream name",
+      "passed": true,
+      "evidence": "reconciliation.md lines 27-29: \"Current issue TC-8021 stream scope: rhtpa-2.1\" and \"TC-8022 summary contains (rhtpa-2.1) -- matches current stream\". The filtering explicitly checks the task summary for the stream name."
+    },
+    {
+      "text": "Step 4.4 links the new CVE Jira TC-8021 to the preemptive task TC-8022 with 'Depend' link type (standard remediation linkage)",
+      "passed": true,
+      "evidence": "reconciliation.md lines 39-49 show Action 1: jira.create_link(inwardIssue: \"TC-8021\", outwardIssue: \"TC-8022\", type: \"Depend\") described as \"the standard remediation linkage between the CVE Jira (TC-8021) and its remediation task (TC-8022)\"."
+    },
+    {
+      "text": "Step 4.4 removes the 'security-preemptive' label from TC-8022 — the task is now a standard remediation task linked to a proper CVE Jira",
+      "passed": true,
+      "evidence": "reconciliation.md lines 53-63 show Action 2: labels updated from [ai-generated-jira, Security, CVE-2026-55123, security-preemptive] to [ai-generated-jira, Security, CVE-2026-55123] with explicit statement: \"The security-preemptive label is removed because TC-8022 is no longer a preemptive task -- it is now a standard remediation task linked to its proper CVE Jira (TC-8021) via Depend.\""
+    },
+    {
+      "text": "Step 7 skips remediation task creation for this stream because Step 4.4 reconciliation already linked an existing task",
+      "passed": true,
+      "evidence": "triage-outcome.md lines 38-40: \"Step 7 remediation task creation is skipped for stream rhtpa-2.1 because Step 4.4 reconciliation linked the existing preemptive task TC-8022 as the remediation task for TC-8021. Creating a new task would be a duplicate.\" Also triage-outcome.md line 55: \"7 | Remediation | SKIPPED -- existing task TC-8022 covers this stream\"."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

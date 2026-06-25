@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The report contains a Test Change Classification row with MIXED — both additive and reductive signals are present across the test file changes",
+      "passed": true,
+      "evidence": "Report summary table line 14: '| Test Change Classification | MIXED | Both additive and reductive signals present |'. Detailed analysis in lines 74-110 identifies both additive signals (new test file with 3 functions, new test_recommend_purls_dedup function) and reductive signals (removed test_recommend_purls_with_qualifiers, relaxed assertion in test_recommend_purls_basic)."
+    },
+    {
+      "text": "The structural summary or reductive findings identify the removed test function test_recommend_purls_with_qualifiers as a reductive signal",
+      "passed": true,
+      "evidence": "Report structural summary line 83: '| `test_recommend_purls_with_qualifiers` removed | REDUCTIVE | -1 function, -5 assertions (status OK, items.len()==2, contains(\"repository_url=\") x2, assert_ne) |'. Semantic assessment line 102: 'Reductive: Removed `test_recommend_purls_with_qualifiers` -- This test verified that qualifier-specific variants... Its removal eliminates coverage for qualifier-presence behavior.'"
+    },
+    {
+      "text": "The structural summary or reductive findings note the assertion change in test_recommend_purls_basic — the PURL assertion changed from checking a fully qualified PURL with qualifiers to checking a versioned PURL without qualifiers, which the semantic assessment may identify as a relaxation contributing to the MIXED classification",
+      "passed": true,
+      "evidence": "Report structural summary line 84: '| `test_recommend_purls_basic` assertion relaxed | REDUCTIVE | Expected value changed from fully qualified PURL (`...@3.12?repository_url=...&type=jar`) to versioned-only PURL (`...@3.12`); assertion now matches a simpler string |'. Semantic assessment lines 104-105: 'The assertion on `body.items[0].purl` changed from checking a fully qualified PURL string (including `?repository_url=https://repo1.maven.org&type=jar`) to checking only the versioned PURL (`pkg:maven/org.apache/commons-lang3@3.12`). This is a semantic relaxation of assertion specificity.'"
+    },
+    {
+      "text": "The new test file tests/api/purl_simplify.rs is recognized as additive (3 new test functions)",
+      "passed": true,
+      "evidence": "Report lines 92-94: '**tests/api/purl_simplify.rs (new file):** | Entire file added | ADDITIVE | +3 functions (`test_simplified_purl_no_version`, `test_simplified_purl_mixed_types`, `test_simplified_purl_ordering_preserved`), +14 assertions |'"
+    },
+    {
+      "text": "The new test function test_recommend_purls_dedup in the modified file is recognized as an additive signal",
+      "passed": true,
+      "evidence": "Report structural summary line 86: '| `test_recommend_purls_dedup` added | ADDITIVE | +1 function, +4 assertions (status OK, items.len()==1, items[0].purl == specific value) |'. Located under 'tests/api/purl_recommend.rs (modified)' section, confirming it is in the modified file."
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "The outputs directory contains only report files: report.md, criterion-1.md through criterion-5.md. These are all verification/analysis documents. No code files (e.g., .rs, .toml, .json source files) were created or modified. The report only analyzes existing code and presents findings."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR — it presents findings for human review (constraint 1.13)",
+      "passed": true,
+      "evidence": "The report concludes with 'Overall: WARN' (line 17) and presents detailed findings across multiple sections. No merge action, merge command, or auto-merge indication appears anywhere in the report or criterion files. The report structure is purely informational for human review."
+    },
+    {
+      "text": "The test change classification verdict appears in the verification report summary table and is accompanied by a detailed analysis section explaining the structural and semantic assessment",
+      "passed": true,
+      "evidence": "Summary table line 14: '| Test Change Classification | MIXED | Both additive and reductive signals present |'. Detailed section starting at line 74: '### Test Change Classification -- MIXED' with subsections '#### Structural Summary' (lines 79-96, per-file tables of additive/reductive signals with counts) and '#### Semantic Assessment' (lines 98-110, 4 numbered items explaining each signal's meaning)."
+    },
+    {
+      "text": "The test change classification analysis is based on comparing base-branch and PR-branch file content (function additions, removals, assertion changes) — the structural and semantic assessment references test file content, not acceptance criteria or task requirements (constraint 1.18)",
+      "passed": true,
+      "evidence": "Structural summary references specific test file changes: function names added/removed (test_recommend_purls_with_qualifiers, test_recommend_purls_dedup), assertion counts (-5/+6 assertions), specific assertion string changes ('...@3.12?repository_url=...&type=jar' to '...@3.12'). Semantic assessment references test code: 'qualifier-specific variants (different `repository_url` values)', 'contains(\"?\") negative assertions', 'seeding two PURLs with the same version but different qualifiers'. No references to acceptance criteria or task requirements in the classification section."
+    },
+    {
+      "text": "Eval Quality is N/A because no eval result reviews exist in the PR — no reviews match the eval result detection criteria, so Eval Quality does not affect the Test Quality combination",
+      "passed": true,
+      "evidence": "Report line 13: 'Test Quality | WARN | Repetitive Test Detection: WARN ...; Eval Quality: N/A'. Line 71: 'Eval Quality: N/A -- No eval result reviews found on this PR.' Test Quality combination is WARN (driven by Repetitive Test Detection), not affected by Eval Quality which is N/A."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

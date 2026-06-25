@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "After creating the upstream backport task, the skill re-fetches the task description from Jira and computes a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "In remediation.md, section '1a. Description Digest Comment for Upstream Backport Task (2.2.x)' (lines 81-148) explicitly shows: Step 1 re-fetches the description via jira.get_issue (line 89), Step 2 computes the digest using 'python3 scripts/sha256-digest.py /tmp/task-desc.md' (line 103). The same pattern is repeated for the 2.1.x upstream backport task in section '3a' (lines 325-365). The Complete Sequence Summary at line 479-490 also confirms the pattern: step 2 is 'jira.get_issue(<new-key>) -- Re-fetch to get Jira-normalized description' and step 3 is 'python3 scripts/sha256-digest.py -- Compute SHA-256 digest from re-fetched description'."
+    },
+    {
+      "text": "After creating the downstream propagation subtask, the skill re-fetches the task description and computes a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "In remediation.md, section '2a. Description Digest Comment for Downstream Propagation Task (2.2.x)' (lines 207-248) shows: Step 1 re-fetches via jira.get_issue (line 215), Step 2 computes digest via 'python3 scripts/sha256-digest.py /tmp/task-desc.md' (line 221). The same pattern is repeated for the 2.1.x downstream propagation task in section '4a' (lines 430-470). The summary at line 508-515 confirms 'Every task received a description digest comment'."
+    },
+    {
+      "text": "A digest comment with marker '[sdlc-workflow] Description digest:' is posted on each remediation task — both upstream and downstream (§1.66)",
+      "passed": true,
+      "evidence": "The marker '[sdlc-workflow] Description digest: <tagged-digest>' is explicitly shown in all four task sections: upstream 2.2.x (line 115), downstream 2.2.x (line 230), upstream 2.1.x (line 350), downstream 2.1.x (line 452). The summary at lines 508-509 confirms: 'Every task received a description digest comment with the marker [sdlc-workflow] Description digest: immediately after creation and before any issue links were created.' All four tasks (2 upstream + 2 downstream across both streams) receive the digest comment."
+    },
+    {
+      "text": "Digest comments are posted BEFORE creating issue links (Depend, Blocks) or other comments on the tasks (§1.66, shared/description-digest-protocol.md Rules)",
+      "passed": true,
+      "evidence": "Each task section explicitly states ordering. For upstream 2.2.x: 'Step 4 -- ONLY AFTER the digest comment is posted, create the issue link' (line 140). For downstream 2.2.x: 'Step 4 -- ONLY AFTER the digest comment is posted, create the issue links' (line 234). For upstream 2.1.x: 'Step 4 -- ONLY AFTER the digest comment is posted, create the issue link' (line 355). For downstream 2.1.x: 'Step 4 -- ONLY AFTER the digest comment is posted, create the issue links' (line 459). The Complete Sequence Summary (lines 479-486) codifies the ordering: step 4 is add_comment (digest), step 5 is create_link, with the note 'The digest comment MUST come before any issue links or other comments' (line 488)."
+    },
+    {
+      "text": "The digest is computed using scripts/sha256-digest.py with the re-fetched description, not the description string passed to create_issue (shared/description-digest-protocol.md Hashing)",
+      "passed": true,
+      "evidence": "In remediation.md, the upstream 2.2.x section explicitly states at line 93-94: 'This re-fetches the description as stored by Jira (which may have been normalized during storage), rather than using the description string originally passed to create_issue.' The upstream 2.1.x section states at lines 336-337: 'This re-fetches the description as Jira stored it (post-normalization), NOT the description string that was passed to create_issue.' The Complete Sequence Summary at lines 489-490 reiterates: 'The digest is computed from the re-fetched description (step 2), not the description originally passed to create_issue (step 1), because Jira may normalize content during storage.' In all cases, the digest input is the output of jira.get_issue (re-fetch), not the original description parameter."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
