@@ -74,14 +74,15 @@
     {
       "id": 6,
       "prompt": "You are invoked without an issue key — run discovery mode. The project CLAUDE.md is in claude-md-security-config.md and the JQL search results are in discovery-mode-results.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your analysis to the workspace outputs/ directory: write outputs/discovery-listing.md with the formatted issue list grouped by query and status — include the actual JQL queries you constructed from the Security Configuration so the queries are visible in the output, and write outputs/status-handling.md with the status-aware handling decisions for each listed issue.",
-      "expected_output": "A discovery mode analysis that constructs two JQL queries using the project key (TC) and vulnerability issue type ID (10024) from the project configuration, presents results in two clearly separated lists (Untriaged and Triaged but still New), and applies status-aware handling: New issues are presented for full triage, In Progress issues trigger a warning about active work.",
+      "expected_output": "A discovery mode analysis that constructs three JQL queries using the project key (TC) and vulnerability issue type ID (10024) from the project configuration, presents results in three clearly separated lists (Untriaged, Triaged but still New, and Ready for QA), and applies status-aware handling: New issues are presented for full triage, In Progress issues trigger a warning about active work. The Ready for QA section filters by linked remediation task completion status.",
       "files": ["files/claude-md-security-config.md", "files/discovery-mode-results.md"],
       "assertions": [
         "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
-        "Two separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged) and one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New) (§1.48)",
-        "Results are grouped into two clearly separated lists: Untriaged issues and Triaged but still New issues",
+        "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (§1.48)",
+        "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
         "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
-        "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work"
+        "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+        "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)"
       ]
     },
     {
@@ -186,6 +187,21 @@
         "The Affects Versions correction comment (Step 3) includes an @mention of the ProdSec contact using an ADF mention node with account ID '557058:prodsec-mock-account-id' (§1.68)",
         "The ProdSec @mention appears before the Comment Footnote in the Affects Versions correction comment (§1.68)",
         "Step 0 extracts the ProdSec Jira account ID from the Security Configuration as an optional field without raising an error (Step 0 config validation)"
+      ]
+    },
+    {
+      "id": 16,
+      "prompt": "You are invoked without an issue key — run discovery mode. The project CLAUDE.md is in claude-md-security-config.md and the JQL search results are in discovery-mode-results.md. The results include Query 3 (Ready for QA candidates) with three issues: TC-9020 has all linked remediation Tasks completed (TC-9021 Done, TC-9022 Closed), TC-9023 has one open Task (TC-9025 In Progress), and TC-9026 has no Depend links. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your analysis to the workspace outputs/ directory: write outputs/discovery-listing.md with the formatted issue list including the Ready for QA section, and write outputs/ready-for-qa.md with the detailed Ready for QA filtering analysis showing which issues qualified and why.",
+      "expected_output": "A discovery mode analysis that constructs the third JQL query for Ready for QA candidates, filters results by checking linked remediation Task completion status, and presents only TC-9020 in the Ready for QA table with a suggestion to transition to ON_QA. TC-9023 and TC-9026 are excluded with documented reasons.",
+      "files": ["files/claude-md-security-config.md", "files/discovery-mode-results.md"],
+      "assertions": [
+        "The third JQL query uses labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA) to find triaged CVEs still in a pre-QA state",
+        "For each query 3 result, the skill checks issuelinks for linked Tasks with link type Depend and fetches each linked Task's status",
+        "TC-9020 is included in Ready for QA because ALL linked remediation Tasks are completed (TC-9021 Done, TC-9022 Closed)",
+        "TC-9023 is excluded from Ready for QA because TC-9025 is still In Progress — remediation is not complete",
+        "TC-9026 is excluded from Ready for QA because it has no linked Tasks with type Depend — no remediation to verify",
+        "The Ready for QA section includes a Remediation Tasks column showing the linked tasks and their statuses",
+        "For each Ready for QA issue, the output suggests transitioning to ON_QA"
       ]
     }
   ]

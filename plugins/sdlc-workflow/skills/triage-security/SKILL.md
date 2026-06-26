@@ -185,12 +185,40 @@ jira.search_jql(
 )
 ```
 
-Present both lists to the engineer, clearly separated:
+**3. Ready for QA** (triaged CVEs with all remediation tasks completed):
+```
+jira.search_jql(
+  jql: "project = <project-key> AND issuetype = <vulnerability-issue-type-id> AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, 'ON_QA') ORDER BY created DESC",
+  fields: ["summary", "labels", "status", "created", "issuelinks"],
+  maxResults: 20
+)
+```
+
+For each result, check its `issuelinks` for linked Tasks with link type "Depend":
+
+1. **Fetch each linked Task's status** — for each `issuelinks` entry where
+   `type.name` is `"Depend"`, extract the linked issue key from `outwardIssue.key`
+   (or `inwardIssue.key` depending on link direction). Fetch the linked issue to
+   inspect its status.
+2. **ALL linked remediation Tasks are Done or Closed** → include in "Ready for QA"
+   list. These CVEs have completed remediation and are candidates for ON_QA
+   transition.
+3. **ANY linked Task is still open** → exclude. Remediation is still in progress.
+4. **NO linked Tasks with type "Depend" exist** → exclude. No remediation to verify.
+
+Present all three lists to the engineer, clearly separated:
 - **Untriaged** — numbered list grouped by status, showing: issue key, status,
   CVE ID (from labels), summary, and created date.
 - **Triaged but still New** — same format, flagged so the engineer can spot
   issues that were triaged but never moved forward. These may need follow-up
   or re-triage.
+- **Ready for QA** — triaged CVEs with all remediation tasks completed:
+
+  | Issue | Status | CVE | Summary | Remediation Tasks |
+  |-------|--------|-----|---------|-------------------|
+  | TC-XXXX | Modified | CVE-YYYY-XXXXX | ... | TC-YYYY (Done), TC-ZZZZ (Closed) |
+
+  For each Ready for QA issue, suggest: "Consider transitioning to ON_QA."
 
 #### Status-aware handling
 
