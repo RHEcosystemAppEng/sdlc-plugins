@@ -174,6 +174,19 @@
         "Digest comments are posted BEFORE creating issue links (Depend, Blocks) or other comments on the tasks (§1.66, shared/description-digest-protocol.md Rules)",
         "The digest is computed using scripts/sha256-digest.py with the re-fetched description, not the description string passed to create_issue (shared/description-digest-protocol.md Hashing)"
       ]
+    },
+    {
+      "id": 15,
+      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config-prodsec.md. Note that the CLAUDE.md includes ProdSec contact configuration (ProdSec contact email: prodsec-team@example.com, ProdSec Jira account ID: 557058:prodsec-mock-account-id). The Vulnerability issue was reported by user 'psirt-analyst' with Jira account ID '557058:psirt-analyst-mock-id'. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2, write outputs/affects-versions.md with the Affects Versions correction comment from Step 3 including any @mentions, and write outputs/remediation.md with the post-triage summary comment from Step 7 including the reporter @mention.",
+      "expected_output": "A triage analysis demonstrating both @mention behaviors: (1) the post-triage summary comment in Step 7 includes an @mention of the vulnerability reporter (psirt-analyst, account ID 557058:psirt-analyst-mock-id) using an ADF mention node, and (2) the Affects Versions correction comment in Step 3 includes an @mention of the configured ProdSec contact (account ID 557058:prodsec-mock-account-id) using an ADF mention node.",
+      "files": ["files/vuln-issue-standard.md", "files/security-matrix-mock.md", "files/claude-md-security-config-prodsec.md"],
+      "assertions": [
+        "The post-triage summary comment (Step 7) includes an @mention of the vulnerability issue's reporter using an ADF mention node with account ID '557058:psirt-analyst-mock-id' (§1.67)",
+        "The reporter @mention in Step 7 is present by default without any ProdSec configuration — it uses the reporter field from the Jira issue (§1.67)",
+        "The Affects Versions correction comment (Step 3) includes an @mention of the ProdSec contact using an ADF mention node with account ID '557058:prodsec-mock-account-id' (§1.68)",
+        "The ProdSec @mention appears before the Comment Footnote in the Affects Versions correction comment (§1.68)",
+        "Step 0 extracts the ProdSec Jira account ID from the Security Configuration as an optional field without raising an error (Step 0 config validation)"
+      ]
     }
   ]
 }

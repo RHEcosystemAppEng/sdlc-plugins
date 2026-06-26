@@ -33,6 +33,15 @@
        on Vulnerability issues (e.g., "customfield_10832"). Used together with the
        Upstream Affected Component field for cross-CVE overlap filtering.
 
+     Optional fields for security team notification:
+     - ProdSec contact email: the email address of the Product Security contact for
+       this project (e.g., "prodsec@example.com"). Used for informational reference
+       in CVE triage notifications. Leave blank if your project does not have a
+       dedicated security team.
+     - ProdSec Jira account ID: the Jira account ID of the ProdSec contact (e.g.,
+       "557058:abc123"). Used for @mentions in triage comments (Affects Versions
+       corrections, cross-CVE overlap notifications). Leave blank to skip @mentions.
+
      Example:
        Product pages URL: https://lifecycle.example.com/products/myproduct
        Jira version prefix: MYPRODUCT
@@ -51,6 +60,8 @@
 - Upstream Affected Component custom field: {{upstream-affected-component-field-id}}
 - PS Component custom field: {{ps-component-field-id}}
 - Stream custom field: {{stream-field-id}}
+- ProdSec contact email: {{prodsec-email}}
+- ProdSec Jira account ID: {{prodsec-jira-account-id}}
 
 ### Version Streams
 
