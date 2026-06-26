@@ -127,6 +127,11 @@ Extract the following from the configuration for use in later steps:
 - **Stream custom field** _(optional)_ — from Security Configuration (e.g.,
   `customfield_10832`). Used with the Upstream Affected Component field for cross-CVE
   overlap filtering in Step 4.3.
+- **ProdSec contact email** _(optional)_ — from Security Configuration. If configured,
+  used for informational reference in triage notifications. If not configured, skip silently.
+- **ProdSec Jira account ID** _(optional)_ — from Security Configuration. If configured,
+  used for @mentions in Affects Versions correction (Step 3) and cross-CVE overlap (Step 4.3)
+  comments. If not configured, skip @mentions silently.
 - **Version Streams** — Konflux release repo URLs and local paths from Security Configuration
 - **Source Repositories** — source repo names and URLs from Security Configuration
 
@@ -567,6 +572,14 @@ Add a summary comment to the original Vulnerability issue documenting:
 3. The triage outcome (closed or remediation created)
 4. Links to all remediation tasks created (upstream + downstream for source
    dependency ecosystems, or single task for system packages)
+5. An @mention of the vulnerability issue's reporter (the PSIRT analyst who
+   created it). Use the reporter's account ID from the Jira issue data extracted
+   in Step 1. Include an ADF mention node:
+   ```json
+   { "type": "mention", "attrs": { "id": "<reporter-account-id>", "text": "@<reporter-name>" } }
+   ```
+   This @mention is mandatory and requires no configuration — the reporter field
+   is always available on the Jira issue.
 
 This comment provides a complete audit trail for future reference. The comment
 MUST include the Comment Footnote (see above).

@@ -500,6 +500,22 @@ Ask the user for the following fields:
 
    If the user skips, leave the placeholder empty in the template.
 
+9. **ProdSec contact email** _(optional)_ — the email address of the Product Security
+   contact for this project. Used for informational reference in CVE triage
+   notifications. Ask the user:
+
+   > "ProdSec contact email (optional, for CVE triage notifications)?"
+
+   If the user skips, leave the placeholder empty in the template.
+
+10. **ProdSec Jira account ID** _(optional)_ — the Jira account ID of the ProdSec
+    contact. Used for @mentions in triage comments (Affects Versions corrections,
+    cross-CVE overlap notifications). Ask the user:
+
+    > "ProdSec Jira account ID (optional, for @mentions in triage comments)?"
+
+    If the user skips, leave the placeholder empty in the template.
+
 ### Step 10.2 – Collect Version Streams
 
 Ask the user for one or more version streams. For each stream, collect:

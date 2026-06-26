@@ -76,6 +76,8 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.64 | `plan-feature` MUST fall back to Feature → Task hierarchy when no level-1 type exists, without error. | `plan-feature/SKILL.md` — Step 2.5 |
 | 1.65 | `triage-security` MUST query MITRE CVE API and OSV.dev for structured version ranges in Step 1.5 and use them as the primary fix threshold source when available, falling back to Jira description data only when external APIs are unavailable. | `triage-security/SKILL.md` — Step 1.5, `triage-security/version-impact-analysis.md` — Step 2.3 |
 | 1.66 | `triage-security` MUST post a description digest comment on each remediation task immediately after creation per `shared/description-digest-protocol.md`, before creating issue links or other comments. | `triage-security/SKILL.md` — Remediation Task Creation, `triage-security/remediation-templates.md` — Jira Issue Creation |
+| 1.67 | `triage-security` MUST @mention the vulnerability issue's reporter in the Step 7 summary comment by default (no configuration required — uses the reporter field from the Jira issue). | `triage-security/SKILL.md` — Post-Triage Summary |
+| 1.68 | `triage-security` MUST @mention the configured ProdSec Jira account in Affects Versions correction (Step 3) and cross-CVE overlap (Step 4.3) comments when a ProdSec Jira account ID is present in Security Configuration, and MUST skip the mention silently when not configured. | `triage-security/SKILL.md` — Step 0, `triage-security/jira-triage-operations.md` — Steps 3, 4.3 |
 
 ### Prior Art — Cross-phase integrity (§1.33–1.35)
 
@@ -169,8 +171,8 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9)
 - `plugins/sdlc-workflow/skills/report-bug/SKILL.md` — Guardrails (§1.50–1.51), Step 4 Preview and Confirm (§1.52)
 - `plugins/sdlc-workflow/skills/triage-bug/SKILL.md` — Guardrails (§1.53–1.54), Step 5 Front-load reproducer test (§1.55), Step 4 Post root cause comment (§1.56), Step 6 Decomposition Guard (§1.57)
-- `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.37, §1.38, §1.47), Step 0 (§1.49), Step 1 Ecosystem detection (§1.48), Step 1 Data Extraction (§1.49), Step 1.5 External CVE Data Enrichment (§1.62), Step 2.1 (§1.47), Step 2.2 (§1.42), Step 2.3 (§1.48), Step 2.4 (§1.44), Step 7 (§1.43), Step 7 Case B (§1.61), Important Rules (§1.38–§1.43, §1.45, §1.46), Remediation Task Creation (§1.46, §1.66)
+- `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.37, §1.38, §1.47), Step 0 (§1.49, §1.68), Step 1 Ecosystem detection (§1.48), Step 1 Data Extraction (§1.49), Step 1.5 External CVE Data Enrichment (§1.62), Step 2.1 (§1.47), Step 2.2 (§1.42), Step 2.3 (§1.48), Step 2.4 (§1.44), Step 7 (§1.43), Step 7 Case B (§1.61), Post-Triage Summary (§1.67), Important Rules (§1.38–§1.43, §1.45, §1.46), Remediation Task Creation (§1.46, §1.66)
 - `plugins/sdlc-workflow/skills/triage-security/version-impact-analysis.md` — Step 2.3 enriched fix threshold (§1.62)
 - `plugins/sdlc-workflow/skills/triage-security/remediation-templates.md` — Jira Issue Creation digest comment (§1.66)
-- `plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md` — Step 4.2 Idempotent sibling linking (§1.58), Step 4.3 Cross-CVE overlap detection (§1.59), Step 4.4 Proactive reconciliation (§1.61)
+- `plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md` — Step 3 ProdSec @mention (§1.68), Step 4.2 Idempotent sibling linking (§1.58), Step 4.3 Cross-CVE overlap detection (§1.59), Step 4.3 ProdSec @mention (§1.68), Step 4.4 Proactive reconciliation (§1.61)
 - `docs/methodology.md` — Core Principles (§2.1, §3.2, §5.5)

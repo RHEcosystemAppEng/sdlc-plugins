@@ -85,12 +85,21 @@ Jira version in the Affects Versions correction. Unreleased versions are valid
 Affects Versions values — they track that the CVE must be fixed before the next
 release ships.
 
-Add a comment documenting the correction:
+Add a comment documenting the correction. If a ProdSec Jira account ID is
+configured in Security Configuration, append an @mention before the Comment
+Footnote using an ADF mention node:
+
+```json
+{ "type": "mention", "attrs": { "id": "<prodsec-jira-account-id>", "text": "@<prodsec-name>" } }
+```
+
+If no ProdSec Jira account ID is configured, omit the @mention silently.
 
 ```
 jira.add_comment(<jira-issue-id>, "Corrected Affects Versions: [old] → [new].
 Based on lock file analysis at pinned commits from security-matrix.md.
-Scoped to stream <stream> per issue suffix.")
+Scoped to stream <stream> per issue suffix.
+[ProdSec @mention if configured]")
 ```
 
 ## Step 4 – Duplicate, Sibling, and Overlap Check
@@ -207,7 +216,15 @@ entirely.
    - If the bump version is **below** the fix threshold: the existing
      remediation does not cover this CVE.
 
-6. **Present findings** to the engineer:
+6. **Present findings** to the engineer. If a ProdSec Jira account ID is
+   configured in Security Configuration, append an @mention before the Comment
+   Footnote in any comments posted during this step, using an ADF mention node:
+
+   ```json
+   { "type": "mention", "attrs": { "id": "<prodsec-jira-account-id>", "text": "@<prodsec-name>" } }
+   ```
+
+   If no ProdSec Jira account ID is configured, omit the @mention silently.
 
    - **If a covering remediation exists:**
      ```
@@ -216,6 +233,7 @@ entirely.
      ([fix-version]). No new remediation task needed.
 
      Recommendation: Close this issue — the fix is already covered by [task-key].
+     [ProdSec @mention if configured]
      ```
    - **If related CVEs exist but no covering remediation:**
      ```
@@ -227,6 +245,7 @@ entirely.
 
      No existing remediation covers this CVE's fix threshold. Proceeding with
      new remediation task creation.
+     [ProdSec @mention if configured]
      ```
    - **If no related CVEs found for this component:** proceed silently to Step 4.4.
 
