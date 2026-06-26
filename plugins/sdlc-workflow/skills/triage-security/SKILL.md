@@ -214,9 +214,9 @@ Present all three lists to the engineer, clearly separated:
   or re-triage.
 - **Ready for QA** — triaged CVEs with all remediation tasks completed:
 
-  | Issue | Status | CVE | Summary | Remediation Tasks |
-  |-------|--------|-----|---------|-------------------|
-  | TC-XXXX | Modified | CVE-YYYY-XXXXX | ... | TC-YYYY (Done), TC-ZZZZ (Closed) |
+  | Issue | Status | CVE | Summary | Created | Remediation Tasks |
+  |-------|--------|-----|---------|---------|-------------------|
+  | TC-XXXX | Modified | CVE-YYYY-XXXXX | ... | 2026-05-15 | TC-YYYY (Done), TC-ZZZZ (Closed) |
 
   For each Ready for QA issue, suggest: "Consider transitioning to ON_QA."
 
