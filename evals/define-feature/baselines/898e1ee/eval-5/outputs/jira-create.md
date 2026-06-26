@@ -1,0 +1,28 @@
+# Jira Issue Creation
+
+## API Parameters
+
+- **projectKey**: TC
+- **issueTypeId**: 10142
+- **labels**: ["ai-generated-jira"]
+- **assignee**: (none)
+- **priority**: (none)
+- **fixVersions**: (none)
+
+## Summary
+
+Add automated PR review posting for eval results
+
+## Description
+
+h2. Feature Overview
+
+Add a CI workflow step that posts eval results as a PR review comment on pull requests that modify skill definitions. When a PR changes a SKILL.md file, the CI pipeline should run the corresponding eval suite and post a summary of pass/fail assertions as a PR review. This gives reviewers immediate visibility into whether skill behavior changes break existing eval expectations.
+
+h2. Requirements
+
+||Requirement||Notes||Is MVP?||
+|Post eval results as a GitHub PR review when SKILL.md files change|Use the GitHub REST API to create a review with pass/fail summary|Yes|
+|Include per-assertion results in the review body|Format as a Markdown checklist|Yes|
+|Handle the case where no evals exist for the modified skill|Post an informational comment instead of a review|Yes|
+|PR reviews can be updated after submission using {{PUT /repos/\{owner\}/\{repo\}/pulls/\{pull_number\}/reviews/\{review_id\}}}, so the implementation should update the existing review instead of creating a new one|The GitHub REST API supports updating a submitted review via {{PUT /repos/\{owner\}/\{repo\}/pulls/\{pull_number\}/reviews/\{review_id\}}}. Use this to update an existing eval review rather than posting duplicates.|Yes|

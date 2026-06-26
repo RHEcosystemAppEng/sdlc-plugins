@@ -1,0 +1,70 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan determines feature-branch workflow mode (not direct-to-main) based on the atomicity constraints in the feature description",
+      "passed": true,
+      "evidence": "impact-map.md line 7: 'Label: workflow:feature-branch' with explanation on line 9: 'All changes must land atomically. The database migration and code changes are interdependent: merging the migration without the code changes would break all advisory queries...'. Feature-branch mode is explicitly determined based on atomicity constraints."
+    },
+    {
+      "text": "A bookend task with Bookend Type create-branch is generated as the first task in the plan",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md contains '## Bookend Type' (line 7) followed by 'create-branch' (line 8). This is task 1 of 7, the first task in the plan."
+    },
+    {
+      "text": "A bookend task with Bookend Type merge-branch is generated as the last task in the plan",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md contains '## Bookend Type' (line 7) followed by 'merge-branch' (line 8). This is task 7 of 7, the last task in the plan."
+    },
+    {
+      "text": "All intermediate tasks (between the create-branch and merge-branch bookend tasks) have Target Branch set to TC-9005",
+      "passed": true,
+      "evidence": "All five intermediate tasks have '## Target Branch' set to 'TC-9005': task-2-database-migration.md (line 5), task-3-update-entity-definitions.md (line 5), task-4-update-advisory-service-and-endpoints.md (line 5), task-5-update-ingestor.md (line 5), task-6-update-integration-tests.md (line 5)."
+    },
+    {
+      "text": "The create-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md line 5: 'main' under '## Target Branch'."
+    },
+    {
+      "text": "The merge-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md line 5: 'main' under '## Target Branch'."
+    },
+    {
+      "text": "All intermediate tasks list the create-branch bookend task as a dependency",
+      "passed": true,
+      "evidence": "All five intermediate tasks list Task 1 as a dependency: task-2 line 47 'Depends on: Task 1 -- Create feature branch TC-9005 from main', task-3 line 40, task-4 line 50, task-5 line 39, task-6 line 37 — all with the same dependency on Task 1."
+    },
+    {
+      "text": "The merge-branch bookend task lists all intermediate tasks as dependencies",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md lines 20-24 lists all five intermediate tasks: 'Depends on: Task 2 -- Database migration for advisory_status_enum', 'Depends on: Task 3 -- Update SeaORM entity definitions', 'Depends on: Task 4 -- Update advisory service and endpoints', 'Depends on: Task 5 -- Update advisory ingestor', 'Depends on: Task 6 -- Update integration tests'."
+    },
+    {
+      "text": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "passed": false,
+      "evidence": "Bookend tasks (task-1-create-feature-branch.md and task-7-merge-feature-branch.md) lack 'Files to Modify', 'Files to Create', and 'Implementation Notes' sections. Task 1 has only: Repository, Target Branch, Bookend Type, Description, Acceptance Criteria, Test Requirements, Dependencies. Task 7 has the same structure. The assertion requires 'each task file' to have these sections with no exemption for bookend tasks."
+    },
+    {
+      "text": "The plan includes a workflow:feature-branch label decision to be applied to the feature issue",
+      "passed": true,
+      "evidence": "impact-map.md line 7: '**Label: workflow:feature-branch**' under the '## Workflow' section, explicitly declaring the label decision for the feature issue."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": true,
+      "evidence": "All 7 task files contain valid digest markers: task-1 'sha256-md:97ecc61b8a10b90298f7eda295ac7389873509aee0fc1dad7b1c2d6dda602cf5', task-2 'sha256-md:19f8fd27177ce5d67361cec2aadb8b006ca375c1a9654a6ef1ece0e1223920b3', task-3 'sha256-md:8f672db6b8963a55f33f5708c11f02c0a6cf255155972e65d530fa57ccd9da44', task-4 'sha256-md:dc7284dca1107719da8b09c472cd098f550264c637c863b70fff7dfe2bb48bb0', task-5 'sha256-md:7d2823240ccf6309291a695efe2c5acc8c5ec7e79316e7f043f3f4e640dfe775', task-6 'sha256-md:fd6bba6589b59384bba27c135c91a352beae16ec256d12edc169cee6df66be45', task-7 'sha256-md:69a95dc5b2e646aa4ffb4d9f07eb2b55101991cfd7953f8feb516f681f2a23c3'. All are 64 lowercase hex chars with correct marker format."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "All intermediate tasks with conventions use the prescribed rationale format. Task 2: 'Applies: task creates `migration/src/m0002_advisory_status_enum/mod.rs` matching the convention's migration file scope.' Task 3: 'Applies: task modifies `entity/src/advisory.rs` matching the convention's `.rs` entity file scope.' Task 4: two conventions, both with 'Applies:' rationale. Task 5: 'Applies: task modifies `modules/ingestor/src/graph/advisory/mod.rs` matching the convention's `.rs` module file scope.' Task 6: 'Applies: task modifies `tests/api/advisory.rs` matching the convention's `.rs` test file scope.' No inapplicable conventions are listed. Bookend tasks (1, 7) omit Implementation Notes entirely, which is correct for bookend tasks."
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 1,
+    "total": 12,
+    "pass_rate": 0.9167
+  }
+}
