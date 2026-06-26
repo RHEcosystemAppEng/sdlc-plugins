@@ -3,6 +3,8 @@
 **Key**: TC-9001
 **Summary**: Add advisory severity aggregation endpoint
 **Status**: New
+**Priority**: Major
+**Fix Versions**: RHTPA 1.5.0
 **Labels**: ai-generated-jira
 **Linked Issues**: None
 
