@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md lines 26-27: 'Use `apply_filter` from `common/src/db/query.rs` to parse the comma-separated string into individual values and build the SQL IN clause.' Also lines 56-58: 'use `apply_filter` from `common/src/db/query.rs` to parse the comma-separated string and generate a SQL `IN` clause. This reuses the exact same utility that the advisory severity filter uses — no new parsing or filtering logic is needed.' The import statement 'use common::db::query::apply_filter;' is shown in code examples on lines 29 and 63."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md line 5: 'The implementation follows the existing severity filter pattern from the advisory list endpoint'. Line 14: 'following the same pattern as the `severity` field in `modules/fundamental/src/advisory/endpoints/list.rs`'. reuse-analysis.md lines 23-35 dedicates an entire section to the advisory list.rs as a structural reference, stating: 'A structural reference implementation showing how to add an optional filter query parameter to a list endpoint.'"
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md lines 73-74: 'Use `entity::package_license` for the JOIN: The `package_license` entity in `entity/src/package_license.rs` already maps the package-to-license relationship. Use its SeaORM relation definition to perform the JOIN rather than writing raw SQL.' Code example on lines 68-70 shows 'use entity::package_license;' and '.join(JoinType::InnerJoin, package_license::Relation::Package.def().rev())'. reuse-analysis.md lines 46-49 confirm: 'No raw SQL is written — the entire JOIN and filter is expressed through SeaORM’s entity and query builder API using the existing entity definition.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md covers all three candidates in dedicated sections: (1) 'common/src/db/query.rs::apply_filter' (lines 9-20) with 'How it is reused' subsection explaining direct function call in service/mod.rs; (2) 'modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)' (lines 23-35) with 'How it is reused' explaining structural pattern replication; (3) 'entity/src/package_license.rs (package-license join entity)' (lines 39-50) with 'How it is reused' explaining JOIN query usage. Each candidate has both 'How it is reused' and 'Why reuse instead of reimplementing/Why reuse this pattern/Why reuse this entity' subsections."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md lists files under 'Files to Modify': (1) modules/fundamental/src/package/endpoints/list.rs, (2) modules/fundamental/src/package/service/mod.rs. Under 'Files to Create': (3) tests/api/package_license_filter.rs. All files are directly scoped to the package license filter feature. The only additional file reference is tests/api/mod.rs for test registration (line 132), which is a necessary mechanical step for test discovery rather than a separate deliverable. No files outside the package/license domain are proposed for modification."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md line 57-58: 'This reuses the exact same utility that the advisory severity filter uses — no new parsing or filtering logic is needed.' reuse-analysis.md line 61-62: 'No new utility functions, helper modules, or abstraction layers are proposed. All filtering and parsing logic leverages existing shared infrastructure (`apply_filter`) and domain entities (`package_license`).' The summary table on lines 56-60 confirms 'New Code Created' is 'None — called as-is' for apply_filter. The plan calls apply_filter directly without creating any wrapper, adapter, or alternative parsing function."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

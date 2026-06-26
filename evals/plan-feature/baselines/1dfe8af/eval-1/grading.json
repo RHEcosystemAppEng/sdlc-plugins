@@ -1,0 +1,75 @@
+{
+  "assertion_results": [
+    {
+      "text": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "passed": false,
+      "evidence": "Task 4 (task-4-endpoint-caching.md) and Task 6 (task-6-route-mounting.md) are missing the 'Test Requirements' section. Task 4 has sections: Repository, Target Branch, Description, Files to Modify, Implementation Notes, Reuse Candidates, Acceptance Criteria, Verification Commands, Dependencies — no Test Requirements. Task 6 has sections: Repository, Target Branch, Description, Files to Modify, Implementation Notes, Reuse Candidates, Acceptance Criteria, Verification Commands, Dependencies — no Test Requirements. All other tasks (1, 2, 3, 5, 7) contain all required sections."
+    },
+    {
+      "text": "Task count is between 3 and 10 inclusive",
+      "passed": true,
+      "evidence": "There are exactly 7 task files: task-1-advisory-severity-summary-model.md, task-2-severity-aggregation-service.md, task-3-advisory-summary-endpoint.md, task-4-endpoint-caching.md, task-5-cache-invalidation-on-ingestion.md, task-6-route-mounting.md, task-7-integration-tests.md. 7 is between 3 and 10 inclusive."
+    },
+    {
+      "text": "All tasks reference repository 'trustify-backend'",
+      "passed": true,
+      "evidence": "All 7 task files contain '## Repository\\ntrustify-backend' as their first section. Verified in: task-1 line 2, task-2 line 2, task-3 line 2, task-4 line 2, task-5 line 2, task-6 line 2, task-7 line 2."
+    },
+    {
+      "text": "Task dependencies form a DAG with no circular dependencies",
+      "passed": true,
+      "evidence": "Dependencies: Task 1 has none; Task 2 depends on Task 1; Task 3 depends on Tasks 1, 2; Task 4 depends on Task 3; Task 5 depends on Task 4; Task 6 depends on Task 3; Task 7 depends on Tasks 3, 4, 5. All edges point from lower-numbered to higher-numbered tasks, forming a valid DAG with no cycles."
+    },
+    {
+      "text": "Every task's Files to Modify and Files to Create reference paths plausible within the repo-backend.md structure",
+      "passed": true,
+      "evidence": "Files to Modify paths all reference existing paths from repo-backend.md: modules/fundamental/src/sbom/model/mod.rs (task 1), modules/fundamental/src/sbom/service/sbom.rs (task 2), modules/fundamental/src/sbom/endpoints/mod.rs (tasks 3, 4), modules/ingestor/src/graph/advisory/mod.rs (task 5), server/src/main.rs (task 6), tests/api/sbom.rs (task 7). Task 4 also modifies modules/fundamental/src/sbom/endpoints/advisory_summary.rs which is created in Task 3. Files to Create are new files in plausible locations: modules/fundamental/src/sbom/model/advisory_summary.rs (task 1, alongside existing summary.rs and details.rs) and modules/fundamental/src/sbom/endpoints/advisory_summary.rs (task 3, alongside existing list.rs and get.rs)."
+    },
+    {
+      "text": "Impact map lists concrete, specific changes (not vague or abstract descriptions)",
+      "passed": true,
+      "evidence": "The impact-map.md lists 7 specific changes: 'Add AdvisorySeveritySummary response model in sbom/model/', 'Add advisory_summary service method to SbomService for aggregating severity counts from sbom_advisory join table', 'Add GET /api/v2/sbom/{id}/advisory-summary endpoint with optional ?threshold query param', 'Register the new advisory-summary route in sbom endpoints/mod.rs', 'Add 5-minute cache layer on the advisory-summary endpoint using tower-http caching middleware', 'Add cache invalidation hook in advisory ingestion pipeline (modules/ingestor/src/graph/advisory/mod.rs)', 'Add integration tests for the new endpoint in tests/api/sbom.rs'. Each change specifies what is being added and where."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "All 7 tasks contain '## Repository\\ntrustify-backend' with exactly one repository name. No task lists multiple repositories. Verified in all task files: the Repository section contains only the single line 'trustify-backend'."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": false,
+      "evidence": "Task 4 (task-4-endpoint-caching.md) and Task 6 (task-6-route-mounting.md) are missing the 'Test Requirements' section. While the template says 'Omit sections that don't apply', the assertion explicitly requires Test Requirements in every task. Tasks 1, 2, 3, 5, 7 all have Target Branch, Description, Acceptance Criteria, and Test Requirements. Tasks 4 and 6 have Target Branch, Description, and Acceptance Criteria but lack Test Requirements."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "All Files to Modify paths exist in repo-backend.md: modules/fundamental/src/sbom/model/mod.rs, modules/fundamental/src/sbom/service/sbom.rs, modules/fundamental/src/sbom/endpoints/mod.rs, modules/fundamental/src/sbom/endpoints/advisory_summary.rs (created by prior task), modules/ingestor/src/graph/advisory/mod.rs, server/src/main.rs, tests/api/sbom.rs. Files to Create are new files placed in existing directories that follow the established naming patterns: modules/fundamental/src/sbom/model/advisory_summary.rs (alongside existing summary.rs, details.rs) and modules/fundamental/src/sbom/endpoints/advisory_summary.rs (alongside existing list.rs, get.rs). No invented or implausible paths found."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Task 1 references 'modules/fundamental/src/sbom/model/summary.rs (SbomSummary)' and 'modules/fundamental/src/sbom/model/details.rs (SbomDetails)'. Task 2 references 'modules/fundamental/src/sbom/service/sbom.rs', 'common/src/db/query.rs', 'entity/src/sbom_advisory.rs', 'entity/src/advisory.rs', 'common/src/error.rs', 'modules/fundamental/src/sbom/endpoints/get.rs'. Task 3 references 'modules/fundamental/src/sbom/endpoints/get.rs', 'modules/fundamental/src/sbom/endpoints/mod.rs'. Task 4 references 'modules/fundamental/src/sbom/endpoints/mod.rs' and tower-http patterns. Task 5 references 'modules/ingestor/src/graph/advisory/mod.rs', 'modules/ingestor/src/service/mod.rs::IngestorService', 'modules/ingestor/Cargo.toml'. Task 6 references 'server/src/main.rs', 'modules/fundamental/src/sbom/endpoints/mod.rs'. Task 7 references 'tests/api/sbom.rs', 'tests/api/advisory.rs', 'entity/src/sbom_advisory.rs' and the assert_eq! pattern. All tasks include specific file paths and code patterns."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "All 7 tasks contain '## Target Branch\\nmain'. Verified in: task-1 line 5, task-2 line 5, task-3 line 5, task-4 line 5, task-5 line 5, task-6 line 5, task-7 line 5."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": false,
+      "evidence": "Six out of seven tasks have hex portions that are only 63 characters long, not the required 64. Task 2: 'b5d8e0a2c4f6179684f20b5d6e9a3c7f8b01d2e4f6a8190b2c4d6e8f0a1b3c5' (63 chars). Task 3: 'c6e9f1b3d5a7280795a31c6d7f0b4d8e9c12e3f5a7b9201c3d5e7f9a1b2c4d6' (63 chars). Task 4: 'd7f0a2c4e6b8391806b42d7e8a1c5e9f0d23f4a6b8c0312d4e6f8a0b2c3d5e7' (63 chars). Task 5: 'e8a1b3c5d7f9402917c53e8f9b2d6f0a1e34a5b7c9d1423e5f7a9b1c3d4e6f8' (63 chars). Task 6: 'f9b2c4d6e8a0513028d64f9a0c3e7a1b2f45b6c8d0e2534f6a8b0c2d4e5f7a9' (63 chars). Task 7: 'a1c3e5f7b9d0624139e75a0b1d4f8a2c3e56b7d9f1a3545a7b9c1d3e5f6a8b0' (63 chars). Only Task 1 has 64 chars. Additionally, all hashes exhibit a clear fabricated pattern (incrementing hex pairs, sequential first bytes a3/b5/c6/d7/e8/f9/a1), indicating they were not computed by sha256-digest.py but invented."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "Tasks 4, 5, and 6 have no convention references at all — they don't include any 'Per CONVENTIONS.md' or 'Applies:' lines in their Implementation Notes, even though they modify .rs files (task 4: advisory_summary.rs and mod.rs; task 5: advisory/mod.rs; task 6: main.rs) that would match the Error Handling convention scope. Tasks 1, 2, 3, and 7 do include convention references with the prescribed format, e.g. task 2: 'Applies: task modifies `modules/fundamental/src/sbom/service/sbom.rs` matching the convention's `.rs` module scope.' However, the inconsistency across tasks means the enrichment is not consistently applied. Additionally, task 1's rationale says 'matching the convention's endpoint file scope' for a model file (advisory_summary.rs in sbom/model/), which is an incorrect scope description."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 4,
+    "total": 13,
+    "pass_rate": 0.69
+  }
+}

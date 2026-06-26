@@ -1,0 +1,70 @@
+{
+  "assertion_results": [
+    {
+      "text": "Tasks target both 'trustify-backend' and 'trustify-ui' repositories with at least one task per repo",
+      "passed": true,
+      "evidence": "Tasks 1, 2, 3, 7 have '## Repository\ntrustify-backend'. Tasks 4, 5, 6 have '## Repository\ntrustify-ui'. Both repos have at least one task each (backend: tasks 2, 3; frontend: tasks 4, 5, 6)."
+    },
+    {
+      "text": "Backend tasks have lower task numbers than the frontend tasks that depend on them",
+      "passed": true,
+      "evidence": "Backend tasks are 2 and 3; frontend tasks are 4, 5, and 6. Task 4 depends on Task 3 ('Depends on: Task 3 -- Implement comparison endpoint'). Task 5 depends on Task 4. Task 6 depends on Task 5. All backend task numbers (2, 3) are lower than all frontend task numbers (4, 5, 6)."
+    },
+    {
+      "text": "UI-facing frontend tasks (pages, components) reference Figma design context mentioning specific PatternFly components and visual specifications — API-layer frontend tasks (API types, client functions, hooks) are exempt from this requirement",
+      "passed": true,
+      "evidence": "Task 5 (UI page) extensively references Figma: 'Figma design mapping (per figma-context.md)' and specific PatternFly components: Select, Button, Dropdown, ExpandableSection, Badge, Table, EmptyState, Skeleton. Task 4 (API types/hooks) has no Figma references but is exempt as an API-layer task. Task 6 (tests) has no Figma references but is a test task, not a UI-facing page/component task."
+    },
+    {
+      "text": "Cross-repo dependency ordering is enforced: either at least one frontend task explicitly depends on a backend task in its Dependencies section, or all tasks target a shared feature branch where backend tasks have lower task numbers than frontend tasks (implicit ordering via feature-branch workflow)",
+      "passed": true,
+      "evidence": "Task 4 (frontend) explicitly depends on backend Task 3: 'Depends on: Task 3 -- Implement comparison endpoint and integration tests (for API contract)'. Additionally, all intermediate tasks target feature branch TC-9003, and backend tasks (2, 3) have lower numbers than frontend tasks (4, 5, 6)."
+    },
+    {
+      "text": "Frontend tasks reference paths from repo-frontend.md; backend tasks reference paths from repo-backend.md",
+      "passed": true,
+      "evidence": "Frontend tasks (4, 5, 6) reference paths under src/api/, src/hooks/, src/pages/, src/components/, src/utils/, tests/mocks/, tests/e2e/ which all appear in repo-frontend.md's directory tree. Backend tasks (2, 3) reference paths under modules/fundamental/src/sbom/, common/src/, entity/src/, tests/api/ which all appear in repo-backend.md's directory tree. No cross-contamination of paths between repos."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "All 7 tasks contain a '## Repository' section with a single repo name. Tasks 1, 2, 3, 7: 'trustify-backend'. Tasks 4, 5, 6: 'trustify-ui'. No task lists multiple repositories."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": false,
+      "evidence": "Task 1 (create-branch) has Target Branch, Description, Acceptance Criteria but lacks Test Requirements. Task 7 (merge-branch) has Target Branch, Description, Acceptance Criteria but lacks Test Requirements. While the template says 'Omit sections that don't apply', the assertion requires all four sections in every task. Tasks 2-6 all have all four sections."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the corresponding mock repository structure manifests (repo-backend.md or repo-frontend.md), not invented paths",
+      "passed": true,
+      "evidence": "Files to Modify paths all exist in repo structures: backend task 2 modifies modules/fundamental/src/sbom/model/mod.rs and service/mod.rs (both in repo-backend.md tree); task 3 modifies endpoints/mod.rs (in tree). Frontend task 4 modifies src/api/models.ts, src/api/rest.ts (both in repo-frontend.md); task 5 modifies src/routes.tsx, src/pages/SbomListPage/SbomListPage.tsx (both in tree); task 6 modifies tests/mocks/handlers.ts (in tree). Files to Create extend existing directories: e.g., comparison.rs in modules/fundamental/src/sbom/model/ (which contains mod.rs, summary.rs, details.rs per backend tree), useSbomComparison.ts in src/hooks/ (which contains useSboms.ts, useSbomById.ts per frontend tree)."
+    },
+    {
+      "text": "Implementation Notes in every non-bookend task reference specific file paths and code patterns from the repository, not abstract or generic guidance — bookend tasks (create-branch, merge-branch) are exempt as they omit Implementation Notes by design",
+      "passed": true,
+      "evidence": "Task 1 (create-branch bookend) and Task 7 (merge-branch bookend) have no Implementation Notes -- exempt. Task 2 references specific paths: 'modules/fundamental/src/sbom/model/summary.rs', 'modules/fundamental/src/sbom/service/sbom.rs', 'modules/fundamental/src/package/service/mod.rs', 'entity/src/sbom_package.rs', etc. Task 3 references 'modules/fundamental/src/sbom/endpoints/get.rs', 'modules/fundamental/src/sbom/endpoints/list.rs', 'tests/api/sbom.rs'. Task 4 references 'src/api/rest.ts', 'src/api/client.ts', 'src/hooks/useSbomById.ts'. Task 5 references 'src/hooks/useSboms.ts', 'src/components/SeverityBadge.tsx', 'src/components/EmptyStateCard.tsx', 'src/utils/severityUtils.ts'. Task 6 references 'tests/mocks/handlers.ts', 'tests/e2e/sbom-list.spec.ts'. All have specific paths, not abstract guidance."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section — either all set to 'main' (direct-to-main workflow) or bookend tasks set to 'main' with intermediate tasks set to the feature issue ID (feature-branch workflow)",
+      "passed": true,
+      "evidence": "All 7 tasks have '## Target Branch'. Task 1 (create-branch bookend): 'main'. Task 7 (merge-branch bookend): 'main'. Tasks 2, 3, 4, 5, 6 (intermediate): 'TC-9003'. This follows the feature-branch workflow pattern correctly."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": false,
+      "evidence": "All 7 tasks have digest lines with the correct format '[sdlc-workflow] Description digest: sha256-md:<64-hex>' and all hashes are exactly 64 lowercase hex characters. However, the hashes are clearly sequential placeholder patterns, not actual SHA-256 digests: task 1='a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d2e3f4a5b6c7d8e9f0a1b2', task 2='b3f4a5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4', task 3='c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5'. These are incrementing hex patterns (a1b2c3d4... -> b3f4a5c6... -> c4d5e6f7...) that are clearly fabricated placeholder values, not computed SHA-256 hashes of actual description content."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "No task contains any convention-aware enrichment. There are no 'Per CONVENTIONS.md' references with applicability rationales in the prescribed format 'Applies: task modifies <file> matching the convention's <scope>'. The repo structures mention CONVENTIONS.md files exist in both repos, but no task's Implementation Notes include convention enrichment with proper applicability validation and rationale formatting."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 3,
+    "total": 12,
+    "pass_rate": 0.75
+  }
+}

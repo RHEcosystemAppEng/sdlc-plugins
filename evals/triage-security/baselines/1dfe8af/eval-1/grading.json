@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+      "passed": true,
+      "evidence": "In data-extraction.md, the table explicitly lists: CVE ID = CVE-2026-31812, Vulnerable library = quinn-proto, Affected version range = 'versions before 0.11.14', Fixed version = 0.11.14. All four fields match the source vulnerability issue (vuln-issue-standard.md)."
+    },
+    {
+      "text": "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+      "passed": true,
+      "evidence": "In data-extraction.md line 21: 'Ecosystem | Cargo (Rust crate -- identified from quinn-proto library name and Ecosystem Mappings in security-matrix.md)'. The Ecosystem Detection section (lines 27-34) further explains: 'The vulnerable library quinn-proto is a Rust crate. The Ecosystem Mappings tables in both streams configure a Cargo ecosystem'."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the security-matrix.md supportability matrix — no versions are skipped (Important Rule 4)",
+      "passed": true,
+      "evidence": "The security-matrix-mock.md defines 7 versions across two streams: 2.1.0, 2.1.1 (stream 2.1.x) and 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4 (stream 2.2.x). The version-impact.md table (lines 7-13) lists all 7 versions: 2.1.0, 2.1.1, 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4. No versions are skipped."
+    },
+    {
+      "text": "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+      "passed": true,
+      "evidence": "In version-impact.md, each version row includes a 'Pinned Tag' column with the exact tags from security-matrix-mock.md: 2.1.0=v0.3.8, 2.1.1=v0.3.12, 2.2.0=v0.4.5, 2.2.1=v0.4.8, 2.2.2=v0.4.8, 2.2.3=v0.4.11, 2.2.4=v0.4.12. These match the supportability matrix tags exactly. The Method section (line 18) states: 'Check command: git show <tag>:Cargo.lock', confirming tag-based analysis."
+    },
+    {
+      "text": "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+      "passed": true,
+      "evidence": "In version-impact.md line 12: '2.2.2 | v0.4.8 | -- | YES | retag of 2.2.1 (same as 2.2.1)'. The quinn-proto column shows '--' (no independent check), status is YES (carried from 2.2.1), and notes say 'retag of 2.2.1'. The Method section (line 20) confirms: 'Version 2.2.2 uses pinned tag v0.4.8 (same as 2.2.1 per supportability matrix note \"backend retag of 2.2.1\"), so the lock file check was skipped and the result carried forward from 2.2.1.'"
+    },
+    {
+      "text": "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+      "passed": true,
+      "evidence": "In affects-versions.md, lines 9-12 show a 'Current vs Proposed' table: Current (PSIRT-assigned) = 'RHTPA 2.0.0', Proposed (from lock file analysis) = 'RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2'. The Proposed Comment (lines 41-42) shows the diff: 'Corrected Affects Versions: [RHTPA 2.0.0] -> [RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]'. This clearly shows the replacement of PSIRT versions with lock-file-verified versions."
+    },
+    {
+      "text": "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+      "passed": true,
+      "evidence": "In affects-versions.md, the proposed Jira mutation (lines 27-33) uses version names: {'name': 'RHTPA 2.2.0'}, {'name': 'RHTPA 2.2.1'}, {'name': 'RHTPA 2.2.2'}. Line 36 explicitly states: 'Version IDs would be discovered dynamically via getJiraIssueTypeMetaWithFields at runtime (Step 3.1). Version names from the supportability matrix are used here'. No hardcoded Jira version IDs are present."
+    },
+    {
+      "text": "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+      "passed": true,
+      "evidence": "In remediation.md, Task 1 (upstream backport) includes: Repository = 'backend' (line 28), Target Branch = 'release/0.4.z' (line 30), Acceptance Criteria section (lines 51-54) with checkboxes. Task 2 (downstream propagation) includes: Repository = 'rhtpa-release.0.4.z' (line 77), Target Branch = 'main' (line 79). Dependency linkage is defined in lines 115-117: 'Link downstream propagation task as blocked by upstream backport task with type \"Blocks\"'. Task 2's Dependencies section (line 109) also states: 'Depends on: upstream backport task (upstream backport must merge first)'."
+    },
+    {
+      "text": "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+      "passed": true,
+      "evidence": "In remediation.md, lines 10-11 state: 'Since quinn-proto is a Cargo (source dependency) ecosystem, two tasks are created: upstream backport + downstream propagation with Blocks dependency.' Task 1 is 'Upstream Backport (2.2.x stream)' (line 15) and Task 2 is 'Downstream Propagation (2.2.x stream)' (line 66). Line 117 defines the Blocks linkage: 'Link downstream propagation task as blocked by upstream backport task with type \"Blocks\"'."
+    },
+    {
+      "text": "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
+      "passed": true,
+      "evidence": "In affects-versions.md, the table header uses 'Proposed (from lock file analysis)' (line 12). The Jira mutation is framed as 'Proposed Jira Mutation' (line 26) and 'Proposed Comment' (line 38). In remediation.md, tasks are presented as descriptions to be created, not as executed actions. The affects-versions.md note on line 36 says 'Version IDs would be discovered dynamically... at runtime', indicating these are proposals not executed mutations. No output file contains evidence of actual Jira API calls being made or mutations being executed."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}
