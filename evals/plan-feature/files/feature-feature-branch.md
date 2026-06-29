@@ -5,6 +5,8 @@
 **Key**: TC-9005
 **Summary**: Drop status table and migrate to enum column
 **Status**: New
+**Priority**: High
+**Fix Versions**: RHTPA 2.0.0
 **Labels**: ai-generated-jira
 **Linked Issues**: None
 
