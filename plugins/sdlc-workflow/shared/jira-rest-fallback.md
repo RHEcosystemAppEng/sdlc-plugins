@@ -352,6 +352,51 @@ cd <plugin-root> && python3 scripts/jira-client.py get_user_info
 cd <plugin-root> && python3 scripts/jira-client.py get_project_metadata TC
 ```
 
+**Get Priorities:**
+```bash
+cd <plugin-root> && python3 scripts/jira-client.py get_priorities
+```
+
+Returns JSON array:
+```json
+[
+  {"id": "1", "name": "Blocker", "description": "..."},
+  {"id": "2", "name": "Critical", "description": "..."},
+  {"id": "3", "name": "Major", "description": "..."}
+]
+```
+
+**Get Project Versions:**
+```bash
+cd <plugin-root> && python3 scripts/jira-client.py get_versions TC
+```
+
+With `--unreleased-only` to filter out released and archived versions:
+```bash
+cd <plugin-root> && python3 scripts/jira-client.py get_versions TC --unreleased-only
+```
+
+Returns JSON array:
+```json
+[
+  {"id": "62648", "name": "RHTPA 1.5.0", "released": false, "archived": false},
+  {"id": "62649", "name": "RHTPA 1.6.0", "released": false, "archived": false}
+]
+```
+
+**Create Issue with Priority and Fix Versions:**
+```bash
+cd <plugin-root> && \
+  python3 scripts/jira-client.py create_issue \
+    --project TC \
+    --summary "New feature request" \
+    --description-md "Feature **description** in markdown." \
+    --issue-type "10142" \
+    --labels ai-generated-jira \
+    --priority Major \
+    --fix-versions "RHTPA 1.5.0,RHTPA 1.6.0"
+```
+
 ## Error Handling
 
 The Python client automatically maps HTTP errors to user-friendly messages:

@@ -324,8 +324,19 @@ From the response, extract:
 For fixVersions, filter to show only **unreleased, non-archived** versions by default
 (where `released` is `false` and `archived` is `false`).
 
-If MCP fails, follow the same REST API fallback pattern from Step 0.5. If REST API
-is also unavailable, skip this step and inform the user:
+**On MCP failure, if REST API chosen (Step 0.5):**
+
+Fetch priorities:
+```bash
+python3 scripts/jira-client.py get_priorities
+```
+
+Fetch fixVersions (filtered to unreleased, non-archived):
+```bash
+python3 scripts/jira-client.py get_versions <project-key> --unreleased-only
+```
+
+If REST API is also unavailable, skip this step and inform the user:
 
 > "Could not fetch available priorities and fixVersions. Skipping metadata fields."
 
@@ -509,9 +520,8 @@ python3 scripts/jira-client.py create_issue \
   --issue-type "<feature-issue-type-id>" \
   --labels ai-generated-jira \
   --assignee-id "$ACCOUNT_ID" \         # omit if no self-assignment
-  --fields-json '{"priority": {"name": "<selected-priority>"}, "fixVersions": [{"name": "<selected-version>"}]}'
-  # omit priority from --fields-json if skipped
-  # omit fixVersions from --fields-json if skipped
+  --priority "<selected-priority>" \    # omit if priority skipped
+  --fix-versions "<selected-version>"   # omit if fixVersion skipped
 ```
 
 The Python client automatically converts markdown to ADF.
