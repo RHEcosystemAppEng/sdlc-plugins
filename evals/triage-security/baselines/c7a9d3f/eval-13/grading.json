@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "After creating the upstream backport task, the skill re-fetches the task description from Jira and computes a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md lines 79-98: For upstream task TC-9001, Step 1 re-fetches via jira.get_issue('TC-9001', fields=['description']), Step 2 computes digest via 'python3 scripts/sha256-digest.py /tmp/task-desc.md'. Same pattern for preemptive upstream task TC-9003 (lines 326-342). Both upstream tasks explicitly re-fetch and compute digest with scripts/sha256-digest.py."
+    },
+    {
+      "text": "After creating the downstream propagation subtask, the skill re-fetches the task description and computes a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md lines 169-193: For downstream task TC-9002, Step 1 re-fetches via jira.get_issue('TC-9002', fields=['description']), Step 2 computes digest via 'python3 scripts/sha256-digest.py /tmp/task-desc.md'. Same pattern for preemptive downstream task TC-9004 (lines 425-443). Both downstream tasks explicitly re-fetch and compute digest with scripts/sha256-digest.py."
+    },
+    {
+      "text": "A digest comment with marker '[sdlc-workflow] Description digest:' is posted on each remediation task — both upstream and downstream (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md shows digest comments posted on all four tasks: TC-9001 (line 105): jira.add_comment('TC-9001', '[sdlc-workflow] Description digest: sha256-md:<64-char-hex-digest>'); TC-9002 (line 197); TC-9003 (line 347); TC-9004 (line 449). All use the exact marker '[sdlc-workflow] Description digest:'."
+    },
+    {
+      "text": "Digest comments are posted BEFORE creating issue links (Depend, Blocks) or other comments on the tasks (§1.66, shared/description-digest-protocol.md Rules)",
+      "passed": true,
+      "evidence": "remediation.md explicitly enforces ordering for each task: line 103 ('BEFORE creating any issue links'), line 200 ('BEFORE creating any issue links'), line 345 ('BEFORE creating any issue links'), line 452 ('BEFORE creating any issue links'). Each task's Step 4 states 'Only after the digest comment is posted, proceed to create issue links.' The linkage section (line 220) confirms 'After both digest comments are posted'. Summary section (line 479) reiterates 'this comment MUST be posted BEFORE creating any issue links'."
+    },
+    {
+      "text": "The digest is computed using scripts/sha256-digest.py with the re-fetched description, not the description string passed to create_issue (shared/description-digest-protocol.md Hashing)",
+      "passed": true,
+      "evidence": "remediation.md explicitly distinguishes re-fetched vs original description. Line 85: 'This re-fetches the description as stored by Jira, which may differ from the string passed to create_issue due to Jira-side formatting normalization.' Line 330: 'The re-fetch is critical because Jira may normalize the blockquote formatting, whitespace, or markdown syntax during storage, producing a different byte sequence than the string passed to create_issue.' Summary line 477: 'Re-fetch the description via jira.get_issue -- this is critical because Jira normalizes content during storage, so the stored description may differ from what was passed to create_issue.' The temp file is written with re-fetched content before computing the digest."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+      "passed": true,
+      "evidence": "All three JQL queries in discovery-listing.md use 'project = TC AND issuetype = 10024'. These match the Security Configuration in claude-md-security-config.md which specifies 'Project key: TC' (line 19) and 'Vulnerability issue type ID: 10024' (line 49). The header of discovery-listing.md also explicitly states 'Project: TC | Vulnerability Issue Type ID: 10024' (line 3)."
+    },
+    {
+      "text": "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (§1.48)",
+      "passed": true,
+      "evidence": "discovery-listing.md contains three distinct JQL queries: (1) line 10: 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged) ORDER BY status ASC, created DESC' for untriaged; (2) line 37: 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status = New ORDER BY created DESC' for triaged-but-new; (3) line 54: 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, 'ON_QA') ORDER BY created DESC' for Ready for QA candidates."
+    },
+    {
+      "text": "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
+      "passed": true,
+      "evidence": "discovery-listing.md has three clearly separated sections with horizontal rule dividers: '## 1. Untriaged Issues' (line 7), '## 2. Triaged but still New' (line 32), and '## 3. Ready for QA' (line 49). Each section contains its own results table(s)."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": true,
+      "evidence": "All issue tables in discovery-listing.md contain columns: Issue (key), Status, CVE ID, Summary, Created. For example, line 20: 'TC-9001 | New | CVE-2026-40112 | h2 - HTTP/2 rapid reset vulnerability [rhtpa-2.2] | 2026-06-08'. The filtering results table (lines 67-71) and Ready for QA table (lines 75-77) also include all five fields. The status-handling.md file similarly shows all five fields for each issue."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "In status-handling.md: TC-9001 (line 11): 'Proceed with full triage (Steps 1-7). This is the default path for New issues'; TC-9002 (line 16): same full triage handling; TC-9004 (line 29): same full triage handling. TC-9003 (lines 21-22): 'WARNING -- This issue is already in In Progress. It may be actively worked on. Before proceeding, the engineer must be asked: 1. Proceed with triage anyway 2. Skip this issue'."
+    },
+    {
+      "text": "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)",
+      "passed": true,
+      "evidence": "In discovery-listing.md filtering results table (lines 69-71): TC-9020 has 'TC-9021 (Done), TC-9022 (Closed)' and is marked 'Yes -- Ready for QA'; TC-9023 has 'TC-9024 (Done), TC-9025 (In Progress)' and is marked 'No -- TC-9025 still In Progress'; TC-9026 has '(no Depend links)' and is marked 'No -- no remediation tasks to verify'. TC-9020 is the sole issue in the Ready for QA list (line 77). Confirmed in status-handling.md: TC-9023 'Excluded from Ready for QA. Remediation task TC-9025 is still In Progress' (line 59); TC-9026 'Excluded from Ready for QA. No linked remediation Tasks with Depend link type exist' (line 66)."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

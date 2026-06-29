@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 2: 'Import `apply_filter` from `common/src/db/query.rs`' and 'call `apply_filter` with the value -- this handles both single values and comma-separated multi-values automatically'. Reuse section states: '`common/src/db/query.rs::apply_filter` for comma-separated parsing and SQL IN clause generation'. reuse-analysis.md Candidate 1: 'This completely eliminates the need to write custom comma-splitting logic or manual SQL IN clause construction'."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 1: 'Follow the same pattern as the `severity` field in `modules/fundamental/src/advisory/endpoints/list.rs`'. Step 4 lists it as 'structurally identical list endpoint with filtering; primary pattern source'. reuse-analysis.md Candidate 2 describes it as a structural template with detailed explanation of how to mirror the Query struct pattern, handler wiring, and validation approach."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 2: 'Join through the `package_license` entity (`entity/src/package_license.rs`) to filter packages by their associated license SPDX identifiers' and 'Use SeaORM's join capabilities'. Reuse section: '`entity/src/package_license.rs` for the JOIN entity rather than raw SQL'. reuse-analysis.md Candidate 3: 'Eliminates raw SQL for the JOIN operation. Leverages the existing SeaORM entity'."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md contains three detailed sections: 'Reuse Candidate 1: common/src/db/query.rs::apply_filter', 'Reuse Candidate 2: modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)', and 'Reuse Candidate 3: entity/src/package_license.rs'. Each includes 'What it provides', 'How it would be reused', 'Reuse type', and 'Benefit' subsections. Summary confirms: 'All three task-identified reuse candidates are used.'"
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6 lists exactly three primary files: 'modules/fundamental/src/package/endpoints/list.rs' (MODIFY), 'modules/fundamental/src/package/service/mod.rs' (MODIFY), 'tests/api/package_license_filter.rs' (CREATE). Step 9 scope containment verifies these three files and explicitly flags 'docs/api.md' and test module registration as potentially out-of-scope items requiring user approval, showing awareness of the constraint."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md consistently proposes direct reuse of apply_filter with no new parsing/filter utilities. Step 9 duplication check: 'Verify no duplicate filter logic exists; apply_filter is the canonical implementation being reused.' reuse-analysis.md summary: 'No new utility functions, helpers, or shared modules need to be created. The implementation is composed almost entirely of reusing existing patterns and invoking existing shared code.' No custom comma-splitting or IN clause generation is proposed anywhere."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
