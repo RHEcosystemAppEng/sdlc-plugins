@@ -110,8 +110,10 @@ Before attempting any JIRA operations (Steps 1, 2.5, 4, 6), determine the access
 - `jira.get_issue(id)` → `python3 scripts/jira-client.py get_issue <id> --fields "*all"`
 - `jira.add_comment(id, text)` → `python3 scripts/jira-client.py add_comment <id> --comment-md "<text>"`
 - `jira.get_project_issue_types(project)` → `python3 scripts/jira-client.py get_project_metadata <project-key>`
-- `jira.create_issue(...)` → `python3 scripts/jira-client.py create_issue --project <key> --summary "<summary>" --description-md "<desc>" --issue-type Task --labels <labels>`
+- `jira.create_issue(...)` → `python3 scripts/jira-client.py create_issue --project <key> --summary "<summary>" --description-md "<desc>" --issue-type Task --labels <labels> --priority "<priority>" --fix-versions "<v1>,<v2>"`
 - `jira.create_issue_link(...)` → `python3 scripts/jira-client.py create_link --inward <issue1> --outward <issue2> --link-type <type>`
+- `jira.get_priorities()` → `python3 scripts/jira-client.py get_priorities`
+- `jira.get_versions(project)` → `python3 scripts/jira-client.py get_versions <project-key> --unreleased-only`
 
 Refer to `shared/jira-rest-fallback.md` for complete implementation details.
 
@@ -148,6 +150,8 @@ Extract:
 - links (especially Figma)
 - `priority`: extract `fields.priority.name` and `fields.priority.id` (e.g., `{"name": "Major", "id": "10002"}`). If the priority name is `"Undefined"`, treat it as unset — do not store or propagate it.
 - `fixVersions`: extract the `fields.fixVersions` array (e.g., `[{"name": "RHTPA 1.5.0", "id": "62648"}]`). If the array is empty, treat it as unset.
+
+**On MCP failure, if REST API chosen (Step 0.5):** use `get_issue <id> --fields "*all"` — the response includes `fields.priority` and `fields.fixVersions` in the same structure.
 
 ## Step 2 – Inspect Figma Design
 
@@ -795,6 +799,8 @@ additional_fields: {
      - If `fixVersion scope` is `"feature"`: do NOT propagate fixVersions to tasks.
      - If `### Jira Field Defaults` does not exist or `fixVersion scope` is absent: default to `"both"` (propagate to tasks).
   If either condition is not met, omit the `fixVersions` key entirely from `additional_fields`.
+
+**On MCP failure, if REST API chosen (Step 0.5):** use the `--priority` and `--fix-versions` flags on `create_issue` (see REST API equivalents in Step 0.5). Omit the flag entirely when the value should not be propagated.
 
 As each task is created, record a mapping of **task number/title → Jira key** (e.g. "Task 1 — Add CSV endpoint" → PROJ-231). This mapping is needed for link creation below.
 

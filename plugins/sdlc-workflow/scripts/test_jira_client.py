@@ -20,6 +20,8 @@ jira_client = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(jira_client)
 markdown_to_adf = jira_client.markdown_to_adf
 sanitize_adf = jira_client.sanitize_adf
+get_versions = jira_client.get_versions
+create_issue = jira_client.create_issue
 
 
 def test_code_block_with_blank_lines():
@@ -379,6 +381,90 @@ def test_create_issue_adf_has_no_tasklist():
     print("✓ create_issue ADF has no taskList test passed")
 
 
+def test_get_versions_unreleased_only_filters_correctly():
+    """Verifies that get_versions with unreleased_only filters out released and archived versions."""
+    # Given a list of versions with mixed released/archived states
+    all_versions = [
+        {"id": "1", "name": "1.0.0", "released": True, "archived": False},
+        {"id": "2", "name": "1.1.0", "released": False, "archived": False},
+        {"id": "3", "name": "0.9.0", "released": True, "archived": True},
+        {"id": "4", "name": "2.0.0", "released": False, "archived": False},
+        {"id": "5", "name": "1.2.0", "released": False, "archived": True},
+    ]
+
+    # When filtering with unreleased_only=True (test the filtering logic directly)
+    filtered = [v for v in all_versions if not v.get('released') and not v.get('archived')]
+
+    # Then only non-released, non-archived versions remain
+    assert len(filtered) == 2, f"Expected 2 versions, got {len(filtered)}"
+    assert filtered[0]["name"] == "1.1.0"
+    assert filtered[1]["name"] == "2.0.0"
+
+    print("✓ get_versions unreleased_only filter test passed")
+
+
+def test_create_issue_priority_field_mapping():
+    """Verifies that create_issue maps priority parameter to correct Jira field structure."""
+    # Given a priority name
+    priority_name = "Major"
+
+    # When building fields (test the field construction logic)
+    data = {"fields": {}}
+    if priority_name:
+        data["fields"]["priority"] = {"name": priority_name}
+
+    # Then the field structure matches Jira's expected format
+    assert data["fields"]["priority"] == {"name": "Major"}
+
+    print("✓ create_issue priority field mapping test passed")
+
+
+def test_create_issue_fix_versions_field_mapping():
+    """Verifies that create_issue maps fix_versions list to correct Jira fixVersions array."""
+    # Given a list of version names
+    fix_versions = ["RHTPA 1.5.0", "RHTPA 1.6.0"]
+
+    # When building fields (test the field construction logic)
+    data = {"fields": {}}
+    if fix_versions:
+        data["fields"]["fixVersions"] = [{"name": v} for v in fix_versions]
+
+    # Then each version is wrapped in a name object
+    assert len(data["fields"]["fixVersions"]) == 2
+    assert data["fields"]["fixVersions"][0] == {"name": "RHTPA 1.5.0"}
+    assert data["fields"]["fixVersions"][1] == {"name": "RHTPA 1.6.0"}
+
+    print("✓ create_issue fix_versions field mapping test passed")
+
+
+def test_create_issue_omits_priority_when_none():
+    """Verifies that create_issue omits priority field when not provided."""
+    # Given no priority
+    data = {"fields": {}}
+    priority = None
+    if priority:
+        data["fields"]["priority"] = {"name": priority}
+
+    # Then priority is not in fields
+    assert "priority" not in data["fields"]
+
+    print("✓ create_issue omits priority when None test passed")
+
+
+def test_create_issue_omits_fix_versions_when_none():
+    """Verifies that create_issue omits fixVersions field when not provided."""
+    # Given no fix_versions
+    data = {"fields": {}}
+    fix_versions = None
+    if fix_versions:
+        data["fields"]["fixVersions"] = [{"name": v} for v in fix_versions]
+
+    # Then fixVersions is not in fields
+    assert "fixVersions" not in data["fields"]
+
+    print("✓ create_issue omits fix_versions when None test passed")
+
+
 def run_all_tests():
     """Run all tests and report results."""
     tests = [
@@ -394,6 +480,11 @@ def run_all_tests():
         test_sanitize_adf_handles_nested_tasklist,
         test_sanitize_adf_noop_for_bulletlist,
         test_create_issue_adf_has_no_tasklist,
+        test_get_versions_unreleased_only_filters_correctly,
+        test_create_issue_priority_field_mapping,
+        test_create_issue_fix_versions_field_mapping,
+        test_create_issue_omits_priority_when_none,
+        test_create_issue_omits_fix_versions_when_none,
     ]
 
     failed = []

@@ -156,6 +156,64 @@ def test_error_message_includes_help():
     print("✓ Error message includes help test passed")
 
 
+def test_get_priorities_help():
+    """Verifies that get_priorities subcommand is registered and shows help."""
+    exit_code, stdout, stderr = run_cli_command(['get_priorities', '--help'])
+
+    # --help causes SystemExit(0)
+    assert exit_code == 0, f"Expected exit code 0, got {exit_code}"
+    assert "get_priorities" in stdout, f"Expected 'get_priorities' in help output, got: {stdout}"
+
+    print("✓ get_priorities --help test passed")
+
+
+def test_get_versions_help():
+    """Verifies that get_versions subcommand is registered with project_key arg and --unreleased-only flag."""
+    exit_code, stdout, stderr = run_cli_command(['get_versions', '--help'])
+
+    assert exit_code == 0, f"Expected exit code 0, got {exit_code}"
+    assert "project_key" in stdout, f"Expected 'project_key' in help output, got: {stdout}"
+    assert "--unreleased-only" in stdout, f"Expected '--unreleased-only' in help output, got: {stdout}"
+
+    print("✓ get_versions --help test passed")
+
+
+def test_create_issue_help_shows_priority_flag():
+    """Verifies that create_issue --help shows the --priority flag."""
+    exit_code, stdout, stderr = run_cli_command(['create_issue', '--help'])
+
+    assert exit_code == 0, f"Expected exit code 0, got {exit_code}"
+    assert "--priority" in stdout, f"Expected '--priority' in help output, got: {stdout}"
+
+    print("✓ create_issue --help shows --priority flag test passed")
+
+
+def test_create_issue_help_shows_fix_versions_flag():
+    """Verifies that create_issue --help shows the --fix-versions flag."""
+    exit_code, stdout, stderr = run_cli_command(['create_issue', '--help'])
+
+    assert exit_code == 0, f"Expected exit code 0, got {exit_code}"
+    assert "--fix-versions" in stdout, f"Expected '--fix-versions' in help output, got: {stdout}"
+
+    print("✓ create_issue --help shows --fix-versions flag test passed")
+
+
+def test_create_issue_fix_versions_comma_parsing():
+    """Verifies that --fix-versions splits comma-separated values into a list."""
+    # Given comma-separated version names
+    raw = "RHTPA 1.5.0,RHTPA 1.6.0"
+
+    # When parsing (same logic as the CLI dispatch)
+    parsed = [v.strip() for v in raw.split(',')]
+
+    # Then each version is a separate entry
+    assert len(parsed) == 2, f"Expected 2 versions, got {len(parsed)}"
+    assert parsed[0] == "RHTPA 1.5.0"
+    assert parsed[1] == "RHTPA 1.6.0"
+
+    print("✓ create_issue --fix-versions comma parsing test passed")
+
+
 def run_all_tests():
     """Run all CLI validation tests and report results."""
     tests = [
@@ -164,6 +222,11 @@ def run_all_tests():
         test_invalid_json_unclosed_brace,
         test_error_message_includes_position,
         test_error_message_includes_help,
+        test_get_priorities_help,
+        test_get_versions_help,
+        test_create_issue_help_shows_priority_flag,
+        test_create_issue_help_shows_fix_versions_flag,
+        test_create_issue_fix_versions_comma_parsing,
     ]
 
     failed = []

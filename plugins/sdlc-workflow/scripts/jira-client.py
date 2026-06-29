@@ -447,6 +447,8 @@ def create_issue(
     issue_type: str,
     labels: Optional[List[str]] = None,
     assignee_id: Optional[str] = None,
+    priority: Optional[str] = None,
+    fix_versions: Optional[List[str]] = None,
     custom_fields: Optional[Dict[str, Any]] = None
 ) -> Dict[str, Any]:
     """Create JIRA issue with markdown description.
@@ -458,6 +460,8 @@ def create_issue(
         issue_type: Issue type ID or name
         labels: Optional list of labels
         assignee_id: Optional assignee account ID
+        priority: Optional priority name (e.g., "Major")
+        fix_versions: Optional list of fixVersion names
         custom_fields: Optional custom field values (field_id: value)
 
     Returns:
@@ -477,6 +481,12 @@ def create_issue(
 
     if assignee_id:
         data["fields"]["assignee"] = {"id": assignee_id}
+
+    if priority:
+        data["fields"]["priority"] = {"name": priority}
+
+    if fix_versions:
+        data["fields"]["fixVersions"] = [{"name": v} for v in fix_versions]
 
     if custom_fields:
         data["fields"].update(custom_fields)
@@ -603,6 +613,31 @@ def get_project_metadata(project_key: str) -> Dict[str, Any]:
     return make_request('GET', f"project/{project_key}")
 
 
+def get_priorities() -> List[Dict[str, Any]]:
+    """Get available priority levels.
+
+    Returns:
+        List of priority objects with id, name, description, and iconUrl
+    """
+    return make_request('GET', 'priority')
+
+
+def get_versions(project_key: str, unreleased_only: bool = False) -> List[Dict[str, Any]]:
+    """Get project fixVersions.
+
+    Args:
+        project_key: Project key (e.g., TC)
+        unreleased_only: If True, filter to non-released, non-archived versions
+
+    Returns:
+        List of version objects with id, name, released, archived, releaseDate
+    """
+    versions = make_request('GET', f"project/{project_key}/versions")
+    if unreleased_only:
+        versions = [v for v in versions if not v.get('released') and not v.get('archived')]
+    return versions
+
+
 # =============================================================================
 # CLI Interface
 # =============================================================================
@@ -638,6 +673,8 @@ def main(argv=None):
     create_issue_parser.add_argument('--issue-type', required=True, help='Issue type ID or name')
     create_issue_parser.add_argument('--labels', help='Comma-separated labels')
     create_issue_parser.add_argument('--assignee-id', help='Assignee account ID')
+    create_issue_parser.add_argument('--priority', help='Priority name (e.g., Major)')
+    create_issue_parser.add_argument('--fix-versions', help='Comma-separated fixVersion names')
 
     # update_issue
     update_issue_parser = subparsers.add_parser('update_issue', help='Update issue fields')
@@ -678,6 +715,15 @@ def main(argv=None):
     project_parser = subparsers.add_parser('get_project_metadata', help='Get project metadata')
     project_parser.add_argument('project_key', help='Project key')
 
+    # get_priorities
+    subparsers.add_parser('get_priorities', help='Get available priority levels')
+
+    # get_versions
+    versions_parser = subparsers.add_parser('get_versions', help='Get project fixVersions')
+    versions_parser.add_argument('project_key', help='Project key')
+    versions_parser.add_argument('--unreleased-only', action='store_true',
+                                 help='Filter to non-released, non-archived versions')
+
     # Parse and execute
     args = parser.parse_args(argv)
 
@@ -688,13 +734,16 @@ def main(argv=None):
 
     elif args.command == 'create_issue':
         labels = args.labels.split(',') if args.labels else None
+        fix_versions = [v.strip() for v in args.fix_versions.split(',')] if args.fix_versions else None
         result = create_issue(
             args.project,
             args.summary,
             args.description_md,
             args.issue_type,
             labels=labels,
-            assignee_id=args.assignee_id
+            assignee_id=args.assignee_id,
+            priority=args.priority,
+            fix_versions=fix_versions,
         )
 
     elif args.command == 'update_issue':
@@ -730,6 +779,12 @@ def main(argv=None):
 
     elif args.command == 'get_project_metadata':
         result = get_project_metadata(args.project_key)
+
+    elif args.command == 'get_priorities':
+        result = get_priorities()
+
+    elif args.command == 'get_versions':
+        result = get_versions(args.project_key, args.unreleased_only)
 
     # Print result as JSON
     if result:
