@@ -8,8 +8,11 @@ ship the vulnerable dependency by reading lock files at pinned source commits.
 
 For each row in the **Version Streams** table in Security Configuration, read the
 `security-matrix.md` file at the path given in the **Security Matrix Path** column,
-resolved relative to the project's working directory. Each `security-matrix.md`
-covers one version stream and contains:
+resolved relative to the project's working directory. Step 0.3 already verified
+that each matrix file's `Last-Updated` timestamp is recent — if staleness was
+detected, the user chose to refresh or proceed before reaching this step.
+
+Each `security-matrix.md` covers one version stream and contains:
 
 - **Version stream** — which product versions this repo covers (e.g., `2.1.x`)
 - **Supportability matrix** — a table mapping each version to source commits

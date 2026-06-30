@@ -1,3 +1,5 @@
+<!-- Last-Updated: {{last-updated-timestamp}} -->
+
 # Security Matrix Template
 
 <!-- TODO: Copy this template into the project working directory at the path specified in

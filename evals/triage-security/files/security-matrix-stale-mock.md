@@ -1,5 +1,5 @@
-<!-- Last-Updated: 2026-06-28T10:00:00Z -->
-<!-- SYNTHETIC TEST DATA — mock security-matrix.md files for two version streams for triage-security eval testing -->
+<!-- Last-Updated: 2026-05-01T10:00:00Z -->
+<!-- SYNTHETIC TEST DATA — stale security-matrix.md fixture for staleness detection eval testing -->
 
 # Stream 1: rhtpa-release.0.3.z (2.1.x stream)
 

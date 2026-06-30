@@ -585,7 +585,11 @@ If the user accepts, for each Version Stream:
    - **Retag status** — whether this version shares the same source commits as another
 3. Write the discovered rows into the Supportability Matrix table in the stream's
    `security-matrix.md`
-4. Present the populated matrix to the user for review before writing
+4. Write or update the `<!-- Last-Updated: <ISO-8601-timestamp> -->` HTML comment at
+   the very first line of the file. Use the current UTC timestamp in ISO 8601 format
+   (e.g., `<!-- Last-Updated: 2026-06-29T14:30:00Z -->`). This timestamp is consumed
+   by triage-security's Step 0.3 staleness check.
+5. Present the populated matrix to the user for review before writing
 
 ## Step 11 – Validate
 

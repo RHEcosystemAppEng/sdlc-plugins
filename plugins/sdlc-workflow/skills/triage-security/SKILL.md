@@ -35,6 +35,7 @@ Do **not** use for:
 | Step | Name | Input | Output |
 |------|------|-------|--------|
 | 0 | Validate Configuration | CLAUDE.md | Project key, Cloud ID, Security Config |
+| 0.3 | Matrix Staleness Check | security-matrix.md timestamps | Staleness warning or proceed |
 | 0.5 | Jira Access | -- | MCP or REST API connection |
 | 1 | Data Extraction | Vulnerability issue key | CVE ID, library, affected range, remote links |
 | 1.5 | External CVE Data Enrichment | CVE ID | Structured version ranges, cross-validated fix thresholds |
@@ -138,6 +139,47 @@ Extract the following from the configuration for use in later steps:
   If not configured, Step 1.7 is skipped entirely.
 - **Version Streams** — Konflux release repo URLs and local paths from Security Configuration
 - **Source Repositories** — source repo names and URLs from Security Configuration
+
+## Step 0.3 – Matrix Staleness Check
+
+Before proceeding with triage, verify that each version stream's `security-matrix.md`
+has been updated recently enough to reflect the current release landscape. A stale
+matrix can cause triage to miss newly released versions or use outdated source commit
+references.
+
+For each row in the **Version Streams** table in Security Configuration:
+
+1. **Read the matrix file** at the configured **Security Matrix Path** (relative to
+   the project working directory).
+2. **Extract the timestamp** from the `<!-- Last-Updated: <ISO-8601> -->` HTML comment
+   at the top of the file. Parse the ISO 8601 value.
+3. **Check for staleness** — compare the timestamp against the current date. If the
+   matrix is older than **14 days** (the default threshold), warn the user:
+
+   > "Security matrix for stream **<stream>** was last updated on <date>
+   > (<N> days ago). The matrix may not reflect recent releases.
+   >
+   > Options:
+   > 1. **Refresh now** — re-run matrix population (setup Step 10.6) for this stream
+   > 2. **Proceed anyway** — continue triage with the current matrix
+   > 3. **Stop** — halt triage so I can investigate"
+
+   Wait for the user's choice before proceeding.
+
+4. **If no timestamp found** — the matrix predates staleness tracking. Warn:
+
+   > "Security matrix for stream **<stream>** has no Last-Updated timestamp.
+   > Consider running `/setup` to populate it with a timestamp for future
+   > staleness checks."
+
+   Proceed without blocking — absence of a timestamp is not an error.
+
+5. **If the matrix file does not exist** — this is handled by Step 2.1's existing
+   fallback logic. Skip the staleness check for this stream.
+
+If the user chooses **Refresh now**, invoke the matrix population logic from setup
+Step 10.6 for the selected stream. After population completes (which writes an
+updated `Last-Updated` timestamp), continue with the refreshed matrix.
 
 ## Step 0.5 – JIRA Access Initialization
 
