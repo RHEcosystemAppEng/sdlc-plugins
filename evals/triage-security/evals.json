@@ -230,6 +230,31 @@
         "Step 1.7 requires explicit engineer confirmation (Yes/No) before proceeding to Step 2 — the gate is a confirmation prompt, not an informational message (§1.70)",
         "The embargo warning gate does NOT trigger for Low or Moderate severity CVEs (CVSS < 7.0) — it is skipped silently when severity is below threshold (§1.70)"
       ]
+    },
+    {
+      "id": 19,
+      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-stale-mock.md (which has a Last-Updated timestamp of 2026-05-01T10:00:00Z — more than 14 days old), and the project CLAUDE.md is in claude-md-security-config.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/staleness-check.md with the Step 0.3 staleness detection output including the warning message and user options.",
+      "expected_output": "A staleness check that detects the security-matrix.md timestamp (2026-05-01T10:00:00Z) is older than the 14-day default threshold and presents a warning with three options: refresh now, proceed anyway, or stop.",
+      "files": ["files/vuln-issue-standard.md", "files/security-matrix-stale-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 0.3 reads the Last-Updated timestamp from the security-matrix.md HTML comment and parses the ISO 8601 value",
+        "Step 0.3 detects that the matrix is older than the 14-day default threshold and displays a staleness warning",
+        "The staleness warning includes the stream name, the last-updated date, and the number of days since the last update",
+        "The warning presents three options: refresh now (re-run setup Step 10.6), proceed anyway, or stop",
+        "Step 0.3 runs before Step 0.5 (JIRA Access Initialization) — no Jira operations are attempted before the staleness check"
+      ]
+    },
+    {
+      "id": 20,
+      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md (which has a recent Last-Updated timestamp within the 14-day threshold), and the project CLAUDE.md is in claude-md-security-config.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/staleness-check.md documenting the Step 0.3 result, and write outputs/data-extraction.md with the parsed CVE data table from Step 1.",
+      "expected_output": "Step 0.3 reads the Last-Updated timestamp, finds it within the 14-day threshold, and proceeds silently to the next step without any warning or user prompt.",
+      "files": ["files/vuln-issue-standard.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 0.3 reads the Last-Updated timestamp from the security-matrix.md HTML comment",
+        "Step 0.3 determines the matrix is within the 14-day threshold and proceeds without displaying a staleness warning",
+        "No user prompt or options are presented for a fresh matrix — the check is silent on success",
+        "The triage continues to Step 0.5 and beyond without interruption from the staleness check"
+      ]
     }
   ]
 }
