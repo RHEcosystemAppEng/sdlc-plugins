@@ -255,6 +255,30 @@
         "No user prompt or options are presented for a fresh matrix — the check is silent on success",
         "The triage continues to Step 0.5 and beyond without interruption from the staleness check"
       ]
+    },
+    {
+      "id": 21,
+      "prompt": "Triage Vulnerability issue TC-8020. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has customfield_10632 (Upstream Affected Component) set to 'quinn-proto'. Assume that the Upstream Affected Component custom field is configured in Security Configuration. When you reach Step 7.0 (Concurrent Triage Detection), assume a JQL search for in-progress triages with cf[10632] ~ 'quinn-proto' AND status IN ('In Progress', 'Code Review') AND key != TC-8020 returns one result: TC-8019 with status 'In Progress', assigned to 'engineer-b@example.com'. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data, write outputs/concurrent-triage.md with the Step 7.0 concurrent triage detection analysis, and write outputs/triage-outcome.md explaining the triage decision.",
+      "expected_output": "A triage analysis where Step 7.0 detects that TC-8019 is concurrently triaging the same upstream component (quinn-proto). The output warns the user about the concurrent triage and presents three options: wait, skip, or proceed with overlap label.",
+      "files": ["files/vuln-issue-standard.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 7.0 detects concurrent triage TC-8019 on the same upstream component (quinn-proto) with status In Progress",
+        "The concurrent triage warning includes the conflicting CVE issue key (TC-8019) and its assignee",
+        "The output presents three options: wait for the other triage to complete, skip remediation task creation, or proceed with a concurrent-triage-overlap label",
+        "The concurrent triage check runs before Case A/B/C branching in Step 7"
+      ]
+    },
+    {
+      "id": 22,
+      "prompt": "Triage Vulnerability issue TC-8021. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has customfield_10632 (Upstream Affected Component) set to 'quinn-proto'. Assume that the Upstream Affected Component custom field is configured in Security Configuration. When you reach Step 7.0 (Concurrent Triage Detection), assume a JQL search for in-progress triages with cf[10632] ~ 'quinn-proto' AND status IN ('In Progress', 'Code Review') AND key != TC-8021 returns zero results. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data, write outputs/concurrent-triage.md with the Step 7.0 analysis, and write outputs/triage-outcome.md explaining the triage decision.",
+      "expected_output": "A triage analysis where Step 7.0 finds no concurrent triages on the same upstream component and proceeds silently to Case A/B/C branching without warning the user.",
+      "files": ["files/vuln-issue-standard.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 7.0 executes the concurrent triage check for upstream component quinn-proto",
+        "No concurrent triages are detected — the JQL search returns zero results",
+        "The analysis proceeds directly to Case A/B/C branching without a concurrent triage warning",
+        "The output does not present wait/skip/proceed options since no conflict exists"
+      ]
     }
   ]
 }

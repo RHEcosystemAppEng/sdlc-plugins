@@ -45,6 +45,7 @@ Do **not** use for:
 | 4 | Duplicate, Sibling, Overlap, and Reconciliation Check | JQL search (sibling issues), component field search, preemptive task search | Duplicate detection, issue links, cross-CVE overlap, preemptive task reconciliation |
 | 5 | Version Lifecycle Check | Product pages URL | EOL status per version |
 | 6 | Already Fixed Check | Resolved sibling issues | Already-fixed detection |
+| 7.0 | Concurrent Triage Detection | Upstream component, JQL | Concurrent triage warning or proceed |
 | 7 | Remediation | Impact analysis results | Remediation tasks or close recommendation |
 
 ## Guardrails
@@ -535,7 +536,9 @@ Steps 4–6 filtering), determine the appropriate action.
 
 ```mermaid
 flowchart TD
-    A["Version impact table\n(after Steps 4-6)"] --> B{"Any supported versions\naffected?"}
+    A["Version impact table\n(after Steps 4-6)"] --> Z{"Step 7.0:\nConcurrent triage\non same component?"}
+    Z -->|No or user proceeds| B{"Any supported versions\naffected?"}
+    Z -->|User waits/skips| STOP["Stop or skip\ntask creation"]
     B -->|Yes| C{"Other streams\nalso affected?"}
     B -->|No| D["Case C: Close as\nNot a Bug"]
     C -->|Yes| E["Case B: Post cross-stream\nimpact comment"]
@@ -551,6 +554,23 @@ flowchart TD
 
 **Important**: This skill never creates Vulnerability issues. PSIRT owns
 Vulnerability issue creation — the skill only creates remediation **Tasks**.
+
+### Step 7.0 – Concurrent triage detection
+
+Before proceeding to Case A/B/C branching, check whether another engineer is
+actively triaging a different CVE that affects the same upstream component. This
+prevents duplicate remediation tasks when two concurrent triages reach Step 7
+simultaneously.
+
+Follow the concurrent triage detection protocol in
+`jira-triage-operations.md` — Step 7.0.
+
+If the Upstream Affected Component custom field is not configured, skip this
+step entirely.
+
+If concurrent triages are detected, the protocol offers three options: wait,
+skip, or proceed with a `concurrent-triage-overlap` label. Only continue to
+Case A/B/C after the user chooses.
 
 ### Case A: Affected — create remediation tasks
 
