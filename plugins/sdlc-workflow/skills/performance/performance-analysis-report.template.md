@@ -377,6 +377,105 @@ improvement because cache-bypass queries dominate warm-cache response time.
 
 ---
 
+#### Migration SQL Anti-Patterns
+
+**Migration Directory:** {migration_path}
+**Migration Files Scanned:** {file_count}
+**DML-Containing Migrations:** {dml_file_count}
+
+**Description:** Performance anti-patterns detected in migration file DML (backfill queries, function definitions). These affect deployment time and database load during migration execution.
+
+{if any 7.8.x findings}
+
+##### Missing Statistics Refresh
+
+{if 7.8.1 findings}
+
+**Finding ID:** F{n}
+**Severity:** {severity}
+**Migration File:** `{migration_file_path}`
+
+```sql
+{backfill_query_snippet}
+```
+
+**Issue:** Bulk {INSERT/UPDATE} operates on `{table_name}` without preceding ANALYZE. Stale statistics may cause planner to misestimate row counts, leading to suboptimal query plans (e.g., nested loops instead of hash joins).
+**Tables Affected:** {table_list}
+**Recommended Fix:** Add `ANALYZE {table_name};` before the backfill query.
+**Validation Status:** {disposition}
+
+{... repeat for each instance ...}
+
+{end if}
+
+##### Non-Materialized CTE Re-evaluation
+
+{if 7.8.2 findings}
+
+**Finding ID:** F{n}
+**Severity:** {severity}
+**Migration File:** `{migration_file_path}`
+
+```sql
+{cte_query_snippet}
+```
+
+**Issue:** CTE `{cte_name}` contains {expensive_operation_description} and is referenced {ref_count} times without MATERIALIZED keyword. PostgreSQL 12+ may inline the CTE, causing the expensive operations to be evaluated {ref_count} times instead of once.
+**Recommended Fix:** Add MATERIALIZED keyword: `WITH {cte_name} AS MATERIALIZED (...)`
+**Validation Status:** {disposition}
+
+{... repeat for each instance ...}
+
+{end if}
+
+##### Uniform Processing of Partitionable Data
+
+{if 7.8.3 findings}
+
+**Finding ID:** F{n}
+**Severity:** {severity}
+**Confidence:** {confidence}
+**Migration File:** `{migration_file_path}`
+
+```sql
+{uniform_query_snippet}
+```
+
+**Issue:** Function `{function_name}` is applied to all rows, but its early-exit guard (`{guard_condition}`) indicates most rows are returned unchanged. The expensive path (JOIN + function evaluation) could be limited to rows matching `{partition_predicate}`.
+**Guard Condition:** `{guard_condition_in_function}`
+**Recommended Fix:** Split into two passes — one for rows matching `{partition_predicate}` (with JOIN + function), one for the rest (direct insert without JOIN/function).
+**Validation Status:** {disposition}
+
+{... repeat for each instance ...}
+
+{end if}
+
+##### Expensive PL/pgSQL Function Patterns
+
+{if 7.8.4 findings}
+
+**Finding ID:** F{n}
+**Severity:** {severity}
+**Migration File:** `{migration_file_path}`
+**Function:** `{function_name}`
+
+```sql
+{function_snippet}
+```
+
+**Issue:** {pattern_description — e.g., "regexp_replace() with dynamically concatenated pattern inside FOREACH loop — regex is recompiled on every iteration"}
+**Recommended Fix:** {fix_description — e.g., "Replace regexp_replace() with boundary-aware replace() calls using SPDX delimiter pairs (space, parentheses, +)"}
+**Estimated Speedup:** {speedup_estimate if available, otherwise "Benchmark required"}
+**Validation Status:** {disposition}
+
+{... repeat for each instance ...}
+
+{end if}
+
+{else: "No migration SQL anti-patterns detected."}
+
+---
+
 ### Cross-Repository Over-Fetching Analysis
 
 **Note:** This analysis cross-references backend response schemas with frontend field usage.
