@@ -141,7 +141,7 @@ For each optimization, document: performance benefit (quantified), impact scope/
 
 Store all impact analysis data for Steps 5.5-9.
 
-### Step 5.5 -- Database Migration Script Generation
+### Step 5.5 -- Database Migration Script Generation (New Migrations)
 
 **Guard:** Runs when any RECOMMEND or CAUTION finding has anti-pattern type in: Missing Index, Sequential Scan, Nested Loop, Row Estimate Mismatch, Unused JOINs, Inefficient Queries, SQL Duplication. Key off anti-pattern type, not step numbers — covers findings from both static analysis (Steps 7.6, 7.6.1, 7.6.4, 7.6.5) and live analysis (Step 9.7.4).
 
@@ -209,6 +209,44 @@ Verify for each migration:
 - Rollback/down migration is non-destructive
 - Migration follows CONVENTIONS.md patterns
 
+### Step 5.6 -- Migration SQL Optimization Handling (Existing Migrations)
+
+**Guard:** Runs when any RECOMMEND or CAUTION finding has anti-pattern type in: Missing Statistics Refresh, Non-Materialized CTE Re-evaluation, Uniform Processing of Partitionable Data, Expensive PL/pgSQL Function Pattern. Key off anti-pattern type — these come from analyze-module Steps 7.8.1-7.8.4.
+
+**Skip when:** no migration-SQL-optimization findings exist among RECOMMEND/CAUTION dispositions.
+
+**Key distinction from Step 5.5:** Step 5.5 generates NEW migration files (e.g., CREATE INDEX for a missing index). Step 5.6 generates patches to EXISTING migration files (e.g., adding ANALYZE before a backfill, materializing a CTE, rewriting a PL/pgSQL function). The implementation approach differs: Step 5.5 produces a complete new migration script; Step 5.6 produces before/after diffs of existing files.
+
+#### Step 5.6.1 -- Read Existing Migration File
+
+For each migration SQL optimization finding, locate and read the specific migration file containing the anti-pattern. The finding's `file` field from `findings-validation.json` provides the path. Verify the file exists and the evidence excerpt matches.
+
+#### Step 5.6.2 -- Generate Fix Artifacts
+
+For each finding, produce:
+
+- **Before SQL** — the current migration code (exact excerpt from the file)
+- **After SQL** — the corrected migration code with the anti-pattern resolved
+- **Explanation** — why the change improves performance, with estimated impact
+- **Verification SQL** — a runnable command to confirm the fix works
+
+Fix patterns by anti-pattern type:
+
+| Anti-Pattern | Fix Pattern | Verification |
+|---|---|---|
+| Missing Statistics Refresh | Insert `ANALYZE {table};` before the backfill DML | `EXPLAIN ANALYZE {backfill_query}` — verify planner row estimates are within 10x of actual |
+| Non-Materialized CTE | Add `MATERIALIZED` keyword to CTE definition | `EXPLAIN {query}` — verify CTE appears as "CTE Scan" (not inlined) |
+| Uniform Processing | Split query into two passes: one for rows matching the partition predicate (with JOIN + function), one for the rest (direct insert without JOIN/function) | Run both passes and verify combined result matches original single-pass result |
+| Expensive PL/pgSQL Pattern | Replace `regexp_replace()` with boundary-aware `replace()` calls; eliminate per-row queries with batch operations | Timing comparison: `\timing` + `SELECT expand_fn_old(...)` vs `SELECT expand_fn_new(...)` on representative data |
+
+#### Step 5.6.3 -- Safety Checks
+
+Verify for each fix:
+- Fix preserves the migration's semantic correctness (same data outcome after migration completes)
+- Fix is idempotent if the migration is re-run (ON CONFLICT handling preserved)
+- No data loss operations introduced
+- For function rewrites: verify the new function produces identical output for all input patterns (boundary cases, edge cases, NULL handling)
+
 ## Step 6 -- Group Optimizations into Logical Tasks
 
 Group only **RECOMMEND** and **CAUTION** optimizations into tasks. CONDITIONAL/DEFER/REJECT are documented in the plan but do NOT become Jira tasks.
@@ -222,6 +260,8 @@ Group only **RECOMMEND** and **CAUTION** optimizations into tasks. CONDITIONAL/D
 **Layer 2 -- Backend** (when configured): 2A Query (N+1, deep chain N+1, pagination, indexes, query rewrites) | 2B Response (over-fetching, wasted computation, caching)
 
 Database migration findings (Missing Index, Sequential Scan, Unused JOINs, Inefficient Queries, SQL Duplication) are grouped under Layer 2A with the `db-migration` label in addition to `performance-optimization`. Index-related findings go into one migration task; query rewrite findings go into a separate task. Each migration task includes the generated migration script (from Step 5.5.4) in Implementation Notes and the manual verification artifacts (from Step 5.5.3) in the Database Migration extension section.
+
+Migration SQL optimization findings (Missing Statistics Refresh, Non-Materialized CTE Re-evaluation, Uniform Processing of Partitionable Data, Expensive PL/pgSQL Function Pattern) are grouped under Layer 2A with the `migration-sql-optimization` label in addition to `performance-optimization`. These are distinct from `db-migration` tasks — they fix EXISTING migration files rather than generating new ones. Group by migration file: findings in the same migration file go into one task. Each task includes the before/after SQL (from Step 5.6.2) in Implementation Notes and the verification commands in the Migration SQL Optimization extension section.
 
 **Strategic materialization promotion:** When the analysis report's Strategic Optimizations section (S1, S2, ...) identifies a materialized view, denormalized table, or pre-computed column that would eliminate a join chain appearing in 2+ N+1/query findings (cross-reference by finding ID in the analysis report's prioritized findings table, e.g., F1, F2, ...), promote it to a **separate db-migration task** under Layer 2A with the `db-migration` label. The task description must include: the target table schema (columns, types, constraints), the source query being materialized, the migration script (up/down) generated via Step 5.5, and which findings it resolves (by ID). This task should be sequenced before the N+1 fix tasks that depend on it, since the materialized table simplifies those fixes.
 
@@ -262,6 +302,15 @@ When a task addresses a `Cross-Table OR Filter` (7.6.7), `Load-All-Then-Search` 
 3. **Define the result merging strategy** — for subquery paths: UNION DISTINCT via query builder folding; for materialized paths: in-application sort + dedup on the composite key.
 4. **State the equivalence constraint explicitly:** "The decomposed queries MUST return the same result set as the original single query for both bare queries (e.g., `q=openssl`) and field-qualified queries (e.g., `q=name~openssl`). Field-qualified queries must route to the correct single branch without behavioral change. Verify equivalence with the repository's existing integration test harness."
 5. **Specify edge case handling** — each branch applies the filter to its column set; branches whose columns do not match the query fields fail filter parsing and are silently excluded. When all branches fail, the original combined column set must be used to produce the user-facing error message. When at least one branch succeeds but returns zero rows, the result is empty (not an error).
+
+### Migration SQL Fix Mandate
+
+When a task addresses a migration SQL optimization finding (from analyze-module Steps 7.8.1-7.8.4), the task's Implementation Notes MUST:
+
+1. **Identify the exact migration file and line range** — the specific `.sql` or `.rs` migration file, the DML statement(s) or function definition affected, and the line numbers from the analysis finding.
+2. **Show before/after SQL** — the exact current code and the corrected code from Step 5.6.2. For PL/pgSQL function rewrites, show the complete function body before and after.
+3. **State the deployment status constraint explicitly:** "This migration file may have already been applied to production databases. The fix must be delivered as a NEW migration file that corrects the data state and replaces the function definition, OR as a modification to the existing migration file if it has not yet been deployed. Confirm deployment status before implementation."
+4. **Specify verification:** For Missing Statistics Refresh fixes, provide `EXPLAIN ANALYZE` commands to verify the planner uses correct row estimates after ANALYZE. For CTE materialization fixes, provide `EXPLAIN` to verify single CTE evaluation. For function rewrites, provide a timing comparison query (old function vs new function on representative data). For query splits, provide a result-equivalence check query.
 
 ### Task Sequencing
 
@@ -357,9 +406,11 @@ mcp__atlassian__createJiraIssue(
 )
 ```
 
-**Labels:** layer = "frontend" | "backend" | "integration". Category = "bundle-size" | "render-optimization" | "resource-optimization" | "query-optimization" | "response-optimization" | "api-communication" | "db-migration".
+**Labels:** layer = "frontend" | "backend" | "integration". Category = "bundle-size" | "render-optimization" | "resource-optimization" | "query-optimization" | "response-optimization" | "api-communication" | "db-migration" | "migration-sql-optimization".
 
 For `db-migration` tasks: include both `performance-optimization` and `db-migration` labels. The `performance-optimization` label maintains Epic grouping; the `db-migration` label enables task type detection in implement-task and verify-pr.
+
+For `migration-sql-optimization` tasks: include both `performance-optimization` and `migration-sql-optimization` labels. The `performance-optimization` label maintains Epic grouping; the `migration-sql-optimization` label distinguishes "fix existing migration SQL" from "create new migration" (`db-migration`). These tasks fix performance anti-patterns in existing migration files (backfill queries, PL/pgSQL functions) rather than generating new DDL migrations.
 
 ### Step 9.3 -- Set Epic as Parent
 

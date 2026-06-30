@@ -190,6 +190,30 @@
         "outputs/mock-backend-fp-scale/performance/analysis/findings-validation.json does NOT contain a confirmed finding with anti_pattern 'Late Pagination' (DB-level pagination correctly recognized)",
         "outputs/mock-backend-fp-scale/performance/analysis/findings-validation.json does NOT contain a confirmed finding with anti_pattern 'Redundant Database Indexes' (prefix index with distinct query coverage not flagged)"
       ]
+    },
+    {
+      "id": 9,
+      "prompt": "Run /sdlc-workflow:performance-analyze-module on mock-backend-migration. Bootstrap: copy files/mock-backend-migration/ to outputs/mock-backend-migration/. Copy files/mock-backend-migration/performance/config-backend-only.json to outputs/mock-backend-migration/performance-config.json. Copy baselines to outputs/mock-backend-migration/performance/baselines/. Write analysis artifacts to outputs/mock-backend-migration/performance/analysis/. Do NOT call Serena (use grep). Do NOT run live SQL. Do NOT start servers or install dependencies. Do NOT modify files outside outputs/. Mark frontend steps and Step 9.7 as not_applicable (backend-only). The backend contains migration SQL with planted anti-patterns in the migration/ directory: (1) migration/m001_backfill.sql: Missing ANALYZE before bulk INSERT...SELECT on large tables with JOINs, (2) migration/m001_backfill.sql: Non-materialized CTE with expand_license_expression_with_mappings() function call referenced in both INSERT columns and md5() JOIN, (3) migration/m002_normalize.sql: Uniform processing — expand_license_expression_with_mappings() applied to all rows via UPDATE, but function has early-exit guard for rows without 'LicenseRef-' (see m000_functions.sql), (4) migration/m000_functions.sql: PL/pgSQL function with regexp_replace using dynamic pattern concatenation ('\\m' || mapping.license_id || '(?![a-zA-Z0-9.\\-])') inside FOREACH loop. Run Steps 6.B, 7 (including 7.8.1-7.8.4), and 9. Treat outputs/mock-backend-migration/ as the target repository.",
+      "expected_output": "All 4 planted migration SQL anti-patterns should be detected. Missing Statistics Refresh, Non-Materialized CTE Re-evaluation, and Expensive PL/pgSQL Function Pattern should have Confirmed findings. Uniform Processing of Partitionable Data should have Confirmed (Low Confidence) disposition. At least 3 confirmed findings total.",
+      "files": [
+        "files/mock-backend-migration/performance/config-backend-only.json",
+        "files/mock-backend-migration/performance/baselines/benchmark-results.json",
+        "files/mock-backend-migration/Cargo.toml",
+        "files/mock-backend-migration/src/lib.rs",
+        "files/mock-backend-migration/src/handlers/mod.rs",
+        "files/mock-backend-migration/migration/m000_functions.sql",
+        "files/mock-backend-migration/migration/m001_backfill.sql",
+        "files/mock-backend-migration/migration/m002_normalize.sql"
+      ],
+      "assertions": [
+        "outputs/mock-backend-migration/performance/analysis/findings-validation.json contains a finding with anti_pattern 'Missing Statistics Refresh' and disposition 'Confirmed'",
+        "outputs/mock-backend-migration/performance/analysis/findings-validation.json contains a finding with anti_pattern 'Non-Materialized CTE Re-evaluation' and disposition 'Confirmed'",
+        "outputs/mock-backend-migration/performance/analysis/findings-validation.json contains a finding with anti_pattern 'Expensive PL/pgSQL Function Pattern' and disposition 'Confirmed'",
+        "outputs/mock-backend-migration/performance/analysis/findings-validation.json contains a finding with anti_pattern 'Uniform Processing of Partitionable Data' and disposition containing 'Confirmed'",
+        "outputs/mock-backend-migration/performance/analysis/analysis-progress.json shows steps 7.8.1, 7.8.2, 7.8.3, and 7.8.4 with status 'done'",
+        "outputs/mock-backend-migration/performance/analysis/workflow-analysis-report.md contains 'Migration SQL' heading or section",
+        "outputs/mock-backend-migration/performance/analysis/findings-validation.json statistics show at least 3 confirmed or confirmed_low_confidence findings"
+      ]
     }
   ]
 }
