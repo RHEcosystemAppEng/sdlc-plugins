@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+      "passed": true,
+      "evidence": "All three JQL queries in discovery-listing.md use 'project = TC' and 'issuetype = 10024'. Query 1: 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged) ORDER BY status ASC, created DESC'. Query 2: 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status = New ORDER BY created DESC'. Query 3: 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, \\'ON_QA\\') ORDER BY created DESC'."
+    },
+    {
+      "text": "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (§1.48)",
+      "passed": true,
+      "evidence": "discovery-listing.md contains exactly three queries matching the required patterns. Query 1 uses 'labels NOT IN (ai-cve-triaged)'. Query 2 uses 'labels IN (ai-cve-triaged) AND status = New'. Query 3 uses 'labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, \\'ON_QA\\')'."
+    },
+    {
+      "text": "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
+      "passed": true,
+      "evidence": "discovery-listing.md contains three clearly separated sections with headings: '## Query 1: Untriaged Issues', '## Query 2: Triaged but still New (stale)', and '## Query 3: Ready for QA', each containing their respective issue tables separated by horizontal rules."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": false,
+      "evidence": "In discovery-listing.md, Query 1 (Untriaged) and Query 2 (Triaged but still New) tables have columns '# | Issue | CVE | Summary | Created' — status is NOT a per-row column. Status appears only as section subheadings ('### Status: New', '### Status: In Progress') for Query 1, and is entirely absent as a per-row value in Query 2's table. Only Query 3's Ready for QA table includes a per-row 'Status' column."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "In status-handling.md: TC-9001, TC-9002, and TC-9004 all show 'Handling decision: Proceed with full triage (default path)'. TC-9003 shows 'Handling decision: Warn the engineer before proceeding' with an explicit warning block: 'This issue is already in In Progress. It may be actively worked on.' with options to proceed or skip."
+    },
+    {
+      "text": "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)",
+      "passed": true,
+      "evidence": "discovery-listing.md explicitly states: 'TC-9020: ALL linked remediation Tasks completed (TC-9021 Done, TC-9022 Closed) -- Ready for QA'. 'TC-9023: TC-9025 still In Progress -- Excluded (remediation in progress)'. 'TC-9026: No linked Tasks with type \"Depend\" -- Excluded (no remediation to verify)'. TC-9020 appears in the Ready for QA table; TC-9023 and TC-9026 appear in the Excluded table."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.8333333333333334
+  }
+}

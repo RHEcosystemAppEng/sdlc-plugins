@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "After creating the upstream backport task, the skill re-fetches the task description from Jira and computes a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md lines 216-234: 'After creating the upstream task (e.g., assigned key TC-XXXX), the following description digest steps would be performed before creating issue links or other comments: 1. Re-fetch the task description from Jira: upstream_desc = jira.get_issue(\"TC-XXXX\", fields=[\"description\"]) ... 3. Compute the SHA-256 digest using scripts/sha256-digest.py: python3 scripts/sha256-digest.py /tmp/task-desc.md'"
+    },
+    {
+      "text": "After creating the downstream propagation subtask, the skill re-fetches the task description and computes a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md lines 315-331: 'After creating the downstream task (e.g., assigned key TC-YYYY), the following description digest steps would be performed before creating issue links or other comments: 1. Re-fetch the task description from Jira: downstream_desc = jira.get_issue(\"TC-YYYY\", fields=[\"description\"]) ... 3. Compute the SHA-256 digest using scripts/sha256-digest.py: python3 scripts/sha256-digest.py /tmp/task-desc.md'"
+    },
+    {
+      "text": "A digest comment with marker '[sdlc-workflow] Description digest:' is posted on each remediation task — both upstream and downstream (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md line 238: 'jira.add_comment(\"TC-XXXX\", \"[sdlc-workflow] Description digest: sha256-md:<64-char-hex-digest>\")' for the upstream task, and line 335: 'jira.add_comment(\"TC-YYYY\", \"[sdlc-workflow] Description digest: sha256-md:<64-char-hex-digest>\")' for the downstream task. Both use the exact marker '[sdlc-workflow] Description digest:'."
+    },
+    {
+      "text": "Digest comments are posted BEFORE creating issue links (Depend, Blocks) or other comments on the tasks (§1.66, shared/description-digest-protocol.md Rules)",
+      "passed": true,
+      "evidence": "remediation.md line 242: 'Only after the digest comment is posted, proceed to create issue links:' followed by jira.create_link calls (lines 244-249) for the upstream task. Similarly, line 339: 'Only after the digest comment is posted, proceed to create issue links:' followed by jira.create_link calls (lines 342-354) for the downstream task. The protocol explicitly sequences digest comment first, then links."
+    },
+    {
+      "text": "The digest is computed using scripts/sha256-digest.py with the re-fetched description, not the description string passed to create_issue (shared/description-digest-protocol.md Hashing)",
+      "passed": true,
+      "evidence": "remediation.md lines 219-232: The upstream protocol first re-fetches via 'jira.get_issue(\"TC-XXXX\", fields=[\"description\"])', writes that fetched content to /tmp/task-desc.md, then runs 'python3 scripts/sha256-digest.py /tmp/task-desc.md'. Line 240 also notes 'do not hash the input string -- Jira normalizes content during storage', making explicit that the script operates on the re-fetched content, not the create_issue input. The same pattern is shown for the downstream task (lines 319-330)."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

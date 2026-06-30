@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "In plan.md Step 4 'Understand the Code (Inspection Before Modification)', section 4a explicitly inspects advisory/service/advisory.rs (line 71: 'get_symbols_overview on modules/fundamental/src/advisory/service/advisory.rs') and advisory/endpoints/mod.rs. Section 4b explicitly reads all four reference files: advisory/endpoints/get.rs (line 77), advisory/model/summary.rs (line 78), entity/src/sbom_advisory.rs (line 79), and common/src/error.rs (line 80). All 4 of the specified files are mentioned."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "The plan's Step 6 lists exactly 6 files: 3 files to create (severity_summary.rs model, severity_summary.rs endpoint, advisory_summary.rs test) and 3 files to modify (advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs). Step 9 includes a scope containment check: 'git diff --name-only compared against Files to Modify and Files to Create'. Step 4g mentions docs/api.md may need updating but Step 9.4 only says to 'check if docs/api.md needs updating' — it does not actually include it as a file to modify. No unrelated files are listed for modification."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "Plan.md Step 6 'Files to Create' lists: (1) 'modules/fundamental/src/advisory/model/severity_summary.rs' (line 129), (2) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs' (line 135), and (3) 'tests/api/advisory_summary.rs' (line 143). Each has a corresponding file-description output (file-1-description.md, file-2-description.md, file-3-description.md) with Action: CREATE."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "Plan.md Step 6 'Files to Modify' lists: (1) 'modules/fundamental/src/advisory/service/advisory.rs' (line 150), (2) 'modules/fundamental/src/advisory/endpoints/mod.rs' (line 160), and (3) 'modules/fundamental/src/advisory/model/mod.rs' (line 164). Each has a corresponding file-description output (file-4-description.md, file-5-description.md, file-6-description.md) with Action: MODIFY."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Plan.md Step 10 shows the commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' which follows Conventional Commits format (type=feat, scope=advisory, description). The footer contains 'Implements TC-9201' referencing the Jira ticket."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "Plan.md Step 10 (line 217) explicitly states: 'With trailer: `--trailer=\"Assisted-by: Claude Code\"`'"
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "Plan.md line 9 states 'Branch Name: TC-9201'. Step 5 (lines 119-123) shows 'git checkout main / git pull / git checkout -b TC-9201'. Line 8 states 'Target Branch: main'. Step 10 (line 220) shows 'gh pr create --base main' referencing main as the target branch."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md explicitly identifies both patterns. Under 'Error Handling' (lines 25-27): 'All handlers and services use Result<T, AppError> return type' and 'Errors are wrapped with .context(\"descriptive message\") for stack trace clarity'. Under 'Module Structure' (lines 6-8): 'Each domain module follows the model/ + service/ + endpoints/ directory structure'. Additional patterns identified include endpoint patterns, service patterns, and database patterns."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "Plan.md line 8 explicitly states 'Target Branch: main'. Step 1 (line 30) lists 'Target Branch: main' as a parsed section. Step 5 uses 'git checkout main' and Step 10 uses '--base main' for the PR."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "Plan.md Step 1.5 'Verify Description Integrity' (lines 48-53) explicitly: (1) 'Fetch comments on TC-9201 via jira.get_issue_comments(TC-9201)', (2) 'Search for digest comment starting with [sdlc-workflow] Description digest:', (3) If found: extract, compute, compare, (4) Line 52: 'If no digest comment found: log warning and proceed (backward compatibility)', (5) If mismatch: alert user and stop."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

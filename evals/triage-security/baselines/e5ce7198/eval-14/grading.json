@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Dependency chain output includes both the rpms.lock.yaml classification AND the SBOM verification result for the affected versions (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md lines 22-28: 'Dependency Chain Context (Step 2.3.5)' section lists 'rpms.lock.yaml: present (explicit install)' and 'SBOM verification: present in BOTH final image SBOM and base image SBOM (base image origin)' for affected versions."
+    },
+    {
+      "text": "SBOM verification uses cosign download sbom to compare the final container image SBOM against the base image SBOM (Step 2.3.5 sub-steps 2 and 4)",
+      "passed": false,
+      "evidence": "sbom-verification.md only shows '$ which cosign' being run to confirm cosign availability. No 'cosign download sbom' command is shown or referenced anywhere in the output files. The 'Final image SBOM' and 'Base image SBOM' rows appear in the tables without any command evidence showing cosign download sbom was used to obtain them."
+    },
+    {
+      "text": "When SBOM classification (base image) disagrees with rpms.lock.yaml classification (explicit install), the discrepancy is flagged to the engineer with a warning (Step 2.3.5 sub-step 5 disagreement handling)",
+      "passed": true,
+      "evidence": "sbom-verification.md contains '**DISAGREEMENT DETECTED**' blocks after each version's table (versions 2.2.0, 2.2.1, 2.2.2) and a dedicated 'Engineer Action Required' section describing the discrepancy and next steps. version-impact.md line 27 also states '**Disagreement detected** -- see outputs/sbom-verification.md for details'."
+    },
+    {
+      "text": "The rpms.lock.yaml classification remains the primary signal — the SBOM result supplements but does not override it (Step 2.3.5 non-MVP enhancement)",
+      "passed": false,
+      "evidence": "version-impact.md line 28 labels the origin as '**disputed**' rather than keeping rpms.lock.yaml as the primary signal. sbom-verification.md states 'Until this disagreement is resolved, the remediation task template should note both possible paths' and presents both remediation paths as equal alternatives, not treating rpms.lock.yaml as primary. There is no statement in any output file that rpms.lock.yaml is the authoritative/primary signal."
+    },
+    {
+      "text": "The SBOM verification result is presented alongside the rpms.lock.yaml result in the dependency chain output, not as a separate section (Step 2.3.5 sub-step 6)",
+      "passed": false,
+      "evidence": "While version-impact.md does show both results together in lines 22-28, a dedicated standalone file 'sbom-verification.md' exists as a separate output section containing the full SBOM verification results. This contradicts the assertion that the SBOM result should appear 'not as a separate section' — the output structure explicitly separates SBOM verification into its own file."
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 3,
+    "total": 5,
+    "pass_rate": 0.4
+  }
+}

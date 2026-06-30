@@ -1,0 +1,90 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan determines feature-branch workflow mode (not direct-to-main) based on the atomicity constraints in the feature description",
+      "passed": true,
+      "evidence": "impact-map.md explicitly states 'Selected mode: feature-branch' with rationale citing two atomicity indicators: (1) coordinated schema migration and (2) cross-cutting refactor. summary-comment.md states 'workflow:feature-branch' label will be applied. These correspond to the non-functional requirements in feature-feature-branch.md stating 'All changes must land together'."
+    },
+    {
+      "text": "A bookend task with Bookend Type create-branch is generated as the first task in the plan",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md contains '## Bookend Type\\ncreate-branch' and is task 1 (the first task). summary-comment.md confirms Task 1 is 'Create feature branch TC-9005 from main'."
+    },
+    {
+      "text": "A bookend task with Bookend Type merge-branch is generated as the last task in the plan",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md contains '## Bookend Type\\nmerge-branch' and is task 7 (the last task). summary-comment.md confirms Task 7 is 'Merge feature branch TC-9005 to main'."
+    },
+    {
+      "text": "All intermediate tasks (between the create-branch and merge-branch bookend tasks) have Target Branch set to TC-9005",
+      "passed": true,
+      "evidence": "Tasks 2-6 are the intermediate tasks. task-2-database-migration.md: '## Target Branch\\nTC-9005'. task-3-entity-definitions.md: '## Target Branch\\nTC-9005'. task-4-advisory-service-endpoints.md: '## Target Branch\\nTC-9005'. task-5-ingestion-pipeline.md: '## Target Branch\\nTC-9005'. task-6-integration-tests.md: '## Target Branch\\nTC-9005'. All five intermediate tasks have Target Branch set to TC-9005."
+    },
+    {
+      "text": "The create-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md contains '## Target Branch\\nmain'."
+    },
+    {
+      "text": "The merge-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md contains '## Target Branch\\nmain'."
+    },
+    {
+      "text": "All intermediate tasks list the create-branch bookend task as a dependency",
+      "passed": true,
+      "evidence": "task-2-database-migration.md: 'Depends on: Task 1'. task-3-entity-definitions.md: 'Depends on: Task 1'. task-4-advisory-service-endpoints.md: 'Depends on: Task 1'. task-5-ingestion-pipeline.md: 'Depends on: Task 1'. task-6-integration-tests.md: 'Depends on: Task 1'. All five intermediate tasks list Task 1 (create-branch) as a dependency."
+    },
+    {
+      "text": "The merge-branch bookend task lists all intermediate tasks as dependencies",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md Dependencies section lists: 'Task 2 -- Database migration', 'Task 3 -- Entity definitions update', 'Task 4 -- Advisory service/endpoints update', 'Task 5 -- Ingestion pipeline update', 'Task 6 -- Integration tests'. All 5 intermediate tasks (2-6) are listed as dependencies."
+    },
+    {
+      "text": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "passed": false,
+      "evidence": "Bookend tasks (task-1 and task-7) intentionally omit Files to Modify/Files to Create and Implementation Notes sections. task-1-create-feature-branch.md has Repository, Target Branch, Bookend Type, Description, Acceptance Criteria, Test Requirements but lacks Files to Modify/Create and Implementation Notes. task-7-merge-feature-branch.md similarly lacks these sections. However, this assertion does not exempt bookend tasks -- it says 'Each task file contains all required template sections' without exception. While the eval instructions note that bookend tasks intentionally omit Implementation Notes, the assertion text itself requires 'at least one of Files to Modify or Files to Create' from every task, and bookend tasks have neither. Intermediate tasks 2-6 all contain all required sections. FAIL because bookend tasks lack Files to Modify/Create sections."
+    },
+    {
+      "text": "The plan includes a workflow:feature-branch label decision to be applied to the feature issue",
+      "passed": true,
+      "evidence": "impact-map.md states: 'The workflow:feature-branch label will be applied to the TC-9005 feature issue.' summary-comment.md states: 'workflow:feature-branch -- This label will be applied to the TC-9005 feature issue.'"
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": true,
+      "evidence": "All 7 task files contain a digest line matching the required format. task-1: 'sha256-md:da26a3776df60cb33dc47604f16cf89c4e3ff86d5ade6cbc3df2cb1d5f6228ac' (64 hex chars). task-2: 'sha256-md:cddb3408516a3b96f4e548df2c29f63f8f2f31c1162b9fe8dabf7ae5ebdd8a90'. task-3: 'sha256-md:f4d7d57ed48f2026c8dd2ad8fe246400bc92b1a799409c26ea830e6d73793ddb'. task-4: 'sha256-md:08b2f5d23f76209a122eea0d844eb86e65adbea0714c721c5f49d36795ee42d6'. task-5: 'sha256-md:f0479cf226d82349d63c7d186f29c4ecf614a1f2c332f720c5394bb02f6cea93'. task-6: 'sha256-md:df22fbab2928f43e4fcbab0b7b727cd30656dc333ce98884bdd4921490bd3b03'. task-7: 'sha256-md:b744ddf518db7fe12fbb8e4905240cc2db12f650dcdbe65ac107730af1b8f819'. All use the correct marker format '[sdlc-workflow] Description digest: sha256-md:<64-hex>'."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "task-2-database-migration.md includes a convention reference with the prescribed rationale format: 'Applies: task modifies `migration/src/m0002_drop_status_table/mod.rs` matching the convention's migration file scope.' Other tasks (3-6) do not include convention references, which indicates inapplicable conventions were excluded entirely rather than listed with 'Not applicable' annotations. No tasks contain 'Not applicable' annotations for conventions."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), every created task's additional_fields includes 'priority' with the inherited priority name. When the Feature's priority is 'Undefined', the priority key is omitted entirely from additional_fields (not set to null or 'Undefined')",
+      "passed": true,
+      "evidence": "Feature TC-9005 has Priority: High. All 7 tasks include Jira Metadata with 'priority': {'name': 'High'} in additional_fields. task-1: '\"priority\": {\"name\": \"High\"}'. task-2: '\"priority\": {\"name\": \"High\"}'. task-3: '\"priority\": {\"name\": \"High\"}'. task-4: '\"priority\": {\"name\": \"High\"}'. task-5: '\"priority\": {\"name\": \"High\"}'. task-6: '\"priority\": {\"name\": \"High\"}'. task-7: '\"priority\": {\"name\": \"High\"}'."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), every created task's additional_fields includes 'fixVersions' with the inherited version(s). When fixVersion scope is 'feature' or the Feature has no fixVersions, the fixVersions key is omitted entirely from additional_fields",
+      "passed": true,
+      "evidence": "Feature TC-9005 has Fix Versions: RHTPA 2.0.0. CLAUDE.md does not contain a '### Jira Field Defaults' section, so fixVersion scope defaults to 'both', meaning fixVersions should be propagated to tasks. All 7 tasks include 'fixVersions': [{'name': 'RHTPA 2.0.0'}] in their Jira Metadata additional_fields."
+    },
+    {
+      "text": "The summary comment on the feature issue (Step 6c) includes the inherited priority and fixVersion values that were propagated to tasks, or states they were omitted and why",
+      "passed": true,
+      "evidence": "summary-comment.md contains: 'Inherited fields propagated to tasks: priority=High, fixVersion=RHTPA 2.0.0'. This explicitly states the inherited values that were propagated."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Per the eval instructions, bookend tasks (task-1 create-branch, task-7 merge-branch) are exempt as they intentionally omit Implementation Notes. Checking intermediate tasks: task-2 references 'migration/src/m0001_initial/mod.rs' and 'migration/src/m0002_drop_status_table/mod.rs'. task-3 references 'entity/src/advisory.rs', 'entity/src/lib.rs', 'entity/src/sbom.rs', 'entity/src/package.rs'. task-4 references 'modules/fundamental/src/advisory/service/advisory.rs', 'modules/fundamental/src/advisory/endpoints/list.rs', 'common/src/db/query.rs', 'common/src/model/paginated.rs', 'common/src/error.rs'. task-5 references 'modules/ingestor/src/graph/advisory/mod.rs', 'modules/ingestor/src/graph/sbom/mod.rs', 'common/src/error.rs'. task-6 references 'tests/api/advisory.rs', 'tests/api/sbom.rs'. All intermediate tasks reference specific file paths from the repo structure."
+    }
+  ],
+  "summary": {
+    "passed": 15,
+    "failed": 1,
+    "total": 16,
+    "pass_rate": 0.9375
+  }
+}

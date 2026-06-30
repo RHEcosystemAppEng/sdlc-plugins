@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 29-30: 'Vulnerable package: openssl-libs (system RPM package)' and 'Ecosystem: **RPM**', with 'Lock file: rpms.lock.yaml' — the package name and component context explicitly drive the RPM classification, not Cargo."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md lines 17-22: The 2.2.x table rows cover 2.2.0 (v0.4.5, openssl-libs 3.0.7-25.el9_3), 2.2.1 (v0.4.8, 3.0.7-27.el9_4), 2.2.2 (v0.4.9, retag), 2.2.3 (v0.4.11, 3.0.7-28.el9_4), 2.2.4 (v0.4.12, 3.0.7-28.el9_4) — all five versions present with rpms.lock.yaml-sourced version strings at their pinned build tags."
+    },
+    {
+      "text": "Dependency chain context classifies the package origin as explicit install because openssl-libs is present in rpms.lock.yaml, not inherited from the base image (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md lines 27-35: 'rpms.lock.yaml: present -> explicit install / Origin: explicit install (openssl-libs specified in rpms.lock.yaml)' and 'The openssl-libs package is present in rpms.lock.yaml at each pinned tag, indicating it is an explicitly installed package (not inherited from the base image).'"
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 7 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md creates exactly one primary remediation task for rhtpa-release.0.4.z (2.2.x stream, lines 19-27) targeting only the Konflux release repo. The second task (lines 94-166) is a preemptive cross-stream task for a different stream (2.1.x / rhtpa-release.0.3.z) under Case B logic — it is not an upstream backport + downstream propagation pair for source dependency ecosystems."
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 7 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md lines 32-72 (task description block): contains '## Repository' (rhtpa-release.0.4.z), '## Target Branch' (main), '## Description', '## Implementation Notes', and '## Acceptance Criteria'. No '## Files to Modify' section appears anywhere in the task description."
+    },
+    {
+      "text": "Dependency chain context includes an SBOM verification line — either showing the cosign comparison result or noting that SBOM verification was skipped because cosign is not available (Step 2.3.5 Optional SBOM verification)",
+      "passed": false,
+      "evidence": "A search for 'sbom', 'SBOM', and 'cosign' across all four output files (data-extraction.md, version-impact.md, affects-versions.md, remediation.md) returned no matches. Neither an SBOM verification result nor a note that SBOM verification was skipped appears anywhere in the outputs."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.8333333333333334
+  }
+}
