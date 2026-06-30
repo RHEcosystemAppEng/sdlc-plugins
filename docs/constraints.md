@@ -81,6 +81,11 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.69 | `triage-security` discovery mode MUST run a third JQL query for triaged CVEs in pre-QA states, check linked remediation Task completion via "Depend" links, and present only issues with ALL Tasks Done/Closed as "Ready for QA" candidates with an ON_QA transition suggestion. | `triage-security/SKILL.md` — Discovery mode |
 | 1.70 | `triage-security` MUST present an embargo warning gate to the engineer after Step 1.5 when an Embargo policy URL is configured and the CVE severity is Critical or Important (CVSS >= 7.0), requiring explicit confirmation before proceeding. | `triage-security/SKILL.md` — Step 1.7 |
 | 1.71 | `triage-security` MUST skip the embargo warning gate silently when no Embargo policy URL is configured in Security Configuration (backward compatibility). | `triage-security/SKILL.md` — Step 1.7 |
+| 1.72 | `define-feature` MUST present priority and fixVersion as optional prompts that can be skipped. | `define-feature/SKILL.md` — Step 3.5 |
+| 1.73 | `define-feature` MUST NOT set priority or fixVersion on the created issue when the user skips the prompt. | `define-feature/SKILL.md` — Step 6.2 |
+| 1.74 | `plan-feature` MUST inherit priority and fixVersions from the parent Feature issue when set. | `plan-feature/SKILL.md` — Step 1, Step 6 |
+| 1.75 | `plan-feature` MUST respect `fixVersion scope` from Jira Field Defaults configuration — only propagating fixVersions to tasks when the scope includes "task" or "both". | `plan-feature/SKILL.md` — Step 6 |
+| 1.76 | `plan-feature` MUST NOT set priority on created tasks when the parent Feature has priority "Undefined" or unset. | `plan-feature/SKILL.md` — Step 1, Step 6 |
 
 ### Prior Art — Cross-phase integrity (§1.33–1.35)
 
@@ -161,7 +166,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 
 Each constraint above references its source. The full source files are:
 
-- `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Step 2.5 Discover Project Issue Types (§1.62–1.64), Step 4.5 Determine Workflow Mode (§1.27), Step 5 Convention-aware task enrichment (§4.11, §4.13), Step 5 Target Branch assignment (§4.12), Step 5 Bookend task generation (§3.4), Step 6a Digest posting (§1.33), Task Description Template (§4.1–4.10)
+- `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Step 1 Priority/fixVersion extraction (§1.74, §1.76), Step 2.5 Discover Project Issue Types (§1.62–1.64), Step 4.5 Determine Workflow Mode (§1.27), Step 5 Convention-aware task enrichment (§4.11, §4.13), Step 5 Target Branch assignment (§4.12), Step 5 Bookend task generation (§3.4), Step 6 Priority/fixVersion inheritance (§1.74, §1.75, §1.76), Step 6a Digest posting (§1.33), Task Description Template (§4.1–4.10)
 - `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Important Rules (§1.4–1.6, §5.1–5.3), Step 1 (§1.6), Step 1.5 Digest verification (§1.34, §1.35), Step 4/6/9 (§5.4), Step 5 (§1.15, §3.1, §3.4), Step 7 (§5.9–5.13), Step 9 (§2.1–2.3, §5.6–5.8), Step 10 (§3.2, §3.3)
 - `plugins/sdlc-workflow/shared/task-description-template.md` — Rules (§4.12)
 - `plugins/sdlc-workflow/shared/description-digest-protocol.md` — Digest format and verification procedure (§1.33, §1.34, §1.35)
@@ -171,7 +176,7 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/skills/verify-pr/security.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/correctness.md` — Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
 - `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md` — Check 1 Convention applicability (§1.36), Check 2 (§1.16), Check 3 (§1.17), Check 4 (§1.18, §1.19, §1.20, §1.21), Check 5 (§1.30, §1.60), Constraints (§1.11, §1.22, §1.23), Output Format (§1.24)
-- `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9)
+- `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9), Step 3.5 Select Priority and Fix Version (§1.72), Step 6.2 Create Feature Issue (§1.73)
 - `plugins/sdlc-workflow/skills/report-bug/SKILL.md` — Guardrails (§1.50–1.51), Step 4 Preview and Confirm (§1.52)
 - `plugins/sdlc-workflow/skills/triage-bug/SKILL.md` — Guardrails (§1.53–1.54), Step 5 Front-load reproducer test (§1.55), Step 4 Post root cause comment (§1.56), Step 6 Decomposition Guard (§1.57)
 - `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.37, §1.38, §1.47), Step 0 (§1.49, §1.68), Step 1 Ecosystem detection (§1.48), Step 1 Data Extraction (§1.49), Step 1.5 External CVE Data Enrichment (§1.62), Step 1.7 Embargo Check (§1.70, §1.71), Discovery mode (§1.69), Step 2.1 (§1.47), Step 2.2 (§1.42), Step 2.3 (§1.48), Step 2.4 (§1.44), Step 7 (§1.43), Step 7 Case B (§1.61), Post-Triage Summary (§1.67), Important Rules (§1.38–§1.43, §1.45, §1.46), Remediation Task Creation (§1.46, §1.66)
