@@ -11,6 +11,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Fullsend dual-mode execution for `triage-security`, with validated trusted input,
   tokenless sandbox analysis, and structured authorized or report-only Jira output
+- `performance-setup` skill for configuration and optimization target scaffolding
+- `performance-baseline` skill for workflow discovery, browser-based metric capture, and baseline reporting
+- `performance-analyze-module` skill for source-level anti-pattern detection (bundle, API, component, resource, backend)
+- `performance-plan-optimization` skill for optimization planning with Jira Epic/Task generation
+- `performance-implement-optimization` and `performance-verify-optimization` skills
+- Backend anti-pattern detection: N+1 queries, missing pagination/caching, inefficient queries, cross-repo over-fetching
+- Deep service chain analysis, wasted computation detection, and missing index detection
+- Migration SQL analysis (Steps 7.8.1–7.8.4): missing ANALYZE, non-materialized CTEs, uniform processing, expensive PL/pgSQL patterns
+- Migration SQL optimization handling (Step 5.6) for patching existing migration files
+- Scale-oriented detection steps (staleTime, spread-in-reduce, zero-result, redundant index, recursive CTE)
+- `db-migration` and `migration-sql-optimization` task types with Jira label support
+- DOM Interactive metric and config path normalization
+- Shared templates: baseline capture script, analysis report, optimization task, common patterns
+- Eval infrastructure for performance skills with mock fixtures
+- Performance workflow documentation and conventions
+
+### Changed
+
+- Unified workflow-first setup: merged workflow discovery into setup, single workflow selection
+- Migrated performance config from Markdown to JSON
+- Consolidated and refactored optimization skills
+- Full self-verification for performance tasks with N+1/pre-fetch detection
+
+### Fixed
+
+- Resolved 42 cross-skill inconsistencies, phantom tools, and broken flows
 
 ## [0.13.10] - 2026-10-07
 
