@@ -603,7 +603,11 @@ def get_remote_links(issue_key: str) -> List[Dict[str, Any]]:
     result = make_request('GET', f"issue/{issue_key}/remotelink")
     if isinstance(result, list):
         return result
-    return result.get('remoteLinks', [result] if result else [])
+    if not result:
+        return []
+    if not isinstance(result, dict):
+        raise ValueError(f"Unexpected response type from remotelink API: {type(result).__name__}")
+    return result.get('remoteLinks', [result])
 
 
 def get_project_metadata(project_key: str) -> Dict[str, Any]:
