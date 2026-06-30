@@ -359,3 +359,56 @@ the vulnerability does not affect the product.
 the unfixed versions and proceed to Step 7.
 
 **If no resolved siblings exist**, proceed to Step 7.
+
+## Step 7.0 – Concurrent Triage Detection
+
+Before creating remediation tasks (Cases A/B), check whether another engineer is
+actively triaging a different CVE that affects the same upstream component. This
+prevents duplicate remediation tasks when two triages reach Step 7 simultaneously.
+
+**Prerequisite:** This step requires the Upstream Affected Component custom field
+to be configured in Security Configuration (Step 0). If the field is not configured,
+skip this step entirely — consistent with Step 4.3's conditional behavior.
+
+1. **Extract the Upstream Affected Component** from the current issue (already
+   fetched in Step 1). If the field is empty, skip this step.
+
+2. **Search for in-progress triages** on the same component:
+
+   ```
+   jira.search_jql(
+     "project = <project-key> AND issuetype = <vulnerability-issue-type-id> AND cf[<upstream-affected-component-field-number>] ~ '<component-value>' AND status IN ('In Progress', 'Code Review') AND key != <current-issue-key>",
+     fields: ["summary", "status", "labels", "assignee"]
+   )
+   ```
+
+3. **If results are returned**, present the concurrent triages to the engineer:
+
+   ```
+   ⚠️ Concurrent triage detected on the same upstream component (<component-value>):
+
+   | CVE Issue | Status | Assignee |
+   |-----------|--------|----------|
+   | <key-1>   | In Progress | <assignee-1> |
+
+   Another engineer is actively triaging a related CVE. Creating remediation
+   tasks now may produce duplicates.
+
+   Options:
+   1. Wait — pause until the other triage completes, then re-run Step 4.3
+      to detect any overlap
+   2. Skip — skip remediation task creation for this CVE
+   3. Proceed — create tasks anyway with a `concurrent-triage-overlap` label
+      so the other engineer's Step 4.3 catches the overlap
+   ```
+
+4. **Handle user choice:**
+   - **Wait**: stop execution and inform the user to re-run after the concurrent
+     triage completes.
+   - **Skip**: skip Step 7 entirely (do not create remediation tasks) and add a
+     Jira comment explaining why task creation was skipped.
+   - **Proceed**: add the `concurrent-triage-overlap` label to the current issue
+     and continue to Case A/B/C branching. The label ensures the other triage's
+     Step 4.3 cross-CVE overlap detection picks up the overlap.
+
+5. **If no results are returned**, proceed silently to Case A/B/C branching.
