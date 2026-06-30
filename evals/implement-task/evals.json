@@ -99,6 +99,21 @@
         "The response offers the user a choice: (1) proceed with the current description, or (2) stop so they can re-run plan-feature",
         "The response stops execution and does not proceed to Step 2 or implementation planning until the user responds — following the same pause-and-ask pattern as the incomplete description handling"
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "Implement task TC-9208. The task description is in task-performance.md, the target repository structure is in repo-backend.md, the project CLAUDE.md is in claude-md-mock.md, the project's CONVENTIONS.md content is in conventions-mock.md, and the project's performance-config.json is in perf-config-mock.json. Do NOT actually modify repository files or call external tools (Jira, git, Serena). Instead, write your implementation plan to the workspace outputs/ directory: write outputs/plan.md describing which files you would modify and create, what changes you would make to each, what CI/formatting checks you would run before committing, and the commit message you would use. Write outputs/perf-verification.md describing how you would verify performance metrics against the baseline and targets.",
+      "expected_output": "A structured implementation plan for a performance optimization task that demonstrates the skill runs the full verification pipeline: functional tests (Step 8.5), self-verification including CI checks from CONVENTIONS.md and scope containment (Step 9), and performance metric verification against baseline and target metrics (Step 9-Perf). The plan should use perf as the commit type and scope changes to the task's specified files.",
+      "files": ["files/task-performance.md", "files/repo-backend.md", "files/claude-md-mock.md", "files/conventions-mock.md", "files/perf-config-mock.json"],
+      "assertions": [
+        "The plan identifies the task as task_type = performance based on the performance-optimization label or the presence of Baseline Metrics, Target Metrics, and Performance Test Requirements sections (SKILL.md lines 144-145)",
+        "The plan includes running functional tests (Step 8.5) for the performance task before proceeding to self-verification",
+        "The plan includes running CI check commands from CONVENTIONS.md (e.g., cargo xtask precommit or formatting/linting commands) — proving Step 9 is NOT skipped for performance tasks",
+        "The plan includes verifying that modified files match the Files to Modify section — a Step 9 scope containment sub-step that confirms full self-verification runs for performance tasks",
+        "The plan references comparing implementation results against the Target Metrics from the task description (Response Time p95 < 200ms, Queries per request < 5) — confirming Step 9-Perf metric verification still runs after Step 9",
+        "The planned commit message uses perf as the commit type following the performance task commit convention (SKILL.md line 1220, Step 10)",
+        "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)"
+      ]
     }
   ]
 }
