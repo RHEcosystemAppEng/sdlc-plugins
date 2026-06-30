@@ -1,0 +1,40 @@
+{
+  "assertions": [
+    {
+      "id": 1,
+      "description": "The remediation output describes the digest protocol for the upstream backport task: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py",
+      "result": "PASS",
+      "evidence": "Lines 75-118 of remediation.md: 'Description Digest Comment for Task 1' section describes re-fetching the description from Jira API after creation (line 79: 'Re-fetch the description from Jira API after creation (since Jira normalizes content during storage)') and computing the digest via 'python3 scripts/sha256-digest.py /tmp/task-desc.md' (lines 85-88)."
+    },
+    {
+      "id": 2,
+      "description": "The remediation output describes the digest protocol for the downstream propagation subtask: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py",
+      "result": "PASS",
+      "evidence": "Lines 175-215 of remediation.md: 'Description Digest Comment for Task 2' section describes re-fetching the description from Jira API after creation (line 179: 'Re-fetch the description from Jira API after creation') and computing the digest via 'python3 scripts/sha256-digest.py /tmp/task-desc.md' (lines 185-188)."
+    },
+    {
+      "id": 3,
+      "description": "The remediation output includes the digest comment marker '[sdlc-workflow] Description digest:' in the described steps for each remediation task \u2014 both upstream and downstream",
+      "result": "PASS",
+      "evidence": "Upstream Task 1 (line 93): 'jira.add_comment(<upstream-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'. Downstream Task 2 (line 193): 'jira.add_comment(<downstream-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'. Both use the exact marker prefix '[sdlc-workflow] Description digest:'. Preemptive tasks also include this marker at lines 373 and 475."
+    },
+    {
+      "id": 4,
+      "description": "The remediation output sequences digest comments BEFORE issue links (Depend, Blocks) or other comments in the described procedure for each task",
+      "result": "PASS",
+      "evidence": "Line 115 (Task 1) and line 214 (Task 2) both state: 'This digest comment is posted BEFORE creating issue links or other comments on the task'. The 'Jira Linkage (2.2.x tasks)' section at line 219 explicitly begins with 'After creating both tasks and posting their description digest comments:' before listing Depend/Blocks link creation. Preemptive tasks similarly state this at lines 394 and 497, with linkage at line 501 following after."
+    },
+    {
+      "id": 5,
+      "description": "The remediation output specifies that the digest is computed from the re-fetched description (via Jira API after create_issue), not from the description string passed to create_issue",
+      "result": "PASS",
+      "evidence": "Line 79: 'Re-fetch the description from Jira API after creation (since Jira normalizes content during storage)'. Summary section lines 614-615: 'After creating each task, the description is re-fetched from Jira (not the string passed to create_issue, since Jira normalizes content during storage).' Explicitly distinguishes re-fetched description from original input."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 extracts the Embargo policy URL from the Security Configuration as an optional field without raising an error",
+      "passed": true,
+      "evidence": "In embargo-check.md, lines 5-6: 'Embargo policy URL is configured in Security Configuration: Embargo policy URL: https://example.com/security/embargo-policy'. The URL is extracted and treated as an optional configuration check ('An Embargo policy URL is present, so this step is not skipped'), indicating it is handled gracefully as an optional field with no error raised when present."
+    },
+    {
+      "text": "Step 1.7 evaluates the CVE severity \u2014 CVSS 7.5 (High) meets the Critical/Important threshold (CVSS >= 7.0) and triggers the embargo warning gate",
+      "passed": true,
+      "evidence": "In embargo-check.md, lines 14-19: 'CVSS score: 7.5', 'Severity: High', 'Trigger threshold: Critical or Important severity (CVSS >= 7.0)', 'Evaluation result: 7.5 >= 7.0 -- threshold is met'. The severity is correctly evaluated and the embargo warning gate is triggered."
+    },
+    {
+      "text": "Step 1.7 presents a warning gate including CVE ID, severity level, embargo risk statement, and link to embargo policy URL",
+      "passed": true,
+      "evidence": "In embargo-check.md, lines 27-37, the warning gate includes: CVE ID 'CVE-2026-31812', severity 'High severity, CVSS 7.5', embargo risk statement 'High-severity vulnerabilities may be under embargo. Before proceeding, verify with your security team that this CVE is cleared for public triage.', and the embargo policy link 'Embargo policy: https://example.com/security/embargo-policy'."
+    },
+    {
+      "text": "Step 1.7 requires explicit engineer confirmation (Yes/No) before proceeding to Step 2",
+      "passed": true,
+      "evidence": "In embargo-check.md, line 36: 'Proceed with triage? (Yes / No)'. Lines 41-43 describe gate behavior: 'If No: Stop execution immediately... Do not proceed to Step 2' and 'If Yes: Proceed to Step 2 (Version Impact Analysis) as normal.' The gate is clearly a confirmation prompt requiring explicit Yes/No, not merely informational."
+    },
+    {
+      "text": "The embargo warning gate does NOT trigger for Low or Moderate severity CVEs (CVSS < 7.0)",
+      "passed": true,
+      "evidence": "In embargo-check.md, lines 20-22: 'The severity is not below threshold (Low or Moderate / CVSS < 7.0), so we do not skip this step.' This explicitly establishes that CVEs with Low or Moderate severity (CVSS < 7.0) would be skipped silently. The logic is clearly stated: the gate only fires when CVSS >= 7.0, and is skipped for values below that threshold."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

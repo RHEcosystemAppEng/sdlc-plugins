@@ -1,0 +1,85 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan determines feature-branch workflow mode (not direct-to-main) based on the atomicity constraints in the feature description",
+      "passed": true,
+      "evidence": "Impact map declares 'Workflow Mode: feature-branch' with rationale citing two atomicity indicators from the feature description: (1) 'Coordinated schema migrations' — the migration and code changes cannot be merged independently without breaking advisory queries, and (2) 'Breaking API changes' — entity, service, and endpoint code are tightly coupled to the schema migration."
+    },
+    {
+      "text": "A bookend task with Bookend Type create-branch is generated as the first task in the plan",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md is the first task and contains '## Bookend Type\\ncreate-branch'."
+    },
+    {
+      "text": "A bookend task with Bookend Type merge-branch is generated as the last task in the plan",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md is the last task (7 of 7) and contains '## Bookend Type\\nmerge-branch'."
+    },
+    {
+      "text": "All intermediate tasks (between the create-branch and merge-branch bookend tasks) have Target Branch set to TC-9005",
+      "passed": true,
+      "evidence": "All five intermediate tasks (2-6) have '## Target Branch\\nTC-9005': task-2-schema-migration.md, task-3-update-entities.md, task-4-update-service-and-endpoints.md, task-5-update-ingestion-pipeline.md, task-6-update-integration-tests.md."
+    },
+    {
+      "text": "The create-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md contains '## Target Branch\\nmain'."
+    },
+    {
+      "text": "The merge-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md contains '## Target Branch\\nmain'."
+    },
+    {
+      "text": "All intermediate tasks list the create-branch bookend task as a dependency",
+      "passed": true,
+      "evidence": "All five intermediate tasks list Task 1 as a dependency: task-2 'Depends on: Task 1 — Create feature branch TC-9005 from main', task-3 'Depends on: Task 1 — Create feature branch TC-9005 from main', task-4 'Depends on: Task 1 — Create feature branch TC-9005 from main', task-5 'Depends on: Task 1 — Create feature branch TC-9005 from main', task-6 'Depends on: Task 1 — Create feature branch TC-9005 from main'."
+    },
+    {
+      "text": "The merge-branch bookend task lists all intermediate tasks as dependencies",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md lists all 5 intermediate tasks as dependencies: Task 2, Task 3, Task 4, Task 5, and Task 6."
+    },
+    {
+      "text": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "passed": true,
+      "evidence": "Bookend tasks (1 and 7) are exempt from Files to Modify/Create and Implementation Notes per grading rules; both have Repository, Target Branch, Bookend Type, Description, Acceptance Criteria, and Test Requirements. Intermediate tasks (2-6) all have Repository, Target Branch, Description, at least one of Files to Modify/Create, Implementation Notes, Acceptance Criteria, and Test Requirements. Task 2 has both Files to Create and Files to Modify; tasks 3-6 each have Files to Modify."
+    },
+    {
+      "text": "The plan includes a workflow:feature-branch label decision to be applied to the feature issue",
+      "passed": true,
+      "evidence": "Impact map line 19: 'The `workflow:feature-branch` label will be applied to the feature issue.'"
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": true,
+      "evidence": "All 7 task files contain description digest markers with sha256-md: prefix and exactly 64 lowercase hex characters. Task 1: 'sha256-md:35c1e2194e0fb15fdd59ba8ab79abdfa1d579dca9ee8745d34b025f2695aaf17' (bare line). Tasks 2-7 in HTML comments: Task 2 'sha256-md:5bcecf4daedddacc99a7f08ff66a376784e001dfa7d6bac7499f5e44a14c2b4a', Task 3 'sha256-md:d51ecc86fe64784d58e3660fab6513e48d1e6865bed4900cedcb8203d086c74a', Task 4 'sha256-md:d4bc76ab9c9b2b49091191a8fcd5a440b13d413b0c7dfb80e346138f5fd4857e', Task 5 'sha256-md:0b40a36b9d10e3853405bcac68a5d9be494752a03882ff6d9945aae0af166414', Task 6 'sha256-md:d6964c4cc7a88f8ecadf6483c8a80ee40cc7266c723f35deb9da4567c4ea5184', Task 7 'sha256-md:324835cd3ffcccbec99e0b1bc5c2c1196f32ab7daa335be04a5ebd3ea6678058'. All are valid 64-char lowercase hex strings, not placeholders."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "No task file contains any convention-applicability rationale in the prescribed 'Applies: task modifies <file> matching the convention's <scope>' format. The repo-backend.md fixture shows CONVENTIONS.md exists in the repository root, indicating conventions should have been checked. Task Implementation Notes reference 'docs/constraints.md' sections but never reference CONVENTIONS.md conventions with the required applicability rationale format. There is no evidence of convention-aware enrichment per shared/convention-applicability-rules.md."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), every created task's additional_fields includes 'priority' with the inherited priority name. When the Feature's priority is 'Undefined', the priority key is omitted entirely from additional_fields (not set to null or 'Undefined')",
+      "passed": true,
+      "evidence": "Feature priority is 'High' (not Undefined). Impact map 'Priority and Fix Version Propagation' section states: 'Priority: High — will be propagated to all created tasks'. Per eval mode grading rules, evidence in the impact map is sufficient. The impact map confirms priority inheritance was planned for all tasks."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), every created task's additional_fields includes 'fixVersions' with the inherited version(s). When fixVersion scope is 'feature' or the Feature has no fixVersions, the fixVersions key is omitted entirely from additional_fields",
+      "passed": true,
+      "evidence": "Feature has fixVersions: 'RHTPA 2.0.0'. No Jira Field Defaults section in CLAUDE.md, so scope defaults to 'both'. Impact map states: 'Fix Versions: RHTPA 2.0.0 — will be propagated to all created tasks (fixVersion scope defaults to \"both\" since no Jira Field Defaults section is configured)'. Per eval mode grading rules, evidence in the impact map is sufficient."
+    },
+    {
+      "text": "The summary comment on the feature issue (Step 6c) includes the inherited priority and fixVersion values that were propagated to tasks, or states they were omitted and why",
+      "passed": true,
+      "evidence": "Impact map 'Priority and Fix Version Propagation' section (lines 45-47) documents both propagated values: 'Priority: High — will be propagated to all created tasks' and 'Fix Versions: RHTPA 2.0.0 — will be propagated to all created tasks (fixVersion scope defaults to \"both\" since no Jira Field Defaults section is configured)'. Per eval mode grading rules, evidence in the impact map is sufficient."
+    }
+  ],
+  "summary": {
+    "passed": 14,
+    "failed": 1,
+    "total": 15,
+    "pass_rate": 0.93
+  }
+}

@@ -1,0 +1,80 @@
+{
+  "assertion_results": [
+    {
+      "text": "Impact map or task descriptions explicitly flag at least 3 ambiguities from the feature description",
+      "passed": true,
+      "evidence": "The impact-map.md file explicitly lists 6 numbered ambiguities: (1) 'Search should be faster' — no quantitative performance target, (2) 'Results should be more relevant' — no definition of relevance, (3) 'Add filters' — no filter specification, (4) 'Should be fast enough' — unmeasurable NFR, (5) 'Better UI' — no design mockups or frontend repository, (6) 'Don't break existing functionality' — no regression baseline. This exceeds the minimum of 3."
+    },
+    {
+      "text": "Plan acknowledges that 'Better UI' (non-MVP) cannot be planned without design mockups or frontend repository and excludes it from scope",
+      "passed": true,
+      "evidence": "impact-map.md ambiguity #5 states: '\"Better UI\" (non-MVP) — no design mockups or frontend repository. This requirement is marked as non-MVP and cannot be planned without design mockups and access to a frontend repository. The Repository Registry in the project configuration contains only the backend repository (trustify-backend). This requirement is excluded from the current plan scope. It should be planned separately once a Figma design is available and a frontend repository is onboarded.' No task was created for the Better UI requirement."
+    },
+    {
+      "text": "Tasks still follow the task-description-template.md format despite ambiguous requirements",
+      "passed": true,
+      "evidence": "Both task files follow the template format with sections: Repository, Target Branch, Description, Files to Modify, Files to Create (task 1), Implementation Notes, Reuse Candidates, Acceptance Criteria, Test Requirements, Verification Commands, and Dependencies. These match the sections defined in the task-description-template.md. The template allows omitting sections that don't apply, and both tasks include all relevant required sections."
+    },
+    {
+      "text": "Tasks document assumptions where they fill in missing details, labeled as assumptions pending clarification",
+      "passed": true,
+      "evidence": "Task 1 contains: 'Assumption (pending clarification): index the most user-visible text fields — SBOM name, advisory title/summary, and package name'. Task 2 contains: 'Assumption (pending clarification): relevance is determined by PostgreSQL ts_rank scoring with weighted fields'. The impact-map.md also labels assumptions for each ambiguity with 'Assumption (pending clarification)' prefix."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "Task 1 has '## Repository\\ntrustify-backend' (lines 1-2). Task 2 has '## Repository\\ntrustify-backend' (lines 1-2). Both contain a single repository name."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "Task 1 contains: '## Target Branch' (line 4), '## Description' (line 7), '## Acceptance Criteria' (line 31), '## Test Requirements' (line 37). Task 2 contains: '## Target Branch' (line 4), '## Description' (line 7), '## Acceptance Criteria' (line 33), '## Test Requirements' (line 41). All four required sections are present in both tasks."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "Task 1 Files to Modify: 'migration/src/lib.rs' — exists in repo-backend.md directory tree. Task 1 Files to Create: 'migration/src/m0002_search_indexes/mod.rs' — follows the pattern of migration/src/m0001_initial/mod.rs from repo-backend.md. Task 2 Files to Modify: 'modules/search/src/service/mod.rs' — exists in repo-backend.md (line 91), 'modules/search/src/lib.rs' — exists in repo-backend.md (line 89). All referenced paths match or follow established patterns from the repository structure."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Task 1 Implementation Notes reference: 'migration/src/m0001_initial/mod.rs' for migration patterns, SeaORM migration trait, and mention 'migration/src/m0002_search_indexes/mod.rs'. Task 2 Implementation Notes reference: 'modules/search/src/service/mod.rs' (SearchService), 'common/src/db/query.rs' (shared query builder helpers), 'common/src/model/paginated.rs' (PaginatedResults), and specific patterns like 'Result<T, AppError>' with '.context()' wrapping. All paths correspond to actual files in repo-backend.md."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "Task 1 line 4-5: '## Target Branch\\nmain'. Task 2 line 4-5: '## Target Branch\\nmain'. Both tasks have Target Branch set to 'main'."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": true,
+      "evidence": "Task 1 contains at line 48: '<!-- [sdlc-workflow] Description digest: sha256-md:a83af7a0bdab29f0225329bf9eb0183d87b439ea6c4c288881bcc34b89f8d7d3 -->' — 'a83af7a0bdab29f0225329bf9eb0183d87b439ea6c4c288881bcc34b89f8d7d3' is exactly 64 lowercase hex characters prefixed by 'sha256-md:'. Task 2 contains at line 54: '<!-- [sdlc-workflow] Description digest: sha256-md:2e63f8ec874219da8b1bd2747ec4995f4af4680a1fb48006c2314936cd818083 -->' — '2e63f8ec874219da8b1bd2747ec4995f4af4680a1fb48006c2314936cd818083' is exactly 64 lowercase hex characters prefixed by 'sha256-md:'. Both follow the required format."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "Task 1 Implementation Notes include one convention reference: 'Per CONVENTIONS.md (repo-level): the project uses SeaORM for database operations. Follow the SeaORM migration pattern with MigrationTrait implementation.\\n  Applies: task creates migration/src/m0002_search_indexes/mod.rs matching the convention's migration file scope.' Task 2 includes: 'Per CONVENTIONS.md (repo-level): all handlers return Result<T, AppError> with .context() wrapping. Ensure the refactored search service propagates errors using this pattern.\\n  Applies: task modifies modules/search/src/service/mod.rs matching the convention's Rust source file scope.' Both use the prescribed 'Applies: task modifies/creates <file> matching the convention's <scope>' format. No inapplicable conventions are listed with 'Not applicable' annotations."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), every created task's additional_fields includes 'priority' with the inherited priority name. When the Feature's priority is 'Undefined', the priority key is omitted entirely from additional_fields (not set to null or 'Undefined')",
+      "passed": false,
+      "evidence": "The feature TC-9002 has priority 'Normal'. The impact-map.md mentions priority propagation: 'Priority: Normal (from feature TC-9002) — will be propagated to all created tasks.' However, neither task-1 nor task-2 output files contain any 'additional_fields' section or explicit mention of priority being set in the task's Jira fields. The evidence only shows intent in the impact map, not actual task-level additional_fields with priority set. Since this is an eval with no real Jira, the task files themselves do not contain evidence of additional_fields with priority."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), every created task's additional_fields includes 'fixVersions' with the inherited version(s). When fixVersion scope is 'feature' or the Feature has no fixVersions, the fixVersions key is omitted entirely from additional_fields",
+      "passed": false,
+      "evidence": "The feature TC-9002 has fixVersions 'RHTPA 1.6.0'. The CLAUDE.md has no fixVersion scope config, defaulting to 'both'. The impact-map.md states: 'fixVersions: RHTPA 1.6.0 (from feature TC-9002) — will be propagated to all created tasks.' However, neither task-1 nor task-2 output files contain any 'additional_fields' section or explicit mention of fixVersions being set in the task fields. The evidence only shows intent in the impact map, not actual task-level additional_fields with fixVersions."
+    },
+    {
+      "text": "The summary comment on the feature issue (Step 6c) includes the inherited priority and fixVersion values that were propagated to tasks, or states they were omitted and why",
+      "passed": false,
+      "evidence": "There is no summary comment file in the outputs directory. The outputs contain only impact-map.md, task-1-search-indexes-migration.md, and task-2-search-fulltext-ranking.md. No file represents or contains a summary comment posted to the feature issue. The impact-map.md mentions priority and fixVersions propagation intent, but this is not a summary comment on the feature issue (Step 6c)."
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 3,
+    "total": 14,
+    "pass_rate": 0.79
+  }
+}
