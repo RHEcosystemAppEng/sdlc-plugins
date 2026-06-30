@@ -11,7 +11,7 @@ argument-hint: "[jira-issue-id]"
 # triage-security skill
 
 You are an AI triage assistant for security vulnerabilities. You take a Jira
-Vulnerability issue (auto-created by PSIRT) and perform a 7-step version-aware triage:
+Vulnerability issue (auto-created by PSIRT) and perform an 8-step version-aware triage:
 extract CVE data, analyze version impact across all supported product versions by
 inspecting lock files at pinned source commits, correct PSIRT-assigned Affects Versions,
 check for duplicates and lifecycle status, and either close the issue or create
@@ -45,8 +45,8 @@ Do **not** use for:
 | 4 | Duplicate, Sibling, Overlap, and Reconciliation Check | JQL search (sibling issues), component field search, preemptive task search | Duplicate detection, issue links, cross-CVE overlap, preemptive task reconciliation |
 | 5 | Version Lifecycle Check | Product pages URL | EOL status per version |
 | 6 | Already Fixed Check | Resolved sibling issues | Already-fixed detection |
-| 7.0 | Concurrent Triage Detection | Upstream component, JQL | Concurrent triage warning or proceed |
-| 7 | Remediation | Impact analysis results | Remediation tasks or close recommendation |
+| 7 | Concurrent Triage Detection | Upstream component, JQL | Concurrent triage warning or proceed |
+| 8 | Remediation | Impact analysis results | Remediation tasks or close recommendation |
 
 ## Guardrails
 
@@ -119,7 +119,7 @@ Extract the following from the configuration for use in later steps:
 - **Product pages URL** — from Security Configuration
 - **Component label pattern** — from Security Configuration (e.g., `pscomponent:`)
 - **VEX Justification custom field** _(optional)_ — from Security Configuration (e.g.,
-  `customfield_00000`). If configured, used in Steps 6 and 7 when closing issues as
+  `customfield_00000`). If configured, used in Steps 6 and 8 when closing issues as
   "Not a Bug". If not configured, close with resolution only, without the VEX field.
 - **Upstream Affected Component custom field** _(optional)_ — from Security Configuration
   (e.g., `customfield_10632`). If configured, used in Step 4.3 for cross-CVE overlap
@@ -331,7 +331,7 @@ identifies which stream PSIRT intended this issue to track.
 
 1. Parse the suffix — e.g., `[myproduct-2.2]` → stream `2.2.x`
 2. Match it to the Version Streams table from Security Configuration
-3. Record the **issue stream scope** for use in Steps 2–7
+3. Record the **issue stream scope** for use in Steps 2–8
 
 If the suffix does not match any configured stream, present the mismatch to the
 engineer and ask which stream this issue should be scoped to. **Do not proceed
@@ -529,14 +529,14 @@ Read `jira-triage-operations.md` for the detailed procedures.
 - **Step 6** – Already Fixed Check: cross-reference resolved sibling issues
   to detect already-fixed scenarios
 
-## Step 7 – Remediation
+## Step 8 – Remediation
 
 Based on the version impact table and the remaining affected versions (after
 Steps 4–6 filtering), determine the appropriate action.
 
 ```mermaid
 flowchart TD
-    A["Version impact table\n(after Steps 4-6)"] --> Z{"Step 7.0:\nConcurrent triage\non same component?"}
+    A["Version impact table\n(after Steps 4-6)"] --> Z{"Step 7:\nConcurrent triage\non same component?"}
     Z -->|No or user proceeds| B{"Any supported versions\naffected?"}
     Z -->|User waits/skips| STOP["Stop or skip\ntask creation"]
     B -->|Yes| C{"Other streams\nalso affected?"}
@@ -555,15 +555,15 @@ flowchart TD
 **Important**: This skill never creates Vulnerability issues. PSIRT owns
 Vulnerability issue creation — the skill only creates remediation **Tasks**.
 
-### Step 7.0 – Concurrent triage detection
+## Step 7 – Concurrent triage detection
 
 Before proceeding to Case A/B/C branching, check whether another engineer is
 actively triaging a different CVE that affects the same upstream component. This
-prevents duplicate remediation tasks when two concurrent triages reach Step 7
+prevents duplicate remediation tasks when two concurrent triages reach Step 8
 simultaneously.
 
 Follow the concurrent triage detection protocol in
-`jira-triage-operations.md` — Step 7.0.
+`jira-triage-operations.md` — Step 7.
 
 If the Upstream Affected Component custom field is not configured, skip this
 step entirely.
@@ -715,7 +715,7 @@ MUST include the Comment Footnote (see above).
 
 ## Important Rules
 
-1. **Follow the step order.** Execute steps 1 through 7 in sequence. Do not skip
+1. **Follow the step order.** Execute steps 1 through 8 in sequence. Do not skip
    steps or reorder them — later steps depend on data from earlier steps.
 2. **Do not guess dependency versions.** Every version claim must come from actual
    `git show` output. If a lock file cannot be read (repo not cloned, commit not

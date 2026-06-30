@@ -253,7 +253,7 @@ entirely.
 
 When triaging a new CVE Jira for a specific stream, check whether a proactive
 remediation task already exists for this CVE and stream (created by a prior
-Step 7 Case B run on a different stream's CVE Jira).
+Step 8 Case B run on a different stream's CVE Jira).
 
 1. **Search for preemptive tasks** matching the current CVE:
 
@@ -299,10 +299,10 @@ Step 7 Case B run on a different stream's CVE Jira).
       - Removed "security-preemptive" label from [task-key]
 
       The preemptive task is now a standard remediation task for this CVE Jira.
-      Skipping new remediation task creation in Step 7.
+      Skipping new remediation task creation in Step 8.
       ```
    d. **Record the reconciliation** — mark that remediation already exists for
-      this stream so Step 7 skips task creation for it.
+      this stream so Step 8 skips task creation for it.
 
 4. **If no matching preemptive task found:** proceed silently to Step 5.
 
@@ -356,15 +356,15 @@ Do **not** set VEX Justification for already-fixed closures — VEX applies only
 the vulnerability does not affect the product.
 
 **If the fix is partial** (some versions covered, others not), narrow the scope to
-the unfixed versions and proceed to Step 7.
+the unfixed versions and proceed to Step 8.
 
-**If no resolved siblings exist**, proceed to Step 7.
+**If no resolved siblings exist**, proceed to Step 8.
 
-## Step 7.0 – Concurrent Triage Detection
+## Step 7 – Concurrent Triage Detection
 
 Before creating remediation tasks (Cases A/B), check whether another engineer is
 actively triaging a different CVE that affects the same upstream component. This
-prevents duplicate remediation tasks when two triages reach Step 7 simultaneously.
+prevents duplicate remediation tasks when two triages reach Step 8 simultaneously.
 
 **Prerequisite:** This step requires the Upstream Affected Component custom field
 to be configured in Security Configuration (Step 0). If the field is not configured,
@@ -405,7 +405,7 @@ skip this step entirely — consistent with Step 4.3's conditional behavior.
 4. **Handle user choice:**
    - **Wait**: stop execution and inform the user to re-run after the concurrent
      triage completes.
-   - **Skip**: skip Step 7 entirely (do not create remediation tasks) and add a
+   - **Skip**: skip Step 8 entirely (do not create remediation tasks) and add a
      Jira comment explaining why task creation was skipped.
    - **Proceed**: add the `concurrent-triage-overlap` label to the current issue
      and continue to Case A/B/C branching. The label ensures the other triage's
