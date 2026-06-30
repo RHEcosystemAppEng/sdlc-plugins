@@ -1,7 +1,7 @@
 # Remediation Task Templates
 
 These templates define the Jira Task descriptions created during CVE triage
-(Step 7, Case A). Tasks follow `task-description-template.md` so that
+(Step 8, Case A). Tasks follow `task-description-template.md` so that
 `/implement-task` can parse them directly.
 
 The number of tasks depends on the ecosystem type:
@@ -245,7 +245,7 @@ jira.add_comment(<task-key>, "[sdlc-workflow] Description digest: <tagged-digest
 
 ## Preemptive Task Variant
 
-When Step 7 Case B identifies affected streams that lack their own CVE Jira,
+When Step 8 Case B identifies affected streams that lack their own CVE Jira,
 create proactive remediation tasks using the same templates as Case A but with
 these differences:
 
