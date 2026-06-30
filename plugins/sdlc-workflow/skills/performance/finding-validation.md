@@ -102,6 +102,10 @@ The `anti_pattern` field must use one of the following values:
 | Cross-Table OR Filter | 7.6.7 | Backend |
 | Load-All-Then-Search | 7.6.8 | Backend |
 | Recursive CTE Risk | 7.6.2 | Backend |
+| Missing Statistics Refresh | 7.8.1 | Backend (Migration) |
+| Non-Materialized CTE Re-evaluation | 7.8.2 | Backend (Migration) |
+| Uniform Processing of Partitionable Data | 7.8.3 | Backend (Migration) |
+| Expensive PL/pgSQL Function Pattern | 7.8.4 | Backend (Migration) |
 | Sequential Scan | 9.7.4 | Backend (EXPLAIN) |
 | Row Estimate Mismatch | 9.7.4 | Backend (EXPLAIN) |
 | Nested Loop on Large Table | 9.7.4 | Backend (EXPLAIN) |

@@ -178,6 +178,57 @@ Before/after size queries for the affected table(s), dialect derived from Migrat
 
 ---
 
+## Migration SQL Optimization Extension
+
+When the task involves fixing existing migration SQL (Layer 2A with `migration-sql-optimization` label), add these sections after Performance Test Requirements:
+
+```
+## Migration SQL Fix
+
+### Target Migration File
+{migration_file_path} (line {start_line}–{end_line})
+
+### Deployment Status
+**CONFIRM BEFORE IMPLEMENTING:** Has this migration been applied to production/staging databases?
+- If YES: Create a NEW corrective migration file that applies the optimized SQL (e.g., re-runs the backfill with the fix, replaces the function definition)
+- If NO: Modify the existing migration file directly
+
+### Before (Current Migration SQL)
+```sql
+{original_migration_sql}
+```
+
+### After (Corrected Migration SQL)
+```sql
+{corrected_migration_sql}
+```
+
+### Performance Impact
+{explanation_of_improvement — e.g., "Adding ANALYZE before the backfill fixes a 170x row overestimate, reducing query plan cost from ~1.8B to ~21M"}
+
+### Verification
+```sql
+{verification_query — e.g., EXPLAIN ANALYZE for planner estimates, timing comparison for function rewrites}
+```
+
+### Safety Checks
+- [ ] Fix preserves semantic correctness (same data outcome after migration)
+- [ ] Fix is idempotent if migration re-runs (ON CONFLICT handling preserved)
+- [ ] No data loss operations introduced
+- [ ] For function rewrites: new function produces identical output for all input patterns
+```
+
+## Migration SQL Optimization Extension Rules
+
+- **Target Migration File** must point to the exact file and line range from the analysis finding
+- **Deployment Status** check is mandatory — determines whether to modify existing migration or create a new corrective migration
+- **Before/After SQL** must show the complete affected code section, not just a snippet
+- **Verification** must include a runnable command the developer can use to confirm the fix
+- Migration SQL optimization tasks are distinct from `db-migration` tasks (which create new DDL migrations)
+- For PL/pgSQL function rewrites: the Before/After must show the complete function body, and verification must include a correctness check (both functions produce identical output) in addition to a timing comparison
+
+---
+
 ## Rules
 
 Follows all base template rules (from `shared/task-description-template.md`), plus:

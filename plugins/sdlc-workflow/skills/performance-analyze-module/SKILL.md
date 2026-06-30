@@ -81,14 +81,14 @@ Write `{analysis_dir}/analysis-progress.json` based on `(metric_type, backend_av
 
 | metric_type | backend_available | Steps → `pending` | Steps → `not_applicable` |
 |---|---|---|---|
-| `frontend` | any | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 8.A-D, 8.F, 9.7 |
-| `backend` | `true` | 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 9.7 | 5.1-5.3, 6.1-6.9, 8.A-D, 8.F |
-| `hybrid` | `true` | 5.1-5.3, 6.1-6.9, 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 8.A-D, 8.F, 9.7 | (none) |
-| `hybrid` | `false` | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 8.A-D, 8.F, 9.7 |
+| `frontend` | any | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 7.8.1-7.8.4, 8.A-D, 8.F, 9.7 |
+| `backend` | `true` | 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 7.8.1-7.8.4, 9.7 | 5.1-5.3, 6.1-6.9, 8.A-D, 8.F |
+| `hybrid` | `true` | 5.1-5.3, 6.1-6.9, 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 7.8.1-7.8.4, 8.A-D, 8.F, 9.7 | (none) |
+| `hybrid` | `false` | 5.1-5.3, 6.1-6.9 | 6.B, 7.1-7.7, 7.3.2, 7.4.1, 7.6.1-7.6.8, 7.6.4.1, 7.8.1-7.8.4, 8.A-D, 8.F, 9.7 |
 
 Status values: `pending` (not yet run), `done` (completed — requires `findings` count, 0 = "no instances"), `skipped` (runtime scope guard excluded a step that could apply — requires `reason`), `not_applicable` (step does not apply to this `metric_type`/`backend_available` combo — use for all steps initialized as `not_applicable` in the table above), `optional_skipped` (user declined or prerequisites not met — requires `reason`). Use `not_applicable` (not `skipped`) for steps excluded by metric_type at initialization.
 
-Optional step rules: Step 5.1 (no bundle stats found) → `done` with `findings: 0` (estimation fallback runs). Step 7.7 (service not running) → `optional_skipped`. Step 9.7 guard failure → `not_applicable`; user declines → `optional_skipped`.
+Optional step rules: Step 5.1 (no bundle stats found) → `done` with `findings: 0` (estimation fallback runs). Step 7.7 (service not running) → `optional_skipped`. Step 7.8 (no DML-containing migration files found) → all 7.8.x sub-steps set to `skipped` with reason "no DML-containing migration files found." Step 9.7 guard failure → `not_applicable`; user declines → `optional_skipped`.
 
 At the end of each detection step (5.x, 6.x, 7.x, 8.x): update `analysis-progress.json` with the step's status and findings count.
 
@@ -153,6 +153,10 @@ All detection steps (6.x and 7.x) classify findings using this table. Each step 
 | Late Pagination (7.4.1) | Unbounded load + post-load slice | Bounded load + post-load slice | Small collection or admin-only |
 | Redundant Indexes (7.6.4.1) | Exact duplicate on junction/relationship table | Exact duplicate on regular table | Exact duplicate on small table |
 | Recursive CTE Risk (7.6.2) | Junction table, no depth limit | Junction table, depth limit present | Entity table or tight limit (< 10) |
+| Missing Statistics Refresh (7.8.1) | Backfill on >1M rows or 3+ table JOIN | Backfill on 2 tables or with function | Simple single-table INSERT...SELECT |
+| Non-Materialized CTE (7.8.2) | CTE with function call, 3+ references | CTE with function, 2 references | CTE with simple aggregate, 2 references |
+| Uniform Processing (7.8.3) | >1M rows, <10% need processing | Medium table, <50% need processing | Skip ratio unclear |
+| Expensive PL/pgSQL Pattern (7.8.4) | Dynamic regexp in loop on >10K rows | Dynamic regexp unclear N, or EXECUTE in loop | RAISE NOTICE in loop or small-N |
 
 **Impact formulas** (use throughout):
 - Over-fetching: `(unused/total) × response_size ÷ (bandwidth_mbps × 125000)`
@@ -504,6 +508,155 @@ The anti-pattern is: the search criteria exist at the call site, but the query d
 
 Wrap API profiling in a shell function: benchmark each endpoint (cold + warm runs), measure percentiles, detect cache effectiveness. Compare current metrics against `benchmark-results.json` baseline if it exists. Regression thresholds: p95 > 50ms AND > 10% = regression.
 
+### Step 7.8 – Migration SQL Analysis
+
+**Scope:** Runs when `backend_available = true` and `metric_type` is `backend` or `hybrid`. Scans migration files for performance anti-patterns in backfill/DML queries.
+
+**Migration file discovery:** Reuse the migration path discovered by Step 7.6.4 (same directory used for index/table registry). If Step 7.6.4 was skipped or found no migration files, attempt discovery using the framework-to-path mapping (Cargo.toml → `migration/`, pom.xml → `src/main/resources/db/migration/`, requirements.txt → `migrations/` or `alembic/`, package.json → `src/migration/` or `prisma/migrations/`). If no migration files found, mark all 7.8.x sub-steps as `skipped` with reason "no migration files found."
+
+**Scope filter:** Only analyze migration files containing DML statements (INSERT, UPDATE, DELETE) or PL/pgSQL function definitions (CREATE FUNCTION, CREATE OR REPLACE FUNCTION). Skip pure DDL-only migrations (CREATE TABLE, CREATE INDEX, ALTER TABLE ADD COLUMN). Build a **function registry** from all CREATE [OR REPLACE] FUNCTION statements across migration files — this is needed by Steps 7.8.3 and 7.8.4 when the function is defined in a different file than the one calling it.
+
+**Scope independence:** Unlike Steps 7.1–7.6 (which analyze only the selected workflow's endpoints), Step 7.8 scans ALL DML-containing migration files in the backend codebase — not just those related to the selected workflow's runtime API endpoints. Migration anti-patterns affect deployment performance, ingestion pipelines, and data consistency regardless of which API workflow was selected for analysis.
+
+**scope_context assignment:** Tag each migration finding with a `scope_context` field determined by tracing where the affected code is called from:
+
+| scope_context | Condition | Example |
+|---|---|---|
+| `"runtime"` | Function/query is called by endpoint handlers at request time | Function referenced in `modules/fundamental/src/*/endpoints/` |
+| `"ingestion"` | Function/query is called during data ingestion | Function referenced in `modules/ingestor/` or ingestion pipeline code |
+| `"migration"` | Function/query runs only within migration SQL files — no references in any application source code (grep all `modules/`, `src/`, application crates excluding `migration/`) | Backfill INSERT that is never re-executed after migration |
+| `"shared"` | Function is referenced from BOTH migration SQL AND application source code (any combination of runtime/ingestion callers) | Function defined in migration, called from both ingestor and endpoint handler |
+
+**Caller search scope:** Search ALL application source code (`modules/`, `src/`, and any other application crates), excluding `migration/` itself. Do not limit the search to a single module — a function defined in a migration file may be called from any application crate.
+
+**Assignment rules:**
+1. For **named functions** (CREATE FUNCTION): grep application source for the function name. If found in any application source → `"ingestion"` or `"runtime"` based on the caller's location. If found in both endpoint handlers and ingestion code → `"shared"`. If found only in other migration SQL → `"migration"`.
+2. For **inline SQL patterns** (CTEs, INSERT...SELECT without a named function): these are self-contained within the migration file. Default to `"migration"` unless the migration is designed to be re-run periodically (check for idempotency guards like `ON CONFLICT`, `WHERE NOT EXISTS`). Idempotent migrations that run during deployment → `"migration"`. One-time backfills → `"migration"`.
+3. When uncertain, default to `"ingestion"` (over-report rather than suppress).
+
+Do NOT suppress findings based on scope_context. All contexts produce valid findings. The scope_context is used by plan-optimization (Step 5) for prioritization, not for filtering.
+
+**Backward compatibility:** Findings from prior analysis runs that lack `scope_context` should be treated as `scope_context = "unknown"` by downstream steps.
+
+#### Step 7.8.1 – Missing Statistics Refresh
+
+Detect bulk INSERT...SELECT or UPDATE...FROM operations that write to or read from tables without a preceding ANALYZE statement in the same migration file.
+
+**Detection:** For each migration file containing INSERT...SELECT or UPDATE...FROM:
+
+1. Extract the target table (INSERT INTO) and source tables (FROM/JOIN in the SELECT)
+2. Check whether `ANALYZE {table};` appears before the DML statement in the same file for any of the involved tables
+3. Flag when: the DML operates on a table that was just created or bulk-loaded in a prior migration step, AND no ANALYZE precedes the DML
+
+| Pattern | Example |
+|---|---|
+| Missing ANALYZE before backfill | `CREATE TABLE new_table (...); INSERT INTO new_table SELECT ... FROM large_table;` — no `ANALYZE large_table;` or `ANALYZE new_table;` before the INSERT |
+| Missing ANALYZE between steps | Step 1 bulk-inserts into `dict_table`, Step 2 JOINs `dict_table` — no `ANALYZE dict_table;` between steps |
+
+**NOT missing ANALYZE (do not flag):**
+- Small reference table inserts (INSERT INTO ... VALUES (...), ...) with fewer than 100 literal rows
+- Migrations that only CREATE TABLE + CREATE INDEX (no DML)
+- INSERT...SELECT where the source query has explicit LIMIT < 1000
+
+**Severity:** Classify per severity table.
+
+**Finding output:** Include `scope_context` per Step 7.8 Scope independence. For inline SQL patterns (INSERT...SELECT, CTE), default to `"migration"`. If the migration contains idempotency guards (ON CONFLICT, WHERE NOT EXISTS) suggesting periodic re-execution during deployments, note this in the finding but keep `scope_context = "migration"`.
+
+#### Step 7.8.2 – Non-Materialized CTE Re-evaluation
+
+Detect CTEs in migration DML that contain expensive operations AND are referenced multiple times in the outer query without the MATERIALIZED keyword.
+
+**Detection:** For each CTE in migration SQL (`WITH ... AS (...)`):
+
+1. Parse CTE name and body
+2. Check if CTE body contains expensive operations: function calls (including PL/pgSQL functions from the function registry), JOINs, subqueries, aggregate functions (GROUP BY, array_agg, etc.)
+3. Count references to the CTE name in the outer query (SELECT, INSERT, UPDATE statements after the CTE definition)
+4. Flag when: reference count >= 2 AND CTE body is expensive AND no MATERIALIZED keyword
+
+**PostgreSQL version context:** PostgreSQL 12+ may inline CTEs when they are non-recursive and referenced once. For CTEs referenced multiple times, the planner MAY still inline them (evaluating the body at each reference site). The MATERIALIZED keyword forces a single evaluation. Prior to PostgreSQL 12, all CTEs were implicitly materialized.
+
+| Pattern | Example |
+|---|---|
+| Non-materialized CTE with function call, used in INSERT + md5 JOIN | `WITH expansions AS (SELECT expand_fn(col, mappings) AS expanded ...) INSERT INTO target SELECT e.sbom_id, el.id FROM expansions e JOIN dict el ON el.hash = md5(e.expanded)` — function evaluated once for the SELECT, again for the md5 JOIN |
+| Non-materialized CTE referenced in two INSERTs | `WITH cte AS (SELECT ... FROM a JOIN b ...) INSERT INTO t1 ... FROM cte; INSERT INTO t2 ... FROM cte;` |
+
+**NOT a problem (do not flag):**
+- CTE referenced exactly once in the outer query
+- CTE body is a simple SELECT from a single table with no function calls or JOINs
+- CTE already has MATERIALIZED keyword
+- Recursive CTEs (`WITH RECURSIVE`) — these are always materialized by PostgreSQL
+
+**Severity:** Classify per severity table.
+
+**Finding output:** Include `scope_context` per Step 7.8 Scope independence. For inline SQL patterns (INSERT...SELECT, CTE), default to `"migration"`. If the migration contains idempotency guards (ON CONFLICT, WHERE NOT EXISTS) suggesting periodic re-execution during deployments, note this in the finding but keep `scope_context = "migration"`.
+
+#### Step 7.8.3 – Uniform Processing of Partitionable Data
+
+Detect queries that apply an expensive operation to all rows when a filterable predicate could partition the work, allowing most rows to skip the expensive path.
+
+**Detection scope:** Limited to specific high-confidence patterns to minimize false positives.
+
+**Pattern 1 — Function call with early-exit guard:** For each migration DML that calls a PL/pgSQL function:
+
+1. Read the function body (from CREATE FUNCTION in the same or earlier migration file, or from the function registry built during Step 7.8 initialization)
+2. Check if the function contains an early-exit guard: `IF POSITION('X' IN param) = 0 THEN RETURN param; END IF;` or `IF param !~ 'pattern' THEN RETURN param; END IF;` or `IF param NOT LIKE '%pattern%' THEN RETURN param; END IF;`
+3. Check if the calling query applies the function to all rows without filtering by the guard condition
+4. Flag when: function has early-exit guard AND calling query processes all rows AND the guard condition could be used as a WHERE clause to skip the majority of rows
+
+| Pattern | Example |
+|---|---|
+| Unconditional function application | `INSERT INTO target SELECT id, expand_fn(text, mappings) FROM source LEFT JOIN mapping_table ...;` where `expand_fn` returns input unchanged for rows without 'LicenseRef-' (early-exit guard) |
+| LEFT JOIN + function on all rows | `INSERT INTO target SELECT src.id, expand_fn(src.text, lim.data) FROM src LEFT JOIN (SELECT ... FROM mappings GROUP BY sbom_id) lim ON ...;` where expand_fn has early-exit and the LEFT JOIN is only consumed by the function |
+
+**Pattern 2 — CASE-expressible partitioning:** For each migration DML with a LEFT JOIN + function call:
+
+1. Check if the LEFT JOIN is only needed by the function call (i.e., the JOIN's fields are only consumed by the function, not by the INSERT/UPDATE target columns directly)
+2. If so, the query could be split: rows matching the guard condition go through the expensive path, the rest skip the JOIN and function entirely
+
+**False-positive guards:**
+1. If the function has no early-exit guard (every row needs processing) → **discard**. Without evidence that rows are skippable, uniform processing may be correct.
+2. If the calling query already has a WHERE clause filtering to the relevant subset → **discard**. The query is already partitioned.
+3. If the function modifies every row differently (no skip-able subset; guard checks a different concern than the expensive path) → **discard**.
+4. If the function's early-exit guard percentage is unclear (no way to estimate skip ratio from code alone) → **downgrade to Low Confidence**. Route to "Candidates for Manual Review" in the report.
+5. If the query is inside a transaction that already filters upstream (e.g., a temp table was populated with only matching rows) → **discard**. The upstream filter serves the same purpose as a WHERE clause.
+
+**Confidence:** Low by default — this pattern requires understanding function semantics. Upgrade to Medium only when the early-exit guard uses a simple string predicate (POSITION/LIKE) that maps directly to a SQL WHERE clause.
+
+**Severity:** Classify per severity table.
+
+**Finding output:** Include `scope_context` per Step 7.8 Scope independence. For named PL/pgSQL functions, grep all application source code (excluding `migration/`) for the function name to determine caller context. A function defined in migration SQL that is referenced from application source code (e.g., `modules/ingestor/`) is NOT a "migration-only" function — it runs at ingestion time and its performance matters beyond the initial migration.
+
+#### Step 7.8.4 – Expensive PL/pgSQL Function Patterns
+
+Detect known slow patterns inside CREATE [OR REPLACE] FUNCTION definitions found in migration files.
+
+**Detection:** For each PL/pgSQL function in migration SQL (from the function registry):
+
+1. **Dynamic regexp in loop:** `regexp_replace(text, '\m' || variable || '...', replacement, 'g')` inside a FOREACH or FOR loop — the regex is recompiled on every iteration because it includes a concatenated variable. Flag when the concatenation uses a loop variable.
+   - **Fix indicator:** If the pattern uses word boundaries (`\m`, `\M`, `(?![...])`) for delimiter matching in a known-delimiter context (SPDX expressions, CSV, space-delimited tokens), `replace()` with boundary-aware splitting would work — enumerate all valid boundary pairs instead of compiling a regex.
+
+2. **Dynamic SQL in loops:** `EXECUTE 'SELECT ...' || variable` or `EXECUTE format('...', variable)` inside a LOOP — dynamic SQL prevents plan caching across iterations.
+
+3. **Per-row database queries inside functions:** `SELECT ... INTO variable FROM table WHERE id = loop_var` inside a LOOP within a function body — this is the PL/pgSQL equivalent of N+1.
+
+4. **Unnecessary RAISE NOTICE in hot paths:** `RAISE NOTICE` inside a LOOP that processes data rows — logging overhead per row (I/O + string formatting).
+
+| Pattern | Example |
+|---|---|
+| Dynamic regexp in loop | `FOREACH mapping IN ARRAY mappings LOOP result := regexp_replace(result, '\m' \|\| mapping.license_id \|\| '(?![a-zA-Z0-9.-])', mapping.name, 'g'); END LOOP;` |
+| EXECUTE in loop | `FOR r IN SELECT * FROM t LOOP EXECUTE format('INSERT INTO %I VALUES ...', r.name); END LOOP;` |
+| Per-row query in function | `FOR r IN SELECT * FROM parent LOOP SELECT count(*) INTO cnt FROM child WHERE parent_id = r.id; END LOOP;` |
+
+**NOT expensive (do not flag):**
+- `regexp_replace` with a static (literal) pattern — the regex is compiled once
+- EXECUTE outside a loop (one-time dynamic SQL)
+- RAISE NOTICE outside a loop (diagnostic, not hot path)
+- A loop with a small fixed-size input (e.g., `FOREACH mapping IN ARRAY mappings` where `mappings` has bounded cardinality < 10 from the calling context)
+
+**Severity:** Classify per severity table.
+
+**Finding output:** Include `scope_context` per Step 7.8 Scope independence. For named PL/pgSQL functions, grep all application source code (excluding `migration/`) for the function name to determine caller context. A function defined in migration SQL that is referenced from application source code (e.g., `modules/ingestor/`) is NOT a "migration-only" function — it runs at ingestion time and its performance matters beyond the initial migration.
+
 ## Step 8 – Cross-Reference Over-Fetching
 
 For each endpoint from Step 6.1:
@@ -578,6 +731,10 @@ For each finding, apply these checks:
 | Missing Indexes | Small table (<1K rows), admin/ingestion path only, existing composite index covers it |
 | Wasted Computation | Shared service method, unused fields are cheap (no queries) |
 | Cross-Layer Waste | Fields needed for future feature, SEO/meta tags |
+| Missing Statistics Refresh (7.8.1) | Small table (<1K rows), single INSERT...VALUES (not INSERT...SELECT), migration is re-run idempotent |
+| Non-Materialized CTE (7.8.2) | CTE referenced once (planner won't inline), PostgreSQL < 12 (CTEs always materialized), CTE body is trivial (no JOINs/functions) |
+| Uniform Processing (7.8.3) | Function has no early-exit guard, upstream transaction already filters, query has WHERE clause partitioning, skip ratio unclear |
+| Expensive PL/pgSQL Pattern (7.8.4) | Regex pattern is static literal (compiled once), loop bound is small constant (<10), scope_context confirmed as "migration" after full caller trace (no references in application source outside migration/) |
 
 #### Step 9.1-C – Assign Confidence
 
@@ -619,6 +776,8 @@ Report path: `{analysis_dir}/workflow-analysis-report.md`.
 ### Step 9.3 – Report Structure
 
 Read template from `${plugin_root}skills/performance/performance-analysis-report.template.md`. Populate with metrics/bundle/baseline from Steps 2–8 and findings exclusively from `findings-validation.json` (never raw detection output). Include frontend sections for `frontend`/`hybrid`, backend sections for `backend`/`hybrid`.
+
+For migration findings (Step 7.8.x), include a **Migration & Ingestion Performance** section after the Backend Anti-Patterns section. Group findings by `scope_context`. Each finding must note its scope so readers understand whether it affects API response time, ingestion throughput, or deployment speed. Findings with `scope_context = "unknown"` (from prior runs without scope tagging) go into a separate "Unscoped Migration Findings" subsection.
 
 ### Step 9.4 – Overall Performance Rating
 
