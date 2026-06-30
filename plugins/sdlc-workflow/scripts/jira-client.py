@@ -591,6 +591,21 @@ def get_user_info() -> Dict[str, Any]:
     return make_request('GET', 'myself')
 
 
+def get_remote_links(issue_key: str) -> List[Dict[str, Any]]:
+    """Get remote links for a JIRA issue.
+
+    Args:
+        issue_key: Issue key (e.g., TC-123)
+
+    Returns:
+        List of remote link objects
+    """
+    result = make_request('GET', f"issue/{issue_key}/remotelink")
+    if isinstance(result, list):
+        return result
+    return result.get('remoteLinks', [result] if result else [])
+
+
 def get_project_metadata(project_key: str) -> Dict[str, Any]:
     """Get project metadata including issue types and fields.
 
@@ -674,6 +689,10 @@ def main(argv=None):
     # get_user_info
     subparsers.add_parser('get_user_info', help='Get current user info')
 
+    # get_remote_links
+    get_remote_links_parser = subparsers.add_parser('get_remote_links', help='Get remote links for issue')
+    get_remote_links_parser.add_argument('issue_key', help='Issue key (e.g., TC-123)')
+
     # get_project_metadata
     project_parser = subparsers.add_parser('get_project_metadata', help='Get project metadata')
     project_parser.add_argument('project_key', help='Project key')
@@ -727,6 +746,9 @@ def main(argv=None):
 
     elif args.command == 'get_user_info':
         result = get_user_info()
+
+    elif args.command == 'get_remote_links':
+        result = get_remote_links(args.issue_key)
 
     elif args.command == 'get_project_metadata':
         result = get_project_metadata(args.project_key)

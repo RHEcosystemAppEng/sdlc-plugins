@@ -147,8 +147,7 @@ Follow the JIRA Access protocol in `shared/jira-access-strategy.md`.
 - `jira.create_link(...)` → `python3 scripts/jira-client.py create_link --inward <key> --outward <key> --link-type <type>`
 - `jira.transition_issue(id, status)` → First `get_transitions <id>`, then `transition_issue <id> --transition-id <id>`
 - `jira.add_comment(id, text)` → `python3 scripts/jira-client.py add_comment <id> --comment-md "<text>"`
-- `jira.get_issue_remote_links(id)` → not available via REST client; if MCP is
-  unavailable, warn the user and skip upstream reference extraction
+- `jira.get_issue_remote_links(id)` → `python3 scripts/jira-client.py get_remote_links <id>`
 
 **Exception for Bash tool:** When using REST API fallback, this skill may use
 `bash -c "python3 scripts/jira-client.py <command>"` for JIRA operations only.
