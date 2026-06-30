@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+      "passed": true,
+      "evidence": "In data-extraction.md, the Parsed CVE Data table contains: CVE ID = CVE-2026-31812, Vulnerable library = quinn-proto, Affected version range = 'versions before 0.11.14 (< 0.11.14)', Fixed version = 0.11.14. All four fields are correctly identified."
+    },
+    {
+      "text": "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+      "passed": true,
+      "evidence": "In data-extraction.md, the Ecosystem Detection table contains: Ecosystem = Cargo, Lock file = Cargo.lock, Check command = 'git show <tag>:Cargo.lock | grep -A2 \"name = \"quinn-proto\"\"'. The ecosystem is correctly identified as Cargo."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the security-matrix.md supportability matrix — no versions are skipped (Important Rule 4)",
+      "passed": true,
+      "evidence": "The security-matrix.md template's worked example lists versions 2.2.0 (0.4.5), 2.2.1 (0.4.8), 2.2.2 (0.4.9), 2.2.3 (0.4.11), 2.2.4 (0.4.12). The version-impact.md table includes all of these: 2.2.0 (v0.4.5), 2.2.1 (v0.4.8), 2.2.2 (v0.4.9), 2.2.3 (v0.4.11), 2.2.4 (v0.4.12), plus 2.1.x versions 2.1.0 (v0.3.8) and 2.1.1 (v0.3.12). No versions from the supportability matrix are skipped."
+    },
+    {
+      "text": "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+      "passed": true,
+      "evidence": "In version-impact.md, the Build Tag column uses version-specific tags from the supportability matrix: v0.3.8 for 2.1.0, v0.3.12 for 2.1.1, v0.4.5 for 2.2.0, v0.4.8 for 2.2.1, v0.4.9 for 2.2.2, v0.4.11 for 2.2.3, v0.4.12 for 2.2.4. These match the pinned commit tags from the security-matrix.md template's worked example, not branch HEAD."
+    },
+    {
+      "text": "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+      "passed": true,
+      "evidence": "In version-impact.md, version 2.2.2 has Notes = 'retag of 2.2.1 (same as v0.4.8)', Affected? = YES, and quinn-proto = 0.11.12 (same as 2.2.1). The retag is identified and the affected status is carried forward from the original version 2.2.1."
+    },
+    {
+      "text": "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+      "passed": true,
+      "evidence": "In affects-versions.md, the Correction section shows: 'Current: [RHTPA 2.0.0]' and 'Proposed: [RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]'. This clearly shows the diff between PSIRT-assigned version (RHTPA 2.0.0) and lock-file-verified versions. The rationale states 'Lock file analysis at pinned commits from security-matrix.md shows quinn-proto versions 0.11.9 and 0.11.12 in versions 2.2.0 through 2.2.2'."
+    },
+    {
+      "text": "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+      "passed": true,
+      "evidence": "In affects-versions.md, the Jira Mutation section uses version names: {\"name\": \"RHTPA 2.2.0\"}, {\"name\": \"RHTPA 2.2.1\"}, {\"name\": \"RHTPA 2.2.2\"}. These are version name strings, not hardcoded Jira version IDs (which would be numeric IDs). The correction throughout uses 'RHTPA 2.2.0', 'RHTPA 2.2.1', 'RHTPA 2.2.2' as name references."
+    },
+    {
+      "text": "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+      "passed": true,
+      "evidence": "In remediation.md: Task 1 (upstream backport) has Repository = 'backend', Target Branch = 'release/0.4.z', Acceptance Criteria with 3 checkboxes, and Dependencies = 'Depends on: TC-8001'. Task 2 (downstream propagation) has Repository = 'rhtpa-release.0.4.z', Target Branch = 'main', Acceptance Criteria with 2 checkboxes, and Dependencies = 'Depends on: upstream backport task (upstream backport must merge first)' and 'Depends on: TC-8001'. The Jira Linkage section shows Blocks dependency: 'jira.create_link(inwardIssue: \"<upstream-task-key>\", outwardIssue: \"<downstream-task-key>\", type: \"Blocks\")'."
+    },
+    {
+      "text": "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+      "passed": true,
+      "evidence": "In remediation.md, two tasks are created for the 2.2.x stream: Task 1 'Upstream Backport Task (2.2.x)' targeting backend/release/0.4.z, and Task 2 'Downstream Propagation Task (2.2.x)' targeting rhtpa-release.0.4.z/main. The Jira Linkage section explicitly creates a Blocks dependency: 'jira.create_link(inwardIssue: \"<upstream-task-key>\", outwardIssue: \"<downstream-task-key>\", type: \"Blocks\")'. Similarly for 2.1.x preemptive tasks (Tasks 3 and 4) with the same Blocks pattern."
+    },
+    {
+      "text": "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
+      "passed": true,
+      "evidence": "In affects-versions.md, the Jira Mutation section is titled 'Jira Mutation (would execute after engineer confirmation)' — framing it as a proposal. The Correction section uses 'Proposed:' language. In remediation.md, the Post-Triage Actions section lists actions as numbered steps without stating they were executed. The cross-stream impact comment says 'would be posted to TC-8001'. The Jira Linkage section is presented as code that 'would execute after engineer confirmation'. All mutations are framed as proposals, not executed actions."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

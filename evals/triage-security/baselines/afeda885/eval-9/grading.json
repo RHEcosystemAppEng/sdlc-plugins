@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 4.3 extracts the Upstream Affected Component (webpack) from customfield_10632 and uses it to search for related CVE Jiras (§1.59)",
+      "passed": true,
+      "evidence": "In overlap-check.md, the Prerequisites Check section shows 'Upstream Affected Component custom field (customfield_10632): configured -- value is webpack'. The JQL search query explicitly uses this field: 'project = TC AND issuetype = 10024 AND cf[10632] ~ \"webpack\" AND key != TC-8011'. In data-extraction.md, the Custom Fields table confirms 'customfield_10632 (Upstream Affected Component) | webpack'."
+    },
+    {
+      "text": "Step 4.3 filters search results by matching PS Component (customfield_10669 = pscomponent:org/rhtpa-ui) and Stream (customfield_10832 = rhtpa-2.2)",
+      "passed": true,
+      "evidence": "In overlap-check.md, the Filtering section explicitly states: 'TC-8012 matches on all three fields: PS Component: pscomponent:org/rhtpa-ui -- matches current issue; Stream: rhtpa-2.2 -- matches current issue'. The search results table also shows both customfield_10669 and customfield_10832 values for TC-8012, confirming the filtering was performed against these specific fields."
+    },
+    {
+      "text": "Step 4.3 traverses issuelinks on TC-8012 to find remediation task TC-8013 via the 'Depend' link type",
+      "passed": true,
+      "evidence": "In overlap-check.md, the Issue Link Traversal section states: 'TC-8012 has the following issue links: Depend: TC-8013 (remediation Task)' with details including Summary: 'Bump webpack to 5.96.1 in rhtpa-ui [rhtpa-2.2]', Status: Closed (Done), and a description excerpt about the bump."
+    },
+    {
+      "text": "Step 4.3 compares the remediation task's bump version (5.96.1) against the current CVE's fix threshold (5.98.0) and determines the fix does NOT cover this CVE",
+      "passed": true,
+      "evidence": "In overlap-check.md, the Remediation Coverage Comparison table shows: 'Remediation bump version: 5.96.1', 'Current CVE (CVE-2026-45678) fix threshold: 5.98.0', 'Comparison: 5.96.1 < 5.98.0', 'Covers this CVE?: NO'. The conclusion states: 'The existing remediation task TC-8013 (from CVE-2026-43210) bumped webpack to 5.96.1, but CVE-2026-45678 requires webpack >= 5.98.0. Since 5.96.1 is below 5.98.0, the prior fix does not cover the current vulnerability.'"
+    },
+    {
+      "text": "The overlap table is presented to the engineer showing TC-8012 and TC-8013 with 'Covers This CVE? = No' — the triage proceeds to create new remediation tasks rather than recommending closure",
+      "passed": true,
+      "evidence": "In overlap-check.md, the Findings section contains the overlap table: '| CVE-2026-43210 | TC-8012 | TC-8013 | 5.96.1 | No (threshold: 5.98.0) |' followed by 'No existing remediation covers this CVE's fix threshold. Proceeding with new remediation task creation.' In triage-outcome.md, the triage decision is 'Case A -- Affected, Create New Remediation Tasks' with a full Remediation Plan describing two new tasks (upstream backport and downstream propagation), confirming the triage proceeds to create new remediation tasks rather than recommending closure."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

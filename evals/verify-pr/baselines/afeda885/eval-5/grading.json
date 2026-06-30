@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The report contains a Test Change Classification row with MIXED — both additive and reductive signals are present across the test file changes",
+      "passed": true,
+      "evidence": "report.md line 14 contains: '| Test Change Classification | MIXED | Modified file has both reductive signals (removed function, relaxed assertion) and additive signals (new dedup function); new test file is purely additive; overall: MIXED |'. The summary table explicitly shows the MIXED classification and references both additive and reductive signals."
+    },
+    {
+      "text": "The structural summary or reductive findings identify the removed test function test_recommend_purls_with_qualifiers as a reductive signal",
+      "passed": true,
+      "evidence": "report.md lines 118-120 under 'Reductive signals' in the Structural Scan section state: '-1 test function: `test_recommend_purls_with_qualifiers` removed entirely (lines 99-117 in diff, corresponding to the base-branch function at lines 30-48 of the base file). This function tested that qualifier variants were returned as separate entries -- behavior that no longer exists.'"
+    },
+    {
+      "text": "The structural summary or reductive findings note the assertion change in test_recommend_purls_basic — the PURL assertion changed from checking a fully qualified PURL with qualifiers to checking a versioned PURL without qualifiers, which the semantic assessment may identify as a relaxation contributing to the MIXED classification",
+      "passed": true,
+      "evidence": "report.md lines 120-121 under 'Reductive signals' state: '-1 assertion relaxed in `test_recommend_purls_basic`: the assertion changed from checking a fully qualified PURL with qualifiers (`\"pkg:maven/org.apache/commons-lang3@3.12?repository_url=https://repo1.maven.org&type=jar\"`) to a versioned PURL without qualifiers (`\"pkg:maven/org.apache/commons-lang3@3.12\"`). This is a specificity reduction -- the assertion now checks a shorter, less detailed string.' Additionally, lines 136-137 in the Semantic Assessment state: 'The assertion relaxation in `test_recommend_purls_basic` is semantically aligned with the feature change. The old assertion verified a fully qualified PURL; the new assertion verifies a simplified PURL. The assertion is weaker in absolute terms (shorter expected string) but correctly matches the new behavior.'"
+    },
+    {
+      "text": "The new test file tests/api/purl_simplify.rs is recognized as additive (3 new test functions)",
+      "passed": true,
+      "evidence": "report.md lines 124-128 under 'New file: tests/api/purl_simplify.rs' state: '+3 test functions: `test_simplified_purl_no_version`, `test_simplified_purl_mixed_types`, `test_simplified_purl_ordering_preserved`' and '+12 assertions across the 3 functions' and 'New file is inherently additive (no base-branch version exists)'."
+    },
+    {
+      "text": "The new test function test_recommend_purls_dedup in the modified file is recognized as an additive signal",
+      "passed": true,
+      "evidence": "report.md lines 115-116 under 'Additive signals' for the modified file state: '+1 test function: `test_recommend_purls_dedup` added (lines 119-134 in diff). This is a new function that tests deduplication behavior after qualifier removal.'"
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "The outputs directory contains only report files: report.md, criterion-1.md through criterion-5.md. These are all analysis/reporting documents. The report describes reading and analyzing code changes (diffs, base-branch content) but does not describe or show any code modifications. All output is verification analysis, not code changes."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR — it presents findings for human review (constraint 1.13)",
+      "passed": true,
+      "evidence": "report.md concludes with 'Overall: PASS' and a summary of findings but does not contain any merge action, gh pr merge command, or auto-merge language. The report presents its findings (acceptance criteria analysis, test classification, security scan) for human review. Line 17: '### Overall: PASS' followed by a descriptive summary, not a merge action."
+    },
+    {
+      "text": "The test change classification verdict appears in the verification report summary table and is accompanied by a detailed analysis section explaining the structural and semantic assessment",
+      "passed": true,
+      "evidence": "The summary table at report.md line 14 contains the Test Change Classification row with verdict MIXED. Lines 106-146 contain a detailed 'Test Change Classification -- MIXED' section with subsections: 'Structural Scan' (lines 112-128 covering additive and reductive signals for both the modified file and new file), 'Semantic Assessment' (lines 130-142 with 4 numbered analysis points), and 'Combined Classification: MIXED' (lines 144-146)."
+    },
+    {
+      "text": "The test change classification analysis is based on comparing base-branch and PR-branch file content (function additions, removals, assertion changes) — the structural and semantic assessment references test file content, not acceptance criteria or task requirements (constraint 1.18)",
+      "passed": true,
+      "evidence": "report.md line 108 explicitly states: 'Classification is based on a thorough structural and semantic comparison between the base-branch version of `tests/api/purl_recommend.rs` (from `test-base-purl-recommend.md`) and the PR-branch version (reconstructed from the diff), plus analysis of the new test file.' The structural scan (lines 112-128) references specific diff lines, function names, and assertion content from the test files. The semantic assessment (lines 130-142) discusses the removed function, relaxed assertion, and new function in terms of their test file content and behavior coverage, not in terms of acceptance criteria. Line 142 states: 'Semantic assessment does not override the structural signals here.'"
+    },
+    {
+      "text": "Eval Quality is N/A because no eval result reviews exist in the PR — no reviews match the eval result detection criteria, so Eval Quality does not affect the Test Quality combination",
+      "passed": true,
+      "evidence": "report.md line 13 shows: '| Test Quality | PASS | All test functions have doc comments; no repetitive test functions detected; Eval Quality: N/A |'. Lines 102-104 state: '**Eval Quality -- N/A** No eval result reviews found on this PR.' The Test Quality verdict is PASS without being affected by Eval Quality, which is N/A."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

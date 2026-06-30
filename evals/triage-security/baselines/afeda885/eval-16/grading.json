@@ -1,0 +1,45 @@
+{
+  "assertion_results": [
+    {
+      "text": "The third JQL query uses labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA) to find triaged CVEs still in a pre-QA state",
+      "passed": true,
+      "evidence": "In discovery-listing.md line 56, the third JQL query is: \"project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, 'ON_QA') ORDER BY created DESC\". This matches the required labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA) conditions."
+    },
+    {
+      "text": "For each query 3 result, the skill checks issuelinks for linked Tasks with link type Depend and fetches each linked Task's status",
+      "passed": true,
+      "evidence": "In ready-for-qa.md, the filtering criteria (lines 17-21) explicitly state: '1. Check issuelinks for links where type.name is \"Depend\"' and '2. For each linked Task, fetch and check its current status'. Each of the 3 candidates (TC-9020, TC-9023, TC-9026) has a dedicated analysis section showing linked Tasks with type Depend, their statuses, and completion assessment. TC-9020 shows TC-9021 (Done) and TC-9022 (Closed); TC-9023 shows TC-9024 (Done) and TC-9025 (In Progress); TC-9026 shows None."
+    },
+    {
+      "text": "TC-9020 is included in Ready for QA because ALL linked remediation Tasks are completed (TC-9021 Done, TC-9022 Closed)",
+      "passed": true,
+      "evidence": "In ready-for-qa.md lines 35-44, TC-9020 analysis shows TC-9021 (Done) and TC-9022 (Closed) with assessment 'ALL linked remediation Tasks are completed (Done or Closed)' and result 'INCLUDED in Ready for QA'. In discovery-listing.md line 63, TC-9020 appears in the Ready for QA table with 'Remediation Tasks' column showing 'TC-9021 (Done), TC-9022 (Closed)'."
+    },
+    {
+      "text": "TC-9023 is excluded from Ready for QA because TC-9025 is still In Progress — remediation is not complete",
+      "passed": true,
+      "evidence": "In ready-for-qa.md lines 55-66, TC-9023 analysis shows TC-9025 with status 'In Progress' and result 'EXCLUDED — remediation is still in progress'. Reason states 'TC-9025 remains In Progress, meaning the remediation work is not yet finished.' In discovery-listing.md line 69: 'TC-9023 — Excluded: TC-9025 is still In Progress. Remediation is not yet complete.'"
+    },
+    {
+      "text": "TC-9026 is excluded from Ready for QA because it has no linked Tasks with type Depend — no remediation to verify",
+      "passed": true,
+      "evidence": "In ready-for-qa.md lines 72-82, TC-9026 analysis shows 'Linked remediation Tasks (Depend): None' with result 'EXCLUDED — no remediation to verify' and reason 'This issue has no linked remediation Tasks with the \"Depend\" link type. Without remediation Tasks to verify, there is nothing to move to QA.' In discovery-listing.md line 70: 'TC-9026 — Excluded: No linked Tasks with type \"Depend\". No remediation to verify.'"
+    },
+    {
+      "text": "The Ready for QA section includes a Remediation Tasks column showing the linked tasks and their statuses",
+      "passed": true,
+      "evidence": "In discovery-listing.md lines 61-63, the Ready for QA table includes a 'Remediation Tasks' column. For TC-9020, it shows 'TC-9021 (Done), TC-9022 (Closed)'. The ready-for-qa.md summary table (lines 88-92) also shows linked tasks and statuses in the 'Depend Links' column."
+    },
+    {
+      "text": "For each Ready for QA issue, the output suggests transitioning to ON_QA",
+      "passed": true,
+      "evidence": "In discovery-listing.md line 65: 'Recommendation: Consider transitioning TC-9020 to ON_QA. All linked remediation tasks have been completed.' In ready-for-qa.md line 45: 'Recommendation: Consider transitioning TC-9020 to ON_QA.' And in the action items at line 98: 'TC-9020: Transition to ON_QA. All remediation is complete.' TC-9020 is the only issue that qualified for Ready for QA, and transitioning to ON_QA is suggested for it."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 0,
+    "total": 7,
+    "pass_rate": 1.0
+  }
+}
