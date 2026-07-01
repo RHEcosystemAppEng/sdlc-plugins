@@ -1,0 +1,85 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan determines feature-branch workflow mode (not direct-to-main) based on the atomicity constraints in the feature description",
+      "passed": true,
+      "evidence": "impact-map.md contains '## Workflow Mode' section with 'Selected mode: `feature-branch`' and a detailed rationale citing three atomicity indicators: coordinated schema migration, breaking API changes, and cross-cutting refactor. It directly references the feature's non-functional requirement: 'All changes must land together.'"
+    },
+    {
+      "text": "A bookend task with Bookend Type create-branch is generated as the first task in the plan",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md is the first task file and contains '## Bookend Type' with value 'create-branch'. Its description says 'Create and push the feature branch `TC-9005` from the latest `main`'."
+    },
+    {
+      "text": "A bookend task with Bookend Type merge-branch is generated as the last task in the plan",
+      "passed": true,
+      "evidence": "task-8-merge-feature-branch.md is the last task file (task 8 of 8) and contains '## Bookend Type' with value 'merge-branch'. Its description says 'Create a PR to merge feature branch `TC-9005` into `main`'."
+    },
+    {
+      "text": "All intermediate tasks (between the create-branch and merge-branch bookend tasks) have Target Branch set to TC-9005",
+      "passed": true,
+      "evidence": "Tasks 2-7 are the intermediate tasks. Each has '## Target Branch' set to 'TC-9005': task-2-create-enum-migration.md (line 5), task-3-update-seaorm-entities.md (line 5), task-4-update-advisory-service-and-models.md (line 5), task-5-update-advisory-endpoints.md (line 5), task-6-update-ingestion-pipeline.md (line 5), task-7-update-integration-tests.md (line 5)."
+    },
+    {
+      "text": "The create-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md has '## Target Branch' with value 'main' (line 5)."
+    },
+    {
+      "text": "The merge-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-8-merge-feature-branch.md has '## Target Branch' with value 'main' (line 5)."
+    },
+    {
+      "text": "All intermediate tasks list the create-branch bookend task as a dependency",
+      "passed": true,
+      "evidence": "All intermediate tasks (2-7) list 'Depends on: Task 1' in their Dependencies section. Task 2: 'Depends on: Task 1 — Create feature branch TC-9005 from main'. Task 3: includes Task 1. Task 4: includes Task 1. Task 5: includes Task 1. Task 6: includes Task 1. Task 7: includes Task 1."
+    },
+    {
+      "text": "The merge-branch bookend task lists all intermediate tasks as dependencies",
+      "passed": true,
+      "evidence": "task-8-merge-feature-branch.md lists all six intermediate tasks as dependencies: 'Depends on: Task 2 — Create enum migration', 'Depends on: Task 3 — Update SeaORM entity definitions', 'Depends on: Task 4 — Update advisory service and models', 'Depends on: Task 5 — Update advisory endpoints', 'Depends on: Task 6 — Update ingestion pipeline', 'Depends on: Task 7 — Update integration tests'."
+    },
+    {
+      "text": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "passed": false,
+      "evidence": "Task 1 (task-1-create-feature-branch.md) is missing 'Files to Modify', 'Files to Create', and 'Implementation Notes' sections — it only has Repository, Target Branch, Bookend Type, Description, Acceptance Criteria, Test Requirements, Dependencies. Task 8 (task-8-merge-feature-branch.md) is similarly missing these sections. While these are bookend tasks, the assertion requires ALL task files to contain these sections."
+    },
+    {
+      "text": "The plan includes a workflow:feature-branch label decision to be applied to the feature issue",
+      "passed": false,
+      "evidence": "No output file contains the text 'workflow:feature-branch' or any mention of a label decision to be applied to the feature issue. The impact-map.md discusses workflow mode selection but does not mention applying a 'workflow:feature-branch' label. Grep across all output files for 'label' and 'workflow' found no relevant matches."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": false,
+      "evidence": "No output file contains any SHA-256 digest, 'sha256-md:', 'sha256-adf:', or '[sdlc-workflow] Description digest' marker. Grep across all output files for 'sha256' and 'digest' returned zero matches."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "No output file contains the text 'Applies:', 'convention-applicability', or any structured convention rationale. While tasks reference project conventions in free-form prose (e.g., 'Follow the existing migration pattern' in task 2, 'per project conventions' in task 5), there is no formal convention-aware enrichment with applicability validation or prescribed-format rationale."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), every created task's additional_fields includes 'priority' with the inherited priority name. When the Feature's priority is 'Undefined', the priority key is omitted entirely from additional_fields (not set to null or 'Undefined')",
+      "passed": false,
+      "evidence": "The feature issue has Priority: High. However, no output file contains the text 'additional_fields', 'priority', or 'High'. No task file includes any field inheritance or propagation metadata."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), every created task's additional_fields includes 'fixVersions' with the inherited version(s). When fixVersion scope is 'feature' or the Feature has no fixVersions, the fixVersions key is omitted entirely from additional_fields",
+      "passed": false,
+      "evidence": "The feature issue has Fix Versions: RHTPA 2.0.0 and there is no fixVersion scope config in CLAUDE.md (defaulting to 'both'). However, no output file contains the text 'additional_fields', 'fixVersions', or 'RHTPA'. No task file includes any field inheritance metadata."
+    },
+    {
+      "text": "The summary comment on the feature issue (Step 6c) includes the inherited priority and fixVersion values that were propagated to tasks, or states they were omitted and why",
+      "passed": false,
+      "evidence": "No output file contains a summary comment referencing inherited priority or fixVersion values. No file mentions 'propagated', 'inherited', 'RHTPA', 'High' (as priority), or any statement about omission of these fields."
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 7,
+    "total": 15,
+    "pass_rate": 0.53
+  }
+}
