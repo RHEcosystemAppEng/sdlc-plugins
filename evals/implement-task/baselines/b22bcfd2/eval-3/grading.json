@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md lines 31-32: 'Reuse `apply_filter` from `common/src/db/query.rs`: Call `apply_filter` to handle the comma-separated multi-value parsing and SQL `IN` clause generation... Do NOT write custom parsing logic for comma-separated values -- `apply_filter` provides this exact capability.' Also reuse-analysis.md Reuse Candidate 1 (lines 7-11) explains apply_filter is called directly for filter parsing and SQL generation with no custom parsing code."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md line 15: 'Following the pattern in `modules/fundamental/src/advisory/endpoints/list.rs`, add an optional `license: Option<String>` field to the existing query parameter struct.' reuse-analysis.md lines 14-29 detail the advisory list endpoint as Reuse Candidate 2, explaining the Query struct pattern, Axum extraction, forwarding to service, and conditional application -- all mirrored for the license filter."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md line 33: 'JOIN through `entity/src/package_license.rs`: Use the `package_license` SeaORM entity to construct the JOIN between the `package` table and the `package_license` table... Build the join using SeaORM's relation/join API with the entity, rather than writing raw SQL joins.' reuse-analysis.md lines 32-44 (Reuse Candidate 3) confirm: 'No new entity definitions, raw SQL joins, or manual table/column references are needed.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md covers three candidates with dedicated sections: (1) 'Reuse Candidate 1: common/src/db/query.rs::apply_filter' (lines 3-12), (2) 'Reuse Candidate 2: modules/fundamental/src/advisory/endpoints/list.rs' (lines 14-29), (3) 'Reuse Candidate 3: entity/src/package_license.rs' (lines 31-44). Each section includes 'What it provides', 'How it is reused', and for candidate 1 also 'Why no new utility is needed'. Summary table on lines 50-54 confirms all three."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md explicitly lists Files to Modify: (1) modules/fundamental/src/package/endpoints/list.rs, (2) modules/fundamental/src/package/service/mod.rs. Files to Create: (1) tests/api/package_license_filter.rs. The plan's Scope Boundaries section (line 85) states: 'Only the files listed in Files to Modify and Files to Create are touched. No changes to response types, database schema, migrations, or other endpoints. No changes to entity/src/package_license.rs -- it is read/used, not modified.' Other referenced files (common/src/db/query.rs, entity/src/package_license.rs, common/src/error.rs) are explicitly used as read-only references, not modified."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Code Reuse Strategy section (lines 67-69): 'The implementation deliberately avoids creating any new utility functions for query parameter parsing or filter application. All filtering logic is composed from existing infrastructure.' Line 69: 'No wrapper, no duplication.' Scope Boundaries (line 86): 'No new utility functions that duplicate `apply_filter` functionality.' reuse-analysis.md line 11: 'Writing a new helper function or inline parsing logic would duplicate this existing functionality. The implementation calls `apply_filter` directly, with no wrapper layer.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

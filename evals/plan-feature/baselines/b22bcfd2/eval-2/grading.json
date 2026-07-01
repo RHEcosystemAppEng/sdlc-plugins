@@ -1,0 +1,80 @@
+{
+  "assertion_results": [
+    {
+      "text": "Impact map or task descriptions explicitly flag at least 3 ambiguities from the feature description",
+      "passed": true,
+      "evidence": "The impact-map.md file contains an 'Ambiguities Identified' section that explicitly flags 5 ambiguities: (1) 'Search should be faster' lacks measurable targets, (2) 'Results should be more relevant' has no relevance criteria, (3) 'Add filters' does not specify which filters, (4) 'Should be fast enough' has no measurable threshold, (5) 'Don't break existing functionality' lacks scope definition. This exceeds the minimum of 3."
+    },
+    {
+      "text": "Plan acknowledges that 'Better UI' (non-MVP) cannot be planned without design mockups or frontend repository and excludes it from scope",
+      "passed": true,
+      "evidence": "The impact-map.md contains a 'Scope Exclusion' section stating: '\"Better UI\" (non-MVP) is excluded from this plan. This requirement cannot be planned without: Design mockups or Figma specifications defining \"better\", A frontend repository (e.g., trustify-ui) — the only repository in scope is trustify-backend, UX requirements specifying what visual or interaction improvements are expected.' No task implements the Better UI requirement."
+    },
+    {
+      "text": "Tasks still follow the task-description-template.md format despite ambiguous requirements",
+      "passed": true,
+      "evidence": "All 4 task files (task-1 through task-4) contain the required template sections: Repository, Target Branch, Description, Files to Modify (and/or Files to Create), Implementation Notes, Acceptance Criteria, Test Requirements. Optional sections (API Changes, Reuse Candidates, Verification Commands, Dependencies) are included where applicable and omitted where not."
+    },
+    {
+      "text": "Tasks document assumptions where they fill in missing details, labeled as assumptions pending clarification",
+      "passed": true,
+      "evidence": "All 4 tasks contain assumptions labeled 'Assumption pending clarification' or 'assumption pending clarification': Task 1 Description: 'Assumption pending clarification: we target sub-500ms p95 response time'; Task 2 Description: 'Assumption pending clarification: relevance means ordering results by PostgreSQL ts_rank score'; Task 2 Acceptance Criteria: 'Assumption pending clarification: relevance scoring uses ts_rank'; Task 3 Description: 'Assumption pending clarification: MVP filters include entity_type, date range, and severity'; Task 3 Acceptance Criteria: 'Assumption pending clarification: the chosen filter set covers MVP needs'; Task 4 Acceptance Criteria: 'Assumption pending clarification: test performance thresholds are based on assumed targets'."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "All 4 task files contain '## Repository\\ntrustify-backend' as their first section, each naming exactly one repository."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "All 4 task files contain: '## Target Branch' (set to 'main'), '## Description' (with detailed content), '## Acceptance Criteria' (with checkbox items), and '## Test Requirements' (with checkbox items)."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "Files to Modify paths across all tasks reference paths from repo-backend.md: migration/src/lib.rs (line 7 in manifest), modules/search/src/service/mod.rs (line 91), modules/search/src/endpoints/mod.rs (line 93), common/src/db/query.rs (line 27), common/src/model/paginated.rs (line 31), tests/api/search.rs (line 113). Files to Create: migration/src/m0002_search_gin_index/mod.rs follows the established pattern of migration/src/m0001_initial/mod.rs from the manifest (line 20-21), creating a new migration in the same directory structure."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Task 1 Implementation Notes reference: migration/src/m0001_initial/mod.rs (pattern), modules/search/src/service/mod.rs (specific refactoring), common/src/db/query.rs (specific helper). Task 2 references: modules/search/src/service/mod.rs (ts_rank), modules/search/src/endpoints/mod.rs (handler pattern), common/src/model/paginated.rs (PaginatedResults). Task 3 references: modules/search/src/endpoints/mod.rs, modules/fundamental/src/sbom/endpoints/list.rs (pattern to follow), modules/fundamental/src/advisory/model/summary.rs (AdvisorySummary severity field), common/src/db/query.rs. Task 4 references: tests/api/search.rs, tests/api/sbom.rs, tests/api/advisory.rs (existing test patterns), assert_eq!(resp.status(), StatusCode::OK) pattern, PaginatedResults<T> format."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "All 4 task files contain '## Target Branch\\nmain': task-1 line 5, task-2 line 5, task-3 line 5, task-4 line 5."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": false,
+      "evidence": "All 4 task files contain a Description Digest section but use placeholder text: 'sha256-md:<computed-at-creation-time>' instead of an actual 64 lowercase hex character hash. The impact map also shows an example with 'sha256-md:a1b2c3d4e5f6...' which is abbreviated, not a full 64-char hex string. The assertion requires exactly 64 lowercase hex characters, not a placeholder or abbreviated value. Since there is no actual Jira API to re-fetch from and no scripts/sha256-digest.py execution, actual digests could not be computed."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "All 4 tasks include convention-aware enrichment with proper rationale format. Task 1: 'Applies: task creates migration/src/m0002_search_gin_index/mod.rs matching the convention's .rs migration file scope' and 'Applies: task modifies common/src/db/query.rs matching the convention's .rs file scope'. Task 2: 'Applies: task modifies common/src/model/paginated.rs matching the convention's .rs file scope' and 'Applies: task modifies modules/search/src/service/mod.rs and modules/search/src/endpoints/mod.rs matching the convention's .rs module structure scope'. Task 3: 'Applies: task modifies common/src/db/query.rs matching the convention's .rs file scope' and 'Applies: task modifies modules/search/src/endpoints/mod.rs matching the convention's .rs endpoint file scope'. Task 4: 'Applies: task modifies tests/api/search.rs matching the convention's .rs test file scope'. No inapplicable conventions are listed."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), every created task's additional_fields includes 'priority' with the inherited priority name. When the Feature's priority is 'Undefined', the priority key is omitted entirely from additional_fields (not set to null or 'Undefined')",
+      "passed": true,
+      "evidence": "Feature TC-9002 has Priority: Normal (not 'Undefined'). All 4 task files contain an '## Additional Fields' section with 'priority: Normal': task-1 line 50, task-2 line 47, task-3 line 60, task-4 line 49."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), every created task's additional_fields includes 'fixVersions' with the inherited version(s). When fixVersion scope is 'feature' or the Feature has no fixVersions, the fixVersions key is omitted entirely from additional_fields",
+      "passed": true,
+      "evidence": "Feature TC-9002 has Fix Versions: RHTPA 1.6.0 (non-empty). CLAUDE.md does not contain a '### Jira Field Defaults' section, so fixVersion scope defaults to 'both', meaning fixVersions should be propagated to tasks. All 4 task files contain 'fixVersions: RHTPA 1.6.0' in their Additional Fields section: task-1 line 51, task-2 line 48, task-3 line 61, task-4 line 50."
+    },
+    {
+      "text": "The summary comment on the feature issue (Step 6c) includes the inherited priority and fixVersion values that were propagated to tasks, or states they were omitted and why",
+      "passed": true,
+      "evidence": "The impact-map.md contains a 'Summary Comment (Step 6c)' section with a formatted summary comment that explicitly states: 'Inherited fields propagated to all tasks: Priority: Normal (inherited from feature), Fix Versions: RHTPA 1.6.0 (inherited from feature)'. This documents both the priority and fixVersion values that were propagated."
+    }
+  ],
+  "summary": {
+    "passed": 13,
+    "failed": 1,
+    "total": 14,
+    "pass_rate": 0.929
+  }
+}

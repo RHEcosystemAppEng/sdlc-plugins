@@ -1,0 +1,53 @@
+{
+  "eval_id": 1,
+  "assertions": [
+    {
+      "assertion": "Bug parsing correctly extracts all four required sections (Description, Steps to Reproduce, Expected Result, Actual Result) using the heading formats from bug-template-mock.md (Step 1)",
+      "pass": true,
+      "evidence": "bug-parsing.md extracts all four required sections with correct heading formats: '### **Issue Description**', '### **Steps to Reproduce**', '### **Expected Result**', '### **Actual Result**'. Each section's content is correctly extracted from the bug issue."
+    },
+    {
+      "assertion": "Bug validation confirms the issue type ID (10020) matches the Bug issue type ID from Bug Configuration (Step 1)",
+      "pass": true,
+      "evidence": "bug-parsing.md states: 'The issue's issuetype.id is 10020. The Bug Configuration in CLAUDE.md specifies Bug issue type ID: 10020. These match — the issue is confirmed as a Bug.'"
+    },
+    {
+      "assertion": "Investigation identifies the trailing-whitespace heading extraction as the root cause — line[3:] does not strip whitespace (Steps 2-3)",
+      "pass": true,
+      "evidence": "investigation.md identifies that line[3:] does not strip trailing whitespace. States: 'The extraction line[3:] takes the substring starting at index 3 to the end of the line. This does not strip trailing whitespace.' and 'section_name becomes \"Migration Patterns  \" (with two trailing spaces).'"
+    },
+    {
+      "assertion": "Root cause comment includes: what is broken (heading extraction does not strip trailing whitespace), where it is broken (plan-feature convention lookup), and how to verify the fix (reproducer test with whitespace in heading) (Step 4)",
+      "pass": true,
+      "evidence": "root-cause.md includes all three elements: (1) what — 'extracts CONVENTIONS.md headings using line[3:], which does not strip trailing whitespace', (2) where — 'plan-feature skill's convention conformance analysis', (3) how to verify — 'Create a test with a CONVENTIONS.md fixture that includes trailing whitespace on a heading line'."
+    },
+    {
+      "assertion": "Task description has reproducer test as the FIRST acceptance criterion — before any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "pass": true,
+      "evidence": "task-description.md Acceptance Criteria: first criterion is 'Reproducer test: add a test with a CONVENTIONS.md fixture containing trailing whitespace on a heading line', followed by 'Fix heading extraction' and 'No regression in existing tests'."
+    },
+    {
+      "assertion": "Task description has reproducer test as the FIRST test requirement — with explicit assertion guidance derived from the Steps to Reproduce (Step 5 Test Requirements ordering)",
+      "pass": true,
+      "evidence": "task-description.md Test Requirements: first requirement is 'Reproducer test for trailing-whitespace heading extraction' with explicit assertion guidance including 'assert that the convention name \"Migration Patterns\" is found in the extracted conventions dictionary AND that the generated task's Implementation Notes contain Per CONVENTIONS.md'."
+    },
+    {
+      "assertion": "Task description includes a Bug Context section with Bug key (ACME-500), Steps to Reproduce, Expected/Actual Result, and Root Cause summary (Step 5 Bug Context extension)",
+      "pass": true,
+      "evidence": "task-description.md includes a '## Bug Context' section with Bug key [ACME-500](url), Steps to Reproduce, Expected Result, Actual Result, and Root Cause summary — all fields present and correctly populated."
+    },
+    {
+      "assertion": "Task description sets Target Branch to main (Step 5 Target Branch)",
+      "pass": true,
+      "evidence": "task-description.md contains '## Target Branch' set to 'main'."
+    },
+    {
+      "assertion": "Task description output includes ai-generated-jira in the Jira API metadata block showing it would be passed as a label to jira.create_issue (Step 5 Task creation)",
+      "pass": true,
+      "evidence": "task-description.md begins with a Jira API Metadata block showing Labels: [\"ai-generated-jira\"] and the jira.create_issue call includes labels=[\"ai-generated-jira\"]."
+    }
+  ],
+  "pass_rate": 1.0,
+  "pass_count": 9,
+  "total_count": 9
+}

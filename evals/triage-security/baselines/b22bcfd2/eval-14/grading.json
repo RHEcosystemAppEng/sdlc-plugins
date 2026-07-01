@@ -1,0 +1,37 @@
+{
+  "eval_id": 14,
+  "assertion_results": [
+    {
+      "assertion": "Dependency chain output includes both the rpms.lock.yaml classification AND the SBOM verification result for the affected versions (Step 2.3.5 Optional SBOM verification)",
+      "pass": true,
+      "evidence": "version-impact.md lines 56-61 present a combined table with columns for rpms.lock.yaml classification, Final Image SBOM, Base Image SBOM, and SBOM Classification for each affected version (2.2.0-2.2.2). sbom-verification.md lines 27-31 provide an expanded side-by-side table with both signals and an Agreement column."
+    },
+    {
+      "assertion": "SBOM verification uses cosign download sbom to compare the final container image SBOM against the base image SBOM (Step 2.3.5 sub-steps 2 and 4)",
+      "pass": true,
+      "evidence": "sbom-verification.md lines 20-23 explicitly describe the procedure: step 1 'Downloaded the final container image SBOM using cosign download sbom <image-reference>@<image-digest>', step 3 'Downloaded the base image SBOM using cosign download sbom <base-image-reference>', step 4 'Checked whether openssl-libs appears in both SBOMs'."
+    },
+    {
+      "assertion": "When SBOM classification (base image) disagrees with rpms.lock.yaml classification (explicit install), the discrepancy is flagged to the engineer with a warning (Step 2.3.5 sub-step 5 disagreement handling)",
+      "pass": true,
+      "evidence": "version-impact.md lines 65-69 contain a WARNING block: 'WARNING -- SBOM classification disagrees with rpms.lock.yaml: rpms.lock.yaml says explicit install... but SBOM comparison says base image... Investigate manually.' sbom-verification.md line 48 repeats: 'WARNING -- SBOM classification disagrees with rpms.lock.yaml'. Both files flag the discrepancy for manual investigation."
+    },
+    {
+      "assertion": "The rpms.lock.yaml classification remains the primary signal -- the SBOM result supplements but does not override it (Step 2.3.5 non-MVP enhancement)",
+      "pass": true,
+      "evidence": "version-impact.md line 71: 'The rpms.lock.yaml classification remains the **primary signal** -- the SBOM result supplements but does not override it.' sbom-verification.md line 57: 'the **rpms.lock.yaml classification remains the primary signal**. The SBOM result supplements but does not override the lock file classification.'"
+    },
+    {
+      "assertion": "The SBOM verification result is presented alongside the rpms.lock.yaml result in the dependency chain output, not as a separate section (Step 2.3.5 sub-step 6)",
+      "pass": true,
+      "evidence": "version-impact.md lines 56-61 present both signals in a single integrated table within the 'Dependency Chain Context' section (section 2.3.5). The table has columns for rpms.lock.yaml, Final Image SBOM, Base Image SBOM, and SBOM Classification in one row per version. The SBOM results are not in a separate section but are co-located with the rpms.lock.yaml classification."
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "score": "5/5",
+    "pass_rate": 1.0
+  }
+}

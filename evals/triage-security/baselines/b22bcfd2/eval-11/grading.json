@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "assertion": "Step 4.4 searches for preemptive tasks using JQL with labels 'security-preemptive' and 'CVE-2026-55123' (\u00a71.60)",
+      "pass": true,
+      "evidence": "reconciliation.md lines 13-14: JQL query 'project = TC AND issuetype = Task AND labels = 'security-preemptive' AND labels = 'CVE-2026-55123' ORDER BY created DESC' explicitly uses both required labels."
+    },
+    {
+      "assertion": "Step 4.4 filters results to match the current stream (rhtpa-2.1) by checking the task summary for the stream name",
+      "pass": true,
+      "evidence": "reconciliation.md lines 26-27: 'The preemptive task TC-8022\u2019s summary contains (rhtpa-2.1), which matches the current issue TC-8021\u2019s stream scope (rhtpa-2.1). This confirms the task was created for the same stream.'"
+    },
+    {
+      "assertion": "Step 4.4 links the new CVE Jira TC-8021 to the preemptive task TC-8022 with 'Depend' link type (standard remediation linkage)",
+      "pass": true,
+      "evidence": "reconciliation.md lines 43-53: Action 1 proposes jira.create_link(inwardIssue: 'TC-8021', outwardIssue: 'TC-8022', type: 'Depend'). Also confirmed in triage-outcome.md line 41: 'Link TC-8021 to TC-8022 with Depend'."
+    },
+    {
+      "assertion": "Step 4.4 removes the 'security-preemptive' label from TC-8022 \u2014 the task is now a standard remediation task linked to a proper CVE Jira",
+      "pass": true,
+      "evidence": "reconciliation.md lines 57-68: Action 2 proposes removing 'security-preemptive' label via jira.edit_issue('TC-8022', fields={labels: ['ai-generated-jira', 'Security', 'CVE-2026-55123']}). The final state table (lines 92-96) shows the label removed in the 'After Reconciliation' column."
+    },
+    {
+      "assertion": "Step 8 skips remediation task creation for this stream because Step 4.4 reconciliation already linked an existing task",
+      "pass": true,
+      "evidence": "reconciliation.md lines 86-88: 'Step 8 will skip remediation task creation for this stream. No new upstream backport task or downstream propagation subtask needs to be created.' triage-outcome.md line 23: Step 8 shows 'Skipped -- preemptive task already covers this stream'. triage-outcome.md lines 59-61: 'no new remediation tasks are created -- no upstream backport task and no downstream propagation subtask.'"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": 1.0
+  }
+}

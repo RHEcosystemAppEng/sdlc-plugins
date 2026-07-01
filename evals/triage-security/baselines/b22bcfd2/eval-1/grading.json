@@ -1,0 +1,61 @@
+{
+  "assertion_results": [
+    {
+      "assertion": "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+      "result": "PASS",
+      "evidence": "data-extraction.md lines 7-13: CVE ID = CVE-2026-31812, Vulnerable library = quinn-proto, Affected version range = '< 0.11.14', Fixed version = 0.11.14. All four values correctly extracted."
+    },
+    {
+      "assertion": "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+      "result": "PASS",
+      "evidence": "data-extraction.md lines 32-44: 'quinn-proto is a Rust crate, which maps to the **Cargo** ecosystem. Cargo is listed in the Ecosystem Mappings table, so automated triage can proceed.' Ecosystem explicitly identified as Cargo."
+    },
+    {
+      "assertion": "Version impact table includes ALL versions from the security-matrix.md supportability matrix \u2014 no versions are skipped (Important Rule 4)",
+      "result": "PASS",
+      "evidence": "version-impact.md version impact table includes all 7 versions: 2.1.0, 2.1.1 (stream 2.1.x) and 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4 (stream 2.2.x). No versions skipped."
+    },
+    {
+      "assertion": "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+      "result": "PASS",
+      "evidence": "version-impact.md line 31: 'All dependency versions are extracted from lock files at the **pinned commit tags** from the supportability matrix (Important Rule 13), not from branch HEAD.' Table column 'Pinned Tag' shows v0.3.8, v0.3.12, v0.4.5, v0.4.8, v0.4.11, v0.4.12."
+    },
+    {
+      "assertion": "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+      "result": "PASS",
+      "evidence": "version-impact.md line 40: '2.2.2 | 2.2.x | v0.4.8 | -- | **YES** | retag of 2.2.1 (same backend tag v0.4.8); same as 2.2.1'. Line 48: 'Version 2.2.2 is a retag of 2.2.1 (identical backend tag v0.4.8). Lock file check was skipped; affected status carried forward from 2.2.1 per Important Rule 5.'"
+    },
+    {
+      "assertion": "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+      "result": "PASS",
+      "evidence": "affects-versions.md lines 37-39: 'Current Affects Versions: [RHTPA 2.0.0]' / 'Proposed Affects Versions: [RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]'. Clear diff from PSIRT-assigned to lock-file-verified values with evidence per version."
+    },
+    {
+      "assertion": "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+      "result": "PASS",
+      "evidence": "affects-versions.md uses version names (RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2) throughout. Line 26: 'Version names are referenced from the supportability matrix. Jira version IDs would be discovered dynamically at runtime via getJiraIssueTypeMetaWithFields (Important Rule 6).' Proposed mutation uses '<dynamically-discovered-id-for-RHTPA-2.2.0>' placeholders, not hardcoded IDs."
+    },
+    {
+      "assertion": "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+      "result": "PASS",
+      "evidence": "remediation.md Task 1: Repository = rhtpa-backend, Target Branch = release/0.4.z, Acceptance Criteria section present. Task 2: Repository = rhtpa-release.0.4.z, Target Branch = main, Acceptance Criteria section present. Linkage summary shows Depend links to TC-8001 and Blocks link between upstream and downstream tasks."
+    },
+    {
+      "assertion": "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+      "result": "PASS",
+      "evidence": "remediation.md lines 12-16: 'Since quinn-proto is a Cargo ecosystem dependency (source dependency), two tasks are created per Important Rule 8: 1. Upstream backport task 2. Downstream propagation subtask'. Lines 197-203 show Blocks link: 'inwardIssue: <upstream-task-key>, outwardIssue: <downstream-task-key>, type: Blocks'."
+    },
+    {
+      "assertion": "The analysis presents triage recommendations as proposed actions \u2014 framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
+      "result": "PASS",
+      "evidence": "affects-versions.md line 45: 'Proposed Jira Mutation (requires engineer confirmation)'. remediation.md line 23: 'Proposed Jira Issue Creation'. Line 276: 'All actions above are **proposed** and require explicit engineer confirmation before execution. No Jira mutations are performed without approval (Guardrails).' All mutations consistently framed as proposals."
+    }
+  ],
+  "summary": {
+    "total": 10,
+    "passed": 10,
+    "failed": 0,
+    "score": "10/10",
+    "pass_rate": 1.0
+  }
+}

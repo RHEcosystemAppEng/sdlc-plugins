@@ -1,0 +1,36 @@
+{
+  "assertion_results": [
+    {
+      "assertion": "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
+      "pass": true,
+      "evidence": "version-impact.md Version Impact Table: 2.1.0 and 2.1.1 marked **YES** (h2 0.4.5 < 0.4.8), all 2.2.x versions (2.2.0-2.2.4) marked NO (h2 >= 0.4.8). Lock file evidence present via simulated 'git show <tag>:Cargo.lock' extraction at pinned commits. Summary explicitly states 'mixed impact result'."
+    },
+    {
+      "assertion": "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
+      "pass": true,
+      "evidence": "affects-versions.md line 40-41: 'Proposed Affects Versions: [RHTPA 2.1.0, RHTPA 2.1.1]'. RHTPA 2.2.0 removed (line 46: 'RHTPA 2.2.0 -- removed (not affected: h2 0.4.8 >= 0.4.8, PSIRT incorrectly included this version)'). Only 2.1.x versions retained."
+    },
+    {
+      "assertion": "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 8 Case A scoping)",
+      "pass": true,
+      "evidence": "remediation.md creates two tasks for stream 2.1.x: upstream backport (target branch release/0.3.z) and downstream propagation (rhtpa-release.0.3.z). Lines 169-171 explicitly state: 'Stream 2.2.x is **not affected**... No remediation tasks are created for this stream.'"
+    },
+    {
+      "assertion": "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
+      "pass": true,
+      "evidence": "data-extraction.md lines 32-34: 'no stream suffix... treated as **unscoped** -- it covers all configured version streams.' Both streams 2.1.x and 2.2.x listed. version-impact.md includes all 7 versions across both streams (2.1.0, 2.1.1, 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4)."
+    },
+    {
+      "assertion": "Cross-stream impact notice is NOT generated because the issue is unscoped \u2014 it covers all streams by definition (Step 8 Case B applies only to scoped issues)",
+      "pass": true,
+      "evidence": "remediation.md lines 13-14: '**Cross-stream impact notice is NOT generated** because this issue is unscoped -- it covers all streams by definition. Case B (cross-stream impact) applies only to scoped issues where other streams outside the issue's scope are also affected.'"
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "score": "5/5",
+    "pass_rate": 1.0
+  }
+}

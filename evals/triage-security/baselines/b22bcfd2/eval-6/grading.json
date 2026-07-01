@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+      "passed": true,
+      "evidence": "discovery-listing.md lines 7-8 state 'Project key: TC (from Jira Configuration)' and 'Vulnerability issue type ID: 10024 (from Security Configuration)'. Line 21 explicitly states: 'The project key TC and vulnerability issue type ID 10024 are read from the project's CLAUDE.md Security Configuration -- not hardcoded.' All three JQL queries use 'project = TC AND issuetype = 10024'."
+    },
+    {
+      "text": "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (§1.48)",
+      "passed": true,
+      "evidence": "discovery-listing.md contains three JQL queries: Query 1 (line 17): 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged) ORDER BY status ASC, created DESC'. Query 2 (line 47): 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status = New ORDER BY created DESC'. Query 3 (line 65): 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, 'ON_QA') ORDER BY created DESC'. All three match the required patterns."
+    },
+    {
+      "text": "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
+      "passed": true,
+      "evidence": "discovery-listing.md has three clearly separated sections with horizontal rule dividers: 'Query 1: Untriaged Issues' (line 12), 'Query 2: Triaged but still New' (line 42), and 'Query 3: Ready for QA' (line 60). Each section contains its own results table."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": true,
+      "evidence": "All issue tables in discovery-listing.md have columns: Issue, Status, CVE ID, Summary, Created. For example, Query 1 table (lines 27-31) shows 'TC-9001 | New | CVE-2026-40112 | h2 - HTTP/2 rapid reset vulnerability [rhtpa-2.2] | 2026-06-08'. Query 2 table (line 54) shows 'TC-9010 | New | CVE-2026-39874 | quinn-proto - Panic on malformed QUIC frame [rhtpa-2.2] | 2026-05-28'. Query 3 Ready for QA table (line 84) shows 'TC-9020 | Modified | CVE-2026-38901 | hyper - HTTP request smuggling [rhtpa-2.2] | 2026-05-15'. All five required fields are present in every listing."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "status-handling.md: TC-9001 (line 11) 'Handling: Proceed with full triage (default path)'; TC-9002 (line 18) 'Handling: Proceed with full triage (default path)'; TC-9004 (line 39) 'Handling: Proceed with full triage (default path)'. TC-9003 (line 25) 'Handling: Warning -- active work detected' with warning text 'This issue is already in In Progress. It may be actively worked on.' and options to proceed or skip. Also in discovery-listing.md line 38: 'Warning: TC-9003 is already in In Progress. It may be actively worked on.'"
+    },
+    {
+      "text": "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)",
+      "passed": true,
+      "evidence": "discovery-listing.md filtering table (lines 74-79): TC-9020 shows 'All Tasks Complete? = Yes, Ready for QA? = Yes'; TC-9023 shows 'No -- TC-9025 still In Progress, Ready for QA? = No (excluded)'; TC-9026 shows 'N/A -- no remediation tasks linked, Ready for QA? = No (excluded)'. Ready for QA section (lines 82-84) lists only TC-9020. Exclusion reasons documented at lines 90-91: TC-9023 excluded because TC-9025 still In Progress; TC-9026 excluded because no linked Tasks with type Depend exist."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
