@@ -174,7 +174,7 @@ to give the engineer remediation context.
 
 The investigation method depends on the ecosystem:
 
-#### Source-level dependencies (Cargo, npm, Go)
+#### Source-level dependencies (Cargo, npm)
 
 Inspect the lock file and manifest files to determine:
 

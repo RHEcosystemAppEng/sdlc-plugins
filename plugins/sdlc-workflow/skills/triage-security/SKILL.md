@@ -371,13 +371,19 @@ assuming a fixed set. Common ecosystems include:
 - **npm** — JavaScript/TypeScript packages (e.g., axios, webpack, react)
 - **RPM** — System packages in container images (e.g., openssl, curl, glibc)
 
+If the detected ecosystem is not listed in the stream's Ecosystem Mappings table (e.g.,
+Go modules), inform the user and stop automated triage for that ecosystem:
+
+> "**Unsupported ecosystem**: Go is not yet supported for automated triage.
+> Manual assessment is required."
+
 The ecosystem determines which lock file to inspect and which parsing command to use.
 Both the lock file path and check command are configured per ecosystem in each stream's
 `security-matrix.md` Ecosystem Mappings table.
 
 ```mermaid
 flowchart TD
-    A["Identify ecosystem\nfrom library + component"] --> B{"Source dependency?\n(Cargo, npm, Go, ...)"}
+    A["Identify ecosystem\nfrom library + component"] --> B{"Source dependency?\n(Cargo, npm, ...)"}
     B -->|Yes| C["Lock file inspection\n(git show commit:lock-file)"]
     B -->|No| D{"RPM / system\npackage?"}
     D -->|Yes| E{"RPM lock file\nconfigured?"}
@@ -557,7 +563,7 @@ flowchart TD
     C -->|Yes| E["Case B: Post cross-stream\nimpact comment"]
     C -->|No| F["Case A: Create\nremediation tasks"]
     E --> F
-    F --> G{"Source dependency?\n(Cargo, npm, Go)"}
+    F --> G{"Source dependency?\n(Cargo, npm)"}
     G -->|Yes| H["2 tasks: upstream\nbackport + downstream\npropagation"]
     G -->|No| I["1 task: Konflux\nrepo fix"]
     D --> J{"VEX Justification\nconfigured?"}
@@ -688,7 +694,7 @@ Read `remediation-templates.md` for the full task description templates, Jira
 issue creation API calls, digest comment procedures, and linkage procedures.
 The key distinction:
 
-- **Source dependency ecosystems** (Cargo, npm, Go modules): create **two** tasks —
+- **Source dependency ecosystems** (Cargo, npm): create **two** tasks —
   an upstream backport task (fix in the source repo) and a downstream propagation
   subtask (update the reference in the Konflux release repo). The downstream subtask
   is blocked by the upstream task.
@@ -749,7 +755,7 @@ MUST include the Comment Footnote (see above).
    This skill only creates remediation Tasks. Cross-stream impact is reported via
    comment on the current issue.
 8. **One remediation Task per affected stream, plus a downstream propagation
-   subtask** when the ecosystem is a source dependency (Cargo, npm, Go modules).
+   subtask** when the ecosystem is a source dependency (Cargo, npm).
    The upstream task covers the source repo fix; the downstream subtask covers
    the Konflux release repo update and is blocked by the upstream task. System
    package ecosystems produce a single task. A single Task spanning multiple
