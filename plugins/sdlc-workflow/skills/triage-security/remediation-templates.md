@@ -6,7 +6,7 @@ These templates define the Jira Task descriptions created during CVE triage
 
 The number of tasks depends on the ecosystem type:
 
-- **Source dependency ecosystems** (Cargo, npm, Go modules): create **two** tasks —
+- **Source dependency ecosystems** (Cargo, npm): create **two** tasks —
   an upstream backport task (fix in the source repo) and a downstream propagation
   subtask (update the reference in the Konflux release repo). The downstream subtask
   is blocked by the upstream task.
