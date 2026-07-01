@@ -37,6 +37,7 @@ Do **not** use for:
 | 0 | Validate Configuration | CLAUDE.md | Project key, Cloud ID, Security Config |
 | 0.3 | Matrix Staleness Check | security-matrix.md timestamps | Staleness warning or proceed |
 | 0.5 | Jira Access | -- | MCP or REST API connection |
+| 0.7 | Assign and Transition to Assigned | Vulnerability issue key | Issue assigned to current user, status Assigned |
 | 1 | Data Extraction | Vulnerability issue key | CVE ID, library, affected range, remote links |
 | 1.5 | External CVE Data Enrichment | CVE ID | Structured version ranges, cross-validated fix thresholds |
 | 1.7 | Embargo Check | Embargo policy URL, CVE severity | Confirmation to proceed (or stop) |
@@ -201,6 +202,46 @@ Follow the JIRA Access protocol in `shared/jira-access-strategy.md`.
 
 **Exception for Bash tool:** When using REST API fallback, this skill may use
 `bash -c "python3 scripts/jira-client.py <command>"` for JIRA operations only.
+
+## Step 0.7 – Assign and Transition to Assigned
+
+Assign the CVE Vulnerability issue to the current user and transition it to
+Assigned status. This provides immediate visibility into who is actively triaging
+the issue and enables Step 7 (Concurrent Triage Detection) to reliably identify
+active work.
+
+1. **Retrieve the current user's Jira account ID:**
+
+   ```
+   jira.user_info()
+   ```
+
+2. **Assign the issue to the current user:**
+
+   ```
+   jira.edit_issue(<jira-issue-id>, assignee=<current-user-account-id>)
+   ```
+
+3. **Discover the target transition dynamically:**
+
+   ```
+   jira.get_transitions(<jira-issue-id>)
+   ```
+
+   Select the transition whose target status name is `"Assigned"`. Do NOT
+   hardcode a transition ID or assume the transition name — Vulnerability issues
+   use a different Jira workflow than Task issues.
+
+4. **Transition to Assigned (if the issue is in New status):**
+
+   ```
+   jira.transition_issue(<jira-issue-id>, <assigned-transition-id>)
+   ```
+
+   If the issue is already in Assigned or any later status (detected via the
+   status-aware handling in the Inputs section), skip the transition silently.
+   The assignment in step 2 still proceeds regardless — it ensures the current
+   user is recorded even when re-triaging an issue that was previously assigned.
 
 ## Inputs
 
@@ -650,7 +691,6 @@ the development stream):
   2. Transition to Closed with resolution "Not a Bug".
   3. If VEX Justification custom field is configured, set it to the appropriate
      value (see VEX Justification below).
-  4. Assign to current user.
 
 ### VEX Justification
 
