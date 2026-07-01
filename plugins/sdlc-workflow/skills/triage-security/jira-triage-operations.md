@@ -227,17 +227,10 @@ entirely.
    If no ProdSec Jira account ID is configured, omit the @mention silently.
 
    - **If a covering remediation exists:**
-     ```
-     Existing remediation task [task-key] (from [related-CVE-ID]) already bumps
-     [library] to [version], which meets or exceeds this CVE's fix threshold
-     ([fix-version]). No new remediation task needed.
 
-     Recommendation: Close this issue — the fix is already covered by [task-key].
-     [ProdSec @mention if configured]
-     ```
-
-     **After engineer confirms closure**, create traceability links and post an
-     explanatory comment before transitioning to Closed:
+     Create traceability links and post an explanatory comment as soon as the
+     overlap is confirmed (these record a factual relationship and must not be
+     deferred to a closure decision):
 
      a. **Create Related link** between the current CVE and the related CVE
         (idempotent — check existing `issuelinks` first, same pattern as
@@ -297,6 +290,16 @@ entirely.
         ```
 
         MUST include the Comment Footnote (see SKILL.md).
+
+     Then present the finding and recommendation to the engineer:
+     ```
+     Existing remediation task [task-key] (from [related-CVE-ID]) already bumps
+     [library] to [version], which meets or exceeds this CVE's fix threshold
+     ([fix-version]). No new remediation task needed.
+
+     Recommendation: Close this issue — the fix is already covered by [task-key].
+     [ProdSec @mention if configured]
+     ```
    - **If related CVEs exist but no covering remediation:**
      ```
      Related CVE Jiras found for [component] in the same stream:
