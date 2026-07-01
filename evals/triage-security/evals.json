@@ -279,6 +279,30 @@
         "The analysis proceeds directly to Case A/B/C branching without a concurrent triage warning",
         "The output does not present wait/skip/proceed options since no conflict exists"
       ]
+    },
+    {
+      "id": 23,
+      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config-deploy-ctx.md. Note that the CLAUDE.md Source Repositories table includes a Deployment Context column with the value 'customer-shipped' for rhtpa-backend. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data table from Step 1 including the deployment context lookup result, and write outputs/remediation.md with the remediation task descriptions including the coordination guidance section.",
+      "expected_output": "A triage analysis where Step 0 extracts the Deployment Context column from the Source Repositories table, Step 1 looks up the deployment context for the affected repository (rhtpa-backend → customer-shipped), and Step 8 remediation task descriptions include a Coordination Guidance subsection with customer-shipped guidance text.",
+      "files": ["files/vuln-issue-standard.md", "files/security-matrix-mock.md", "files/claude-md-security-config-deploy-ctx.md"],
+      "assertions": [
+        "Step 0 extracts the Deployment Context column from the Source Repositories table and parses rhtpa-backend as customer-shipped (§1.77)",
+        "Step 1 looks up the deployment context for the affected repository and records customer-shipped as part of the CVE metadata",
+        "Remediation task descriptions include a Coordination Guidance subsection in Implementation Notes with customer-shipped guidance text",
+        "The customer-shipped guidance mentions coordinating with Product Security for CVE assignment, advisory preparation, and formal disclosure"
+      ]
+    },
+    {
+      "id": 24,
+      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. Note that the CLAUDE.md Source Repositories table does NOT have a Deployment Context column. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data table from Step 1, and write outputs/remediation.md with the remediation task descriptions.",
+      "expected_output": "A triage analysis where Step 0 detects the absence of the Deployment Context column in the Source Repositories table, defaults all repositories to upstream, and Step 8 remediation task descriptions do NOT include a Coordination Guidance subsection (backward compatibility).",
+      "files": ["files/vuln-issue-standard.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 0 detects the absence of the Deployment Context column in the Source Repositories table and defaults all repositories to upstream (§1.78)",
+        "Remediation task descriptions do NOT include a Coordination Guidance subsection — the section is omitted entirely when no Deployment Context column exists",
+        "The triage proceeds normally through all steps without errors from the missing Deployment Context column",
+        "Backward compatibility is maintained — existing eval behavior is unaffected by the absence of the Deployment Context column"
+      ]
     }
   ]
 }

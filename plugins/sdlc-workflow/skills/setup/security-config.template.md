@@ -97,8 +97,13 @@
 
      Example:
        | backend | https://github.com/my-org/backend |
-       | frontend-ui | https://github.com/my-org/frontend-ui | -->
+       | frontend-ui | https://github.com/my-org/frontend-ui |
 
-| Repository | URL |
-|---|---|
-| {{source-repo-name}} | {{source-repo-url}} |
+     Deployment Context (optional, defaults to upstream):
+     - internal: Private repos, internal tools/services. No public disclosure needed.
+     - upstream: Public upstream components. Coordinate with upstream maintainers.
+     - customer-shipped: Products shipped to customers. Full Product Security coordination required. -->
+
+| Repository | URL | Deployment Context |
+|---|---|---|
+| {{source-repo-name}} | {{source-repo-url}} | {{deployment-context}} |

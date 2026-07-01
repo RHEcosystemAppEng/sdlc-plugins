@@ -543,6 +543,9 @@ for CVE analysis. For each repository, collect:
 
 1. **Repository name** — short name (e.g., `backend`, `frontend-ui`)
 2. **URL** — the repository URL
+3. **Deployment context** — one of `internal`, `upstream`, or `customer-shipped`. Default to `upstream` if the user skips.
+
+> "Deployment context for this repository (internal / upstream / customer-shipped)?"
 
 ### Step 10.4 – Scaffold Security Configuration
 

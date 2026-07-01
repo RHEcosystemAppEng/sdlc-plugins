@@ -187,6 +187,24 @@ Remediate CVE-YYYY-XXXXX: update [package-name] to [fixed-version].
 These depend on repository structure that the triage skill does not have context for —
 `implement-task` discovers them via code analysis.
 
+## Coordination Guidance
+
+When the affected repository has a deployment context configured in Security Configuration
+(see Step 0), append a `### Coordination Guidance` subsection to the Implementation Notes
+of each remediation task description. The content varies by deployment context:
+
+- **internal**: "This component is deployed internally. Develop and merge the fix within
+  the repository. No public advisory or upstream coordination required."
+- **upstream**: "This component is public upstream. Coordinate fix with upstream maintainers
+  if the vulnerability is not yet public. Follow your organization's embargo policy before
+  discussing in public channels or PRs."
+- **customer-shipped**: "This component is shipped to customers. Coordinate with Product
+  Security for CVE assignment, advisory preparation, and formal disclosure. Fix must be
+  released via a security advisory with explicit CVE-to-component mapping."
+
+When the Deployment Context column is absent from the Source Repositories table (backward
+compatibility), omit the coordination guidance entirely — do not add the subsection.
+
 ## Jira Issue Creation
 
 After creating each remediation task, post a description digest comment per
