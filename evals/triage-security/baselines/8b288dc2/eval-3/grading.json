@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Duplicate check searches for sibling issues using JQL with the CVE label and excludes the current issue key (Step 4)",
+      "passed": true,
+      "evidence": "duplicate-check.md shows JQL query: `project = TC AND labels = 'CVE-2026-31812' AND issuetype = 10024 AND key != TC-8003`. This searches by CVE label and explicitly excludes the current issue key TC-8003."
+    },
+    {
+      "text": "Duplicate check correctly classifies TC-7999 as a same-stream sibling (both have stream suffix [rhtpa-2.2]) and identifies it as a duplicate (Step 4.1)",
+      "passed": true,
+      "evidence": "duplicate-check.md 'Stream Classification' section states: 'TC-8003 stream suffix: [rhtpa-2.2] -> stream 2.2.x' and 'TC-7999 stream suffix: [rhtpa-2.2] -> stream 2.2.x', with classification 'Same-stream sibling'. Step 4.1 section explicitly identifies TC-7999 as a same-stream duplicate and recommends closing TC-8003."
+    },
+    {
+      "text": "Triage outcome recommends closing TC-8003 as Duplicate with resolution 'Duplicate', referencing TC-7999 as the original (Step 4.1)",
+      "passed": true,
+      "evidence": "triage-outcome.md states 'Decision: Close as Duplicate' and 'TC-8003 (CVE-2026-31812 quinn-proto [rhtpa-2.2]) is a duplicate of TC-7999'. The actions table specifies 'Transition TC-8003 | Closed, resolution: Duplicate'. duplicate-check.md also states 'Recommendation: Close TC-8003 as Duplicate of TC-7999' and proposes 'Transition TC-8003 to Closed with resolution Duplicate'."
+    },
+    {
+      "text": "The close recommendation includes a comment documenting why it is a duplicate — same CVE tracked for the same stream (Step 4.1)",
+      "passed": true,
+      "evidence": "duplicate-check.md includes a proposed comment: 'Duplicate of TC-7999 -- same CVE (CVE-2026-31812) tracked for the same stream [rhtpa-2.2]. TC-7999 is already In Progress with Affects Versions [RHTPA 2.2.0, RHTPA 2.2.1]. Version impact analysis confirms overlap. Closing as duplicate.' triage-outcome.md also includes a post-triage summary comment explaining: 'Both issues track CVE-2026-31812 (quinn-proto, versions before 0.11.14) for the same stream [rhtpa-2.2].' Both clearly document same CVE and same stream as the reason."
+    },
+    {
+      "text": "The analysis does NOT proceed to remediation task creation — duplicate detection short-circuits the triage flow",
+      "passed": true,
+      "evidence": "duplicate-check.md explicitly lists all skipped steps under 'Triage Halted': 'Step 8 (remediation task creation) — skipped (issue is being closed)' and states 'No remediation tasks are created for TC-8003.' triage-outcome.md confirms under 'What Is NOT Done': 'No remediation tasks created — remediation is tracked under TC-7999, not TC-8003.' There are no remediation task files in the outputs directory (only data-extraction.md, duplicate-check.md, triage-outcome.md)."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

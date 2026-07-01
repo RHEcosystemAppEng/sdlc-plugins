@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 detects the absence of the Deployment Context column in the Source Repositories table and defaults all repositories to upstream (§1.78)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 27-30 contain a '## Deployment Context' section that explicitly states: 'The Source Repositories table in CLAUDE.md does not have a Deployment Context column. Per backward compatibility rules, all repositories default to upstream.' It then lists 'rhtpa-backend: upstream (default -- no Deployment Context column present)'. This satisfies §1.78 by detecting the absence and defaulting to upstream."
+    },
+    {
+      "text": "Remediation task descriptions do NOT include a Coordination Guidance subsection — the section is omitted entirely when no Deployment Context column exists",
+      "passed": true,
+      "evidence": "remediation.md contains two remediation tasks (upstream backport and downstream propagation). Neither task's Implementation Notes section includes a '### Coordination Guidance' subsection. Task 1 Implementation Notes (lines 39-44) contain only dependency update instructions. Task 2 Implementation Notes (lines 89-92) contain only source pinning update instructions. The string 'Coordination Guidance' does not appear anywhere in the file."
+    },
+    {
+      "text": "The triage proceeds normally through all steps without errors from the missing Deployment Context column",
+      "passed": true,
+      "evidence": "Both output files are complete and well-structured. data-extraction.md includes: parsed CVE data table (CVE-2026-31812, quinn-proto, < 0.11.14), stream scope resolution, deployment context handling, version impact analysis across all versions, cross-stream impact analysis, and affects versions correction. remediation.md includes: triage outcome (Case A), two properly formed remediation tasks with Repository/Target Branch/Description/Implementation Notes/Acceptance Criteria/Test Requirements/Dependencies sections, Jira linkage steps, and cross-stream impact comment. No error messages, warnings about missing data, or incomplete sections are present."
+    },
+    {
+      "text": "Backward compatibility is maintained — existing eval behavior is unaffected by the absence of the Deployment Context column",
+      "passed": true,
+      "evidence": "The output matches standard triage behavior: correct CVE data extraction (CVE-2026-31812, quinn-proto, affected range < 0.11.14, fixed 0.11.14), ecosystem detection (Cargo), version impact analysis identifying 2.2.0-2.2.2 as affected and 2.2.3-2.2.4 as not affected, affects versions correction from RHTPA 2.0.0 to RHTPA 2.2.0/2.2.1/2.2.2, two-task remediation (upstream backport + downstream propagation with Blocks dependency), and cross-stream impact notice for 2.1.x. The deployment context defaulting is handled gracefully as an additive annotation in data-extraction.md without disrupting any other triage steps or output structure."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

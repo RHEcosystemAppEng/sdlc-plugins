@@ -1,0 +1,90 @@
+{
+  "assertion_results": [
+    {
+      "text": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "passed": true,
+      "evidence": "All 5 task files contain: ## Repository (e.g., 'trustify-backend'), ## Target Branch ('main'), ## Description (multi-sentence descriptions), at least one of ## Files to Modify or ## Files to Create (task-1 has both, task-2 has Files to Modify only, task-3 has both, task-4 has Files to Modify only, task-5 has both), ## Implementation Notes (with specific guidance), ## Acceptance Criteria (with checkbox items), ## Test Requirements (with checkbox items)."
+    },
+    {
+      "text": "Task count is between 3 and 10 inclusive",
+      "passed": true,
+      "evidence": "There are exactly 5 task files in the outputs directory: task-1-add-advisory-severity-summary-model.md, task-2-add-severity-aggregation-service-method.md, task-3-add-advisory-summary-endpoint.md, task-4-add-cache-invalidation-for-advisory-summary.md, task-5-add-advisory-summary-integration-tests.md. 5 is between 3 and 10 inclusive."
+    },
+    {
+      "text": "All tasks reference repository 'trustify-backend'",
+      "passed": true,
+      "evidence": "Every task file has '## Repository' followed by 'trustify-backend': task-1 line 2, task-2 line 2, task-3 line 2, task-4 line 2, task-5 line 2."
+    },
+    {
+      "text": "Task dependencies form a DAG with no circular dependencies",
+      "passed": true,
+      "evidence": "Dependency graph: Task 1 has no dependencies. Task 2 depends on Task 1. Task 3 depends on Task 2. Task 4 depends on Task 3. Task 5 depends on Task 3. This forms a directed acyclic graph (T1 -> T2 -> T3 -> T4, and T3 -> T5). No cycles exist."
+    },
+    {
+      "text": "Every task's Files to Modify and Files to Create reference paths plausible within the repo-backend.md structure",
+      "passed": true,
+      "evidence": "Files to Modify paths that exist in repo-backend.md: modules/fundamental/src/sbom/model/mod.rs (line 41), modules/fundamental/src/sbom/service/sbom.rs (line 47), modules/fundamental/src/sbom/endpoints/mod.rs (line 49), modules/ingestor/src/graph/advisory/mod.rs (line 83), tests/Cargo.toml (line 114). Files to Create are in existing directories: modules/fundamental/src/sbom/model/advisory_summary.rs (model/ dir exists), modules/fundamental/src/sbom/endpoints/advisory_summary.rs (endpoints/ dir exists), tests/api/advisory_summary.rs (tests/api/ dir exists). All paths are plausible."
+    },
+    {
+      "text": "Impact map lists concrete, specific changes (not vague or abstract descriptions)",
+      "passed": true,
+      "evidence": "The impact map lists 7 specific changes: 'Add AdvisorySeveritySummary response model struct with fields: critical, high, medium, low, total', 'Add service method in sbom service to aggregate advisory severity counts for a given SBOM, deduplicating by advisory ID', 'Add GET /api/v2/sbom/{id}/advisory-summary endpoint with 404 handling for missing SBOMs and 5-minute cache via tower-http caching middleware', 'Support optional ?threshold query parameter to filter severity counts above a given level', 'Add cache invalidation hook in the advisory ingestion pipeline', 'Add integration tests for the new advisory-summary endpoint covering: success response, 404 for unknown SBOM, threshold filtering, deduplication, and cache behavior', 'Update API documentation to include the new endpoint'. All are concrete with specific details."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "All 5 tasks have '## Repository' followed by exactly one repository name 'trustify-backend' on a single line. No task lists multiple repositories."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "All 5 task files contain: '## Target Branch' (set to 'main'), '## Description' (with substantive content), '## Acceptance Criteria' (with checkbox items), '## Test Requirements' (with checkbox items). These match the required sections from task-description-template.md."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "All Files to Modify paths exist verbatim in repo-backend.md: modules/fundamental/src/sbom/model/mod.rs, modules/fundamental/src/sbom/service/sbom.rs, modules/fundamental/src/sbom/endpoints/mod.rs, modules/ingestor/src/graph/advisory/mod.rs, tests/Cargo.toml. Files to Create paths (advisory_summary.rs in model/, endpoints/, and tests/api/) are new files in directories that exist in the manifest, which is the expected pattern for new file creation."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Task 1: references 'modules/fundamental/src/sbom/model/summary.rs (SbomSummary)', 'modules/fundamental/src/sbom/model/details.rs (SbomDetails)', 'model/mod.rs'. Task 2: references 'modules/fundamental/src/sbom/service/sbom.rs (SbomService)', 'entity/src/sbom_advisory.rs', 'entity/src/advisory.rs', 'common/src/error.rs', 'modules/fundamental/src/sbom/endpoints/get.rs'. Task 3: references 'modules/fundamental/src/sbom/endpoints/get.rs', 'modules/fundamental/src/sbom/endpoints/list.rs', 'modules/fundamental/src/sbom/endpoints/mod.rs'. Task 4: references 'modules/ingestor/src/graph/advisory/mod.rs', 'sbom_advisory join table'. Task 5: references 'tests/api/sbom.rs', 'tests/api/advisory.rs', 'assert_eq!(resp.status(), StatusCode::OK) pattern'. All are specific, not abstract."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "All 5 task files have '## Target Branch' followed by 'main': task-1 line 5, task-2 line 5, task-3 line 5, task-4 line 5, task-5 line 5."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": true,
+      "evidence": "All 5 task files contain the digest marker in the correct format: task-1: '[sdlc-workflow] Description digest: sha256-md:df242cadd5bf53acd37dd872a22d0d51aabc99afaf8e45994bc4bbbf41c2d390', task-2: 'sha256-md:17ff7ffc3c1b696d05d7e27003de11f872861dbc2a6c7e6b6e5e1fa426945349', task-3: 'sha256-md:bf909f21b7d1107cdd197cd60dd9d0040e0cb33be1ded0c5c305615b89ffa582', task-4: 'sha256-md:9ef4ebed80f1577112915f6e110cd70e4d1c761be7262e128e175367029041eb', task-5: 'sha256-md:6b88aa9521a86f65a8b92375c726958e3798731968c2335b7ad74c346a703d5f'. Each hash is exactly 64 lowercase hex characters, prefixed with 'sha256-md:', with the full marker format '[sdlc-workflow] Description digest: sha256-md:<hash>'."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "All convention references across all 5 tasks use the prescribed rationale format. Examples: Task 1: 'Applies: task modifies `modules/fundamental/src/sbom/model/mod.rs` matching the convention's module model directory scope', 'Applies: task creates `modules/fundamental/src/sbom/model/advisory_summary.rs` matching the convention's Rust model file scope'. Task 2: 'Applies: task modifies `modules/fundamental/src/sbom/service/sbom.rs` matching the convention's Rust service file scope'. Task 3: 'Applies: task modifies `modules/fundamental/src/sbom/endpoints/mod.rs` matching the convention's endpoint registration file scope'. No inapplicable conventions are listed with 'Not applicable' annotations. All rationales follow the format 'Applies: task modifies/creates <file> matching the convention's <scope>'."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), every created task's additional_fields includes 'priority' with the inherited priority name. When the Feature's priority is 'Undefined', the priority key is omitted entirely from additional_fields (not set to null or 'Undefined')",
+      "passed": true,
+      "evidence": "The feature fixture (feature-standard.md) has Priority: Major. The impact map's summary comment (lines 39-41) states: 'Priority: Major — propagated to all tasks'. This indicates all 5 tasks were created with priority 'Major' in additional_fields. The task description files are the Jira description body content, not the API request payloads, so additional_fields are not visible there, but the summary comment confirms propagation."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), every created task's additional_fields includes 'fixVersions' with the inherited version(s). When fixVersion scope is 'feature' or the Feature has no fixVersions, the fixVersions key is omitted entirely from additional_fields",
+      "passed": true,
+      "evidence": "The feature fixture has 'Fix Versions: RHTPA 1.5.0' (non-empty). CLAUDE.md has no '### Jira Field Defaults' section, so fixVersion scope defaults to 'both'. The impact map's summary comment (line 41) states: 'fixVersion: RHTPA 1.5.0 — propagated to all tasks (fixVersion scope defaults to \"both\" since no Jira Field Defaults section exists in CLAUDE.md)'. This confirms fixVersions were included in additional_fields for all tasks."
+    },
+    {
+      "text": "The summary comment on the feature issue (Step 6c) includes the inherited priority and fixVersion values that were propagated to tasks, or states they were omitted and why",
+      "passed": true,
+      "evidence": "The impact map's summary comment (lines 38-41) includes an 'Inherited field values' section: 'Priority: Major — propagated to all tasks' and 'fixVersion: RHTPA 1.5.0 — propagated to all tasks (fixVersion scope defaults to \"both\" since no Jira Field Defaults section exists in CLAUDE.md)'. Both inherited values are explicitly documented with propagation status and rationale."
+    }
+  ],
+  "summary": {
+    "passed": 16,
+    "failed": 0,
+    "total": 16,
+    "pass_rate": 1.0
+  }
+}

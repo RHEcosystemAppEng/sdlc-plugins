@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation identifies two independent root causes: (1) convention reference formatter using wrong case transform, (2) task creation using Feature issue type ID instead of Task (Steps 2-4)",
+      "passed": true,
+      "evidence": "investigation.md: Root Cause 1 identifies 'convention reference formatter in shared/convention-utils.md applies an incorrect case transform — it lowercases and kebab-cases heading names'. Root Cause 2 identifies 'task creation logic in plan-feature/SKILL.md Step 6a reads the Feature issue type ID (10142) from the project's Jira Configuration when creating task issues' instead of Task ID 10050."
+    },
+    {
+      "text": "Decomposition Guard is triggered because the two root causes are in different modules/code paths (Step 6)",
+      "passed": true,
+      "evidence": "investigation.md independence table shows Root Cause 1 in 'shared/convention-utils.md' (Convention reference formatting code path) vs Root Cause 2 in 'plan-feature/SKILL.md Step 6a' (Jira issue creation code path). States 'They share no common code path, no shared state, and no causal relationship.' decomposition-guard.md opens with 'multiple independent issues rooted in different modules with separate code paths'."
+    },
+    {
+      "text": "Decomposition Guard presents both issues with their affected files/modules (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md: Issue 1 'Malformed convention references — wrong case transform' with 'Affected file/module: shared/convention-utils.md'. Issue 2 'Wrong issue type in task creation — reads Feature ID instead of Task ID' with 'Affected file/module: plan-feature/SKILL.md Step 6a'."
+    },
+    {
+      "text": "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md Options section: '1. **Proceed** — Create a single Task covering all fixes (both the convention formatter in shared/convention-utils.md and the issue type lookup in plan-feature/SKILL.md Step 6a).' and '2. **Split** — Create separate Bug issues for each independent root cause, then triage each individually: Bug A: Malformed convention references... Bug B: Wrong issue type...'"
+    },
+    {
+      "text": "The skill does NOT silently create a single Task bundling both fixes — it waits for user input (Step 6 stop rule)",
+      "passed": true,
+      "evidence": "decomposition-guard.md final section: 'The skill **WAITS** for user input before proceeding. It does **NOT** silently create a single Task when multiple independent root causes are detected. Please select one of the options above to continue.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

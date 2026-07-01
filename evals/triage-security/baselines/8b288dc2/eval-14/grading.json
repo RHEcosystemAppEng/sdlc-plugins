@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Dependency chain output includes both the rpms.lock.yaml classification AND the SBOM verification result for the affected versions (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "In sbom-verification.md, the 'Side-by-Side Classification Results' table includes both 'rpms.lock.yaml' and 'SBOM Comparison' columns for each version. For affected versions 2.2.0, 2.2.1, 2.2.2, the rpms.lock.yaml column shows 'Present -- explicit install' and the SBOM Comparison column shows 'In both final and base image SBOMs -- base image'. The 'Dependency Chain Summary' section at the bottom also includes both: 'rpms.lock.yaml: PRESENT -> explicit install' and 'SBOM verification: present in both final and base image SBOMs -> base image'."
+    },
+    {
+      "text": "SBOM verification uses cosign download sbom to compare the final container image SBOM against the base image SBOM (Step 2.3.5 sub-steps 2 and 4)",
+      "passed": true,
+      "evidence": "In sbom-verification.md, the 'SBOM Verification Procedure' section shows commands: 'cosign download sbom <image-reference>@<image-digest> > /tmp/final-sbom.json' (final image SBOM download) and 'cosign download sbom <base-image-reference> > /tmp/base-sbom.json' (base image SBOM download). Both SBOMs are then compared by grepping for 'openssl-libs' in each. The table shows the comparison result: 'In both final and base image SBOMs -- base image'."
+    },
+    {
+      "text": "When SBOM classification (base image) disagrees with rpms.lock.yaml classification (explicit install), the discrepancy is flagged to the engineer with a warning (Step 2.3.5 sub-step 5 disagreement handling)",
+      "passed": true,
+      "evidence": "In sbom-verification.md, there is a 'Disagreement Warning' section with a prominent 'WARNING: SBOM classification disagrees with rpms.lock.yaml for versions 2.2.0, 2.2.1, and 2.2.2.' The warning explains: rpms.lock.yaml says 'explicitly installed' while SBOM comparison says 'base image package'. The table also has an 'Agreement?' column showing 'DISAGREE' for affected versions. The summary also includes: 'WARNING: SBOM classification disagrees with rpms.lock.yaml -- lock file says explicit install but SBOM comparison says base image. Investigate manually.'"
+    },
+    {
+      "text": "The rpms.lock.yaml classification remains the primary signal — the SBOM result supplements but does not override it (Step 2.3.5 non-MVP enhancement)",
+      "passed": true,
+      "evidence": "In sbom-verification.md, the 'Classification Method' section states: 'Primary signal: rpms.lock.yaml' and 'Supplementary signal: SBOM comparison via cosign download sbom'. The disagreement warning explicitly states: 'rpms.lock.yaml is the PRIMARY signal and takes precedence. The SBOM result supplements but does not override the lock file classification.' The remediation section confirms: 'the lock file entry takes precedence over the SBOM base image classification.' The summary states: 'Origin (per primary signal): explicit install'."
+    },
+    {
+      "text": "The SBOM verification result is presented alongside the rpms.lock.yaml result in the dependency chain output, not as a separate section (Step 2.3.5 sub-step 6)",
+      "passed": true,
+      "evidence": "In sbom-verification.md, the SBOM result is integrated alongside the rpms.lock.yaml result in two ways: (1) The 'Side-by-Side Classification Results' table has both 'rpms.lock.yaml' and 'SBOM Comparison' as columns in the same table row per version, not in separate tables. (2) The 'Dependency Chain Summary' block presents both results together sequentially: 'rpms.lock.yaml: PRESENT -> explicit install' immediately followed by 'SBOM verification: present in both final and base image SBOMs -> base image'. The SBOM verification procedure details are in a sub-section of the same document, but the results themselves are presented alongside, not separately."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
