@@ -139,7 +139,10 @@ Extract the following from the configuration for use in later steps:
   used in Step 1.7 to present an embargo warning gate for Critical/Important severity CVEs.
   If not configured, Step 1.7 is skipped entirely.
 - **Version Streams** — Konflux release repo URLs and local paths from Security Configuration
-- **Source Repositories** — source repo names and URLs from Security Configuration
+- **Source Repositories** — source repo names, URLs, and deployment contexts from Security
+  Configuration. Parse each row into a mapping: repository name → { url, deployment_context }.
+  If the Deployment Context column is absent (backward compatibility), default all repos to
+  `upstream`.
 
 ## Step 0.3 – Matrix Staleness Check
 
@@ -384,6 +387,16 @@ flowchart TD
     F --> I["Remediation: 1 task\n(Konflux repo)"]
     G --> I
 ```
+
+### Deployment context lookup
+
+After identifying the affected repository from the component label pattern, look up its
+deployment context from the Source Repositories mapping extracted in Step 0. Record the
+deployment context as part of the extracted CVE metadata for use in Step 8 (Remediation)
+when generating coordination guidance in remediation task descriptions.
+
+If the affected repository is not found in the Source Repositories table, default to
+`upstream`.
 
 ## Step 1.5 – External CVE Data Enrichment
 

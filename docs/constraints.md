@@ -86,6 +86,8 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.74 | `plan-feature` MUST inherit priority and fixVersions from the parent Feature issue when set. | `plan-feature/SKILL.md` — Step 1, Step 6 |
 | 1.75 | `plan-feature` MUST respect `fixVersion scope` from Jira Field Defaults configuration — only propagating fixVersions to tasks when the scope includes "task" or "both". | `plan-feature/SKILL.md` — Step 6 |
 | 1.76 | `plan-feature` MUST NOT set priority on created tasks when the parent Feature has priority "Undefined" or unset. | `plan-feature/SKILL.md` — Step 1, Step 6 |
+| 1.77 | `triage-security` MUST extract the Deployment Context column from the Source Repositories table in Security Configuration and use it to annotate remediation task descriptions with context-appropriate coordination guidance (internal, upstream, or customer-shipped). | `triage-security/SKILL.md` — Step 0, `triage-security/remediation-templates.md` — Coordination Guidance |
+| 1.78 | `triage-security` MUST default all repositories to `upstream` deployment context when the Deployment Context column is absent from the Source Repositories table (backward compatibility). | `triage-security/SKILL.md` — Step 0 |
 
 ### Prior Art — Cross-phase integrity (§1.33–1.35)
 
@@ -179,7 +181,7 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9), Step 3.5 Select Priority and Fix Version (§1.72), Step 6.2 Create Feature Issue (§1.73)
 - `plugins/sdlc-workflow/skills/report-bug/SKILL.md` — Guardrails (§1.50–1.51), Step 4 Preview and Confirm (§1.52)
 - `plugins/sdlc-workflow/skills/triage-bug/SKILL.md` — Guardrails (§1.53–1.54), Step 5 Front-load reproducer test (§1.55), Step 4 Post root cause comment (§1.56), Step 6 Decomposition Guard (§1.57)
-- `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.37, §1.38, §1.47), Step 0 (§1.49, §1.68), Step 1 Ecosystem detection (§1.48), Step 1 Data Extraction (§1.49), Step 1.5 External CVE Data Enrichment (§1.62), Step 1.7 Embargo Check (§1.70, §1.71), Discovery mode (§1.69), Step 2.1 (§1.47), Step 2.2 (§1.42), Step 2.3 (§1.48), Step 2.4 (§1.44), Step 8 (§1.43), Step 8 Case B (§1.61), Post-Triage Summary (§1.67), Important Rules (§1.38–§1.43, §1.45, §1.46), Remediation Task Creation (§1.46, §1.66)
+- `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.37, §1.38, §1.47), Step 0 (§1.49, §1.68), Step 0 Deployment Context (§1.77, §1.78), Step 1 Ecosystem detection (§1.48), Step 1 Data Extraction (§1.49), Step 1.5 External CVE Data Enrichment (§1.62), Step 1.7 Embargo Check (§1.70, §1.71), Discovery mode (§1.69), Step 2.1 (§1.47), Step 2.2 (§1.42), Step 2.3 (§1.48), Step 2.4 (§1.44), Step 8 (§1.43), Step 8 Case B (§1.61), Post-Triage Summary (§1.67), Important Rules (§1.38–§1.43, §1.45, §1.46), Remediation Task Creation (§1.46, §1.66)
 - `plugins/sdlc-workflow/skills/triage-security/version-impact-analysis.md` — Step 2.3 enriched fix threshold (§1.62)
 - `plugins/sdlc-workflow/skills/triage-security/remediation-templates.md` — Jira Issue Creation digest comment (§1.66)
 - `plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md` — Step 3 ProdSec @mention (§1.68), Step 4.2 Idempotent sibling linking (§1.58), Step 4.3 Cross-CVE overlap detection (§1.59), Step 4.3 ProdSec @mention (§1.68), Step 4.4 Proactive reconciliation (§1.61)
