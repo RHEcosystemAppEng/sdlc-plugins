@@ -1,0 +1,45 @@
+{
+  "assertion_results": [
+    {
+      "text": "The third JQL query uses labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA) to find triaged CVEs still in a pre-QA state",
+      "passed": true,
+      "evidence": "In discovery-listing.md line 67 and ready-for-qa.md line 10, the JQL query is: 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, 'ON_QA') ORDER BY created DESC'. This matches the required labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA) pattern exactly."
+    },
+    {
+      "text": "For each query 3 result, the skill checks issuelinks for linked Tasks with link type Depend and fetches each linked Task's status",
+      "passed": true,
+      "evidence": "In discovery-listing.md line 72: 'For each result, the skill checks issuelinks for linked Tasks with link type \"Depend\" and fetches each linked Task's status to determine readiness.' In ready-for-qa.md, each of the three issues (TC-9020, TC-9023, TC-9026) has a 'Linked Remediation Tasks (Depend type)' table showing Task Key, Issue Type, Status, and Completed columns, confirming each issue's links were checked."
+    },
+    {
+      "text": "TC-9020 is included in Ready for QA because ALL linked remediation Tasks are completed (TC-9021 Done, TC-9022 Closed)",
+      "passed": true,
+      "evidence": "In discovery-listing.md lines 77-80, TC-9020 appears in the 'Ready for QA' table with 'Remediation Tasks: TC-9021 (Done), TC-9022 (Closed)' and the note 'Consider transitioning TC-9020 to ON_QA. All linked remediation tasks are completed.' In ready-for-qa.md lines 38-40: 'Filtering Decision: INCLUDED in Ready for QA' with 'Reason: ALL linked remediation Tasks are in a completed state (Done or Closed). Both TC-9021 (Done) and TC-9022 (Closed) have finished.'"
+    },
+    {
+      "text": "TC-9023 is excluded from Ready for QA because TC-9025 is still In Progress — remediation is not complete",
+      "passed": true,
+      "evidence": "In discovery-listing.md line 86: TC-9023 is in the 'Excluded from Ready for QA' table with exclusion reason 'TC-9025 still In Progress — remediation not complete' and remediation tasks 'TC-9024 (Done), TC-9025 (In Progress)'. In ready-for-qa.md lines 59-61: 'Filtering Decision: EXCLUDED from Ready for QA' with 'Reason: TC-9025 is still In Progress — remediation is not complete.'"
+    },
+    {
+      "text": "TC-9026 is excluded from Ready for QA because it has no linked Tasks with type Depend — no remediation to verify",
+      "passed": true,
+      "evidence": "In discovery-listing.md line 87: TC-9026 is in the 'Excluded from Ready for QA' table with exclusion reason 'No linked Tasks with type \"Depend\" — no remediation to verify' and remediation tasks '(none)'. In ready-for-qa.md lines 77-79: 'Filtering Decision: EXCLUDED from Ready for QA' with 'Reason: No linked Tasks with type \"Depend\" exist on this issue. Without remediation tasks to verify, there is no evidence that a fix has been implemented.'"
+    },
+    {
+      "text": "The Ready for QA section includes a Remediation Tasks column showing the linked tasks and their statuses",
+      "passed": true,
+      "evidence": "In discovery-listing.md lines 76-78, the Ready for QA table has columns: Issue | Status | CVE | Summary | Created | Remediation Tasks, with TC-9020 showing 'TC-9021 (Done), TC-9022 (Closed)' in the Remediation Tasks column. The Excluded table (lines 85-87) also has a Remediation Tasks column. In ready-for-qa.md line 95, the final Ready for QA Table also includes the Remediation Tasks column."
+    },
+    {
+      "text": "For each Ready for QA issue, the output suggests transitioning to ON_QA",
+      "passed": true,
+      "evidence": "In discovery-listing.md line 80: '> Consider transitioning TC-9020 to ON_QA. All linked remediation tasks are completed.' In ready-for-qa.md line 42: 'Recommendation: Consider transitioning TC-9020 to ON_QA. All remediation work has been completed and the fix is ready for quality assurance verification.' And line 99: '> Consider transitioning TC-9020 to ON_QA.' TC-9020 is the only issue that qualifies for Ready for QA, and the transition suggestion is present for it."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 0,
+    "total": 7,
+    "pass_rate": 1.0
+  }
+}

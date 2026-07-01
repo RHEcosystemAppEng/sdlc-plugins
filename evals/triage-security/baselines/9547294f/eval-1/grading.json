@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+      "passed": true,
+      "evidence": "data-extraction.md table shows: CVE ID = CVE-2026-31812, Vulnerable library = quinn-proto, Affected version range = < 0.11.14, Fixed version = 0.11.14. All four fields match exactly."
+    },
+    {
+      "text": "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+      "passed": true,
+      "evidence": "data-extraction.md 'Ecosystem Detection' section states: 'The vulnerable library is quinn-proto, a Rust crate. Based on the Ecosystem Mappings table in the security-matrix.md configuration, this maps to the Cargo ecosystem.' Lock file identified as Cargo.lock."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the security-matrix.md supportability matrix — no versions are skipped (Important Rule 4)",
+      "passed": true,
+      "evidence": "version-impact.md table lists 7 versions: 2.1.0, 2.1.1 (from 2.1.x stream) and 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4 (from 2.2.x stream). This matches all versions in security-matrix-mock.md supportability matrices for both streams. The output explicitly notes: 'ALL versions from BOTH streams in the supportability matrix are included (Important Rule 4).'"
+    },
+    {
+      "text": "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+      "passed": true,
+      "evidence": "version-impact.md table includes a 'Pinned Commit Tag' column with values v0.3.8, v0.3.12, v0.4.5, v0.4.8, v0.4.9, v0.4.11, v0.4.12 matching the backend column from security-matrix-mock.md. The output states: 'Dependency versions are extracted using the pinned commit tags from the supportability matrix, not branch HEAD (Important Rule 13).'"
+    },
+    {
+      "text": "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+      "passed": true,
+      "evidence": "version-impact.md row for 2.2.2 shows: Pinned Commit Tag = v0.4.9, quinn-proto = --, Affected? = YES, Notes = 'retag of 2.2.1 (same as 2.2.1: backend pinned commit v0.4.8)'. The output states: 'Version 2.2.2 is identified as a retag of 2.2.1 (same backend commit v0.4.8). Its affected status is carried forward from 2.2.1 without re-running the lock file check (Important Rule 5).' This matches security-matrix-mock.md which shows 2.2.2 backend = v0.4.8 with note 'backend retag of 2.2.1'."
+    },
+    {
+      "text": "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md shows a clear Current vs Proposed comparison: Current (PSIRT-assigned) = RHTPA 2.0.0, Proposed (lock-file-verified) = RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2. The diff is explicitly shown: 'Diff: Current: [RHTPA 2.0.0] -> Proposed: [RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]'."
+    },
+    {
+      "text": "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+      "passed": true,
+      "evidence": "affects-versions.md uses version names like 'RHTPA 2.2.0', 'RHTPA 2.2.1', 'RHTPA 2.2.2' and explicitly states: 'Version names are referenced from the supportability matrix and would be matched against Jira version names discovered dynamically via getJiraIssueTypeMetaWithFields (Important Rule 6). No hardcoded Jira version IDs are used.' The Jira mutation shows placeholder IDs '<RHTPA-2.2.0-jira-id>' rather than hardcoded values."
+    },
+    {
+      "text": "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+      "passed": true,
+      "evidence": "remediation.md Task 1 includes: Repository = rhtpa-backend, Target Branch = release/0.4.z, Acceptance Criteria (3 items), and Dependencies noting 'Depends on: TC-8001'. Task 2 includes: Repository = rhtpa-release.0.4.z, Target Branch = main, Acceptance Criteria (2 items), and Dependencies: 'Depends on: <upstream-task-key>' and 'Depends on: TC-8001'. Linkage Summary shows Blocks link between upstream and downstream."
+    },
+    {
+      "text": "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+      "passed": true,
+      "evidence": "remediation.md explicitly states: 'Since quinn-proto is a Cargo (source dependency) ecosystem, two tasks are created per Important Rule 8: 1. An upstream backport task to fix the dependency in the source repository 2. A downstream propagation subtask to update the reference in the Konflux release repository, blocked by the upstream task'. The Linkage Summary confirms: 'Blocks: <upstream-task-key> -> <downstream-task-key> (downstream is blocked by upstream)'."
+    },
+    {
+      "text": "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
+      "passed": true,
+      "evidence": "affects-versions.md frames the Jira mutation as 'Proposed Jira Mutation' with 'This is a proposed action requiring engineer confirmation before execution'. remediation.md Task 1 is labeled 'Proposed Jira Issue Creation'. The Post-Triage Summary states: 'Proposed actions (all require engineer confirmation before execution)' and concludes: 'All Affects Versions changes, label additions, status transitions, and task creation are presented as proposals for engineer review and confirmation. No Jira mutations are executed without explicit approval.'"
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

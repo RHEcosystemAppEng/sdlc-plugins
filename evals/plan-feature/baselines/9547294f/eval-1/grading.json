@@ -1,0 +1,90 @@
+{
+  "assertion_results": [
+    {
+      "text": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "passed": true,
+      "evidence": "All 6 task files contain: Repository (e.g. 'trustify-backend'), Target Branch ('main'), Description, Implementation Notes, Acceptance Criteria, and Test Requirements sections. Tasks 1-5 have Files to Modify and/or Files to Create. Task 6 has Files to Modify ('README.md'). Every task has at least one of Files to Modify or Files to Create."
+    },
+    {
+      "text": "Task count is between 3 and 10 inclusive",
+      "passed": true,
+      "evidence": "There are 6 task files: task-1-advisory-severity-model-and-service.md, task-2-advisory-summary-endpoint.md, task-3-cache-invalidation-advisory-ingestion.md, task-4-integration-tests-advisory-summary.md, task-5-threshold-query-parameter.md, task-6-api-documentation-update.md. 6 is within [3, 10]."
+    },
+    {
+      "text": "All tasks reference repository 'trustify-backend'",
+      "passed": true,
+      "evidence": "All 6 tasks have '## Repository\\ntrustify-backend' as their first section."
+    },
+    {
+      "text": "Task dependencies form a DAG with no circular dependencies",
+      "passed": true,
+      "evidence": "Task 1: no dependencies. Task 2: depends on Task 1. Task 3: depends on Task 2. Task 4: depends on Task 2. Task 5: depends on Task 2. Task 6: depends on Task 5. Dependency graph: 1 -> 2 -> {3, 4, 5} and 5 -> 6. This is a valid DAG with no cycles."
+    },
+    {
+      "text": "Every task's Files to Modify and Files to Create reference paths plausible within the repo-backend.md structure",
+      "passed": true,
+      "evidence": "Task 1: Creates modules/fundamental/src/sbom/model/advisory_summary.rs (new file in existing model/ dir), modifies modules/fundamental/src/sbom/model/mod.rs and modules/fundamental/src/sbom/service/sbom.rs (both in repo-backend.md). Task 2: Modifies modules/fundamental/src/sbom/endpoints/mod.rs (in repo-backend.md), creates modules/fundamental/src/sbom/endpoints/advisory_summary.rs (new file in existing endpoints/ dir). Task 3: Modifies modules/ingestor/src/graph/advisory/mod.rs (in repo-backend.md). Task 4: Creates tests/api/advisory_summary.rs (new file in existing tests/api/ dir), modifies tests/Cargo.toml (in repo-backend.md). Task 5: Modifies modules/fundamental/src/sbom/endpoints/advisory_summary.rs and modules/fundamental/src/sbom/service/sbom.rs (both plausible). Task 6: Modifies README.md (in repo-backend.md). All paths are plausible within the manifest structure."
+    },
+    {
+      "text": "Impact map lists concrete, specific changes (not vague or abstract descriptions)",
+      "passed": true,
+      "evidence": "The impact map in impact-map.md lists 8 specific changes: 'Add AdvisorySeveritySummary response model struct with fields critical, high, medium, low, total', 'Add service method on SbomService to query the sbom_advisory join table', 'Add GET /api/v2/sbom/{id}/advisory-summary endpoint handler...with 5-minute cache', 'Return 404...when the SBOM ID does not exist', 'Add optional ?threshold query parameter', 'Add cache invalidation hook in the advisory ingestion pipeline', 'Add integration tests...covering: success with severity counts, 404 for missing SBOM, cache behavior, and threshold filtering', 'Update API documentation'. Each item specifies concrete entities, endpoints, fields, or behaviors."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "All 6 tasks have '## Repository\\ntrustify-backend' — a single repository name, not multiple."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "All 6 tasks contain: '## Target Branch' (set to 'main'), '## Description' (with substantive content), '## Acceptance Criteria' (with checkbox items), and '## Test Requirements' (with checkbox items)."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "All modified paths exist in repo-backend.md: modules/fundamental/src/sbom/model/mod.rs (line 41), modules/fundamental/src/sbom/service/sbom.rs (line 46), modules/fundamental/src/sbom/endpoints/mod.rs (line 48), modules/ingestor/src/graph/advisory/mod.rs (line 83), tests/Cargo.toml (line 114), README.md (line 14). Created files are new files in existing directories from the manifest: modules/fundamental/src/sbom/model/advisory_summary.rs (in model/ dir), modules/fundamental/src/sbom/endpoints/advisory_summary.rs (in endpoints/ dir), tests/api/advisory_summary.rs (in tests/api/ dir). All paths are consistent with the manifest structure."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Task 1 references: modules/fundamental/src/sbom/model/summary.rs, entity/src/sbom_advisory.rs, entity/src/advisory.rs, common/src/error.rs, modules/fundamental/src/sbom/service/sbom.rs, common/src/db/query.rs. Task 2 references: modules/fundamental/src/sbom/endpoints/mod.rs, list.rs, get.rs patterns. Task 3 references: modules/ingestor/src/graph/advisory/mod.rs, modules/ingestor/src/service/mod.rs. Task 4 references: tests/api/sbom.rs, tests/api/advisory.rs, entity/src/sbom_advisory.rs. Task 5 references: modules/fundamental/src/advisory/model/summary.rs, modules/fundamental/src/sbom/endpoints/list.rs, common/src/db/query.rs. Task 6 references specific endpoint paths and response shapes. All tasks cite concrete file paths and code patterns."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "All 6 tasks have '## Target Branch\\nmain'."
+    },
+    {
+      "text": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string. Marker format: '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' (or sha256-adf). The digest is computed by re-fetching the description from the API and running scripts/sha256-digest.py",
+      "passed": false,
+      "evidence": "All 6 tasks contain a simulated/placeholder digest instead of an actual SHA-256 hash. Each task ends with: '> [sdlc-workflow] Description digest: (simulated) The digest would be posted as a Jira comment after task creation per the description-digest-protocol. Format: `[sdlc-workflow] Description digest: sha256-md:<64-hex-chars>`'. This is a placeholder/example string, not an actual 64-character hex digest prefixed by sha256-md: or sha256-adf:. The assertion requires exactly 64 lowercase hex characters, not a description of the format."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "Each task that includes convention references uses the prescribed format. Task 1: 'Applies: task creates modules/fundamental/src/sbom/model/advisory_summary.rs matching the convention's Rust module file scope.' and 'Applies: task modifies modules/fundamental/src/sbom/service/sbom.rs matching the convention's Rust service file scope.' Task 2: 'Applies: task modifies modules/fundamental/src/sbom/endpoints/mod.rs matching the convention's Rust endpoint file scope.' and 'Applies: task creates modules/fundamental/src/sbom/endpoints/advisory_summary.rs matching the convention's Rust endpoint file scope.' Tasks 3-5 similarly use the prescribed format. No inapplicable conventions are listed with 'Not applicable' annotations. All rationales follow the 'Applies: task modifies/creates <file> matching the convention's <scope>' format."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), every created task's additional_fields includes 'priority' with the inherited priority name. When the Feature's priority is 'Undefined', the priority key is omitted entirely from additional_fields (not set to null or 'Undefined')",
+      "passed": false,
+      "evidence": "None of the 6 task files contain an 'additional_fields' section or any mention of priority inheritance. There is no evidence in the output files that priority was propagated from the Feature issue to tasks via additional_fields, nor any evidence that the Feature's priority was checked and the field was intentionally omitted because it was 'Undefined'. The impact-map.md also contains no mention of priority handling."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), every created task's additional_fields includes 'fixVersions' with the inherited version(s). When fixVersion scope is 'feature' or the Feature has no fixVersions, the fixVersions key is omitted entirely from additional_fields",
+      "passed": false,
+      "evidence": "None of the 6 task files contain an 'additional_fields' section or any mention of fixVersions inheritance. There is no evidence in the output files that fixVersions was propagated from the Feature issue to tasks, nor any evidence that the Feature's fixVersions were checked and the field was intentionally omitted. The impact-map.md also contains no mention of fixVersions handling."
+    },
+    {
+      "text": "The summary comment on the feature issue (Step 6c) includes the inherited priority and fixVersion values that were propagated to tasks, or states they were omitted and why",
+      "passed": false,
+      "evidence": "There is no summary comment file in the outputs directory. The outputs contain only impact-map.md and 6 task files. No file contains a Step 6c summary comment, and there is no mention of inherited priority or fixVersion values being propagated or omitted in any output file."
+    }
+  ],
+  "summary": {
+    "passed": 12,
+    "failed": 4,
+    "total": 16,
+    "pass_rate": 0.75
+  }
+}

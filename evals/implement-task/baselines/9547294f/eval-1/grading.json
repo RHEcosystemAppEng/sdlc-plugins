@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "In plan.md Step 4 'Understand the Code', the plan explicitly lists inspecting all 4 files: (1) 'modules/fundamental/src/advisory/service/advisory.rs' — 'Use mcp__serena_backend__get_symbols_overview to see AdvisoryService methods'; (2) 'modules/fundamental/src/advisory/endpoints/get.rs' — 'Use mcp__serena_backend__find_symbol to read the GET handler'; (3) 'modules/fundamental/src/advisory/model/summary.rs' — 'Use mcp__serena_backend__find_symbol on AdvisorySummary to see the severity field type'; (4) 'common/src/error.rs' — 'Inspect AppError to understand error handling pattern'. All 4 files are referenced."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "In plan.md Step 9 'Self-Verification', the plan explicitly checks scope containment: 'Run git diff --name-only and verify all changed files are within the Files to Modify and Files to Create lists.' The expected files listed exactly match the task's Files to Modify (advisory/model/mod.rs, advisory/service/advisory.rs, advisory/endpoints/mod.rs) and Files to Create (advisory/model/severity_summary.rs, advisory/endpoints/severity_summary.rs, tests/api/advisory_summary.rs). The plan also notes 'If docs/api.md is updated (documentation impact), flag as out-of-scope and request user approval.' No unrelated files are included in the implementation plan (Steps 6-7)."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "In plan.md Step 6 'Files to Create' section: (1) 'modules/fundamental/src/advisory/model/severity_summary.rs -- SeveritySummary struct', (2) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs -- GET handler', (3) 'tests/api/advisory_summary.rs -- integration tests'. Detailed implementations are provided in file-1-description.md (model), file-4-description.md (endpoint handler), and file-6-description.md (test file)."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "In plan.md Step 6 'Files to Modify' section: (1) 'modules/fundamental/src/advisory/model/mod.rs -- add pub mod severity_summary;', (2) 'modules/fundamental/src/advisory/service/advisory.rs -- add severity_summary method', (3) 'modules/fundamental/src/advisory/endpoints/mod.rs -- register new route'. Detailed modifications are provided in file-2-description.md (model/mod.rs), file-3-description.md (service/advisory.rs), and file-5-description.md (endpoints/mod.rs)."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "In plan.md Step 10 'Commit Message', the planned commit message is: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' with body text and footer 'Implements TC-9201'. This follows Conventional Commits format with type 'feat', scope 'advisory', and a colon-separated description. The Jira key TC-9201 is referenced in the footer."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "In plan.md Step 10, immediately after the commit message block: 'With `--trailer=\"Assisted-by: Claude Code\"`.' This explicitly states the trailer will be used."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "In plan.md header section: 'Branch Name: TC-9201'. In Step 5 'Create Branch': 'git checkout main; git pull; git checkout -b TC-9201' — showing branch creation from main. In Step 1 'Target Branch': 'main -- standard direct-to-main workflow.' In Step 10 PR creation: 'gh pr create --base main'. Both the branch name TC-9201 and the target branch 'main' are referenced."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "In conventions.md: (1) Error handling section states 'All handlers in endpoints/ return Result<T, AppError> with .context() for wrapping errors' and 'AppError is defined in common/src/error.rs and implements IntoResponse'. (2) Module structure section states 'Each domain module (sbom, advisory, package) follows the model/ + service/ + endpoints/ tri-directory structure'. Both patterns are explicitly identified with specific details from sibling code analysis."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "In plan.md Step 1 'Parsed Sections': 'Target Branch: main'. Separately under 'Target Branch' subsection: 'main -- standard direct-to-main workflow.' In Step 5: 'git checkout main; git pull; git checkout -b TC-9201'. In Step 10: 'gh pr create --base main'."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "In plan.md 'Step 1.5 -- Verify Description Integrity': 'Would fetch issue comments via jira.get_issue_comments(TC-9201), search for digest comment starting with [sdlc-workflow] Description digest:, and if found, compute SHA-256 digest of the description and compare. If no digest comment is found, log warning and proceed.' This explicitly describes checking for the digest comment and proceeding with a warning when none is found."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

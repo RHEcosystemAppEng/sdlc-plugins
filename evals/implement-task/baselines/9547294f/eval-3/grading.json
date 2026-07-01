@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Section 6.2 states: 'Apply the filter using apply_filter: When the license parameter is Some, use apply_filter from common/src/db/query.rs to generate the SQL filter clause.' It shows code: 'use common::db::query::apply_filter;' and '.filter(apply_filter(package_license::Column::License, license))'. Section 4.2 describes apply_filter as: 'takes a column reference and a comma-separated string value, splits on commas, generates a SQL IN (...) clause (or = ... for single values)'. The reuse-analysis.md Reuse Candidate 1 section explicitly states: 'Eliminates the need to write custom comma-parsing logic'."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md Section 4.2 inspects 'modules/fundamental/src/advisory/endpoints/list.rs' and describes it as 'the key reference pattern -- the advisory list endpoint has a severity query parameter'. Section 6.1 states: 'Reuse: Follows the AdvisoryQuery struct pattern from modules/fundamental/src/advisory/endpoints/list.rs.' reuse-analysis.md Reuse Candidate 2 is titled 'modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)' and provides a detailed mapping table showing how each advisory component maps to the package implementation."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Section 6.2 shows: 'use entity::package_license;' and code joining through the entity: 'query.join(JoinType::InnerJoin, package_license::Relation::Package.def().rev())'. reuse-analysis.md Reuse Candidate 3 explicitly states: 'The entity is used in PackageService::list() to perform the JOIN that connects packages to their licenses. Without this entity, we would need to write raw SQL for the join, which would violate the project's convention of using SeaORM entities for all database operations.' It also states: 'Reuse type: Direct reuse (no modification needed)'."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md has three dedicated sections: 'Reuse Candidate 1: common/src/db/query.rs::apply_filter' (lines 11-52), 'Reuse Candidate 2: modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)' (lines 55-96), and 'Reuse Candidate 3: entity/src/package_license.rs (package-license join entity)' (lines 99-139). Each section includes 'What it provides', 'How it would be reused' with code examples, 'Reuse type', and 'Impact' subsections. The summary table at the bottom confirms: 'All three explicitly listed Reuse Candidates from the task description are utilized in the implementation.'"
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": false,
+      "evidence": "plan.md Step 1 lists Files to Modify as 'modules/fundamental/src/package/endpoints/list.rs' and 'modules/fundamental/src/package/service/mod.rs', and Files to Create as 'tests/api/package_license_filter.rs'. However, the plan also proposes modifying 'docs/api.md' (Section 6.4 and Step 10 git add command). Step 9 Self-Verification explicitly acknowledges this: 'docs/api.md -- out of scope (documentation update), would flag for user approval'. While the plan notes it is out of scope, it still includes docs/api.md in the git add command at Step 10, meaning the plan actively proposes modifying a file outside the defined scope."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "The plan consistently reuses apply_filter directly. plan.md Section 6.2 shows direct import and use: 'use common::db::query::apply_filter;' and '.filter(apply_filter(package_license::Column::License, license))'. Section 9 Duplication check states: 'The apply_filter function is reused from common/src/db/query.rs -- no duplication'. reuse-analysis.md states: 'No new utility code needs to be written -- the implementation is composed entirely from existing building blocks'. No new parsing or filter utility functions are proposed anywhere in either output file."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.8333333333333334
+  }
+}
