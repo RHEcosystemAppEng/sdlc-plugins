@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+      "passed": true,
+      "evidence": "discovery-listing.md explicitly states 'Security Configuration extracted from CLAUDE.md: Project key: TC, Vulnerability issue type ID: 10024' and all three JQL queries use 'project = TC AND issuetype = 10024', matching the values in claude-md-security-config.md Security Configuration section (Project key: TC, Vulnerability issue type ID: 10024)."
+    },
+    {
+      "text": "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (§1.48)",
+      "passed": true,
+      "evidence": "discovery-listing.md contains three distinct JQL queries: (1) 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged)' for untriaged issues, (2) 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status = New' for triaged-but-new issues, (3) 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA)' for Ready for QA candidates. All three match the required filter criteria."
+    },
+    {
+      "text": "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
+      "passed": true,
+      "evidence": "discovery-listing.md has three clearly separated sections with horizontal rule dividers: '## 1. Untriaged Issues', '## 2. Triaged but still New (stale)', and '## 3. Ready for QA'. Each section has its own heading, JQL query, and results listing."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": true,
+      "evidence": "All primary listed issues show all five required fields. Examples: 'TC-9001 | New | CVE-2026-40112 | h2 - HTTP/2 rapid reset vulnerability [rhtpa-2.2] | Created: 2026-06-08' (section 1), 'TC-9010 | New | CVE-2026-39874 | quinn-proto - Panic on malformed QUIC frame [rhtpa-2.2] | Created: 2026-05-28' (section 2), and TC-9020 in Ready for QA table shows 'TC-9020 | Modified | CVE-2026-38901 | hyper - HTTP request smuggling [rhtpa-2.2] | 2026-05-15'. The excluded items in section 3 use a different table format showing exclusion reasons instead of created dates, but all actionable discovery listings include all five fields."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "status-handling.md explicitly handles each issue: TC-9001 (New): 'Proceed with full triage (default path). No warnings required.' TC-9002 (New): 'Proceed with full triage (default path). No warnings required.' TC-9004 (New): 'Proceed with full triage (default path). No warnings required.' TC-9003 (In Progress): 'Warning required. This issue is already in In Progress status. It may be actively worked on by another engineer.' with a quoted warning message and options to proceed or skip."
+    },
+    {
+      "text": "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)",
+      "passed": true,
+      "evidence": "discovery-listing.md section 3 shows: TC-9020 under 'Qualifies for ON_QA' with 'Remediation Tasks: TC-9021 (Done), TC-9022 (Closed)' and note 'All linked remediation Tasks are completed.' TC-9023 under 'Excluded' with reason 'Remediation in progress -- TC-9025 is still In Progress (TC-9024 is Done)'. TC-9026 under 'Excluded' with reason 'No linked Tasks with type Depend -- no remediation to verify'. All three filtering decisions match the expected behavior exactly."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

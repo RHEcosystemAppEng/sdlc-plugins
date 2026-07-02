@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md sections 3 and 4 explicitly detect TC-8100 and TC-8101 via Depend links and mark both as SKIP. triage-outcome.md Step 8 states: 'The skill inspects the issue's existing Depend links and finds: TC-8100 (upstream backport task) -- already linked via Depend, TC-8101 (downstream propagation task) -- already linked via Depend... Step 8 skips task creation entirely. No mutation.' The Mutation Ledger confirms all four Step 8 mutations (create tasks + create links) are Skip in the second run."
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 21 lists 'ai-cve-triaged' among current labels. idempotency-check.md section 1 states: 'Issue labels include ai-cve-triaged. Status: ALREADY PRESENT. Action: SKIP -- do not add the label again.' triage-outcome.md Post-Triage Summary confirms: 'ai-cve-triaged label: already present on the issue. Skip.' Mutation Ledger shows 'Add ai-cve-triaged label' as Skip with reason 'Label already present'."
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 20 shows Status: In Progress. idempotency-check.md section 2 states: 'Current issue status is In Progress. Status: ALREADY TRANSITIONED. Action: SKIP -- do not transition again.' It further notes 'issues in In Progress may be actively worked on and asks whether to proceed or skip.' triage-outcome.md Step 0.7 states: 'The issue is already in In Progress status (past Assigned). The status-aware handling detects this and skips the transition.' Mutation Ledger confirms both 'Transition to Assigned' (Step 0.7) and 'Transition to In Progress' (Post) are Skip."
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 46 lists existing description digest comment with sha256 hash. idempotency-check.md section 5 states: 'Comments on TC-8001 include one matching the marker string [sdlc-workflow] Description digest:. Found: Comment #1... Action: SKIP -- do not post a duplicate description digest comment.' triage-outcome.md Post-Triage Summary confirms: 'Description digest comment: already posted (Comment #1, 2026-07-01T10:00:00Z). Skip.'"
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 47 lists existing post-triage summary comment. idempotency-check.md section 6 states: 'Comments on TC-8001 include a post-triage summary... Found: Comment #2 -- Post-triage summary with version impact, actions taken... Action: SKIP -- do not post a duplicate post-triage summary comment.' triage-outcome.md Post-Triage Summary confirms: 'Summary comment: already posted (Comment #2, 2026-07-01T10:01:00Z). Skip.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

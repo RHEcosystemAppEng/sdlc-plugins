@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md states: 'The vulnerable library openssl-libs is a system RPM package (not a Cargo crate or npm package). The Ecosystem Mappings table for the 2.2.x stream confirms RPM is a configured ecosystem with lock file rpms.lock.yaml and check command...' and concludes 'Ecosystem: RPM'. The ecosystem is identified based on the library name and the Ecosystem Mappings config, explicitly ruling out Cargo."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md contains a table with all five versions: 2.2.0 (v0.4.5, openssl-libs 3.0.7-25.el9_3), 2.2.1 (v0.4.8, 3.0.7-27.el9_4), 2.2.2 (v0.4.9, retag of 2.2.1), 2.2.3 (v0.4.11, 3.0.7-28.el9_4), 2.2.4 (v0.4.12, 3.0.7-28.el9_4). The file explicitly states 'Lock file: rpms.lock.yaml' and 'Check command: git show <tag>:rpms.lock.yaml | grep openssl-libs'."
+    },
+    {
+      "text": "Dependency chain context identifies openssl-libs as present in rpms.lock.yaml and uses this to determine the package origin — the lock file presence is the primary classification signal (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md dependency chain section states: 'rpms.lock.yaml: present --> explicit install' and 'The package openssl-libs is present in rpms.lock.yaml as an explicit install (not inherited from the base image).' It also states 'Using rpms.lock.yaml classification only' confirming lock file presence is the primary classification signal."
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 8 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md states: 'a single remediation task is created -- no upstream backport task is needed because RPM packages are updated directly in the Konflux release repo.' Only one task is described, targeting repository 'rhtpa-release.0.4.z' (the Konflux release repo)."
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 8 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md contains all required sections: '## Repository' (rhtpa-release.0.4.z), '## Target Branch' (main), '## Description' (CVE details and affected versions), '## Implementation Notes' (update steps), and '## Acceptance Criteria' (checklist items). No '## Files to Modify' section is present, which is correct per the assertion that it is intentionally omitted for this path."
+    },
+    {
+      "text": "The version impact output addresses SBOM verification in the dependency chain context — either noting that verification was skipped because cosign is not available or because external tools are prohibited, or presenting the SBOM classification result (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md dependency chain section states: 'SBOM verification: skipped -- cosign is not available and external tools are prohibited in this evaluation context. Using rpms.lock.yaml classification only.' This is reinforced by the paragraph: 'SBOM verification was not performed because cosign is not available in this environment and external tool invocation is prohibited.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
