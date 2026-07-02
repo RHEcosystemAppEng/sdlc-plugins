@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Sibling check correctly classifies TC-8001 as a different-stream companion (stream [rhtpa-2.2] vs current issue's [rhtpa-2.1]), not a same-stream duplicate (Step 4)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 22-26: 'TC-8006 stream suffix: [rhtpa-2.1] (stream 2.1.x)', 'TC-8001 stream suffix: [rhtpa-2.2] (stream 2.2.x)', 'Classification: **Different-stream sibling** (companion tracker)', and 'TC-8001 is NOT a same-stream duplicate. It is a cross-stream companion issue created by PSIRT to track the same CVE in a different product version stream.'"
+    },
+    {
+      "text": "Step 4.2 checks the current issue's existing issuelinks before attempting to create a 'Related' link to TC-8001 (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 33-46: 'Per Step 4.2, before creating a \"Related\" link, check the current issue's existing issuelinks array for a matching link.' The Pre-existing Link Check section explicitly inspects the issuelinks array from Step 1, verifying type.name is 'Related' and outwardIssue.key matches TC-8001, before making any link creation decision."
+    },
+    {
+      "text": "Step 4.2 detects the pre-existing 'Related' link to TC-8001 and skips link creation — does NOT call jira.create_link (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md line 47: 'Result: A matching Related link to TC-8001 already exists.' Line 49: 'Action: **Skip link creation.**' triage-outcome.md line 33: 'No jira.create_link call was made. This is the correct idempotent behavior.'"
+    },
+    {
+      "text": "The output includes a log message indicating the link was skipped because it already exists (e.g., 'Related link to TC-8001 already exists — skipping')",
+      "passed": true,
+      "evidence": "sibling-check.md line 50: '\"Related link to TC-8001 already exists -- skipping\"'. triage-outcome.md line 30 repeats the same log message. The message conveys the same meaning as the example, using '--' instead of an em dash."
+    },
+    {
+      "text": "The sibling landscape table is still presented to the engineer despite the link already existing — the idempotent check only affects link creation, not the sibling summary",
+      "passed": true,
+      "evidence": "sibling-check.md lines 59-66: A 'Sibling Landscape' table is presented with columns Issue, Stream, Status, Affects Versions, listing both TC-8001 (2.2.x, In Progress) and TC-8006 (current, 2.1.x, New). This table appears after the link skip decision, confirming the idempotent check only affected link creation, not the sibling summary display."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

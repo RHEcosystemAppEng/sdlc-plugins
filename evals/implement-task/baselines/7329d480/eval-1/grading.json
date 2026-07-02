@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "Step 4 of plan.md explicitly lists all 4 files for inspection: (1) advisory/service/advisory.rs — 'use mcp__serena_backend__get_symbols_overview to see AdvisoryService struct and its existing methods'; (5) advisory/endpoints/get.rs — 'sibling endpoint handler. Inspect to understand the endpoint pattern'; (7) advisory/model/summary.rs — 'sibling model file. Inspect AdvisorySummary struct'; (11) common/src/error.rs — 'AppError enum and .context() usage pattern'."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "The plan's Step 6 lists 3 files to create (severity_summary.rs model, severity_summary.rs endpoint, advisory_summary.rs tests) and 3 files to modify (model/mod.rs, service/advisory.rs, endpoints/mod.rs), matching exactly the task's scope. server/src/main.rs is explicitly marked 'No changes needed' (file-7-description.md). The git add in Step 10 lists exactly these 6 files. Step 9 includes a scope containment check: 'git diff --name-only must match exactly the Files to Modify and Files to Create lists.'"
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "Step 6 lists: (1) 'modules/fundamental/src/advisory/model/severity_summary.rs — New SeveritySummary response struct' (CREATE); (2) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs — New GET handler' (CREATE). Step 7 lists: 'tests/api/advisory_summary.rs — Integration tests'. File descriptions file-1, file-2, and file-6 confirm these as CREATE operations."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "Step 6 lists: (3) 'modules/fundamental/src/advisory/model/mod.rs — Add pub mod severity_summary;' (MODIFY); (4) 'modules/fundamental/src/advisory/service/advisory.rs — Add severity_summary method' (MODIFY); (5) 'modules/fundamental/src/advisory/endpoints/mod.rs — Register the new route' (MODIFY). File descriptions file-3, file-4, and file-5 confirm these as MODIFY operations."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Step 10 shows the commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' (type=feat, scope=advisory, description follows). The footer contains 'Implements TC-9201', referencing the Jira ticket."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "Step 10 commit command explicitly includes: \"git commit --trailer='Assisted-by: Claude Code' -m ...\""
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "Step 5 shows: 'git checkout main / git pull / git checkout -b TC-9201' creating branch TC-9201 from main. Step 1 extracts 'Target Branch: main'. Step 5 states 'Target Branch is main.' The PR creation in Step 10 uses '--base main' and notes 'The --base main flag explicitly targets the Target Branch extracted in Step 1.'"
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md identifies both patterns: (1) Error handling section: 'All handlers return Result<T, AppError> where AppError is defined in common/src/error.rs' and 'Errors are wrapped with .context(\"descriptive message\") for meaningful error chains'; (2) Module structure section: 'Each domain module follows the model/ + service/ + endpoints/ tripartite structure'."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "Step 1 parsed fields include 'Target Branch: main'. A dedicated subsection '### Target Branch extraction' states: 'Target Branch is main. This value will be used in Step 5 (branch creation) and Step 10 (PR base).' Step 5 confirms 'Target Branch is main.' Step 10 PR creation uses '--base main' with note 'The --base main flag explicitly targets the Target Branch extracted in Step 1.'"
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "Step 1.5 is titled 'Verify Description Integrity' and states: 'Fetched comments on TC-9201 via jira.get_issue_comments(TC-9201).' It then notes: 'No description digest found -- skipping integrity check. This task may have been created before digest tracking was introduced.' and 'Per the backward compatibility rules in shared/description-digest-protocol.md, a missing digest comment is a non-blocking warning. Proceeding with implementation normally.'"
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

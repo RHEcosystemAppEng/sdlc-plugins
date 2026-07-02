@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "Plan line 15 states: 'Use `apply_filter` from `common/src/db/query.rs` to parse the comma-separated license string into individual values and generate the appropriate SQL `IN` clause. Do NOT write custom parsing logic -- `apply_filter` already handles both single and multi-value comma-separated parameters.' Also reiterated in the Reuse Applied section: 'Reuse `apply_filter` from `common/src/db/query.rs` directly for comma-separated parameter parsing and SQL IN clause generation.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "Plan line 13 states: 'following the same pattern as the `severity` field in `modules/fundamental/src/advisory/endpoints/list.rs`'. Lines 21-22 reiterate: 'Follow the query struct pattern from `modules/fundamental/src/advisory/endpoints/list.rs` (the severity filter) -- add the `license` field to the existing Query struct in the same way severity is declared as an optional filter field there.'"
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "Plan line 28 states: 'add a JOIN to the `package_license` table using the `entity::package_license` SeaORM entity from `entity/src/package_license.rs`'. Lines 33-34 state: 'Use the `package_license` entity from `entity/src/package_license.rs` for the JOIN query rather than writing raw SQL.' Line 57 confirms: '`entity/src/package_license.rs` -- used as-is for the JOIN; no modifications needed.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "Reuse analysis covers all 3 candidates with detailed sections: (1) 'Reuse Candidate 1: common/src/db/query.rs::apply_filter' (lines 9-18) explains it handles comma-separated parsing and will be called from the endpoint handler. (2) 'Reuse Candidate 2: modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)' (lines 21-38) explains 3-step structural pattern to follow (Query struct, Handler flow, Service call). (3) 'Reuse Candidate 3: entity/src/package_license.rs (package-license join entity)' (lines 41-52) explains JOIN construction, filter application, and why no raw SQL. Each includes 'What it provides', 'How it will be reused', and 'Why reuse' subsections."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "Task defines Files to Modify: (1) modules/fundamental/src/package/endpoints/list.rs, (2) modules/fundamental/src/package/service/mod.rs. Files to Create: (1) tests/api/package_license_filter.rs. The plan's Files to Modify section lists exactly these two files (list.rs and service/mod.rs). The plan's Files to Create section lists exactly tests/api/package_license_filter.rs. The plan also includes a 'Files NOT Modified' section explicitly listing entity/src/package_license.rs, common/src/db/query.rs, advisory/endpoints/list.rs, and package/endpoints/mod.rs as out of scope. The conditional mention of tests/Cargo.toml ('if required') is ancillary infrastructure, not a substantive scope violation."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "The plan explicitly states 'Do NOT write custom parsing logic -- `apply_filter` already handles both single and multi-value comma-separated parameters' (line 15). It calls for reusing apply_filter directly throughout. The 'Files NOT Modified' section confirms 'common/src/db/query.rs -- `apply_filter` is reused directly; no modifications needed.' No new parsing, splitting, or filter utility functions are proposed anywhere in the plan. The reuse analysis further confirms: 'No new utility functions or parsing logic need to be written' (line 5)."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

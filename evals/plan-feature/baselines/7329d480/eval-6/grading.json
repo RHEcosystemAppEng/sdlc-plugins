@@ -1,0 +1,94 @@
+{
+  "assertion_results": [
+    {
+      "assertion_number": 1,
+      "description": "Epics are generated between Feature and Tasks — at least 2 Epics are created (one per repository) when by-repository grouping is used",
+      "result": "PASS",
+      "evidence": "epics.md defines two Epics with by-repository grouping strategy: Epic 1 'TC-9006: trustify-backend' (Tasks 1, 2, 3, 8) and Epic 2 'TC-9006: trustify-ui' (Tasks 4, 5, 6, 7). The grouping strategy is explicitly stated as 'by-repository — one Epic per repository that contains tasks for this feature.'"
+    },
+    {
+      "assertion_number": 2,
+      "description": "Each Epic summary follows the format '<feature-key>: <repository-name>'",
+      "result": "PASS",
+      "evidence": "epics.md shows Epic 1 Summary: 'TC-9006: trustify-backend' and Epic 2 Summary: 'TC-9006: trustify-ui'. Both follow the exact '<feature-key>: <repository-name>' format."
+    },
+    {
+      "assertion_number": 3,
+      "description": "Each task specifies its parent Epic key in the output — tasks targeting trustify-backend are assigned to the backend Epic, tasks targeting trustify-ui are assigned to the frontend Epic",
+      "result": "PASS",
+      "evidence": "All 8 task files contain a 'Parent Epic' line. Backend tasks (1, 2, 3, 8) all state 'Parent Epic: TC-9006: trustify-backend' with Repository: trustify-backend. Frontend tasks (4, 5, 6, 7) all state 'Parent Epic: TC-9006: trustify-ui' with Repository: trustify-ui. The mapping is consistent and correct."
+    },
+    {
+      "assertion_number": 4,
+      "description": "Incorporates links are created from the Feature to each Epic (not from Feature to individual Tasks)",
+      "result": "PASS",
+      "evidence": "epics.md Links section states: 'TC-9006 **incorporates** Epic \"TC-9006: trustify-backend\"' and 'TC-9006 **incorporates** Epic \"TC-9006: trustify-ui\"'. It explicitly notes: 'Individual tasks are children of their respective Epic, not linked directly to Feature TC-9006.'"
+    },
+    {
+      "assertion_number": 5,
+      "description": "Task dependency ordering is preserved within and across Epics — backend tasks have lower task numbers than dependent frontend tasks",
+      "result": "PASS",
+      "evidence": "impact-map.md shows the dependency graph: Backend chain Task 1 -> Task 2 -> Task 3 (numbers ascending). Frontend chain Task 4 -> Task 5 -> Task 6 -> Task 7 (numbers ascending). Backend core tasks (1, 2, 3) have lower numbers than all frontend tasks (4, 5, 6, 7). Task 8 (documentation, backend) depends on Task 2 and Task 6, placed last at position 8, correctly after all its dependencies."
+    },
+    {
+      "assertion_number": 6,
+      "description": "Each task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements",
+      "result": "FAIL",
+      "evidence": "Tasks 2, 5, 6, and 8 are missing the '## Test Requirements' section. Task 1 has it, Task 3 has it, Task 4 has it, Task 7 has it. But task-2-remediation-endpoints.md, task-5-remediation-dashboard-page.md, task-6-remediation-vulnerability-table.md, and task-8-remediation-documentation.md do not contain a Test Requirements section."
+    },
+    {
+      "assertion_number": 7,
+      "description": "Epics are created with the level-1 issue type name ('Epic') and parent set to the feature issue key",
+      "result": "PASS",
+      "evidence": "epics.md shows both Epics with 'Issue Type: Epic (level 1)' and 'Parent: TC-9006'. Epic 1: 'Issue Type: Epic (level 1)', 'Parent: TC-9006'. Epic 2: 'Issue Type: Epic (level 1)', 'Parent: TC-9006'."
+    },
+    {
+      "assertion_number": 8,
+      "description": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "result": "PASS",
+      "evidence": "All 8 task files have a '## Repository' section with a single repository name. Tasks 1, 2, 3, 8: 'trustify-backend'. Tasks 4, 5, 6, 7: 'trustify-ui'. No task lists multiple repositories."
+    },
+    {
+      "assertion_number": 9,
+      "description": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "result": "FAIL",
+      "evidence": "Tasks 2, 5, 6, and 8 are missing the '## Test Requirements' section. All 8 tasks have Target Branch, Description, and Acceptance Criteria. But task-2-remediation-endpoints.md, task-5-remediation-dashboard-page.md, task-6-remediation-vulnerability-table.md, and task-8-remediation-documentation.md lack Test Requirements."
+    },
+    {
+      "assertion_number": 10,
+      "description": "After each task is created, a description digest comment is posted with a format-tagged SHA-256 hash",
+      "result": "PASS",
+      "evidence": "digest-log.md contains entries for all 8 tasks. Each has a valid sha256-md: prefix followed by exactly 64 lowercase hexadecimal characters. Verified: task-1 sha256-md:836413b3...0359 (64 hex), task-2 sha256-md:c2b25d09...f3ea (64 hex), task-3 sha256-md:1809d9ea...ae76 (64 hex), task-4 sha256-md:afd30184...3ed4 (64 hex), task-5 sha256-md:b7b960b2...2b76 (64 hex), task-6 sha256-md:234452e0...7086 (64 hex), task-7 sha256-md:aa741651...4823 (64 hex), task-8 sha256-md:10bf48e9...1726 (64 hex). All 8 hashes are unique, non-placeholder values."
+    },
+    {
+      "assertion_number": 11,
+      "description": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention",
+      "result": "PASS",
+      "evidence": "All convention references in task Implementation Notes include 'Applies:' rationale lines in the prescribed format. Backend tasks use 'Applies: task creates <file> matching the convention's .rs scope' (e.g., task-1 line 29: 'Applies: task creates modules/fundamental/src/remediation/model/summary.rs matching the convention's .rs module scope.'). Frontend tasks use 'Applies: task creates/modifies <file> matching the convention's .ts/.tsx scope' or 'Applies: convention has no file-type restriction (broadly applicable)' for naming conventions. No 'Not applicable' annotations found in any task file. Task 8 (documentation, modifies only README.md) correctly excludes all .rs-scoped conventions."
+    },
+    {
+      "assertion_number": 12,
+      "description": "When the Feature issue has a priority set (not 'Undefined'), every created task's additional_fields includes 'priority' with the inherited priority name",
+      "result": "PASS",
+      "evidence": "impact-map.md states 'Priority: Major (propagated from TC-9006 to all Epics and Tasks)' and shows additional_fields: { \"priority\": {\"name\": \"Major\"} }. Both epics in epics.md show 'Priority: Major'. summary-comment.md confirms 'Priority: Major (propagated from TC-9006 to all Epics and Tasks)'."
+    },
+    {
+      "assertion_number": 13,
+      "description": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config is 'task' or 'both' (or absent, defaulting to 'both'), every created task's additional_fields includes 'fixVersions'",
+      "result": "PASS",
+      "evidence": "CLAUDE.md has no '### Jira Field Defaults' section, so fixVersion scope defaults to 'both'. impact-map.md states 'Fix Versions: RHTPA 1.5.0 (propagated from TC-9006 to all Epics and Tasks)' and shows additional_fields: { \"fixVersions\": [{\"name\": \"RHTPA 1.5.0\"}] }. Both epics in epics.md show 'Fix Versions: RHTPA 1.5.0'. summary-comment.md confirms 'Fix Versions: RHTPA 1.5.0 (propagated from TC-9006 to all Epics and Tasks)'."
+    },
+    {
+      "assertion_number": 14,
+      "description": "The summary comment on the feature issue (Step 6c) includes the inherited priority and fixVersion values that were propagated to tasks, or states they were omitted and why",
+      "result": "PASS",
+      "evidence": "summary-comment.md (the summary comment) contains a 'Propagated Fields' section stating: 'Priority: Major (propagated from TC-9006 to all Epics and Tasks)' and 'Fix Versions: RHTPA 1.5.0 (propagated from TC-9006 to all Epics and Tasks)'. It also shows the exact additional_fields JSON: { \"labels\": [\"ai-generated-jira\"], \"priority\": {\"name\": \"Major\"}, \"fixVersions\": [{\"name\": \"RHTPA 1.5.0\"}] }."
+    }
+  ],
+  "summary": {
+    "passed": 12,
+    "failed": 2,
+    "total": 14,
+    "pass_rate": 0.857
+  }
+}
