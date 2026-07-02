@@ -84,7 +84,7 @@ If any of these sections are missing or incomplete, inform the user:
 
 ## Step 0.5 – JIRA Access Initialization
 
-Before attempting any JIRA operations (Steps 1, 2.5, 4, 6), determine the access method.
+Before attempting any JIRA operations (Steps 1, 1.5, 2.5, 4, 6), determine the access method.
 
 **For every JIRA operation:**
 1. **Attempt MCP first** (preferred method)
@@ -114,6 +114,7 @@ Before attempting any JIRA operations (Steps 1, 2.5, 4, 6), determine the access
 - `jira.create_issue_link(...)` → `python3 scripts/jira-client.py create_link --inward <issue1> --outward <issue2> --link-type <type>`
 - `jira.get_priorities()` → `python3 scripts/jira-client.py get_priorities`
 - `jira.get_versions(project)` → `python3 scripts/jira-client.py get_versions <project-key> --unreleased-only`
+- `jira.edit_issue(id, parent)` → `python3 scripts/jira-client.py update_issue <id> --fields-json '{"parent": {"key": "<parent-key>"}}'`
 
 Refer to `shared/jira-rest-fallback.md` for complete implementation details.
 
@@ -152,6 +153,49 @@ Extract:
 - `fixVersions`: extract the `fields.fixVersions` array (e.g., `[{"name": "RHTPA 1.5.0", "id": "62648"}]`). If the array is empty, treat it as unset.
 
 **On MCP failure, if REST API chosen (Step 0.5):** use `get_issue <id> --fields "*all"` — the response includes `fields.priority` and `fields.fixVersions` in the same structure.
+
+## Step 1.5 – Link Feature to Parent Issue
+
+After fetching the Feature issue in Step 1, optionally link it to a parent issue
+in the Jira hierarchy (e.g., an Outcome at hierarchy level 3+). This enables teams
+to maintain the full Outcome → Feature → Epic → Task hierarchy.
+
+1. **Check existing parent**: inspect the Feature issue response from Step 1 for a
+   `parent` field. If the Feature already has a parent set, display the current
+   parent (key and summary) and ask the user whether to keep or change it. If the
+   user wants to keep it, skip to Step 2.
+
+2. **Prompt the user**: display an interactive prompt:
+
+   ```
+   Link this Feature to a parent issue? Enter the parent issue key (e.g., TC-100) or press Enter to skip:
+   ```
+
+3. **If user provides a key**: validate it by fetching the issue:
+
+   ```
+   jira.get_issue(<parent-key>)
+   ```
+
+   Verify that:
+   - The issue exists.
+   - Its issue type's `hierarchyLevel` is strictly higher than the Feature's
+     `hierarchyLevel`. Use the type-to-role mapping from Step 2.5 if already
+     available, or inspect the parent issue type's `hierarchyLevel` field directly
+     from the fetched issue response (`fields.issuetype.hierarchyLevel`). The
+     parent should be at level 3+ (e.g., Outcome), not at the same level as
+     the Feature (level 2) or lower (Epic level 1, Task level 0).
+
+   If validation fails, inform the user of the hierarchy mismatch and ask again.
+
+4. **Set the parent link**: update the Feature issue:
+
+   ```
+   jira.edit_issue(<feature-key>, fields={"parent": {"key": "<parent-key>"}})
+   ```
+
+5. **If user skips (presses Enter)**: proceed without linking — this step is
+   entirely optional.
 
 ## Step 2 – Inspect Figma Design
 
