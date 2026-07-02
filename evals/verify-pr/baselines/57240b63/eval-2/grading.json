@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The verification report marks at least 2 acceptance criteria as FAIL, identifying specific gaps between the diff and the task requirements",
+      "passed": true,
+      "evidence": "report.md Acceptance Criteria section shows 'FAIL (3 of 6 criteria fail)'. Criteria 1 (incorrect total computation), 3 (invalid threshold silently accepted), and 5 (threshold_applied field missing) are all marked FAIL with specific code-level evidence from the diff explaining each gap."
+    },
+    {
+      "text": "The report identifies that invalid threshold values are silently accepted (unwrap_or(0)) instead of returning 400 Bad Request as required",
+      "passed": true,
+      "evidence": "report.md Criterion 3 section: 'The most significant defect is the silent acceptance of invalid threshold values. The code: let threshold_idx = severity_order.iter().position(|&s| s == threshold.to_lowercase()).unwrap_or(0);' and 'When threshold=invalid, position() returns None, and unwrap_or(0) maps it to index 0 (critical). This means any invalid input is silently treated as ?threshold=critical.' criterion-3.md confirms: 'No 400 Bad Request error is returned' and 'No validation error is raised'."
+    },
+    {
+      "text": "The report identifies that the threshold_applied boolean field is missing from the response",
+      "passed": true,
+      "evidence": "report.md Criterion 5 row: 'Response includes threshold_applied boolean field | FAIL | No such field exists in the response; AdvisorySummary struct was not modified'. criterion-5.md confirms: 'There is no threshold_applied boolean field anywhere in the response' and 'The diff does not modify the AdvisorySummary struct definition'."
+    },
+    {
+      "text": "The report identifies that the test file tests/api/advisory_summary.rs is absent from the diff — no tests were created",
+      "passed": true,
+      "evidence": "report.md Scope Containment section lists 'tests/api/advisory_summary.rs | No -- MISSING' in the Files to Create table, followed by 'This file is entirely absent from the PR diff. No test file of any kind was added.' Test Quality section: 'No test file was created. The task requires tests/api/advisory_summary.rs with 6 specific test cases' followed by listing all 6 required tests and 'None of these tests exist in the PR diff.'"
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "All output files are verification reports: report.md and criterion-1.md through criterion-6.md, all located in the outputs directory. The report content exclusively reads and analyzes the PR diff without any indication of modifying source code. No code files were created or edited -- all outputs are analysis documents."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR — it presents findings for human review (constraint 1.13)",
+      "passed": true,
+      "evidence": "report.md concludes with 'FAIL -- This PR does not satisfy the acceptance criteria for TC-9102' followed by a summary of the three failing criteria. There is no merge action, no approval, and no auto-merge directive anywhere in the report. The report presents findings for human review."
+    },
+    {
+      "text": "The overall result is FAIL, not PASS or WARN",
+      "passed": true,
+      "evidence": "report.md line 5: '**Overall Result**: FAIL'. The Overall Assessment section also states: '**FAIL** -- This PR does not satisfy the acceptance criteria for TC-9102.'"
+    },
+    {
+      "text": "The report contains a Test Change Classification row with N/A — no test files exist in the PR diff",
+      "passed": true,
+      "evidence": "report.md Summary Table row: '| Style/Conventions | Test Change Classification | N/A |'. The detailed Test Change Classification section states: '**Result**: N/A' with explanation 'No test files appear in the PR diff.'"
+    },
+    {
+      "text": "The report includes detailed findings for each failing check with specific evidence from the diff — Scope Containment identifies the missing test file by comparing PR files against the task specification, Acceptance Criteria provides per-criterion analysis explaining each gap",
+      "passed": true,
+      "evidence": "Scope Containment provides two tables (Files to Modify, Files to Create) comparing task-specified files against the diff, explicitly marking tests/api/advisory_summary.rs as 'No -- MISSING'. It also notes 'the changes to advisory.rs are minimal (no substantive logic added), despite the task specifying that filtering logic should be added there.' Acceptance Criteria provides a 6-row table with per-criterion Result and Reason, plus three detailed subsections (Criterion 3, Criterion 5, Criterion 1) each with code excerpts from the diff and specific analysis of the gap."
+    },
+    {
+      "text": "Acceptance criteria verification produces per-criterion PASS/FAIL analysis with code-level evidence — each criterion-N.md output file contains detailed reasoning about what was checked and what gap was found",
+      "passed": true,
+      "evidence": "All six criterion files exist with detailed analysis: criterion-1.md (FAIL, quotes total computation code, explains unfiltered vs filtered counts), criterion-2.md (PASS, quotes Option<String> and None branch), criterion-3.md (FAIL, quotes unwrap_or(0) pattern, explains silent acceptance), criterion-4.md (PASS, quotes severity_order array and index comparison logic), criterion-5.md (FAIL, quotes AdvisorySummary struct fields, notes missing threshold_applied), criterion-6.md (PASS, quotes SBOM fetch logic, confirms unchanged error path). Each file includes a Verdict line with reasoning."
+    },
+    {
+      "text": "Eval Quality is N/A because no eval result reviews exist in the PR — no reviews match the eval result detection criteria, so Eval Quality does not affect the Test Quality combination",
+      "passed": true,
+      "evidence": "report.md Eval Quality section: '**Result**: N/A' with explanation 'No eval result reviews exist.' The Summary Table shows Eval Quality as N/A and Test Quality as FAIL independently. Since Eval Quality is N/A, it does not factor into or alter the Test Quality result."
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "pass_rate": 1.0
+  }
+}

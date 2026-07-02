@@ -1,0 +1,55 @@
+{
+  "assertion_results": [
+    {
+      "text": "Bug parsing correctly extracts all four required sections (Description, Steps to Reproduce, Expected Result, Actual Result) using the heading formats from bug-template-mock.md (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md 'Template Section Matching' table (lines 30-36) lists all four required sections with heading formats matching bug-template-mock.md: Description as `### **Issue Description**`, Steps to Reproduce as `### **Steps to Reproduce**`, Expected Result as `### **Expected Result**`, Actual Result as `### **Actual Result**` — all marked 'Present: Yes'. The 'Parsed Sections' (lines 49-75) contain extracted content for each section."
+    },
+    {
+      "text": "Bug validation confirms the issue type ID (10020) matches the Bug issue type ID from Bug Configuration (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md line 24: 'Issue type validation: Issue type ID `10020` matches Bug Configuration's Bug issue type ID `10020`. Confirmed as a Bug issue.' The Configuration Validation section (lines 14-22) also explicitly shows 'Bug issue type ID: 10020'."
+    },
+    {
+      "text": "Investigation identifies the trailing-whitespace heading extraction as the root cause — line[3:] does not strip whitespace (Steps 2-3)",
+      "passed": true,
+      "evidence": "investigation.md lines 22-26: 'It iterates over lines, extracting section headings: ... section_name = line[3:]  # Extracts heading text after \"## \"'. Lines 25-26: 'When the heading line is `## Migration Patterns  \\n` (with trailing whitespace), the extraction `line[3:]` produces `\"Migration Patterns  \"` (with two trailing spaces).' Line 37: 'Divergence point: The behavior diverges from expected at step 3 — the heading extraction does not strip trailing whitespace, causing all subsequent exact-match lookups against that heading to fail.'"
+    },
+    {
+      "text": "Root cause comment includes: what is broken (heading extraction does not strip trailing whitespace), where it is broken (plan-feature convention lookup), and how to verify the fix (reproducer test with whitespace in heading) (Step 4)",
+      "passed": true,
+      "evidence": "root-cause.md line 9 (what): 'The plan-feature skill's convention conformance analysis extracts CONVENTIONS.md section headings using line[3:], which captures all text after the ## prefix without stripping trailing whitespace.' Line 13 (where): 'plugins/sdlc-workflow/skills/plan-feature/SKILL.md — Convention conformance analysis section: heading extraction logic (section_name = line[3:]) does not call .strip()'. Lines 24-28 (how to verify): 'Create a test fixture CONVENTIONS.md with trailing whitespace on at least one heading line... Run the plan-feature convention lookup against this fixture and assert that the convention is correctly matched despite the trailing whitespace.'"
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md Acceptance Criteria section, first item (line 68): '- [ ] A reproducer test exists that creates a CONVENTIONS.md with trailing whitespace on headings, runs convention lookup, and asserts that the convention is correctly matched (fails before fix, passes after fix)'. The fix criterion follows as the second item (line 69): '- [ ] The heading extraction in the convention conformance analysis applies .strip() to normalize section names...'"
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST test requirement — with explicit assertion guidance derived from the Steps to Reproduce (Step 5 Test Requirements ordering)",
+      "passed": true,
+      "evidence": "task-description.md Test Requirements section, first item (line 74): '- [ ] Reproducer test: create a CONVENTIONS.md fixture with trailing whitespace on at least one section heading (e.g., ## Migration Patterns  ), run the plan-feature convention conformance analysis against it, and assert that the convention appears in the generated task's Implementation Notes as Per CONVENTIONS.md §Migration Patterns: add Index::create() for all FK columns.' The assertion guidance ('assert that the convention appears in the generated task's Implementation Notes as Per CONVENTIONS.md §Migration Patterns: add Index::create() for all FK columns.') is directly derived from the Steps to Reproduce in the bug report."
+    },
+    {
+      "text": "Task description includes a Bug Context section with Bug key (ACME-500), Steps to Reproduce, Expected/Actual Result, and Root Cause summary (Step 5 Bug Context extension)",
+      "passed": true,
+      "evidence": "task-description.md lines 78-84: '## Bug Context' section contains all five required elements: Bug key as '**Bug**: [ACME-500](https://mock-jira.example.com/browse/ACME-500)', Steps to Reproduce, Expected Result ('The generated task's Implementation Notes should include Per CONVENTIONS.md §Migration Patterns...'), Actual Result ('The generated task's Implementation Notes do NOT reference the Migration Patterns convention...'), and Root Cause summary ('The convention heading extraction uses line[3:] without .strip(), storing keys with trailing whitespace that fail exact-match lookups against clean convention names.')."
+    },
+    {
+      "text": "Task description sets Target Branch to main (Step 5 Target Branch)",
+      "passed": true,
+      "evidence": "task-description.md lines 19-20: '## Target Branch' followed by 'main'."
+    },
+    {
+      "text": "Task description output includes ai-generated-jira in the Jira API metadata block showing it would be passed as a label to jira.create_issue (Step 5 Task creation)",
+      "passed": true,
+      "evidence": "task-description.md lines 1-7: '# Jira API Metadata\\n\\nParameters for `jira.create_issue`:\\n\\n- **Project key**: ACME\\n- **Issue type**: Task\\n- **Labels**: ai-generated-jira'. The label 'ai-generated-jira' is explicitly listed as a parameter for jira.create_issue."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9,
+    "pass_rate": 1.0
+  }
+}

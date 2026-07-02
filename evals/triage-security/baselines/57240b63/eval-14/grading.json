@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Dependency chain output includes both the rpms.lock.yaml classification AND the SBOM verification result for the affected versions (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "sbom-verification.md lines 89-101 show a dependency chain output block that includes both signals: 'rpms.lock.yaml: present --> explicit install' and 'SBOM verification: present in BOTH final and base image SBOMs --> base image'. Per-version tables for each affected version (2.2.0, 2.2.1, 2.2.2) also include both the rpms.lock.yaml result and the SBOM comparison result side by side."
+    },
+    {
+      "text": "SBOM verification uses cosign download sbom to compare the final container image SBOM against the base image SBOM (Step 2.3.5 sub-steps 2 and 4)",
+      "passed": true,
+      "evidence": "sbom-verification.md line 7 confirms cosign availability: '/usr/bin/cosign (confirmed via which cosign)'. The classification method (lines 13-16) describes comparing final container image SBOM against base image SBOM: 'Present in final SBOM but NOT in base SBOM --> explicit install; Present in BOTH final and base SBOMs --> base image package.' Per-version tables include 'Final image SBOM' and 'Base image SBOM' rows showing the comparison was performed. data-extraction.md line 37 also notes 'SBOM verification: available (cosign found at /usr/bin/cosign)'."
+    },
+    {
+      "text": "When SBOM classification (base image) disagrees with rpms.lock.yaml classification (explicit install), the discrepancy is flagged to the engineer with a warning (Step 2.3.5 sub-step 5 disagreement handling)",
+      "passed": true,
+      "evidence": "sbom-verification.md explicitly flags disagreements for all three affected versions with bold 'DISAGREEMENT' callouts (lines 29, 40, 53): 'rpms.lock.yaml says explicit install but SBOM comparison says base image (present in both final and base image SBOMs). Investigate manually.' A summary disagreement table (lines 65-69) consolidates all discrepancies. The dependency chain output (lines 93-95) also includes: 'DISAGREEMENT: rpms.lock.yaml classification (explicit install) does not match SBOM comparison (base image). Investigate manually.'"
+    },
+    {
+      "text": "The rpms.lock.yaml classification remains the primary signal — the SBOM result supplements but does not override it (Step 2.3.5 non-MVP enhancement)",
+      "passed": true,
+      "evidence": "sbom-verification.md lists rpms.lock.yaml as signal #1 and SBOM comparison as signal #2 in the classification method (lines 11-16). When disagreement occurs, the origin is 'DISPUTED -- manual investigation required' (line 96) rather than being auto-overridden by the SBOM result. The version-impact.md file uses rpms.lock.yaml lock file evidence (not SBOM results) as the basis for the Version Impact Table (lines 33-43), confirming rpms.lock.yaml is the primary signal for impact determination. The SBOM result supplements by providing a second data point but does not change the version-level affected/not-affected determination."
+    },
+    {
+      "text": "The SBOM verification result is presented alongside the rpms.lock.yaml result in the dependency chain output, not as a separate section (Step 2.3.5 sub-step 6)",
+      "passed": true,
+      "evidence": "sbom-verification.md lines 89-101 show the dependency chain output block where both results appear together in a single unified block: 'rpms.lock.yaml: present --> explicit install' immediately followed by 'SBOM verification: present in BOTH final and base image SBOMs --> base image', followed by the disagreement note. They are integrated into one 'Dependency chain for openssl-libs (RPM)' block rather than being separated into distinct sections. The per-version tables (e.g., version 2.2.0 at lines 22-27) also present both signals in the same table with rpms.lock.yaml and SBOM comparison rows together."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

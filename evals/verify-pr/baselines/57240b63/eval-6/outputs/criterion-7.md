@@ -1,0 +1,13 @@
+# Criterion 7: Step 6a verdict mapping includes Documentation Coverage
+
+## Verdict: PASS
+
+## Reasoning
+
+The PR diff adds a new row to the verdict mapping table in `SKILL.md`:
+
+```
+| Style/Conventions | Documentation Coverage    | Style Quality *(new)*     |
+```
+
+This maps the Documentation Coverage check from the Style/Conventions sub-agent to a new "Style Quality" verdict in the summary report. This directly satisfies the criterion: the Step 6a verdict mapping now includes Documentation Coverage.

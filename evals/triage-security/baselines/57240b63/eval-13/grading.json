@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The remediation output describes the digest protocol for the upstream backport task: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "Task 1 (lines 76-126) and Task 3 (lines 323-370) both describe the full digest protocol for upstream backport tasks: step 1 re-fetches from Jira via get_issue after create_issue, step 3 computes digest using 'python3 scripts/sha256-digest.py /tmp/task-desc.md'. Line 80 explicitly states 'do NOT hash the description string passed to create_issue'."
+    },
+    {
+      "text": "The remediation output describes the digest protocol for the downstream propagation subtask: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "Task 2 (lines 184-238) and Task 4 (lines 434-488) both describe the full digest protocol for downstream propagation subtasks: step 1 re-fetches description from Jira via get_issue after create_issue, step 3 computes digest using 'python3 scripts/sha256-digest.py /tmp/task-desc.md'. Line 188 states 'always re-fetch, never hash the input string'."
+    },
+    {
+      "text": "The remediation output includes the digest comment marker '[sdlc-workflow] Description digest:' in the described steps for each remediation task — both upstream and downstream (§1.66)",
+      "passed": true,
+      "evidence": "The exact marker '[sdlc-workflow] Description digest:' appears in the digest comment examples for all four tasks: Task 1 (line 110), Task 2 (line 218), Task 3 (line 357), Task 4 (line 466). The summary at line 598 also confirms: 'The marker string is fixed: [sdlc-workflow] Description digest:'."
+    },
+    {
+      "text": "The remediation output sequences digest comments BEFORE issue links (Depend, Blocks) or other comments in the described procedure for each task (§1.66, shared/description-digest-protocol.md Rules)",
+      "passed": true,
+      "evidence": "All four tasks explicitly state digest comments must come before links: Task 1 step 4 (line 98): 'This comment MUST be posted BEFORE creating issue links or any other comments', step 5 (line 118): 'Only after the digest comment is posted, proceed to create issue links'; Task 2 step 4 (line 203): same BEFORE constraint, step 5 (line 222): links after; Task 3 step 4 (line 343): 'MUST be posted BEFORE creating issue links or any other comments', step 5 (line 363): links after; Task 4 step 4 (line 453): same. Summary execution order (lines 606-614) confirms: step 5=digest comment, step 6=issue links."
+    },
+    {
+      "text": "The remediation output specifies that the digest is computed from the re-fetched description (via Jira API after create_issue), not from the description string passed to create_issue (shared/description-digest-protocol.md Hashing)",
+      "passed": true,
+      "evidence": "Explicit statements in all four tasks: Task 1 (line 80): 'do NOT hash the description string passed to create_issue -- Jira normalizes content during storage'; Task 2 (line 188): 'always re-fetch, never hash the input string'; Task 3 (line 327): 'the description must be re-fetched after creation because Jira normalizes content during storage -- never hash the input string passed to create_issue'; Task 4 (line 438): 'always re-fetch after creation, never hash the input'. Summary rule 1 (line 594): 'Always re-fetch the description from Jira after create_issue -- never hash the description string you passed in'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
