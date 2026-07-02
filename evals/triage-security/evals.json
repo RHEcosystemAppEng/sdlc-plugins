@@ -236,6 +236,19 @@
       ]
     },
     {
+      "id": 18,
+      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard-already-triaged.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has ALREADY been triaged in a prior run: it has the ai-cve-triaged label, Status is In Progress, two remediation tasks (TC-8100, TC-8101) are linked via Depend, a description digest comment exists, and a post-triage summary comment exists. This is a RE-RUN of triage on the same issue. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data table from Step 1, write outputs/idempotency-check.md with the analysis of all pre-existing triage artifacts detected and skipped, and write outputs/triage-outcome.md explaining why the second run produces no new mutations.",
+      "expected_output": "A triage analysis where the second run detects all pre-existing triage artifacts — ai-cve-triaged label, In Progress status, existing Depend links to remediation tasks TC-8100 and TC-8101, existing description digest comment, and existing post-triage summary comment — and skips all mutations. No new remediation tasks are created, no labels are added, no status transition occurs, no duplicate comments are posted, and no duplicate links are created. The output documents each idempotent skip with an explanation.",
+      "files": ["files/vuln-issue-standard-already-triaged.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+        "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+        "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+        "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+        "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)"
+      ]
+    },
+    {
       "id": 19,
       "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-stale-mock.md (which has a Last-Updated timestamp of 2026-05-01T10:00:00Z — more than 14 days old), and the project CLAUDE.md is in claude-md-security-config.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/staleness-check.md with the Step 0.3 staleness detection output including the warning message and user options.",
       "expected_output": "A staleness check that detects the security-matrix.md timestamp (2026-05-01T10:00:00Z) is older than the 14-day default threshold and presents a warning with three options: refresh now, proceed anyway, or stop.",
