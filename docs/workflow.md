@@ -181,8 +181,20 @@ Converts a Jira feature into structured implementation tasks.
 
 **Workflow mode determination:** After the Repository Impact Map is approved, the skill determines whether the feature requires **feature-branch mode** (all-or-nothing delivery) or **direct-to-main mode** (incremental delivery). The decision is based on atomicity indicators — coordinated schema migrations, breaking API changes, cross-cutting refactors, or tightly coupled feature components. When any indicator is present, feature-branch mode is selected; otherwise direct-to-main mode is used. The decision is recorded as a comment on the feature issue.
 
+**Documentation and testing task generation:** In addition to implementation tasks, plan-feature can generate two types of feature-level tasks:
+
+- **Documentation tasks** are triggered when the Feature's "Documentation Considerations" section (captured during `/define-feature`) indicates doc impact — New Content, Updates to existing content, or Release Notes. The generated task describes what documentation needs updating and what type of update is needed. Documentation tasks depend on all implementation tasks so that documentation is written after the feature is implemented. When the Documentation Considerations section is absent or states "No Doc Impact", documentation task generation is skipped.
+
+- **Testing tasks** are triggered by the presence of a testing readiness template at `docs/testing-readiness.md` in the target repository. The template uses `## <Category Name>` headings to define cross-cutting test categories (e.g., Smoke Tests, Integration Tests, Performance Benchmarks), with acceptance criteria listed as bullet points under each heading. Plan-feature generates one testing task per category, using the template's acceptance criteria directly. Testing tasks depend on all implementation tasks. When no readiness template exists, testing task generation is skipped silently. See [docs/templates/testing-readiness.md](templates/testing-readiness.md) for the template format.
+
+Both task types are **additive** — they complement the per-task Test Requirements and Documentation Updates sections in individual implementation tasks, rather than replacing them. Documentation tasks cover feature-level documentation impact, while testing tasks cover cross-cutting validation that spans the entire feature.
+
+**Opt-out:** Documentation tasks are controlled by the Feature description (omit the Documentation Considerations section or state "No Doc Impact"). Testing tasks are controlled by the presence of the readiness template file (remove or do not create `docs/testing-readiness.md` to skip).
+
 **Output:**
 - Implementation tasks created in Jira (labeled `ai-generated-jira`)
+- Documentation task (when Documentation Considerations section indicates doc impact)
+- Testing tasks (one per category in `docs/testing-readiness.md`, when the file exists)
 - Impact map comment on the feature issue
 - Workflow mode decision comment on the feature issue
 - Issue links (feature incorporates tasks, task dependency chains)
