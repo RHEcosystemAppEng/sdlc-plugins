@@ -5,6 +5,19 @@ All notable changes to the sdlc-workflow plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.12.0] - 2026-07-02
+
+### Added
+
+- Epic creation and grouping strategies with configurable hierarchy preferences in `plan-feature` (TC-4869)
+- Parent issue linking step in `plan-feature` (TC-4870)
+- Early assignment and Assigned transition at Step 0.7 in `triage-security` (TC-5008)
+- Cross-CVE traceability links and comments at Step 4.3 in `triage-security` (TC-5009)
+
+### Fixed
+
+- Traceability links created at identification time instead of after confirmation in `triage-security` (TC-5009)
+
 ## [0.11.1] - 2026-07-01
 
 ### Added
