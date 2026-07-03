@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md lines 42-46: 'Import `apply_filter` from `common::db::query`. ... Use `apply_filter` to parse the comma-separated license string (e.g., \"MIT,Apache-2.0\") into individual values. `apply_filter` handles both single and multi-value inputs and generates the appropriate SQL `IN` clause.' Also line 92: 'Service calls `apply_filter` (from `common/src/db/query.rs`) to parse \"MIT,Apache-2.0\" into [\"MIT\", \"Apache-2.0\"] and generate the SQL `IN` clause.' Also line 102: 'No new utility functions -- `apply_filter` from `common/src/db/query.rs` is reused directly.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md line 13: 'following the same pattern as the `severity` field in `modules/fundamental/src/advisory/endpoints/list.rs`.' Lines 18-19: 'The advisory list endpoint (`modules/fundamental/src/advisory/endpoints/list.rs`) defines a Query struct with an optional `severity` field and passes it through to the service layer. Replicate this pattern exactly:'"
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md line 43: 'Import the `package_license` entity from `entity::package_license`.' Line 46: 'Build a SeaORM query that JOINs `package` to `package_license` on the foreign key relationship defined in the `package_license` entity.' Line 93: 'Service builds a SeaORM query joining `package` to `package_license` (from `entity/src/package_license.rs`) and applies the `IN` filter on the license column.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md covers all three: Reuse Candidate 1 (common/src/db/query.rs::apply_filter, lines 9-16 with 'How it is reused' section), Reuse Candidate 2 (modules/fundamental/src/advisory/endpoints/list.rs, lines 20-29 with 'How it is reused' section listing 3 specific reuse points), Reuse Candidate 3 (entity/src/package_license.rs, lines 33-43 with 'How it is reused' section listing 3 specific reuse points). Each candidate has a detailed explanation of what it provides, how it is reused, and why reuse is preferred."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md lists exactly three files: two to modify (modules/fundamental/src/package/endpoints/list.rs at line 9, modules/fundamental/src/package/service/mod.rs at line 33) and one to create (tests/api/package_license_filter.rs at line 58). Line 99 explicitly states: 'Only the three files listed above are touched (two modified, one created).' Line 101: 'No changes to other endpoints or modules.' The conditional mention of tests/Cargo.toml on line 81 ('Register the new test file in `tests/Cargo.toml` if needed') is a minor ancillary step, not a new file creation or modification outside scope. Line 85 explicitly excludes out-of-scope files: 'No changes to `modules/fundamental/src/package/endpoints/mod.rs` or `server/src/main.rs` are needed.'"
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md line 102: 'No new utility functions -- `apply_filter` from `common/src/db/query.rs` is reused directly.' The plan consistently references calling apply_filter directly (lines 42-46, line 92) and never proposes writing any new parsing, splitting, or filter-building utility functions. reuse-analysis.md Candidate 1 section further confirms: 'the service calls `apply_filter` directly with the raw license string from the query parameter. This handles all the parsing and SQL generation without writing any new string-splitting or clause-building logic.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

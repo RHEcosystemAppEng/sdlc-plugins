@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 46-51 lists existing Depend links to TC-8100 and TC-8101. idempotency-check.md lines 36-56 (section '4. Remediation tasks linked via Depend') explicitly detects both tasks, matches them to expected templates, and states 'Action: SKIP remediation task creation -- both tasks already exist and are linked with the correct link types (Depend to CVE, Blocks between tasks). Creating new tasks would produce duplicates.' triage-outcome.md lines 103-122 (Step 8) confirms: 'the skill detects the existing Depend-linked remediation tasks in the issue's issuelinks' and reports 'Mutations: 0 (tasks already exist and are correctly linked)'."
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 21 shows Labels include 'ai-cve-triaged'. idempotency-check.md lines 9-14 (section '1. ai-cve-triaged label') states 'Present: YES' and 'Action: SKIP adding the label again -- already present.' triage-outcome.md line 127 states 'ai-cve-triaged label: Already present in the issue's labels array. Adding it again would be a no-op.' The summary table at line 149 confirms 'ai-cve-triaged label | Added | Already present, skipped'."
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 20 shows Status is 'In Progress'. idempotency-check.md lines 16-25 (section '2. Status: In Progress') detects the status, states 'Action: SKIP status transition -- already at or past In Progress' and adds 'the issue is flagged as \"already in In Progress\" and the user is warned that this issue may be actively worked on.' triage-outcome.md lines 30-36 (Step 0.7) confirms 'Issue is already In Progress, which is past the Assigned status. The skill detects this via status-aware handling and skips the transition. Mutations: 0'."
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 55-56 shows the existing description digest comment: '[sdlc-workflow] Description digest: sha256-md:a1b2c3d4...' posted 2026-07-01T10:00:00Z. idempotency-check.md lines 58-68 (section '5. Description digest comment') states 'Present: YES' and 'Action: SKIP posting a duplicate digest comment.' triage-outcome.md summary table line 148 confirms 'Description digest | Posted sha256-md digest | Already present, skipped'."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 56-57 shows the existing post-triage summary comment posted 2026-07-01T10:01:00Z. idempotency-check.md lines 70-80 (section '6. Post-triage summary comment') states 'Present: YES' and 'Action: SKIP posting a duplicate summary comment.' triage-outcome.md lines 128-130 states 'Summary comment: A post-triage summary comment already exists (posted 2026-07-01T10:01:00Z). Posting a duplicate would create redundant audit trail noise. Mutations: 0'. Summary table line 150 confirms 'Summary comment | Posted | Already present, skipped'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

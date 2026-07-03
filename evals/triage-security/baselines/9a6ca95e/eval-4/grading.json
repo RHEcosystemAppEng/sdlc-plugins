@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
+      "passed": true,
+      "evidence": "version-impact.md contains a table with 2.1.0 and 2.1.1 marked 'YES' (h2 0.4.5 < 0.4.8 vulnerable) and 2.2.0 through 2.2.4 all marked 'NO' (h2 >= 0.4.8). The Stream Impact Summary confirms '2.1.x: YES' and '2.2.x: NO'. Lock file evidence is cited: 'h2 0.4.5 shipped in all versions (v0.3.8, v0.3.12)' for 2.1.x and 'h2 0.4.8 shipped from first version' for 2.2.x."
+    },
+    {
+      "text": "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md shows Proposed Affects Versions as 'RHTPA 2.1.0, RHTPA 2.1.1' only. RHTPA 2.2.0 is explicitly marked 'REMOVE -- h2 0.4.8 is at or above fix threshold; NOT affected'. The Jira update snippet sets versions to only [{\"name\": \"RHTPA 2.1.0\"}, {\"name\": \"RHTPA 2.1.1\"}]. The comment confirms: 'Corrected Affects Versions: [RHTPA 2.1.0, RHTPA 2.2.0] -> [RHTPA 2.1.0, RHTPA 2.1.1]'."
+    },
+    {
+      "text": "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 8 Case A scoping)",
+      "passed": true,
+      "evidence": "remediation.md states 'Remediation tasks are created only for the affected 2.1.x stream. No remediation is needed for the 2.2.x stream.' Task 1 (upstream backport) targets 'release/0.3.z' (2.1.x branch). Task 2 (downstream propagation) targets 'rhtpa-release.0.3.z' (2.1.x). A dedicated 'Why No 2.2.x Remediation' section explains all 2.2.x versions ship h2 >= 0.4.8. Post-Triage Summary confirms '2 tasks created for 2.1.x stream'. No tasks target the 2.2.x stream."
+    },
+    {
+      "text": "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
+      "passed": true,
+      "evidence": "data-extraction.md states Product version as '_(no stream suffix -- unscoped)_' and explicitly resolves: 'This issue is therefore **unscoped** -- it covers all configured version streams (2.1.x and 2.2.x). Steps 2-8 will analyze all streams and scope remediation to actually affected streams only.' version-impact.md confirms all versions from both streams were analyzed: 2.1.0, 2.1.1 (2.1.x stream) and 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4 (2.2.x stream)."
+    },
+    {
+      "text": "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 8 Case B applies only to scoped issues)",
+      "passed": true,
+      "evidence": "No cross-stream impact notice appears in any output file. remediation.md contains sections: Triage Outcome, Sibling/Duplicate Check, Task 1, Task 2, Jira Linkage, Why No 2.2.x Remediation, Post-Triage Summary — no cross-stream impact notice section. The issue is consistently treated as unscoped throughout (data-extraction.md: 'no stream suffix -- unscoped'; affects-versions.md: 'Unscoped issue — correction covers all streams'). The 'Why No 2.2.x Remediation' section explains 2.2.x needs no fix, but this is not a cross-stream impact notice — it is a scoping rationale for remediation."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
