@@ -560,6 +560,8 @@ Rules:
 - Each change should be a short, concrete statement of what needs to happen (not how)
 - The map is the basis for task generation in Step 5 — every change listed here will become part of a Jira task
 
+When a requirement from the Feature description cannot be planned due to missing inputs (no design mockups available, no target repository for that requirement's domain, insufficient specification to decompose into tasks), explicitly document it in the impact map under an "Excluded requirements" section. For each excluded requirement, state the requirement and the specific missing input that prevents planning. Do not silently omit requirements — the engineer needs to know what was excluded and why so they can provide the missing inputs. This applies to MVP and non-MVP requirements alike — any requirement that cannot be decomposed into actionable tasks should be flagged rather than silently dropped.
+
 Present the map to the user for review before proceeding to task generation.
 
 Once the user approves the map, post it as a comment on the Jira feature issue using:
