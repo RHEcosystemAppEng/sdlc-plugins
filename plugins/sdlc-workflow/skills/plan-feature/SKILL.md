@@ -924,6 +924,12 @@ bracket the intermediate implementation tasks:
   Description, Acceptance Criteria, Test Requirements, or Dependencies — these
   are listed above and must be included.
 - All intermediate tasks MUST list this task in their `## Dependencies` section.
+  This means EVERY non-documentation intermediate task must include the
+  create-branch task in its `## Dependencies` section, in addition to any
+  task-specific dependencies. Chain dependencies (Task 3 depends on Task 2,
+  which depends on Task 1) are insufficient — each task must directly list the
+  create-branch bookend. Documentation tasks may list implementation tasks as
+  dependencies instead, since documentation depends on implementation completion.
 
 **Last task — merge feature branch:**
 
