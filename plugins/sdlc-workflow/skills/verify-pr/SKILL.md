@@ -489,9 +489,9 @@ jira.create_issue with:
 - **Summary:** concise description of the required fix
 - **Labels:** `["ai-generated-jira", "review-feedback"]`
 - **Description:** structured task description following the template defined in
-  [`shared/task-description-template.md`](../shared/task-description-template.md).
+  [`shared/task-description-template.md`](../../shared/task-description-template.md).
   Apply the eval coverage propagation from
-  [`shared/eval-coverage-propagation.md`](../shared/eval-coverage-propagation.md).
+  [`shared/eval-coverage-propagation.md`](../../shared/eval-coverage-propagation.md).
   Include the applicable base sections plus these extension sections:
 
   - **Review Context** — the original review comment text and PR file/line reference
@@ -518,7 +518,7 @@ Process `create-sub-task` actions from the Correctness sub-agent. For each actio
    - **Summary:** the action's Title (e.g., "Fix failing lint check: unused import in handler.rs")
    - **Labels:** `["ai-generated-jira", "review-feedback"]`
    - **Description:** structured task description following the template defined in
-     [`shared/task-description-template.md`](../shared/task-description-template.md).
+     [`shared/task-description-template.md`](../../shared/task-description-template.md).
      Include:
      - **Review Context** — the CI check name, failure log excerpt, and error summary
        (from the action's Root cause field)
@@ -560,7 +560,7 @@ and sub-task creation below.
    - **Summary:** "Fix <eval-id> assertion failures: <brief description of failures>"
    - **Labels:** `["ai-generated-jira", "eval-failure"]`
    - **Description:** structured task description following the template defined in
-     [`shared/task-description-template.md`](../shared/task-description-template.md).
+     [`shared/task-description-template.md`](../../shared/task-description-template.md).
      Include:
      - **Review Context** — the eval review body excerpt with specific failing
        assertions and their evidence (text + evidence fields from the eval review)
@@ -829,9 +829,9 @@ jira.create_issue with:
 - **Summary:** "Root-cause: <brief description of the systemic improvement>"
 - **Labels:** `["ai-generated-jira", "root-cause"]`
 - **Description:** structured task description following the template defined in
-  [`shared/task-description-template.md`](../shared/task-description-template.md).
+  [`shared/task-description-template.md`](../../shared/task-description-template.md).
   Apply the eval coverage propagation from
-  [`shared/eval-coverage-propagation.md`](../shared/eval-coverage-propagation.md).
+  [`shared/eval-coverage-propagation.md`](../../shared/eval-coverage-propagation.md).
   The description must be actionable — it describes the concrete change to the
   skill, prompt, or convention that prevents the gap from recurring. Do **not**
   include the root-cause analysis narrative in the description.

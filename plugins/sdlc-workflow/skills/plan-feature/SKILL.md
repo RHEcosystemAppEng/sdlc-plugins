@@ -633,7 +633,7 @@ Before generating task descriptions, read `docs/constraints.md` from the project
 - For tasks that create Jira issues: include the task template rules (§4).
 - For all tasks: include the skill scope rules (§1) that apply to the skill executing the task.
 
-Create implementation tasks for each unit of work. Each task description MUST follow the template defined in [`shared/task-description-template.md`](../shared/task-description-template.md) exactly — read the template and rules from that file before generating tasks.
+Create implementation tasks for each unit of work. Each task description MUST follow the template defined in [`shared/task-description-template.md`](../../shared/task-description-template.md) exactly — read the template and rules from that file before generating tasks.
 
 ### Epic grouping (when available)
 
@@ -856,7 +856,7 @@ proceeding. Convention enrichment is not optional when conventions exist.
 ### Eval coverage propagation
 
 For each task, apply the eval coverage propagation from
-[`shared/eval-coverage-propagation.md`](../shared/eval-coverage-propagation.md).
+[`shared/eval-coverage-propagation.md`](../../shared/eval-coverage-propagation.md).
 
 ### Backend API contract enrichment for manual REST calls
 
