@@ -342,7 +342,7 @@ jira.add_comment(<jira-bug-id>, <root-cause-analysis>)
 ## Step 5 – Generate Task
 
 Create a single Task issue following
-[`shared/task-description-template.md`](../shared/task-description-template.md).
+[`shared/task-description-template.md`](../../shared/task-description-template.md).
 Read the template before generating the task description.
 
 ### Front-load the reproducer test
