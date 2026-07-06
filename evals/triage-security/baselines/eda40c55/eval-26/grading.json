@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 2.3.5 dependency chain context identifies criterion as a dev-only dependency based on its presence in [dev-dependencies] in the manifest",
+      "passed": true,
+      "evidence": "version-impact.md 'Dependency Chain Context (Step 2.3.5)' section states: 'Profile: dev-only ([dev-dependencies] in backend/Cargo.toml)' and 'NOT present in production builds -- used for benchmarks only'. Manifest evidence block shows '[dev-dependencies] criterion = \"0.5.1\"'. Dependency Scope Assessment reaffirms: 'criterion is declared in [dev-dependencies] in backend/Cargo.toml'."
+    },
+    {
+      "text": "The dependency scope decision tree classifies criterion as 'dev-only — not shipped in production' and applies the dev-dependency remediation handling",
+      "passed": true,
+      "evidence": "version-impact.md lines 44-50 explicitly reference the decision tree: 'Per the dependency scope decision tree: Dev-only dependencies still represent a supply chain risk... Still create remediation tasks, but with modifications: Add the dev-dependency label, Override priority to Normal regardless of CVE severity, Include a note that the dependency is dev/build-only.' remediation.md line 5-7 confirms: 'criterion is a dev-only dependency (not shipped in production). Per the dependency scope decision tree, remediation tasks are created with the dev-dependency label and Normal priority override.'"
+    },
+    {
+      "text": "Remediation tasks include the dev-dependency label in the labels array: labels contain 'dev-dependency' alongside 'ai-generated-jira', 'Security', and the CVE ID",
+      "passed": true,
+      "evidence": "remediation.md Task 1 labels: 'ai-generated-jira, Security, CVE-2026-99001, dev-dependency' (line 16) and Jira creation array: [\"ai-generated-jira\", \"Security\", \"CVE-2026-99001\", \"dev-dependency\"] (line 81). Task 2 labels identical (line 94) and Jira creation array identical (line 150). All four required labels present in both tasks."
+    },
+    {
+      "text": "Remediation task priority is set to Normal regardless of the CVE severity (CVSS 5.3 Medium) — the priority override is applied per the decision tree",
+      "passed": true,
+      "evidence": "remediation.md Task 1 priority: 'Normal' (line 19), Jira creation priority: 'Normal' (line 83). Task 2 priority: 'Normal' (line 97), Jira creation priority: 'Normal' (line 153). Dev-Dependency Modifications Summary (lines 189-191): 'Priority: Overridden to Normal regardless of CVE severity (CVSS 5.3 Medium). Standard triage would inherit the CVE priority; dev-dependency scope reduces this to Normal because the risk is supply chain only.'"
+    },
+    {
+      "text": "Remediation task description includes a note indicating the dependency is dev/build-only and not shipped in production",
+      "passed": true,
+      "evidence": "remediation.md Task 1 description (lines 38-39): 'This dependency is dev/build-only and is not shipped in production. Remediation priority is Normal (supply chain risk only).' Task 1 implementation notes (lines 53-56): 'This is a dev-only dependency ([dev-dependencies] in backend/Cargo.toml), used for benchmarks only. It is not shipped in production builds.' Task 2 description (lines 114-115): 'This dependency is dev/build-only and is not shipped in production. Remediation priority is Normal (supply chain risk only).'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
