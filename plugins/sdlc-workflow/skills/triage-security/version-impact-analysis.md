@@ -348,6 +348,8 @@ for the stream.
    result (sub-step 6) or the skip notice above. This line is mandatory even
    though the cosign verification itself is optional; omitting it leaves the
    engineer without visibility into whether SBOM cross-validation was attempted.
+   Present all SBOM verification results inline within the dependency chain
+   output — do not create a separate output file or section for SBOM results.
 
 4. **Base image reference** (when origin is base image) — extract the `FROM`
    reference from the Dockerfile to identify the update path:
