@@ -1,0 +1,80 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review comment about transaction wrapping (id 30001) is classified as a code change request and triggers sub-task creation",
+      "passed": true,
+      "evidence": "review-30001.md: Classification is 'code change request'. Action states 'Sub-task created to address this feedback.' subtask-30001.md exists and addresses comment 30001. report.md classified comments table shows comment 30001 as 'code change request' with action 'Sub-task created'."
+    },
+    {
+      "text": "The review comment about adding an index (id 30002) is classified as suggestion — the reviewer uses suggestive language ('should also', 'would help') and the classification output (review-30002.md) explains this reasoning",
+      "passed": true,
+      "evidence": "review-30002.md: Classification is 'suggestion'. Reasoning section states: 'The reviewer uses suggestive language (\"should also add\", \"would help\") rather than directive language identifying a defect. The phrase \"should also\" proposes an addition beyond the current scope, and \"would help\" frames the index as a performance optimization rather than a correctness requirement.' Both specific phrases ('should also', 'would help') are cited and the reasoning explains why they indicate suggestion rather than code change request."
+    },
+    {
+      "text": "The nit comment about context message (id 30003) is classified as nit and does NOT trigger sub-task creation",
+      "passed": true,
+      "evidence": "review-30003.md: Classification is 'nit'. Action states 'No sub-task created. This is minor style feedback that does not affect correctness.' No subtask-30003.md file exists in the outputs directory. report.md classified comments table shows comment 30003 as 'nit' with action 'No sub-task'."
+    },
+    {
+      "text": "The question comment about GET behavior (id 30004) is classified as question and does NOT trigger sub-task creation",
+      "passed": true,
+      "evidence": "review-30004.md: Classification is 'question'. Action states 'No sub-task created. This is a clarification question; no code change is directly requested.' No subtask-30004.md file exists in the outputs directory. report.md classified comments table shows comment 30004 as 'question' with action 'No sub-task'."
+    },
+    {
+      "text": "Each sub-task description follows the task-description-template.md format: contains Repository, Description, Files to Modify, Implementation Notes, and Acceptance Criteria sections (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-30001.md (the only sub-task created) contains all required sections: '## Repository' (trustify-backend), '## Description' (wrapping UPDATE operations in transaction), '## Files to Modify' (modules/fundamental/src/sbom/service/sbom.rs), '## Implementation Notes' (4 bullet points about SeaORM transaction API), and '## Acceptance Criteria' (4 checkboxes covering transaction wrapping, rollback, return type, and existing tests)."
+    },
+    {
+      "text": "Each sub-task description includes a Target PR section with the PR URL https://github.com/trustify/trustify-backend/pull/744 (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-30001.md contains '## Target PR' section on line 28 with the exact URL 'https://github.com/trustify/trustify-backend/pull/744' on line 29."
+    },
+    {
+      "text": "Each sub-task description includes a Review Context section with the original review comment text (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-30001.md contains '## Review Context' section (line 31) with 'Original review comment by **reviewer-a** on `modules/fundamental/src/sbom/service/sbom.rs` line 60:' followed by the full quoted original comment text about wrapping the three UPDATE statements in a database transaction."
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, creates sub-task descriptions, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "The outputs directory contains exactly 6 files: report.md, review-30001.md through review-30004.md, and subtask-30001.md. All are markdown classification/reporting/description files. No source code files (.rs, .toml, .py, etc.) exist in the outputs directory. The report describes reading PR diffs, classifying comments, and generating findings but contains no evidence of code file modification."
+    },
+    {
+      "text": "The skill reads and processes all PR review comments before generating findings (constraint 1.10)",
+      "passed": true,
+      "evidence": "All 4 review comments (30001-30004) have individual classification files (review-30001.md through review-30004.md) each containing comment text, classification, reasoning, and action. report.md Review Feedback row states '4 comments classified: 1 code change request (30001: transaction wrapping, sub-task created), 1 suggestion (30002: index addition, no convention backing), 1 nit (30003: context message wording), 1 question (30004: GET by ID behavior)'. The classified comments table lists all 4 comments."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR (constraint 1.13)",
+      "passed": true,
+      "evidence": "report.md overall result is 'FAIL' due to scope containment issues. There is no mention of merging, auto-merging, or approving the PR anywhere in report.md or any other output file. The report only classifies comments, creates sub-tasks, and reports verification findings."
+    },
+    {
+      "text": "The report contains a Test Change Classification row with ADDITIVE — only new test files were added (tests/api/sbom_delete.rs is a new file)",
+      "passed": true,
+      "evidence": "report.md summary table contains: '| Test Change Classification | ADDITIVE | Only new test file added (tests/api/sbom_delete.rs); no modified or deleted test files |'. The detailed section (lines 125-127) states: 'Test Change Classification -- ADDITIVE' with 'Only new test files added. `tests/api/sbom_delete.rs` is a new file (not present on base branch). No test files were modified or deleted. New test files are inherently additive.'"
+    },
+    {
+      "text": "Convention upgrade eligibility is evaluated for review comment 30002 (index suggestion) — the review classification output (review-30002.md) or the report's Style/Conventions analysis explains whether the suggestion matches a documented or demonstrated project convention",
+      "passed": true,
+      "evidence": "review-30002.md contains a detailed 'Convention Upgrade Eligibility Assessment' section evaluating three criteria: (1) CONVENTIONS.md check -- no matching convention found for index creation on migration columns; (2) Codebase pattern check -- only one migration exists, insufficient evidence; (3) Performance-related scrutiny -- general database best practices excluded as upgrade evidence. Decision: 'NOT upgraded.' report.md Convention Upgrade section also confirms: 'Comment 30002 (index suggestion): NOT upgraded. CONVENTIONS.md does not document index creation conventions for migration columns.'"
+    },
+    {
+      "text": "Review comment 30002 (index suggestion) does NOT result in a sub-task — the suggestion classification is correct (suggestive language, no directive) and no project convention in the fixture data backs an upgrade from suggestion to code change request",
+      "passed": true,
+      "evidence": "review-30002.md classifies the comment as 'suggestion' with reasoning citing suggestive language ('should also add', 'would help'). Convention Upgrade Eligibility Assessment concludes 'NOT upgraded' because no CONVENTIONS.md convention or codebase pattern backs an upgrade. Action states 'No sub-task created. The suggestion is valid but optional -- no project convention backs an upgrade to a code change request.' No subtask-30002.md file exists. report.md shows comment 30002 as 'suggestion' with 'No sub-task (no convention backing)'."
+    },
+    {
+      "text": "Eval Quality is N/A because no eval result reviews exist in the PR — the 3-criteria detection (author github-actions[bot], marker ## Eval Results, footer sdlc-workflow/run-evals) found no matches, so Eval Quality does not affect the Test Quality combination",
+      "passed": true,
+      "evidence": "report.md Eval Quality section (lines 121-123): 'Eval Quality -- N/A' with 'No eval result reviews found on the PR. No `github-actions[bot]` reviews with `## Eval Results` marker detected.' report.md Test Quality summary row confirms: 'Test Quality | PASS | All 5 test functions have doc comments; no repetitive test patterns detected; Eval Quality: N/A'. Eval Quality is N/A and does not affect the Test Quality combination, which is PASS based solely on test documentation and repetitive test detection."
+    }
+  ],
+  "summary": {
+    "passed": 14,
+    "failed": 0,
+    "total": 14,
+    "pass_rate": 1.0
+  }
+}

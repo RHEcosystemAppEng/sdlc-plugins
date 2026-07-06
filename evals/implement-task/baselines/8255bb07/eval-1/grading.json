@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4 'Understand the Code' explicitly lists inspecting all four files: (1) 'modules/fundamental/src/advisory/service/advisory.rs' (item 1), (2) 'modules/fundamental/src/advisory/endpoints/get.rs' (item 2), (3) 'modules/fundamental/src/advisory/model/summary.rs' (item 5, described as 'AdvisorySummary struct to understand the severity field type and structure'), and (4) 'common/src/error.rs' (item 9, described as 'AppError enum and .context() usage pattern')."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md 'Files to Modify' table (lines 104-111) lists exactly 6 files: 3 CREATE (severity_summary.rs model, severity_summary.rs endpoint, advisory_summary.rs tests) and 3 MODIFY (advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs). Step 9 'Scope containment' explicitly states 'All modified/created files match the Files to Modify and Files to Create sections.' No additional files appear in the plan's modification list."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md Files to Modify table lists: (1) 'modules/fundamental/src/advisory/model/severity_summary.rs' — CREATE — 'SeveritySummary response struct', (2) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs' — CREATE — 'GET handler for /api/v2/sbom/{id}/advisory-summary', (3) 'tests/api/advisory_summary.rs' — CREATE — 'Integration tests for the new endpoint'. Corresponding file descriptions (file-1-description.md, file-2-description.md, file-3-description.md) provide full implementation details for each."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md Files to Modify table lists: (4) 'modules/fundamental/src/advisory/service/advisory.rs' — MODIFY — 'Add severity_summary method to AdvisoryService', (5) 'modules/fundamental/src/advisory/endpoints/mod.rs' — MODIFY — 'Register the new route', (6) 'modules/fundamental/src/advisory/model/mod.rs' — MODIFY — 'Add pub mod severity_summary;'. Corresponding file descriptions (file-4-description.md, file-5-description.md, file-6-description.md) provide detailed modification specifications."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10 'Commit Message' shows: 'feat(api): add advisory severity aggregation endpoint' as the title (Conventional Commits format with type=feat, scope=api), followed by a body, and footer line 'Implements TC-9201'."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md line 155 states: 'With `--trailer=\"Assisted-by: Claude Code\"`.' immediately after the commit message block."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Step 5 'Create Branch' shows: 'git checkout main / git pull / git checkout -b TC-9201'. Branch name is TC-9201, and it branches from main. The Target Branch is identified on line 8 as 'Target Branch: main'. Step 10 Pull Request also shows 'gh pr create --base main'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md explicitly identifies both patterns: (1) Error handling section (lines 17-19): 'All handlers return Result<T, AppError> where AppError is from common/src/error.rs' and 'Error wrapping uses .context(\"descriptive message\") pattern throughout'. (2) Module structure section (lines 6-8): 'Each domain module follows the model/ + service/ + endpoints/ tripartite structure' and 'Module registration in mod.rs uses pub mod <name>; declarations'."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md line 8 states '**Target Branch**: main' in the Task Summary section. Step 1 (Parse Structured Description) lists 'Target Branch: main' as a parsed field. Step 5 branches from main ('git checkout main'), and Step 10 PR creation uses '--base main'."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": false,
+      "evidence": "No mention of 'description digest', 'digest comment', 'Step 1.5', or 'backward compatibility' appears anywhere in plan.md or any of the output files. The plan goes from Step 1 (Parse Structured Description) directly to Step 2 (Verify Dependencies) without any intermediate step about digest validation. A search for 'digest' across all output files yields no results."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 1,
+    "total": 10,
+    "pass_rate": 0.9
+  }
+}

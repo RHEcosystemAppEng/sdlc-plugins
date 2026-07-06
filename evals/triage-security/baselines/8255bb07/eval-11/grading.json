@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 4.4 searches for preemptive tasks using JQL with labels 'security-preemptive' and 'CVE-2026-55123' (§1.60)",
+      "passed": true,
+      "evidence": "reconciliation.md shows the JQL query: \"project = TC AND issuetype = Task AND labels = 'security-preemptive' AND labels = 'CVE-2026-55123' ORDER BY created DESC\". Both required labels are present in the query."
+    },
+    {
+      "text": "Step 4.4 filters results to match the current stream (rhtpa-2.1) by checking the task summary for the stream name",
+      "passed": true,
+      "evidence": "reconciliation.md 'Stream Matching' section: \"Current issue stream suffix: [rhtpa-2.1] (stream 2.1.x)\" and \"Preemptive task summary contains: (rhtpa-2.1)\" followed by \"Match confirmed: TC-8022 is a preemptive remediation task for the same CVE and the same stream as TC-8021.\""
+    },
+    {
+      "text": "Step 4.4 links the new CVE Jira TC-8021 to the preemptive task TC-8022 with 'Depend' link type (standard remediation linkage)",
+      "passed": true,
+      "evidence": "reconciliation.md Action (a): \"Link TC-8021 to TC-8022 with 'Depend'\" with code showing jira.create_link(inwardIssue: \"TC-8021\", outwardIssue: \"TC-8022\", type: \"Depend\"). Also confirmed in triage-outcome.md final state: \"Depend --> TC-8022 (remediation task, reconciled from preemptive)\"."
+    },
+    {
+      "text": "Step 4.4 removes the 'security-preemptive' label from TC-8022 — the task is now a standard remediation task linked to a proper CVE Jira",
+      "passed": true,
+      "evidence": "reconciliation.md Action (b): Current labels include 'security-preemptive', updated labels do not. Final State table confirms Before labels contain 'security-preemptive' and After labels do not. triage-outcome.md confirms: \"Labels: ai-generated-jira, Security, CVE-2026-55123 (security-preemptive removed)\"."
+    },
+    {
+      "text": "Step 8 skips remediation task creation for this stream because Step 4.4 reconciliation already linked an existing task",
+      "passed": true,
+      "evidence": "triage-outcome.md Step 8 row: \"Skipped -- Step 4.4 reconciliation already established remediation via TC-8022\". reconciliation.md Action (d): \"The flag remediation_exists_for_streams = [\"2.1.x\"] is set internally, which causes Step 8 to skip task creation for this stream.\" triage-outcome.md Step 8 section: \"Step 8 checked for streams still needing remediation task creation. Since Step 4.4 recorded that remediation already exists for stream 2.1.x... Step 8 skipped remediation task creation entirely.\""
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references checking out TC-9005 (the Target Branch) before creating the task branch — includes git checkout TC-9005 or equivalent, not git checkout main (constraint 3.1, Step 5)",
+      "passed": true,
+      "evidence": "plan.md Step 5 (lines 106-110): 'git checkout TC-9005 / git pull / git checkout -b TC-9205'. The plan explicitly checks out TC-9005 before creating the task branch, not main."
+    },
+    {
+      "text": "The plan specifies opening a PR with --base TC-9005 targeting the feature branch, not --base main (Step 10)",
+      "passed": true,
+      "evidence": "plan.md Step 10 (line 222): 'gh pr create --base TC-9005 --title \"refactor(migration): drop deprecated status column from advisory table\"'. Also line 251: 'The PR targets **TC-9005** (the feature branch), NOT `main`. This is because the task's Target Branch is `TC-9005`.'"
+    },
+    {
+      "text": "The plan names the task branch TC-9205 (the task issue ID), not TC-9005 (the feature branch) — the task branch is distinct from the Target Branch (constraint 3.1)",
+      "passed": true,
+      "evidence": "plan.md Step 5 (line 109): 'git checkout -b TC-9205'. Step 10 (line 201): 'Already on branch `TC-9205` (created from `TC-9005` in Step 5)'. The task branch TC-9205 is clearly distinct from the target branch TC-9005."
+    },
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 1 of: migration/src/m0001_initial/mod.rs, entity/src/advisory.rs, migration/src/lib.rs (constraint 1.5, Steps 4-9 unaffected by Target Branch)",
+      "passed": true,
+      "evidence": "plan.md Step 4 (lines 62-72) lists all three files for inspection: (1) 'migration/src/lib.rs -- Use mcp__serena_backend__get_symbols_overview', (2) 'migration/src/m0001_initial/mod.rs -- Use mcp__serena_backend__find_symbol with include_body=true', (3) 'entity/src/advisory.rs -- Use mcp__serena_backend__get_symbols_overview to verify that the Advisory entity no longer references a status column'."
+    },
+    {
+      "text": "The plan includes --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md Step 10 (line 208): 'git commit --trailer=\"Assisted-by: Claude Code\" -m \"refactor(migration): drop deprecated status column from advisory table\"'"
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9205 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md lines 240-247 show the commit message: 'refactor(migration): drop deprecated status column from advisory table' follows Conventional Commits with type='refactor', scope='migration', and description. The footer contains 'Implements TC-9205' referencing the task issue ID."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying TC-9005 as the target branch",
+      "passed": true,
+      "evidence": "plan.md Step 1 (line 27): '**Target Branch**: TC-9005 (feature branch -- not main)'. Lines 39-41: 'The Target Branch is `TC-9005`, which is a feature branch (not `main`). This means: The task branch will be created from `TC-9005` / The PR will target `TC-9005` using `--base TC-9005`'. Also line 10: '**Target Branch**: TC-9005'."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 0,
+    "total": 7,
+    "pass_rate": 1.0
+  }
+}
