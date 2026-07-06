@@ -44,6 +44,9 @@ Advisory: [advisory URL from remote links]
   that might prevent the bump
 - If a direct bump introduces breaking changes, assess whether a
   code-level workaround is viable (see upstream changelog)
+- If the vulnerable dependency is dev-only or build-only (identified
+  in Step 2.3.5), the remediation priority is Normal regardless of CVE
+  severity. Add `dev-dependency` label to the task.
 
 ## Acceptance Criteria
 

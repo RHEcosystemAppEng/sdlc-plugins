@@ -799,7 +799,10 @@ MUST include the Comment Footnote (see above).
    The upstream task covers the source repo fix; the downstream subtask covers
    the Konflux release repo update and is blocked by the upstream task. System
    package ecosystems produce a single task. A single Task spanning multiple
-   streams would be unimplementable by `/implement-task`.
+   streams would be unimplementable by `/implement-task`. For dev-only or
+   build-only dependencies (identified in Step 2.3.5), add the `dev-dependency`
+   label and override priority to Normal — see the dependency scope decision
+   tree in `version-impact-analysis.md`.
 9. **Follow `task-description-template.md` for generated tasks.** The remediation
    Task description must be parseable by `/implement-task`. Do not invent custom
    sections or deviate from the template format.
