@@ -332,6 +332,32 @@
         "Automated triage stops after the unsupported ecosystem notification — no version impact analysis or remediation task creation is performed for the unsupported ecosystem",
         "The notification includes both the ecosystem name and the instruction that manual assessment is required"
       ]
+    },
+    {
+      "id": 26,
+      "prompt": "Triage Vulnerability issue TC-8050. The issue details are in vuln-issue-dev-dependency.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has stream suffix [rhtpa-2.2] so triage is scoped to the 2.2.x stream. The vulnerable library (criterion) is a dev-only dependency — the mock dependency chain data in the fixture shows it is declared in [dev-dependencies] and is NOT present in production builds. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2 including the dependency chain context from Step 2.3.5, and write outputs/remediation.md with the remediation task descriptions showing the dev-dependency label and Normal priority override.",
+      "expected_output": "A triage analysis where Step 2.3.5 identifies criterion as a dev-only dependency (in [dev-dependencies], not shipped in production). The dependency scope decision tree is applied: remediation tasks are still created (supply chain risk) but with the dev-dependency label and Normal priority instead of inheriting the CVE's priority. The remediation task description includes a note that the dependency is dev/build-only.",
+      "files": ["files/vuln-issue-dev-dependency.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 2.3.5 dependency chain context identifies criterion as a dev-only dependency based on its presence in [dev-dependencies] in the manifest",
+        "The dependency scope decision tree classifies criterion as 'dev-only — not shipped in production' and applies the dev-dependency remediation handling",
+        "Remediation tasks include the dev-dependency label in the labels array: labels contain 'dev-dependency' alongside 'ai-generated-jira', 'Security', and the CVE ID",
+        "Remediation task priority is set to Normal regardless of the CVE severity (CVSS 5.3 Medium) — the priority override is applied per the decision tree",
+        "Remediation task description includes a note indicating the dependency is dev/build-only and not shipped in production"
+      ]
+    },
+    {
+      "id": 27,
+      "prompt": "Triage Vulnerability issue TC-8051. The issue details are in vuln-issue-feature-gated.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has stream suffix [rhtpa-2.2] so triage is scoped to the 2.2.x stream. The vulnerable library (rustls) is an optional dependency gated behind the non-default 'tls-rustls' feature flag — the mock dependency chain data in the fixture shows the default features do NOT include tls-rustls. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2 including the dependency chain context from Step 2.3.5, and write outputs/feature-gate-prompt.md with the VEX justification prompt presented to the user for the feature-gated dependency.",
+      "expected_output": "A triage analysis where Step 2.3.5 identifies rustls as a feature-gated optional dependency behind the non-default 'tls-rustls' feature. The dependency scope decision tree presents the user with a VEX justification prompt: option 1 to skip remediation with 'Vulnerable Code not in Execute Path' justification, or option 2 to proceed with standard remediation. The prompt includes the library name, feature flag name, and the recommended VEX justification.",
+      "files": ["files/vuln-issue-feature-gated.md", "files/security-matrix-mock.md", "files/claude-md-security-config.md"],
+      "assertions": [
+        "Step 2.3.5 dependency chain context identifies rustls as a feature-gated optional dependency behind the non-default 'tls-rustls' feature flag",
+        "The dependency scope decision tree presents a VEX justification prompt to the user with two options: skip remediation or proceed with standard remediation",
+        "The VEX justification prompt recommends 'Vulnerable Code not in Execute Path' as the justification for skipping remediation",
+        "The VEX justification prompt includes the library name (rustls) and the feature flag name (tls-rustls) so the user has context for the decision",
+        "If the user chooses to skip remediation, the version is closed as not affected with the VEX justification — no remediation tasks are created for that version"
+      ]
     }
   ]
 }

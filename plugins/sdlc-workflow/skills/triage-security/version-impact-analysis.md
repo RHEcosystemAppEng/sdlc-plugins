@@ -189,7 +189,8 @@ Inspect the lock file and manifest files to determine:
    - **npm**: `devDependencies` (build/test only), `optionalDependencies`
 
    If the dependency is only present in a non-production profile (e.g., dev-only),
-   note this — it changes the risk assessment.
+   note this — it changes the risk assessment and remediation handling per the
+   decision tree below.
 4. **Introduction point** — if a dependency is present in one version but not
    another, note when it was introduced (helps identify which upgrade or feature
    addition brought it in)
@@ -203,6 +204,56 @@ Dependency chain for quinn-proto:
 First appeared: 2.2.0 (commit 05a3af91 added reqwest http3 feature)
 Not present in: 2.1.x (reqwest used without http3 feature)
 ```
+
+#### Dependency scope decision tree
+
+When the profile/scope analysis (item 3 above) identifies a non-production
+dependency, apply the following decision tree to determine remediation handling:
+
+**Dev-only or build-only dependencies (not shipped in production):**
+
+These are dependencies that do not appear in the production binary or container
+image:
+
+- **Cargo** `[dev-dependencies]` — used for tests and benchmarks only; NOT shipped
+- **Cargo** `[build-dependencies]` — used in build scripts only; NOT shipped
+- **npm** `devDependencies` — used for build/test only; NOT shipped (unless
+  bundled by the build tool — verify bundler configuration if uncertain)
+
+Even though dev-only dependencies are not shipped, they still represent a supply
+chain risk (compromised dev deps can inject malicious code during builds). Still
+create remediation tasks, but with these modifications:
+
+- Add the `dev-dependency` label to the remediation task
+- Set priority to **Normal** regardless of the CVE severity — do not inherit
+  the CVE's priority
+- Include a note in the remediation task description: "This dependency is
+  dev/build-only and is not shipped in production. Remediation priority is
+  Normal (supply chain risk only)."
+
+**Feature-gated optional dependencies:**
+
+These are dependencies declared in `[dependencies]` with `optional = true` and
+gated behind a non-default feature flag in Cargo, or `optionalDependencies`
+in npm that are not enabled by default.
+
+Before creating remediation tasks, present the user with a VEX justification
+option:
+
+> "The vulnerable dependency `[library]` is gated behind the `[feature-flag]`
+> feature, which is not enabled by default. Recommended VEX justification:
+> **Vulnerable Code not in Execute Path**.
+>
+> Options:
+> 1. Skip remediation — apply VEX justification and close as not affected
+> 2. Proceed with remediation — create tasks despite the feature gate
+>
+> Choose (1/2):"
+
+If the user chooses option 1, close the version as not affected with VEX
+justification "Vulnerable Code not in Execute Path" (the overall issue closure
+depends on whether other versions are affected). If the user chooses option 2,
+create standard remediation tasks without label or priority modifications.
 
 #### Container-level dependencies (RPM, system packages)
 

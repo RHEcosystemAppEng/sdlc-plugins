@@ -107,6 +107,30 @@ eval, use this data as the simulated output.
 | `v0.4.11` | 0.4.9 |
 | `v0.4.12` | 0.4.9 |
 
+## criterion versions by tag
+
+| Tag | criterion version |
+|-----|-------------------|
+| `v0.3.8` | 0.5.1 |
+| `v0.3.12` | 0.5.1 |
+| `v0.4.5` | 0.5.1 |
+| `v0.4.8` | 0.5.1 |
+| `v0.4.9` | _(retag of v0.4.8)_ |
+| `v0.4.11` | 0.5.1 |
+| `v0.4.12` | 0.5.1 |
+
+## rustls versions by tag
+
+| Tag | rustls version |
+|-----|----------------|
+| `v0.3.8` | _(not present)_ |
+| `v0.3.12` | _(not present)_ |
+| `v0.4.5` | 0.23.4 |
+| `v0.4.8` | 0.23.4 |
+| `v0.4.9` | _(retag of v0.4.8)_ |
+| `v0.4.11` | 0.23.4 |
+| `v0.4.12` | 0.23.4 |
+
 ## openssl-libs versions by tag (rpms.lock.yaml)
 
 The following sections provide the RPM package versions that would be extracted
