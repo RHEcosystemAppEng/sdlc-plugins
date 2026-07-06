@@ -599,10 +599,12 @@ flowchart TD
     A["Version impact table\n(after Steps 4-6)"] --> Z{"Step 7:\nConcurrent triage\non same component?"}
     Z -->|No or user proceeds| B{"Any supported versions\naffected?"}
     Z -->|User waits/skips| STOP["Stop or skip\ntask creation"]
-    B -->|Yes| C{"Other streams\nalso affected?"}
+    B -->|Yes| SCOPE{"Issue scoped to\na single stream?"}
     B -->|No| D["Case C: Close as\nNot a Bug"]
+    SCOPE -->|"Yes (scoped)"| C{"Other streams\nalso affected?"}
+    SCOPE -->|"No (unscoped)"| F["Case A: Create\nremediation tasks\nfor affected streams"]
     C -->|Yes| E["Case B: Post cross-stream\nimpact comment"]
-    C -->|No| F["Case A: Create\nremediation tasks"]
+    C -->|No| F
     E --> F
     F --> G{"Source dependency?\n(Cargo, npm)"}
     G -->|Yes| H["2 tasks: upstream\nbackport + downstream\npropagation"]
@@ -644,8 +646,15 @@ are affected:
 
 ### Case B: Cross-stream impact — proactive remediation
 
-If the version impact analysis reveals that **other streams** (outside this
-issue's scope) are also affected:
+**Guard — scoped issues only.** Case B applies exclusively to stream-scoped
+issues (those whose summary contains a stream suffix like `[myproduct-2.2]`).
+Unscoped issues cover all streams by definition — there are no "other streams
+outside this issue's scope," so the cross-stream impact check is not applicable.
+For unscoped issues, skip Case B entirely and proceed directly to Case A task
+creation for all affected streams.
+
+If the issue is **scoped** and the version impact analysis reveals that **other
+streams** (outside this issue's scope) are also affected:
 
 1. **Post the cross-stream impact comment** (existing behavior):
    ```
