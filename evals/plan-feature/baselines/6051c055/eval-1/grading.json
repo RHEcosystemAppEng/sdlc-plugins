@@ -1,0 +1,105 @@
+{
+  "assertion_results": [
+    {
+      "text": "Each non-documentation, non-testing task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements. Documentation tasks (tasks whose filename or description indicates doc-only scope) and testing tasks (tasks whose filename or description indicates cross-cutting testing scope) are exempt from requiring Files to Modify, Files to Create, and Implementation Notes — they must still include Repository, Target Branch, Description, Acceptance Criteria, and Test Requirements",
+      "passed": true,
+      "evidence": "9 task files found. Non-doc/non-testing tasks (1-6) all contain Repository, Target Branch, Description, Files to Modify and/or Files to Create, Implementation Notes, Acceptance Criteria, and Test Requirements. Task 7 (documentation) has Repository, Target Branch, Description, Acceptance Criteria, Test Requirements and correctly omits Files to Modify/Create and Implementation Notes. Tasks 8-9 (smoke tests, performance benchmarks) have Repository, Target Branch, Description, Acceptance Criteria, Test Requirements and correctly omit Files to Modify/Create and Implementation Notes."
+    },
+    {
+      "text": "Task count is between 3 and 12 inclusive",
+      "passed": true,
+      "evidence": "9 task files found: task-1-advisory-severity-model.md through task-9-performance-benchmarks.md. 3 <= 9 <= 12."
+    },
+    {
+      "text": "All tasks reference repository 'trustify-backend'",
+      "passed": true,
+      "evidence": "All 9 task files contain '## Repository\ntrustify-backend' as their first two lines. Verified in task-1 through task-9."
+    },
+    {
+      "text": "Task dependencies form a DAG with no circular dependencies",
+      "passed": true,
+      "evidence": "Task 1: no dependencies. Task 2: depends on Task 1. Task 3: depends on Task 2. Task 4: depends on Task 3. Task 5: depends on Task 3 and Task 4. Task 6: depends on Task 5. Task 7: depends on Tasks 1-6. Task 8: depends on Tasks 1-6. Task 9: depends on Tasks 1-6. This is a valid DAG — all edges point forward (lower-numbered to higher-numbered tasks), no cycles exist."
+    },
+    {
+      "text": "Every task's Files to Modify and Files to Create reference paths plausible within the repo-backend.md structure",
+      "passed": true,
+      "evidence": "Task 1 Files to Create: modules/fundamental/src/advisory/model/severity_summary.rs (parent directory advisory/model/ exists in repo-backend.md). Task 1 Files to Modify: modules/fundamental/src/advisory/model/mod.rs (exists). Task 2: modules/fundamental/src/advisory/service/advisory.rs (exists). Task 3: modules/fundamental/src/sbom/endpoints/mod.rs (exists). Task 4: modules/ingestor/src/graph/advisory/mod.rs (exists). Task 5: tests/api/sbom.rs (exists). Task 6: modules/fundamental/src/sbom/endpoints/mod.rs and modules/fundamental/src/advisory/service/advisory.rs (both exist). Tasks 7-9 have no Files to Modify/Create sections (doc/testing tasks)."
+    },
+    {
+      "text": "Impact map lists concrete, specific changes (not vague or abstract descriptions)",
+      "passed": true,
+      "evidence": "Impact map lists 6 concrete changes: (1) New AdvisorySeveritySummary struct with specific fields (critical, high, medium, low, total) in specific directory; (2) New service method on AdvisoryService to query sbom_advisory join table with specific behavior (deduplicate by advisory ID, aggregate severity counts); (3) New endpoint GET /api/v2/sbom/{id}/advisory-summary with specific response format and 404 handling; (4) 5-minute cache with invalidation on advisory ingestion referencing specific file modules/ingestor/src/graph/advisory/mod.rs; (5) Threshold query parameter with specific behavior; (6) Integration tests in tests/api/sbom.rs. All items reference specific paths, struct names, and behaviors."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "All 9 tasks contain exactly '## Repository\ntrustify-backend' — a single repository name per task. No task lists multiple repositories."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "All 9 tasks contain ## Target Branch (set to 'main'), ## Description, ## Acceptance Criteria (with checkbox items), and ## Test Requirements (with checkbox items). Verified across task-1 through task-9."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "All Files to Modify paths match repo-backend.md exactly: modules/fundamental/src/advisory/model/mod.rs, modules/fundamental/src/advisory/service/advisory.rs, modules/fundamental/src/sbom/endpoints/mod.rs, modules/ingestor/src/graph/advisory/mod.rs, tests/api/sbom.rs. Files to Create path modules/fundamental/src/advisory/model/severity_summary.rs is in the existing advisory/model/ directory. No invented paths found."
+    },
+    {
+      "text": "Implementation Notes in every non-documentation, non-testing task reference specific file paths and code patterns from the repository, not abstract or generic guidance. Documentation tasks and testing tasks are exempt from this requirement as they intentionally omit Implementation Notes",
+      "passed": true,
+      "evidence": "Task 1: references AdvisorySummary in modules/fundamental/src/advisory/model/summary.rs, specific derives (Clone, Debug, Serialize, Deserialize, utoipa::ToSchema). Task 2: references entity::sbom_advisory, entity::advisory, modules/fundamental/src/advisory/model/summary.rs, common/src/error.rs AppError, modules/fundamental/src/sbom/service/sbom.rs SbomService, common/src/db/query.rs. Task 3: references modules/fundamental/src/sbom/endpoints/mod.rs, AdvisoryService::get_severity_summary_for_sbom, common/src/error.rs AppError, Cache-Control header pattern. Task 4: references modules/ingestor/src/graph/advisory/mod.rs, entity/src/sbom_advisory.rs join table. Task 5: references tests/api/sbom.rs, tests/api/advisory.rs patterns, entity/src/sbom_advisory.rs. Task 6: references modules/fundamental/src/sbom/endpoints/mod.rs, Axum Query extractor. Tasks 7-9 are exempt (doc/testing tasks)."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "All 9 tasks contain '## Target Branch\nmain'. Verified in task-1 through task-9."
+    },
+    {
+      "text": "For each task created, a description digest is produced — evidenced by a separate digest file (e.g., task-N-digest.md), a digest entry in the impact map, or a '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' marker in any output file. The digest must contain a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:', not a placeholder, abbreviated value, or example string",
+      "passed": true,
+      "evidence": "9 digest files exist, one per task: task-1-advisory-severity-model-digest.md through task-9-performance-benchmarks-digest.md. Each contains a valid '[sdlc-workflow] Description digest: sha256-md:<64-hex>' marker. Example: task-1-advisory-severity-model-digest.md contains 'sha256-md:4089ba44b03b22c88368c8639530c5ea810d7855d747d869974e2be9d4a341aa'. All 9 hashes are exactly 64 lowercase hex characters prefixed by 'sha256-md:'."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "All convention references in Implementation Notes use the prescribed format. Examples: Task 1: 'Per CONVENTIONS.md §Module pattern: place the model in model/ following the model/ + service/ + endpoints/ module structure. Applies: task creates modules/fundamental/src/advisory/model/severity_summary.rs matching the convention's Rust module scope.' Task 2: 'Per CONVENTIONS.md §Error handling: return Result<T, AppError> with .context() for error propagation. Applies: task modifies modules/fundamental/src/advisory/service/advisory.rs matching the convention's Rust service scope.' Task 3 has three convention references all with proper 'Applies:' rationales naming specific files and scope signals. No inapplicable conventions are listed with 'Not applicable' annotations — only applicable conventions appear."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), the plan documents that the Feature's priority is inherited by created tasks — evidenced by priority field values in the impact map, task creation log, or task description files. When the Feature's priority is 'Undefined', the plan documents that priority inheritance is skipped (not propagated as null or 'Undefined')",
+      "passed": true,
+      "evidence": "summary-comment.md contains 'Inherited Fields' section with '**Priority:** Major -- propagated to all tasks'. The Feature's priority is 'Major' (not Undefined), and the plan documents it is inherited by all created tasks."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), the plan documents that fixVersions are inherited by created tasks — evidenced by fixVersion values in the impact map, task creation log, or task description files. When fixVersion scope is 'feature' or the Feature has no fixVersions, the plan documents that fixVersion inheritance is skipped",
+      "passed": true,
+      "evidence": "summary-comment.md contains '**Fix Versions:** RHTPA 1.5.0 -- propagated to all tasks (fixVersion scope: both)'. The Feature has fixVersions ['RHTPA 1.5.0'] and scope defaults to 'both', so inheritance is correctly documented as propagated."
+    },
+    {
+      "text": "A summary of inherited field propagation is produced — evidenced by a summary-comment.md file in the outputs directory, or a summary section in the impact map that includes the inherited priority and fixVersion values propagated to tasks, or states they were omitted and why",
+      "passed": true,
+      "evidence": "summary-comment.md exists in the outputs directory and contains an 'Inherited Fields' section documenting: '**Priority:** Major -- propagated to all tasks' and '**Fix Versions:** RHTPA 1.5.0 -- propagated to all tasks (fixVersion scope: both)'."
+    },
+    {
+      "text": "A documentation task is generated because the feature description's Documentation Considerations section indicates doc impact (Updates — add endpoint to REST API reference). The documentation task includes Repository, Target Branch, Description, Acceptance Criteria, Test Requirements, and Dependencies sections, and omits Files to Modify, Files to Create, API Changes, Implementation Notes, Reuse Candidates, and Verification Commands",
+      "passed": true,
+      "evidence": "task-7-documentation.md is a documentation task. It includes: Repository ('trustify-backend'), Target Branch ('main'), Description ('Update the REST API reference documentation to include the new GET /api/v2/sbom/{id}/advisory-summary endpoint'), Acceptance Criteria (6 checkbox items), Test Requirements (3 checkbox items), Dependencies (depends on Tasks 1-6). It correctly omits Files to Modify, Files to Create, API Changes, Implementation Notes, Reuse Candidates, and Verification Commands — none of these sections appear in the file."
+    },
+    {
+      "text": "Testing tasks are generated from the testing readiness template — exactly 2 testing tasks are created (one per test category: Smoke Tests and Performance Benchmarks). Each testing task includes Repository, Target Branch, Description, Acceptance Criteria, Test Requirements, and Dependencies sections, and omits Files to Modify, Files to Create, API Changes, Implementation Notes, Reuse Candidates, and Verification Commands",
+      "passed": true,
+      "evidence": "Exactly 2 testing tasks: task-8-smoke-tests.md (Smoke Tests) and task-9-performance-benchmarks.md (Performance Benchmarks). Task 8 includes: Repository, Target Branch, Description ('Execute smoke tests to validate...'), Acceptance Criteria (3 items), Test Requirements (3 smoke test items), Dependencies (Tasks 1-6). Task 9 includes: Repository, Target Branch, Description ('Execute performance benchmarks...'), Acceptance Criteria (3 items), Test Requirements (3 performance test items), Dependencies (Tasks 1-6). Both omit Files to Modify, Files to Create, API Changes, Implementation Notes, Reuse Candidates, and Verification Commands."
+    },
+    {
+      "text": "Each testing task depends on all implementation tasks (not on documentation or other testing tasks)",
+      "passed": true,
+      "evidence": "Implementation tasks are Tasks 1-6. Task 8 (Smoke Tests) Dependencies: 'Depends on: Task 1, Task 2, Task 3, Task 4, Task 5, Task 6' — all 6 implementation tasks, no dependency on Task 7 (doc) or Task 9 (testing). Task 9 (Performance Benchmarks) Dependencies: 'Depends on: Task 1, Task 2, Task 3, Task 4, Task 5, Task 6' — all 6 implementation tasks, no dependency on Task 7 (doc) or Task 8 (testing)."
+    }
+  ],
+  "summary": {
+    "passed": 19,
+    "failed": 0,
+    "total": 19,
+    "pass_rate": 1.0
+  }
+}

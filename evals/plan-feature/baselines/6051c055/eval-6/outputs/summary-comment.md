@@ -1,0 +1,100 @@
+# Implementation Plan Summary — TC-9006
+
+## Feature: Add vulnerability remediation tracking dashboard
+
+### Overview
+
+This plan decomposes TC-9006 into 9 implementation tasks across 2 repositories, organized under 2 Epics using the by-repository grouping strategy.
+
+### Epics Created
+
+| Epic | Summary | Type | Parent |
+|------|---------|------|--------|
+| Epic 1 | TC-9006: trustify-backend | Epic (level 1) | TC-9006 |
+| Epic 2 | TC-9006: trustify-ui | Epic (level 1) | TC-9006 |
+
+Incorporates links: TC-9006 -> Epic 1 (TC-9006: trustify-backend), TC-9006 -> Epic 2 (TC-9006: trustify-ui).
+
+### Repositories Affected
+
+- **trustify-backend** (4 tasks) — new remediation module with aggregation service and REST endpoints, plus documentation
+- **trustify-ui** (5 tasks) — new dashboard page with summary cards, progress chart, filterable table, routing, and tests
+
+### Tasks Created
+
+**Epic: TC-9006: trustify-backend**
+
+| # | Summary | Repository |
+|---|---------|------------|
+| 1 | Create remediation domain models and aggregation service | trustify-backend |
+| 2 | Add remediation REST endpoints with route registration | trustify-backend |
+| 3 | Add integration tests for remediation endpoints | trustify-backend |
+| 9 | Document remediation dashboard and aggregation API endpoints | trustify-backend |
+
+**Epic: TC-9006: trustify-ui**
+
+| # | Summary | Repository |
+|---|---------|------------|
+| 4 | Add remediation API types, client functions, and React Query hooks | trustify-ui |
+| 5 | Create remediation dashboard page with summary cards and progress chart | trustify-ui |
+| 6 | Add filterable vulnerability table to remediation dashboard | trustify-ui |
+| 7 | Register remediation dashboard route and add navigation entry | trustify-ui |
+| 8 | Add unit and E2E tests for remediation dashboard | trustify-ui |
+
+### Architecture Summary
+
+The backend introduces a new `remediation` module under `modules/fundamental/` following the established `model/ + service/ + endpoints/` pattern. Two new REST endpoints provide aggregated remediation data:
+- `GET /api/v2/remediation/summary` — severity x status counts
+- `GET /api/v2/remediation/by-product` — per-product breakdown
+
+No new database tables are created — aggregations are computed from existing vulnerability and SBOM relationship data.
+
+The frontend introduces a new `RemediationDashboardPage` at `/remediation` with PatternFly 5 components, React Query hooks for data fetching, and a reusable filter toolbar for severity/product/status filtering.
+
+### Workflow Mode
+
+**direct-to-main** — no atomicity constraints identified. All changes are additive (new endpoints, new pages) and each PR independently leaves main in a working state. Backend tasks are ordered before frontend tasks to ensure API endpoints exist before the UI depends on them.
+
+### Inherited Field Propagation
+
+| Field | Feature Value | Propagated To | Notes |
+|-------|--------------|---------------|-------|
+| **priority** | Major | All Epics and Tasks | Inherited from Feature TC-9006. Priority is "Major" (not "Undefined"), so it is propagated via `additional_fields: {"priority": {"name": "Major"}}` on every created Epic and Task. |
+| **fixVersions** | RHTPA 1.5.0 | All Epics and Tasks | Inherited from Feature TC-9006. Feature has a non-empty fixVersions array. No `fixVersion scope` setting exists in CLAUDE.md Jira Field Defaults, so the default scope "both" applies — fixVersions are propagated to both Epics and Tasks via `additional_fields: {"fixVersions": [{"name": "RHTPA 1.5.0"}]}`. |
+| **labels** | ai-generated-jira | All Epics and Tasks | Applied to every created issue per skill requirements. |
+
+### additional_fields Applied to Created Issues
+
+Every Epic and Task is created with the following `additional_fields`:
+
+```json
+{
+  "labels": ["ai-generated-jira"],
+  "priority": {"name": "Major"},
+  "fixVersions": [{"name": "RHTPA 1.5.0"}]
+}
+```
+
+### Excluded Requirements
+
+- **Export remediation report as CSV** — non-MVP requirement; deferred to a follow-up iteration.
+
+### Description Digests
+
+Each task received a description digest comment immediately after creation per the description-digest-protocol:
+
+| Task | Digest |
+|------|--------|
+| 1 | sha256-md:545f4b218fc290c8118fe480c81e34aa7aabb774b177c422534a129971565f1c |
+| 2 | sha256-md:9cdb42dbc5d17a399a912c63d1ccc48b5cab5af30392906187e12445f39d3ac3 |
+| 3 | sha256-md:9caa28549c412127b8de855cf663b8a528ab4f77c386897b2182c19c49599e19 |
+| 4 | sha256-md:78bf1c72dad2adce38a721483d5eae15114a10b9a45f6434bce7e50bb37710f6 |
+| 5 | sha256-md:88948f5983ae7db9f3772f315568a9779b5a8d44dcfd09a8d1c35e94d0cbbb97 |
+| 6 | sha256-md:5af1d6bedd7a32e498baa8dcd10a4d083addddac65e7ec3d139058ff3c6cdd6c |
+| 7 | sha256-md:35e5626541be6b6616ea227725f2ec5d45fdcb43d801473f643858130f323b7a |
+| 8 | sha256-md:203fc47179d7a1d05ae3837be56b5fe9e5055a8cb8c6a938945097f85ac0e4a0 |
+| 9 | sha256-md:749920dde507a6ab68ea3a31629d3eab683a6bbd2772fffe70e76a65cfac6f25 |
+
+---
+
+This comment was AI-generated by [sdlc-workflow/plan-feature](https://github.com/mrizzi/sdlc-plugins) v0.12.2.

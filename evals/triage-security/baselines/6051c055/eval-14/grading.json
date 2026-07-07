@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Dependency chain output includes both the rpms.lock.yaml classification AND the SBOM verification result for the affected versions (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "Section 2.3.5 dependency chain output for versions 2.2.0-2.2.2 includes both 'rpms.lock.yaml: present --> explicit install' and 'SBOM verification (cosign available at /usr/bin/cosign):' with Final image SBOM, Base image SBOM, and SBOM comparison result lines. Both classifications are present for the affected versions."
+    },
+    {
+      "text": "SBOM verification uses cosign download sbom to compare the final container image SBOM against the base image SBOM (Step 2.3.5 sub-steps 2 and 4)",
+      "passed": true,
+      "evidence": "The dependency chain output references cosign ('cosign available at /usr/bin/cosign') and shows the comparison between 'Final image SBOM: openssl-libs PRESENT' and 'Base image SBOM: openssl-libs PRESENT', with a comparison result: 'present in both final and base image SBOMs --> base image origin'. This demonstrates cosign-based SBOM retrieval and comparison of final container image SBOM against base image SBOM."
+    },
+    {
+      "text": "When SBOM classification (base image) disagrees with rpms.lock.yaml classification (explicit install), the discrepancy is flagged to the engineer with a warning (Step 2.3.5 sub-step 5 disagreement handling)",
+      "passed": true,
+      "evidence": "The output contains an explicit 'WARNING: SBOM classification DISAGREES with rpms.lock.yaml' block that details: 'rpms.lock.yaml says: explicit install (package IS listed in lock file)' vs 'SBOM comparison says: base image origin (package appears in both final and base image SBOMs)' and instructs 'Investigate manually -- the package may be both explicitly installed AND present in the base image, or the lock file entry may be redundant.'"
+    },
+    {
+      "text": "The rpms.lock.yaml classification remains the primary signal — the SBOM result supplements but does not override it (Step 2.3.5 non-MVP enhancement)",
+      "passed": true,
+      "evidence": "The dependency chain output explicitly states 'Primary signal: rpms.lock.yaml (explicit install) -- lock file remains authoritative' and 'Origin (per rpms.lock.yaml): explicit install'. The summary also reinforces: 'The rpms.lock.yaml remains the primary signal; the discrepancy is flagged for manual investigation.' The SBOM disagreement did not change the final classification from 'explicit install'."
+    },
+    {
+      "text": "The SBOM verification result is presented alongside the rpms.lock.yaml result in the dependency chain output, not as a separate section (Step 2.3.5 sub-step 6)",
+      "passed": true,
+      "evidence": "In Section 2.3.5, both the rpms.lock.yaml classification and the SBOM verification are within the same 'Dependency chain for openssl-libs (RPM):' code block. The SBOM verification lines immediately follow the rpms.lock.yaml line, all indented under the same dependency chain header. They are not in a separate section or heading."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
