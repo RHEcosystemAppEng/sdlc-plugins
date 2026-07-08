@@ -51,7 +51,7 @@ implementing tasks, and verifying pull requests:
 ### 1. Add the marketplace
 
 ```
-/plugin marketplace add mrizzi/sdlc-plugins
+/plugin marketplace add RHEcosystemAppEng/sdlc-plugins
 ```
 
 ### 2. Install the plugin

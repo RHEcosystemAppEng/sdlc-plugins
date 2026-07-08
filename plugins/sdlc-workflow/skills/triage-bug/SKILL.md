@@ -89,7 +89,7 @@ Use ADF `contentFormat` to ensure the rule and text render correctly:
         {
           "type": "link",
           "attrs": {
-            "href": "https://github.com/mrizzi/sdlc-plugins"
+            "href": "https://github.com/RHEcosystemAppEng/sdlc-plugins"
           }
         }
       ]
