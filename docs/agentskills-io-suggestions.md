@@ -29,4 +29,4 @@ The guide uses `with_skill/` and `without_skill/` subdirectories, which works we
 
 A brief note in the guide about preserving `benchmark.json` between iterations for trend tracking could help practitioners who want to measure improvement over time. The token optimization and naming adaptation may be too context-specific, but we're happy to share more details if useful.
 
-Our full implementation is at [mrizzi/sdlc-plugins PR #83](https://github.com/mrizzi/sdlc-plugins/pull/83).
+Our full implementation is at [RHEcosystemAppEng/sdlc-plugins PR #83](https://github.com/RHEcosystemAppEng/sdlc-plugins/pull/83).
