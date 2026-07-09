@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation identifies two independent root causes: (1) convention reference formatter using wrong case transform, (2) task creation using Feature issue type ID instead of Task (Steps 2-4)",
+      "passed": true,
+      "evidence": "investigation.md Step 2 traces both code paths: Trace 1 confirms 'the convention reference formatter uses a wrong case transform function that lowercases and hyphenates heading text' (line 78), Trace 2 confirms 'Step 6a reads the Feature issue type ID (10142) from Jira Configuration instead of the Task issue type ID (10050)' (line 84). Step 4 explicitly names 'Root Cause 1: Convention reference formatter uses wrong case transform' (line 105) and 'Root Cause 2: Task creation uses wrong issue type ID' (line 112). The independence assessment at lines 119-126 states they affect different modules and different code paths."
+    },
+    {
+      "text": "Decomposition Guard is triggered because the two root causes are in different modules/code paths (Step 6)",
+      "passed": true,
+      "evidence": "investigation.md line 128 states: 'This triggers the **Decomposition Guard** (Step 6) -- see outputs/decomposition-guard.md'. decomposition-guard.md line 16 states: 'These are in different modules and different code paths -- fixing one does not affect the other.' The guard file exists and is populated, confirming the guard was triggered. The rationale explicitly cites different modules (shared/convention-utils.md vs plan-feature/SKILL.md) and different code paths."
+    },
+    {
+      "text": "Decomposition Guard presents both issues with their affected files/modules (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md presents issue 1: 'Convention reference formatter uses wrong case transform (in shared/convention-utils.md)' (lines 5-9) and issue 2: 'Task creation uses Feature issue type instead of Task issue type (in plan-feature/SKILL.md Step 6a)' (lines 11-14). Both issues include descriptions, affected files, and specific details about the defect."
+    },
+    {
+      "text": "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md lines 18-21 present: '1. **Proceed** -- create a single Task covering all fixes' and '2. **Split** -- I recommend creating separate Bugs for each independent issue, then triaging each one individually'. Both options are clearly labeled and described."
+    },
+    {
+      "text": "The skill does NOT silently create a single Task bundling both fixes — it waits for user input (Step 6 stop rule)",
+      "passed": true,
+      "evidence": "decomposition-guard.md ends with 'Choose (1/2):' on line 22, explicitly prompting for user input. No task creation output file exists in the outputs directory (only investigation.md and decomposition-guard.md are present). There is no evidence of a Jira issue being created or any task bundling both fixes."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
