@@ -37,6 +37,10 @@ the top of page 2. The total count shown in the pagination footer
 is correct, but the actual displayed items exceed this count due to
 duplicates.
 
+## Environment / Version
+
+RHTPA 1.3.0, deployed via operator on OpenShift 4.15.
+
 ## Attachments
 
 None — the issue is reproducible with any dataset of 50+ SBOMs.
