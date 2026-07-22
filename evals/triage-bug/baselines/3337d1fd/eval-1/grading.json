@@ -1,0 +1,55 @@
+{
+  "assertion_results": [
+    {
+      "text": "Bug parsing correctly extracts all four required sections (Description, Steps to Reproduce, Expected Result, Actual Result) using the heading formats from bug-template-mock.md (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md lines 28-33 show a 'Required Sections' table listing all four sections with heading formats matching bug-template-mock.md: `### **Issue Description**`, `### **Steps to Reproduce**`, `### **Expected Result**`, `### **Actual Result**` — all marked 'Present: Yes'. Lines 56-81 contain the parsed content for each section."
+    },
+    {
+      "text": "Bug validation confirms the issue type ID (10020) matches the Bug issue type ID from Bug Configuration (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md lines 18-20: 'Bug issue type ID from Bug Configuration: **10020**' / 'Issue's issuetype.id: **10020**' / 'Result: **Match** -- issue is confirmed as a Bug.' This matches claude-md-bug-config.md line 34: 'Bug issue type ID: 10020'."
+    },
+    {
+      "text": "Investigation identifies the trailing-whitespace heading extraction as the root cause — line[3:] does not strip whitespace (Steps 2-3)",
+      "passed": true,
+      "evidence": "investigation.md lines 17-18: 'The heading text is extracted using `line[3:]` -- this takes everything after `## ` but does NOT strip trailing whitespace.' Line 30: 'Divergence point: Step 3 above -- `line[3:]` does not call `.strip()` or `.rstrip()`, so trailing whitespace in the heading line is preserved in the dictionary key.' Lines 35-36: 'Confirmed via code-path trace. The heading extraction logic at `line[3:]` does not strip trailing whitespace, causing downstream exact-match comparisons to fail silently.'"
+    },
+    {
+      "text": "Root cause comment includes: what is broken (heading extraction does not strip trailing whitespace), where it is broken (plan-feature convention lookup), and how to verify the fix (reproducer test with whitespace in heading) (Step 4)",
+      "passed": true,
+      "evidence": "root-cause.md — WHAT: lines 9-10 'extracts CONVENTIONS.md section headings using `line[3:]`, which takes the text after `## ` but does not strip trailing whitespace'. WHERE: lines 18-20 'plugins/sdlc-workflow/skills/plan-feature/SKILL.md -- convention conformance analysis section, specifically the heading extraction logic'. HOW TO VERIFY: lines 38-44 'Create a test fixture CONVENTIONS.md with trailing whitespace on one or more section headings... Run the plan-feature convention conformance analysis against this fixture and assert that the convention is correctly matched and included in the generated task\\'s Implementation Notes.'"
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md line 58 (first item under '## Acceptance Criteria'): '- [ ] Reproducer test: a test with trailing whitespace on a `CONVENTIONS.md` heading demonstrates the bug (fails before the fix, passes after the fix)'. The subsequent criteria on lines 59-61 are fix/regression criteria, confirming the reproducer is first."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST test requirement — with explicit assertion guidance derived from the Steps to Reproduce (Step 5 Test Requirements ordering)",
+      "passed": true,
+      "evidence": "task-description.md line 64 (first item under '## Test Requirements'): '- [ ] Reproducer test: create a `CONVENTIONS.md` fixture with trailing whitespace on the `## Migration Patterns  ` heading; run the convention conformance analysis and assert that the `Migration Patterns` convention is matched and included in the generated task\\'s Implementation Notes (should fail before fix, pass after fix)'. The assertion guidance ('assert that the Migration Patterns convention is matched and included in the generated task\\'s Implementation Notes') is derived from the Steps to Reproduce which specify inspecting the generated task's Implementation Notes for the convention."
+    },
+    {
+      "text": "Task description includes a Bug Context section with Bug key (ACME-500), Steps to Reproduce, Expected/Actual Result, and Root Cause summary (Step 5 Bug Context extension)",
+      "passed": true,
+      "evidence": "task-description.md lines 72-78: '## Bug Context' section contains: Bug key '[ACME-500](https://mock-jira.example.com/browse/ACME-500)', Steps to Reproduce ('Create a CONVENTIONS.md with trailing whitespace on a heading...'), Expected Result ('The generated task\\'s Implementation Notes should include...'), Actual Result ('The generated task\\'s Implementation Notes do NOT reference the Migration Patterns convention...'), and Root Cause summary ('The heading extraction logic `line[3:]` does not strip trailing whitespace...')."
+    },
+    {
+      "text": "Task description sets Target Branch to main (Step 5 Target Branch)",
+      "passed": true,
+      "evidence": "task-description.md lines 13-14: '## Target Branch' followed by 'main'."
+    },
+    {
+      "text": "Task description output includes ai-generated-jira in the Jira API metadata block showing it would be passed as a label to jira.create_issue (Step 5 Task creation)",
+      "passed": true,
+      "evidence": "task-description.md lines 1-7: '<!-- Jira API metadata block: parameters for jira.create_issue -->' containing 'labels: [\"ai-generated-jira\"]'."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9,
+    "pass_rate": 1.0
+  }
+}

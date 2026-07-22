@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The report contains a Test Change Classification row with MIXED — both additive and reductive signals are present across the test file changes",
+      "passed": true,
+      "evidence": "report.md summary table line 14: '| Test Change Classification | MIXED | Both additive and reductive test signals detected (see analysis below) |'"
+    },
+    {
+      "text": "The structural summary or reductive findings identify the removed test function test_recommend_purls_with_qualifiers as a reductive signal",
+      "passed": true,
+      "evidence": "report.md structural scan table: '| Test functions | +1 (`test_recommend_purls_dedup` added) | -1 (`test_recommend_purls_with_qualifiers` removed) |'. Semantic assessment section: 'Removed test function `test_recommend_purls_with_qualifiers`: This function tested that PURLs with different qualifiers were returned as separate entries and that qualifier data (`repository_url=`) was present in the response. This behavior no longer exists after the change, so the test was removed. This is reductive -- the old behavior is no longer tested because it no longer exists.'"
+    },
+    {
+      "text": "The structural summary or reductive findings note the assertion change in test_recommend_purls_basic — the PURL assertion changed from checking a fully qualified PURL with qualifiers to checking a versioned PURL without qualifiers, which the semantic assessment may identify as a relaxation contributing to the MIXED classification",
+      "passed": true,
+      "evidence": "report.md structural scan table: '| Assertion specificity | -- | -1 (PURL assertion relaxed: checking for `pkg:maven/org.apache/commons-lang3@3.12` without qualifiers instead of `pkg:maven/org.apache/commons-lang3@3.12?repository_url=https://repo1.maven.org&type=jar`) |'. Semantic assessment: 'Relaxed assertion in `test_recommend_purls_basic`: The base-branch version asserted the exact fully qualified PURL string including qualifiers... The PR version asserts a shorter PURL without qualifiers... This is semantically weaker -- it checks fewer characters and no longer validates qualifier serialization.'"
+    },
+    {
+      "text": "The new test file tests/api/purl_simplify.rs is recognized as additive (3 new test functions)",
+      "passed": true,
+      "evidence": "report.md lines 104-107: 'New file: `tests/api/purl_simplify.rs` — +3 test functions (`test_simplified_purl_no_version`, `test_simplified_purl_mixed_types`, `test_simplified_purl_ordering_preserved`) — +11 assertions (across all 3 new functions) — Purely additive (new file)'"
+    },
+    {
+      "text": "The new test function test_recommend_purls_dedup in the modified file is recognized as an additive signal",
+      "passed": true,
+      "evidence": "report.md structural scan table: '| Test functions | +1 (`test_recommend_purls_dedup` added) | -1 (`test_recommend_purls_with_qualifiers` removed) |'. Semantic assessment: 'The new `test_recommend_purls_dedup` function tests a behavior that did not exist before (deduplication after qualifier removal).'"
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "All output files are verification/analysis reports (report.md, criterion-1.md through criterion-5.md). No output file indicates any code modification was performed. The report analyzes and presents findings without modifying source files."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR — it presents findings for human review (constraint 1.13)",
+      "passed": true,
+      "evidence": "report.md presents an 'Overall: PASS' verdict with detailed findings but contains no merge action, no gh pr merge command, and no indication of auto-merging. The report states: 'All functional checks pass' and presents analysis sections for human review."
+    },
+    {
+      "text": "The test change classification verdict appears in the verification report summary table and is accompanied by a detailed analysis section explaining the structural and semantic assessment",
+      "passed": true,
+      "evidence": "Summary table row: '| Test Change Classification | MIXED | Both additive and reductive test signals detected (see analysis below) |'. Detailed section '### Test Change Classification -- MIXED' contains three subsections: '#### Structural Scan' (with a signal table comparing additive/reductive changes), '#### Semantic Assessment' (explaining each reductive and additive signal), and '#### Classification' (summarizing the MIXED verdict)."
+    },
+    {
+      "text": "The test change classification analysis is based on comparing base-branch and PR-branch file content (function additions, removals, assertion changes) — the structural and semantic assessment references test file content, not acceptance criteria or task requirements (constraint 1.18)",
+      "passed": true,
+      "evidence": "report.md structural scan: 'Comparing the base-branch version against the PR version:' followed by analysis of test function additions/removals and assertion changes. Semantic assessment references specific test file content: exact assertion strings from base-branch ('pkg:maven/org.apache/commons-lang3@3.12?repository_url=https://repo1.maven.org&type=jar') vs PR-branch ('pkg:maven/org.apache/commons-lang3@3.12'), and discusses the removed test function's behavior. Analysis is grounded in file content comparison, not acceptance criteria."
+    },
+    {
+      "text": "Eval Quality is N/A because no eval result reviews exist in the PR — no reviews match the eval result detection criteria, so Eval Quality does not affect the Test Quality combination",
+      "passed": true,
+      "evidence": "report.md Test Quality row: '| Test Quality | PASS | All test functions documented; no repetitive tests detected; Eval Quality: N/A |'. Detailed section: 'Eval Quality: N/A -- No eval result reviews found on this PR.' The Test Quality verdict is PASS without being affected by Eval Quality."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

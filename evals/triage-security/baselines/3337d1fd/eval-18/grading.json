@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md lines 72-81: Step 8 checks show TC-8100 (upstream backport) 'exists, linked via Depend' -> 'Skip -- task already exists', and TC-8101 (downstream propagation) 'exists, linked via Depend' -> 'Skip -- task already exists'. Line 81: 'The skill recognizes these as the remediation tasks it would create and skips task creation entirely.'"
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md line 87: 'ai-cve-triaged label | Present in issue labels | Skip -- label already exists'. data-extraction.md line 21 confirms the label is present: 'Labels | CVE-2026-31812, pscomponent:org/rhtpa-server, ai-cve-triaged'."
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md lines 15-16: Status is 'In Progress', action is 'Skip -- issue is already past \"Assigned\" status; transition is not needed'. triage-outcome.md lines 11-15 elaborate: 'The issue's current status is In Progress (not New). Per the skill's status-aware handling... the skill warns the user that the issue may be actively worked on.'"
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md line 89: 'Description digest comment | Present (comment #1, posted 2026-07-01T10:00:00Z) | Skip -- digest already posted'. Line 90: detection method is 'identified by its [sdlc-workflow] Description digest: prefix'."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md line 88: 'Post-triage summary comment | Present (comment #2, posted 2026-07-01T10:01:00Z) | Skip -- summary already posted'. Line 91: detection method is 'identified by content pattern (\"Triage complete for CVE-2026-31812\") and author attribution'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
