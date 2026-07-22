@@ -45,6 +45,12 @@ ERROR trustify_module_ingestor::service: Failed to parse advisory path
 
 No advisory is created in the database.
 
+## Environment / Version
+
+RHTPA 1.4.2, installed via Helm on OpenShift 4.14. The issue affects
+the Advisory ingestion pipeline. Observed on both Firefox 128 and
+Chrome 126 on Fedora 40.
+
 ## Attachments
 
 - Screenshot of the 500 error in the browser

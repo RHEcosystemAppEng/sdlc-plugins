@@ -28,6 +28,9 @@ After a successful DELETE, the SBOM record is removed from the database. Subsequ
 Actual Result:
 DELETE returns 200 but the record persists. GET still returns the full SBOM data with HTTP 200.
 
+Environment / Version:
+RHTPA 1.4.0 deployed via Helm on OpenShift 4.14. PostgreSQL 15.4 backend. Issue confirmed on both staging and production environments.
+
 Attachments:
 API request/response logs from the verify-pr test run showing the DELETE succeeding but the subsequent GET still returning data.
 

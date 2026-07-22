@@ -10,6 +10,7 @@
 | Steps to reproduce | `### **Steps to Reproduce**` |
 | Expected Result | `### **Expected Result**` |
 | Actual Result | `### **Actual Result**` |
+| Environment / Version | `### **Environment / Version**` |
 | Attachments | `### **Attachments**` |
 
 ## Optional Sections
