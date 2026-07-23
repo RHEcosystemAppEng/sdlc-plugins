@@ -37,6 +37,7 @@ Do **not** use for:
 | 2 | Reproduce/Trace | Steps to Reproduce | Reproduction outcome or trace findings |
 | 3 | Codebase Investigation | Repository Registry | Affected files, symbols, patterns |
 | 4 | Root Cause Analysis | Investigation findings | Root cause comment on Bug |
+| 4.5 | Affects Version Resolution | Version section + Jira versions | Affects Version set or gap flagged |
 | 5 | Generate Task | Root cause + template | Linked Task with reproducer test |
 | 5b | Link Task to Bug | Task key, Bug key | Issue link (Task blocks Bug) |
 | 5c | Post Digest | Task description | Integrity digest comment |
@@ -172,6 +173,8 @@ Before attempting any JIRA operations (Steps 1, 4, 5, 5b, 5c), determine the acc
 - `jira.add_comment(id, text)` → `python3 scripts/jira-client.py add_comment <id> --comment-md "<text>"`
 - `jira.create_issue(...)` → `python3 scripts/jira-client.py create_issue --project <key> --summary "<summary>" --description-md "<desc>" --issue-type Task --labels <labels>`
 - `jira.create_issue_link(...)` → `python3 scripts/jira-client.py create_link --inward <issue1> --outward <issue2> --link-type <type>`
+- `jira.edit_issue(id, fields={"versions": [...]})` → `python3 scripts/jira-client.py update_issue <id> --fields-json '{"versions": [{"name": "<version-name>"}]}'`
+- `jira.get_versions(project)` → `python3 scripts/jira-client.py get_versions <project-key>`
 
 Refer to `shared/jira-rest-fallback.md` for complete implementation details.
 
@@ -206,6 +209,7 @@ heading (or end of description). Required sections are:
 - **Steps to Reproduce** (mapped from the template's "Steps to reproduce" row)
 - **Expected Result** (mapped from the template's "Expected Result" row)
 - **Actual Result** (mapped from the template's "Actual Result" row)
+- **Environment / Version** (mapped from the template's "Environment / Version" row)
 
 For each **Optional Section**, extract the content if present:
 
@@ -228,7 +232,9 @@ Also extract from the Bug issue:
 - **Summary** — the bug title
 - **Labels** — for context
 - **Component** — if set, helps narrow codebase investigation
-- **Affects Version/s** — if set, helps scope the investigation
+- **Affects Version/s** — if set, helps scope the investigation. Also record
+  whether `affectsVersions` (the `versions` Jira field) is already populated
+  with one or more values, so Step 4.5 can decide whether to skip or augment.
 
 ## Step 2 – Reproduce/Trace
 
@@ -338,6 +344,120 @@ diagnostic context. The comment should include:
 Use ADF `contentFormat` for the comment. Append the Comment Footnote.
 
 jira.add_comment(<jira-bug-id>, <root-cause-analysis>)
+
+## Step 4.5 – Affects Version Resolution
+
+After root cause analysis, resolve and set the Affects Version field on the Bug issue.
+
+### 4.5.1 – Check existing field
+
+If the bug's `affectsVersions` field is already populated with one or more versions
+(recorded in Step 1), display them and ask the user whether to keep, replace, or
+augment:
+
+```
+Affects Version/s is already set: [RHTPA 0.9.0]
+
+Options:
+1. Keep — leave the current value and skip to Step 5
+2. Replace — clear and set a new value
+3. Augment — add additional versions alongside the current ones
+
+Choose (1/2/3):
+```
+
+If the user chooses "1. Keep", skip the remaining sub-steps and proceed to Step 5.
+
+### 4.5.2 – Extract version from description
+
+Parse the **Environment / Version** section content (extracted in Step 1) for version
+identifiers. Look for patterns like:
+
+- Explicit version numbers (e.g., `0.9.0`, `2.1.1`)
+- Product-prefixed versions (e.g., `RHTPA 2.1.0`)
+- Version keywords followed by numbers (e.g., `version 1.2.3`)
+
+If the section is empty, contains only vague text (e.g., "latest", "unknown"), or no
+version pattern can be extracted, skip to sub-step 4.5.6 (gap flagging).
+
+### 4.5.3 – Discover available Jira versions
+
+Call the Jira API to get available project versions, following the triage-security
+Step 3.1 pattern in `plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md`.
+
+1. Call `getJiraIssueTypeMetaWithFields` for the Bug issue type:
+   ```
+   jira.getJiraIssueTypeMetaWithFields(
+     projectIdOrKey: "<project-key>",
+     issueTypeId: "<bug-issue-type-id>"
+   )
+   ```
+2. Extract the `versions` field's `allowedValues` array. Each entry contains:
+   - `id` — the Jira version ID (used for mutations)
+   - `name` — the display name (e.g., `RHTPA 0.9.0`)
+   - `released` — boolean indicating release status
+   - `releaseDate` — planned or actual release date
+
+**REST API fallback:** `python3 scripts/jira-client.py get_versions <project-key>`
+
+Present the available versions for context:
+
+```
+Available Jira versions:
+
+| Jira ID | Name          | Released | Release Date |
+|---------|---------------|----------|--------------|
+| 62643   | RHTPA 0.9.0   | yes      | 2025-06-15   |
+| 62644   | RHTPA 1.0.0   | yes      | 2025-09-01   |
+| ...     | ...           | ...      | ...          |
+```
+
+### 4.5.4 – Match
+
+Compare the extracted version text against the available Jira version names. Use
+substring matching (e.g., extracted `0.9.0` matches Jira version `RHTPA 0.9.0`).
+If multiple versions match, present all candidates.
+
+### 4.5.5 – Confirm with user
+
+Present the matched version(s) and ask for confirmation:
+
+```
+Extracted version info: "0.9.0"
+Matched Jira version: RHTPA 0.9.0 (ID: 62643)
+
+Set this as the Affects Version on <bug-key>? (yes/no/skip)
+```
+
+- **yes**: proceed to set the field.
+- **no**: ask the user to select from the available versions list, or enter a
+  version manually.
+- **skip**: skip Affects Version setting entirely and proceed to Step 5.
+
+After confirmation, update the Affects Version field:
+
+```
+jira.edit_issue(<bug-key>, fields={
+  "versions": [{"id": "<version-id>"}]
+})
+```
+
+Use the Jira version IDs discovered in sub-step 4.5.3, not hardcoded values.
+When augmenting (from sub-step 4.5.1), merge the new version(s) with the existing
+ones.
+
+### 4.5.6 – Flag gap
+
+If version information cannot be extracted from the description (sub-step 4.5.2),
+or no match is found against available Jira versions (sub-step 4.5.4), post a
+comment on the Bug:
+
+```
+jira.add_comment(<bug-key>, "Affects Version could not be determined from the
+bug description — please set manually.")
+```
+
+Append the Comment Footnote.
 
 ## Step 5 – Generate Task
 

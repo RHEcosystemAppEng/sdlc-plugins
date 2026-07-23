@@ -42,6 +42,44 @@
         "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
         "The skill does NOT silently create a single Task bundling both fixes — it waits for user input (Step 6 stop rule)"
       ]
+    },
+    {
+      "id": 4,
+      "prompt": "Triage Bug issue ACME-510. The issue details are in bug-issue-with-version.md, the bug template is in bug-template-mock.md, the repository context is in repo-context-mock.md, and the project CLAUDE.md is in claude-md-bug-config.md. Do NOT actually call Jira MCP, Serena, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/bug-parsing.md with the parsed description sections from Step 1 (including Environment / Version), write outputs/version-resolution.md with the Affects Version resolution from Step 4.5 (version extraction, available versions, matching, and the confirmation prompt you would present to the user), write outputs/investigation.md with the codebase investigation findings from Steps 2-3, write outputs/root-cause.md with the root cause analysis from Step 4, and write outputs/task-description.md with the full Task description you would create in Step 5.",
+      "expected_output": "A complete triage demonstrating: correct extraction of the Environment / Version section content, version identifier '0.9.0' extracted from the section, matched against available Jira version 'RHTPA 0.9.0' (ID: 62643), and a confirmation prompt asking whether to set it as the Affects Version on ACME-510.",
+      "files": ["files/bug-issue-with-version.md", "files/bug-template-mock.md", "files/repo-context-mock.md", "files/claude-md-bug-config.md"],
+      "assertions": [
+        "Bug parsing extracts the Environment / Version section content including 'Product version: 0.9.0' (Step 1)",
+        "Version resolution extracts '0.9.0' as the version identifier from the Environment / Version section (Step 4.5.2)",
+        "Version resolution presents the available Jira versions from the fixture's version table (Step 4.5.3)",
+        "Version resolution matches extracted '0.9.0' against Jira version 'RHTPA 0.9.0' (ID: 62643) using substring matching (Step 4.5.4)",
+        "Version resolution presents a confirmation prompt asking whether to set 'RHTPA 0.9.0' as the Affects Version on ACME-510 (Step 4.5.5)",
+        "Since affectsVersions is not already set, sub-step 4.5.1 (existing field check) is skipped or notes the field is empty (Step 4.5.1)"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Triage Bug issue ACME-511. The issue details are in bug-issue-no-version.md, the bug template is in bug-template-mock.md, the repository context is in repo-context-mock.md, and the project CLAUDE.md is in claude-md-bug-config.md. Do NOT actually call Jira MCP, Serena, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/bug-parsing.md with the parsed description sections from Step 1 (including Environment / Version), write outputs/version-resolution.md with the Affects Version resolution from Step 4.5 showing why version could not be determined, write outputs/investigation.md with the codebase investigation findings, write outputs/root-cause.md with the root cause analysis, and write outputs/task-description.md with the full Task description.",
+      "expected_output": "A complete triage demonstrating: correct extraction of the Environment / Version section with vague content ('Not sure which version — using whatever is deployed on staging'), determination that no version identifier can be extracted, and a gap comment that would be posted on the bug stating that Affects Version could not be determined.",
+      "files": ["files/bug-issue-no-version.md", "files/bug-template-mock.md", "files/repo-context-mock.md", "files/claude-md-bug-config.md"],
+      "assertions": [
+        "Bug parsing extracts the Environment / Version section content including the vague text (Step 1)",
+        "Version resolution determines that no version identifier can be extracted from the vague description (Step 4.5.2)",
+        "Version resolution outputs the gap comment: 'Affects Version could not be determined from the bug description — please set manually.' (Step 4.5.6)",
+        "The gap comment includes the Comment Footnote (Step 4.5.6)"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Triage Bug issue ACME-500. The issue details are in bug-issue-standard.md, the bug template is in bug-template-mock.md, the repository context is in repo-context-mock.md, and the project CLAUDE.md is in claude-md-bug-config.md. Note that ACME-500 already has 'Affects Version/s: 0.9.0' set on the issue. Do NOT actually call Jira MCP, Serena, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/bug-parsing.md with the parsed description sections from Step 1, write outputs/version-resolution.md with the Affects Version resolution from Step 4.5 showing how the existing value is handled, write outputs/investigation.md with the codebase investigation findings, write outputs/root-cause.md with the root cause analysis, and write outputs/task-description.md with the full Task description.",
+      "expected_output": "A complete triage demonstrating: detection that affectsVersions is already populated with '0.9.0', and a prompt asking the user whether to keep, replace, or augment the existing Affects Version value.",
+      "files": ["files/bug-issue-standard.md", "files/bug-template-mock.md", "files/repo-context-mock.md", "files/claude-md-bug-config.md"],
+      "assertions": [
+        "Bug metadata extraction records that affectsVersions is already populated with '0.9.0' (Step 1)",
+        "Version resolution detects the existing Affects Version/s value and presents it to the user (Step 4.5.1)",
+        "Version resolution offers three options: Keep, Replace, or Augment the existing value (Step 4.5.1)",
+        "The skill does NOT silently overwrite or skip the existing value — it waits for user input (Step 4.5.1)"
+      ]
     }
   ]
 }
