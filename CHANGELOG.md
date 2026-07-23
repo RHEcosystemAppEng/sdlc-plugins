@@ -5,6 +5,13 @@ All notable changes to the sdlc-workflow plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.5] - 2026-07-23
+
+### Fixed
+
+- Version footer generation moved from workflow into render_summary.py in `run-evals`
+- Eval-baseline workflow skipped on fork repositories
+
 ## [0.13.4] - 2026-07-23
 
 ### Added
