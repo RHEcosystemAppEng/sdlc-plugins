@@ -166,14 +166,20 @@ Write `<workspace>/feedback.json` with empty strings for each eval:
 
 Determine the baseline path: `evals/<skill-name>/baselines/latest/`.
 
-Run the render script, passing the skill name so the heading identifies
-which skill the results belong to:
+Read the plugin version from `plugins/sdlc-workflow/.claude-plugin/plugin.json`
+(the `version` field). This file is in the base-branch checkout (trusted), not
+in the PR content.
+
+Run the render script, passing the skill name and version so the heading
+identifies which skill the results belong to and the footer attributes the
+output:
 
 ```bash
 python3 <skill-dir>/scripts/render_summary.py \
   --results <workspace> \
   --baseline <baseline-path> \
-  --skill <skill-name>
+  --skill <skill-name> \
+  --version <version>
 ```
 
 If the baseline path does not exist, omit `--baseline` — the script
