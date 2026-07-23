@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation identifies two independent root causes: (1) convention reference formatter using wrong case transform, (2) task creation using Feature issue type ID instead of Task (Steps 2-4)",
+      "passed": true,
+      "evidence": "investigation.md Step 2 Trace 1 identifies: 'The formatter applies a slugify or kebab-case transformation to the heading text (lowercasing and replacing spaces with hyphens), producing §migration-patterns instead of preserving the original heading text §Migration Patterns.' Trace 2 identifies: 'it falls back to the Feature issue type ID (10142) from ## Jira Configuration in CLAUDE.md. This causes all created tasks to be of type Feature instead of Task.' Step 4 Root Cause Analysis explicitly documents both as independent root causes with a summary table. The independence assessment states: 'These two root causes are independent' citing different modules, different code paths, no shared state, and independent fixes."
+    },
+    {
+      "text": "Decomposition Guard is triggered because the two root causes are in different modules/code paths (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md exists and explicitly states: 'These two problems are caused by independent code paths in different modules: Root Cause 1 is in the shared convention formatting layer (shared/convention-utils.md), invoked during task description generation. Root Cause 2 is in the plan-feature task creation logic (plan-feature/SKILL.md Step 6a), invoked during Jira API calls. Fixing one does not affect the other.'"
+    },
+    {
+      "text": "Decomposition Guard presents both issues with their affected files/modules (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md presents both issues with numbered descriptions and affected files: '1. Malformed convention references (in shared/convention-utils.md): The convention reference formatter applies kebab-case slugification...' and '2. Wrong issue type in task creation (in plan-feature/SKILL.md Step 6a): The task creation logic reads the Feature issue type ID (10142) from Jira Configuration instead of using the Task issue type ID...'"
+    },
+    {
+      "text": "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md presents: 'Options: 1. Proceed — create a single Task covering all fixes 2. Split — I recommend creating separate Bugs for each independent issue, then triaging each one individually Choose (1/2):'"
+    },
+    {
+      "text": "The skill does NOT silently create a single Task bundling both fixes — it waits for user input (Step 6 stop rule)",
+      "passed": true,
+      "evidence": "decomposition-guard.md ends with 'Choose (1/2):' indicating execution stopped to wait for user input. No task creation output or Jira issue creation artifacts exist in the outputs directory. The only two files are investigation.md and decomposition-guard.md, confirming the skill halted at the decomposition guard step without proceeding to create any tasks."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "Bug metadata extraction records that affectsVersions is already populated with '0.9.0' (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md line 83: '- **Affects Version/s**: 0.9.0 (already populated on the issue)' explicitly records the existing value in the Extracted Metadata section."
+    },
+    {
+      "text": "Version resolution detects the existing Affects Version/s value and presents it to the user (Step 4.5.1)",
+      "passed": true,
+      "evidence": "version-resolution.md lines 5-7: 'The bug issue ACME-500 already has the Affects Version/s field populated: Current value: 0.9.0'. Lines 11-19 present it to the user: 'Affects Version/s is already set: [0.9.0]' followed by three numbered options and 'Choose (1/2/3):'."
+    },
+    {
+      "text": "Version resolution offers three options: Keep, Replace, or Augment the existing value (Step 4.5.1)",
+      "passed": true,
+      "evidence": "version-resolution.md lines 14-18 list all three options: '1. Keep -- leave the current value and skip to Step 5', '2. Replace -- clear and set a new value', '3. Augment -- add additional versions alongside the current ones'."
+    },
+    {
+      "text": "The skill does NOT silently overwrite or skip the existing value — it waits for user input (Step 4.5.1)",
+      "passed": false,
+      "evidence": "version-resolution.md presents the user prompt with 'Choose (1/2/3):' but then auto-resolves without waiting for user input. Lines 22-28 provide a 'Resolution' with 'Recommendation: Option 1 (Keep)' and lines 37-39 state 'Skip remaining sub-steps (4.5.2 through 4.5.6) and proceed to Step 5 (Generate Task).' The existence of task-description.md confirms the skill proceeded to Step 5 without user interaction. The skill did not silently overwrite, but it did not wait for user input — it auto-selected Keep."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 1,
+    "total": 4,
+    "pass_rate": 0.75
+  }
+}
