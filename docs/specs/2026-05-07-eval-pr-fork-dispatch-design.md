@@ -31,7 +31,10 @@ A trust check auto-approves eval runs for repository collaborators with write ac
 | Trust threshold | `admin` or `write` | Collaborators with write access can already push to the repo directly — granting them secret access in CI adds no new attack surface |
 | Untrusted gate | Protected environment | GitHub's built-in approval mechanism — reviewers click "Approve" in the Actions UI |
 | PR coverage | All PRs (fork and non-fork) | Single code path avoids duplicate logic and ensures consistent behavior |
-| Data flow | No artifact — Stage 2 derives everything | Artifact is attacker-controlled (fork PR can modify Stage 1 workflow). Stage 2 derives PR identity from GitHub API and skills from git diff on the checked-out merge commit |
+| Data flow | No artifact — Stage 2 derives everything | Artifact is attacker-controlled (fork PR can modify Stage 1 workflow). Stage 2 derives PR identity from GitHub API and skills from `pulls.listFiles` (no checkout needed) |
+| Skill discovery | `pulls.listFiles` API (no checkout) | Eliminates fork code checkout in the discover job entirely — no `allow-unsafe-pr-checkout` needed for discovery |
+| Workspace isolation | Base branch at root, PR in subdirectory | Workspace root is trusted (CLAUDE.md, .claude/ config). PR code in `pr-head/` via `--add-dir`. Requires `allow-unsafe-pr-checkout: true` for the subdirectory checkout |
+| Credential isolation | `sandbox.credentials.envVars` deny mode | GCP/Vertex AI env vars stripped from sandboxed Bash subprocesses. Claude Code runtime retains access for API auth. Belt-and-suspenders: `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` |
 
 ## Architecture
 
@@ -52,11 +55,11 @@ Fork PR opened
 │  Job 1: discover                     │
 │  - Set pending commit status on PR   │
 │  - Resolve PR identity via GitHub API│
-│  - Checkout PR merge commit          │
-│  - Discover skills via git diff      │
+│  - Discover skills via pulls.listFiles│
 │  - Check collaborator permission     │
 │  - Update status if awaiting approval│
-│  - Output: trusted, skills, PR#     │
+│  - Output: trusted, skills, PR#      │
+│  (No checkout — pure API discovery)  │
 │                                      │
 │  Job 2: gate                         │
 │  - Runs ONLY if trusted != true      │
@@ -64,9 +67,12 @@ Fork PR opened
 │  - Blocks until reviewer approves    │
 │                                      │
 │  Job 3: run-evals                    │
-│  - Checkout PR merge commit          │
+│  - Checkout base branch (workspace   │
+│    root = trusted CLAUDE.md)         │
+│  - Checkout PR into pr-head/         │
+│  - Install bubblewrap + socat        │
 │  - Authenticate GCP                  │
-│  - Run evals                         │
+│  - Run evals (sandbox + --add-dir)   │
 │  - Post PR review                    │
 │                                      │
 │  Job 4: report-status                │
@@ -121,20 +127,20 @@ permissions:
 
 ### Job 1: discover
 
-Resolves PR identity from the GitHub API, checks out the PR merge commit, discovers changed skills via git diff, and determines trust level. Skips early if the triggering workflow failed. No data from the triggering workflow is used — everything is derived independently.
+Resolves PR identity from the GitHub API, discovers changed skills via `pulls.listFiles`, and determines trust level. Skips early if the triggering workflow failed. No data from the triggering workflow is used — everything is derived independently. **No checkout is performed in this job.**
 
 **Steps:**
 
-1. **Resolve PR identity and check trust** via `actions/github-script@v7`:
+1. **Resolve PR identity and check trust** via `actions/github-script@v9`:
    - Find PR via `pulls.list` filtered by `base: 'main'`, matched by `head.sha == workflow_run.head_sha`
    - Check collaborator permission level for the PR author
-   - Output `pr_number`, `base_sha`, `author`, `trusted`
+   - Output `pr_number`, `author`, `trusted`
 
 Note: `listPullRequestsAssociatedWithCommit` does not work for fork PRs because the commit lives in the fork's repository, not the base repo's commit graph. `pulls.list` with SHA matching is the reliable alternative.
 
 ```javascript
 const headSha = context.payload.workflow_run.head_sha;
-const { data: prs } = await github.rest.pulls.list({
+const prs = await github.paginate(github.rest.pulls.list, {
   owner: context.repo.owner, repo: context.repo.repo,
   state: 'open', base: 'main', per_page: 100
 });
@@ -145,11 +151,9 @@ const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
 const trusted = ['admin', 'write'].includes(data.permission);
 ```
 
-2. **Checkout PR merge commit** — `actions/checkout@v4` with `ref: refs/pull/<pr_number>/merge` and `fetch-depth: 0`
+2. **Discover changed skills** via `actions/github-script@v9` — uses `pulls.listFiles` to get changed filenames, matches against skill/eval path patterns, confirms `evals/<skill>/evals.json` exists via the file list or `repos.getContent`. No checkout needed.
 
-3. **Discover changed skills** — git diff against `base_sha`, same logic as the original `eval-pr.yml` discovery step (map changed files to eval suites)
-
-4. **Set outputs**: `skills`, `pr_number`, `author`, `trusted`
+3. **Set outputs**: `skills`, `pr_number`, `author`, `trusted`
 
 ### Job 2: gate
 
@@ -183,28 +187,28 @@ run-evals:
 
 **Steps:**
 
-1. **Checkout PR merge commit**:
+1. **Checkout base branch** — `actions/checkout@v7` with no `ref:` (defaults to the base branch). This establishes a trusted workspace root with the repository's CLAUDE.md and `.claude/` configuration.
 
-```yaml
-- uses: actions/checkout@v4
-  with:
-    ref: refs/pull/${{ needs.discover.outputs.pr_number }}/merge
-    fetch-depth: 0
-```
+2. **Checkout PR merge commit into subdirectory** — `actions/checkout@v7` with `ref: refs/pull/<pr_number>/merge`, `path: pr-head`, and `allow-unsafe-pr-checkout: true`. The `allow-unsafe-pr-checkout` flag is required because `actions/checkout@v7` blocks fork PR refs in `workflow_run` workflows regardless of the `path:` parameter ([GitHub Changelog, June 2026](https://github.blog/changelog/2026-06-18-safer-pull_request_target-defaults-for-github-actions-checkout/)).
 
-2. **Authenticate to Google Cloud** — existing step, moved from `eval-pr.yml`:
+3. **Install sandbox dependencies** — `bubblewrap` and `socat` via `apt-get`. Required by `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` on Linux runners.
+
+4. **Authenticate to Google Cloud** via Workload Identity Federation:
 
 ```yaml
 - uses: google-github-actions/auth@v3
   with:
-    credentials_json: ${{ secrets.GCP_SA_KEY }}
+    project_id: ${{ secrets.GCP_PROJECT_ID }}
+    workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
 ```
 
-3. **Install Claude Code** — existing step, moved from `eval-pr.yml`
+5. **Install Claude Code**
 
-4. **Run PR evals** — existing step, moved from `eval-pr.yml`. Uses `needs.discover.outputs.skills` instead of the inline discovery output.
+6. **Write sandbox settings** — generates `/tmp/eval-sandbox-settings.json` with `sandbox.credentials.envVars` deny entries for GCP/Vertex AI env vars (see [Credential Isolation](#credential-isolation) below).
 
-5. **Post eval results review** — existing step, moved from `eval-pr.yml`. Uses `needs.discover.outputs.pr_number` instead of `context.issue.number` (which is unavailable in `workflow_run` context).
+7. **Run PR evals** — invokes `claude -p` with `--settings /tmp/eval-sandbox-settings.json --add-dir pr-head` and `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`. Eval paths reference `pr-head/evals/<skill>/evals.json`.
+
+8. **Post eval results review** — reads `summary.md` from eval workspaces and posts as a PR review via `pulls.createReview`. Uses `needs.discover.outputs.pr_number`.
 
 ### Job 4: report-status
 
@@ -239,10 +243,27 @@ All other PR authors. Their eval runs require a reviewer to click "Approve" in t
 ### Security Properties
 
 - The `workflow_run` workflow executes on the base repository's default branch — a fork PR cannot modify the workflow definition or trust logic
-- No data passes from Stage 1 to Stage 2 — there is no artifact. Stage 2 derives everything independently: PR identity from the GitHub API, skills from git diff on the checked-out merge commit. This eliminates artifact poisoning as an attack vector entirely.
+- No data passes from Stage 1 to Stage 2 — there is no artifact. Stage 2 derives everything independently: PR identity from the GitHub API, skills from `pulls.listFiles`. This eliminates artifact poisoning as an attack vector entirely
+- The discover job performs no checkout — skill discovery uses only GitHub API calls, so no fork code is fetched in the discovery phase
 - The collaborator permission check uses GitHub's API, not a file in the repo — it cannot be manipulated by a PR
-- Once approved, the workflow does execute skill files from the PR with access to secrets via environment variables — this is inherent to the use case (evaluating skills requires running them)
-- The `dontAsk` permission mode with explicit `--allowedTools` limits Claude Code's capabilities, but a malicious skill could still read environment variables via the Bash tool
+- The workspace root is the trusted base branch (CLAUDE.md, `.claude/` config). Fork PR code is isolated in the `pr-head/` subdirectory via `--add-dir`
+- GCP/Vertex AI credential env vars are stripped from sandboxed Bash subprocesses via `sandbox.credentials.envVars` deny mode. Claude Code's own runtime retains access for API authentication
+- `CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1` provides blanket scrubbing of Anthropic, cloud, and GitHub Actions secrets from all subprocesses as belt-and-suspenders
+- The `dontAsk` permission mode with explicit `--allowedTools` limits Claude Code's capabilities
+- Once approved, the workflow does execute skill files from the PR — this is inherent to the use case (evaluating skills requires running them). The credential isolation mitigates but does not eliminate prompt injection risk
+
+### Credential Isolation
+
+The run-evals job uses two layers of credential protection:
+
+1. **`sandbox.credentials.envVars`** (deny mode) — declaratively strips specific env vars from sandboxed Bash subprocesses. The deny list covers all env vars set by `google-github-actions/auth@v3` in WIF mode and the workflow's own secret-derived env vars:
+   - `ANTHROPIC_VERTEX_PROJECT_ID`, `CLOUD_ML_REGION`
+   - `GOOGLE_APPLICATION_CREDENTIALS`, `CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE`, `GOOGLE_GHA_CREDS_PATH`
+   - `CLOUDSDK_PROJECT`, `CLOUDSDK_CORE_PROJECT`, `GCP_PROJECT`, `GCLOUD_PROJECT`, `GOOGLE_CLOUD_PROJECT`
+
+2. **`CLAUDE_CODE_SUBPROCESS_ENV_SCRUB=1`** — blanket best-effort scrub of Anthropic, cloud, and GitHub Actions secrets from subprocess environments. Requires `bubblewrap` and `socat` on Linux runners.
+
+Both layers are independent — the deny list targets specific known vars, the env scrub catches patterns. See [Claude Code Sandboxing: Protect credentials](https://code.claude.com/docs/en/sandboxing#protect-credentials) for full documentation.
 
 ### Why Not Other Approaches
 
@@ -261,7 +282,11 @@ Create a protected environment in the repository:
 
 1. Settings > Environments > New environment: `eval-protected`
 2. Add required reviewers (at minimum, repository maintainers)
-3. No environment-specific secrets needed — existing repository-level secrets (`GCP_SA_KEY`, `CLOUD_ML_REGION`) are available to all `workflow_run` jobs
+3. No environment-specific secrets needed — existing repository-level secrets (`GCP_PROJECT_ID`, `GCP_WIF_PROVIDER`, `GCP_CLOUD_ML_REGION`) are available to all `workflow_run` jobs
+
+### Runner Dependencies
+
+The sandbox credential isolation requires `bubblewrap` and `socat` on Linux runners. These are installed by the workflow via `apt-get` before Claude Code runs.
 
 ### No Other Infrastructure
 
@@ -282,4 +307,8 @@ Create a protected environment in the repository:
 - [Using secrets in GitHub Actions](https://docs.github.com/en/actions/security-for-github-actions/security-guides/using-secrets-in-github-actions) — fork PR secret restriction
 - [Events that trigger workflows: workflow_run](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#workflow_run) — secret access in `workflow_run`
 - [GitHub Security Lab: Preventing pwn requests](https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/) — two-stage pattern for fork PR processing
+- [GitHub Security Lab: New patterns and mitigations](https://securitylab.github.com/resources/github-actions-new-patterns-and-mitigations/) — `workflow_run` security mitigations
+- [GitHub Changelog: Safer pull_request_target defaults](https://github.blog/changelog/2026-06-18-safer-pull_request_target-defaults-for-github-actions-checkout/) — `actions/checkout@v7` fork guard and backport to supported major versions
+- [Claude Code Sandboxing: Protect credentials](https://code.claude.com/docs/en/sandboxing#protect-credentials) — `sandbox.credentials.envVars` deny/mask modes
+- [claude-code-action security: Fork PRs](https://github.com/anthropics/claude-code-action/blob/main/docs/security.md) — safe fork PR patterns with `--add-dir`
 - [Repository collaborators API](https://docs.github.com/en/rest/collaborators/collaborators) — permission check endpoint
