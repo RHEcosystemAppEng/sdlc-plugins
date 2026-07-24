@@ -72,6 +72,57 @@ slash commands.
 This interactively populates the required Project Configuration in your
 project's CLAUDE.md (repository registry, Jira settings, and code intelligence).
 
+## Sandbox Credential Isolation
+
+This repository includes a `.claude/settings.json` file that configures
+`sandbox.credentials.envVars` deny entries for 16 credential environment
+variables across four categories: GCP (9), Anthropic/Vertex AI (3),
+GitHub (2), and AWS (2). When the sandbox is enabled, these variables are
+stripped from Bash subprocesses while Claude Code's own runtime retains
+access for API authentication.
+
+The sandbox is **opt-in** — it is not enabled automatically. Run `/sandbox`
+at the start of each session to activate it.
+
+### Verifying the deny entries
+
+After enabling the sandbox, confirm that denied variables are stripped:
+
+```
+/sandbox
+```
+
+Then in a Bash command, check that a denied variable is empty:
+
+```bash
+echo "GITHUB_TOKEN=$GITHUB_TOKEN"
+```
+
+The output should show an empty value. If Claude Code can still call APIs
+(Jira, GitHub), the runtime retained its own access while the sandbox
+stripped the variable from the Bash subprocess.
+
+### JIRA_API_TOKEN
+
+`JIRA_API_TOKEN` is intentionally **not** included in the project-level deny
+entries. It requires `mask` mode (which redacts the value rather than
+removing it entirely), and `mask` can only be set from user-level settings,
+managed settings, or the `--settings` CLI flag — not from project-level
+`.claude/settings.json`. To mask it locally, add the following to your
+`.claude/settings.local.json`:
+
+```json
+{
+  "sandbox": {
+    "credentials": {
+      "envVars": [
+        { "name": "JIRA_API_TOKEN", "mode": "mask" }
+      ]
+    }
+  }
+}
+```
+
 ## Project Configuration
 
 For the skills to work with your project, your project's CLAUDE.md must
