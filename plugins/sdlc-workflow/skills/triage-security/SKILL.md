@@ -634,16 +634,6 @@ If concurrent triages are detected, the protocol offers three options: wait,
 skip, or proceed with a `concurrent-triage-overlap` label. Only continue to
 Case A/B/C after the user chooses.
 
-### Case A: Affected — create remediation tasks
-
-If the issue's stream-scoped versions (or all versions for unscoped issues)
-are affected:
-- Keep the current Vulnerability issue as-is (with corrected Affects Versions
-  from Step 3).
-- Create one remediation Task per affected stream within the issue's scope
-  (see Remediation Task Creation below).
-- Link each Task to the Vulnerability issue.
-
 ### Case B: Cross-stream impact — proactive remediation
 
 **Guard — scoped issues only.** Case B applies exclusively to stream-scoped
@@ -694,6 +684,23 @@ streams** (outside this issue's scope) are also affected:
 Do **not** create new Vulnerability issues — PSIRT manages per-stream
 Vulnerability tracking. Only create remediation **Tasks**.
 
+### Case A: Affected — create remediation tasks
+
+If the issue's stream-scoped versions (or all versions for unscoped issues)
+are affected:
+- Keep the current Vulnerability issue as-is (with corrected Affects Versions
+  from Step 3).
+- Create remediation tasks for each affected stream within the issue's scope.
+  The number of tasks depends on the ecosystem:
+  - **Source dependency ecosystems** (Cargo, npm): create **two** tasks per
+    stream — an upstream backport task (fix in the source repo) and a downstream
+    propagation subtask (update the reference in the Konflux release repo). The
+    downstream subtask is blocked by the upstream task.
+  - **System package ecosystems** (RPM): create **one** task per stream — the
+    fix happens directly in the Konflux release repo.
+  See Remediation Task Creation below for full templates and API calls.
+- Link each Task to the Vulnerability issue.
+
 ### Case C: No supported versions affected
 
 If the version impact table shows NO for all supported versions (including
@@ -728,6 +735,20 @@ engineer as part of the close recommendation.
 
 Present the full recommendation (task details, cross-stream notice, or close
 rationale) to the engineer for confirmation before executing any Jira mutations.
+
+**Pre-creation checklist** — verify before presenting the recommendation:
+
+- [ ] **Task count per stream**: source dependency ecosystems (Cargo, npm) produce
+  2 tasks per stream (upstream + downstream); system package ecosystems produce 1.
+- [ ] **Cross-stream coverage**: for scoped issues, all affected streams outside the
+  issue's scope have either a preemptive task or an existing sibling CVE Jira.
+- [ ] **Link types**: "Depend" for tasks linked to their own CVE Jira, "Related" for
+  preemptive tasks linked to another stream's CVE Jira, "Blocks" for upstream →
+  downstream within a stream.
+- [ ] **Preemptive labels**: tasks for streams without their own CVE Jira carry the
+  `security-preemptive` label.
+- [ ] **Coordination guidance**: each task's Implementation Notes includes the
+  appropriate guidance based on the repository's deployment context.
 
 ## Remediation Task Creation
 
@@ -809,15 +830,14 @@ MUST include the Comment Footnote (see above).
 7. **Never create Vulnerability issues.** PSIRT owns Vulnerability issue creation.
    This skill only creates remediation Tasks. Cross-stream impact is reported via
    comment on the current issue.
-8. **One remediation Task per affected stream, plus a downstream propagation
-   subtask** when the ecosystem is a source dependency (Cargo, npm).
-   The upstream task covers the source repo fix; the downstream subtask covers
-   the Konflux release repo update and is blocked by the upstream task. System
-   package ecosystems produce a single task. A single Task spanning multiple
-   streams would be unimplementable by `/implement-task`. For dev-only or
-   build-only dependencies (identified in Step 2.3.5), add the `dev-dependency`
-   label and override priority to Normal — see the dependency scope decision
-   tree in `version-impact-analysis.md`.
+8. **Task count per stream depends on the ecosystem** — source dependencies
+   (Cargo, npm) produce two tasks (upstream + downstream), system packages
+   produce one. See Case A inline rule and the pre-creation checklist for
+   details. A single Task spanning multiple streams would be unimplementable
+   by `/implement-task`. For dev-only or build-only dependencies (identified
+   in Step 2.3.5), add the `dev-dependency` label and override priority to
+   Normal — see the dependency scope decision tree in
+   `version-impact-analysis.md`.
 9. **Follow `task-description-template.md` for generated tasks.** The remediation
    Task description must be parseable by `/implement-task`. Do not invent custom
    sections or deviate from the template format.
