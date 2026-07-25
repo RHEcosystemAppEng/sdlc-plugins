@@ -602,8 +602,8 @@ flowchart TD
     B -->|Yes| SCOPE{"Issue scoped to\na single stream?"}
     B -->|No| D["Case C: Close as\nNot a Bug"]
     SCOPE -->|"Yes (scoped)"| C{"Other streams\nalso affected?"}
-    SCOPE -->|"No (unscoped)"| F["Case A: Create\nremediation tasks\nfor affected streams"]
-    C -->|Yes| E["Case B: Post cross-stream\nimpact comment"]
+    SCOPE -->|"No (unscoped)"| F["Case B: Create\nremediation tasks\nfor affected streams"]
+    C -->|Yes| E["Case A: Post cross-stream\nimpact comment"]
     C -->|No| F
     E --> F
     F --> G{"Source dependency?\n(Cargo, npm)"}
@@ -634,13 +634,13 @@ If concurrent triages are detected, the protocol offers three options: wait,
 skip, or proceed with a `concurrent-triage-overlap` label. Only continue to
 Case A/B/C after the user chooses.
 
-### Case B: Cross-stream impact — proactive remediation
+### Case A: Cross-stream impact — proactive remediation
 
-**Guard — scoped issues only.** Case B applies exclusively to stream-scoped
+**Guard — scoped issues only.** Case A applies exclusively to stream-scoped
 issues (those whose summary contains a stream suffix like `[myproduct-2.2]`).
 Unscoped issues cover all streams by definition — there are no "other streams
 outside this issue's scope," so the cross-stream impact check is not applicable.
-For unscoped issues, skip Case B entirely and proceed directly to Case A task
+For unscoped issues, skip Case A entirely and proceed directly to Case B task
 creation for all affected streams.
 
 If the issue is **scoped** and the version impact analysis reveals that **other
@@ -659,7 +659,7 @@ streams** (outside this issue's scope) are also affected:
    suffix (reuse the JQL from Step 4).
 
 3. **For each affected stream without its own CVE Jira**, create proactive
-   remediation tasks using the same templates as Case A, but with the
+   remediation tasks using the same templates as Case B, but with the
    preemptive variant (see `remediation-templates.md` — Preemptive Task
    Variant):
    - Labels include `security-preemptive` alongside standard labels
@@ -684,7 +684,7 @@ streams** (outside this issue's scope) are also affected:
 Do **not** create new Vulnerability issues — PSIRT manages per-stream
 Vulnerability tracking. Only create remediation **Tasks**.
 
-### Case A: Affected — create remediation tasks
+### Case B: Affected — create remediation tasks
 
 If the issue's stream-scoped versions (or all versions for unscoped issues)
 are affected:
@@ -752,7 +752,7 @@ rationale) to the engineer for confirmation before executing any Jira mutations.
 
 ## Remediation Task Creation
 
-When triage concludes "needs fix" (Case A above), create Jira Tasks
+When triage concludes "needs fix" (Case B above), create Jira Tasks
 following `task-description-template.md` so that `/implement-task` can parse them
 directly. Only create tasks for streams within the current issue's scope.
 
@@ -832,7 +832,7 @@ MUST include the Comment Footnote (see above).
    comment on the current issue.
 8. **Task count per stream depends on the ecosystem** — source dependencies
    (Cargo, npm) produce two tasks (upstream + downstream), system packages
-   produce one. See Case A inline rule and the pre-creation checklist for
+   produce one. See Case B inline rule and the pre-creation checklist for
    details. A single Task spanning multiple streams would be unimplementable
    by `/implement-task`. For dev-only or build-only dependencies (identified
    in Step 2.3.5), add the `dev-dependency` label and override priority to
