@@ -412,6 +412,17 @@ assuming a fixed set. Common ecosystems include:
 - **npm** — JavaScript/TypeScript packages (e.g., axios, webpack, react)
 - **RPM** — System packages in container images (e.g., openssl, curl, glibc)
 
+The ecosystem classification determines remediation task structure:
+
+| Category | Ecosystems | Remediation tasks per stream |
+|---|---|---|
+| Source dependency | Cargo, npm | 2 — upstream backport + downstream propagation |
+| System package | RPM | 1 — Konflux release repo fix only |
+
+When a new ecosystem is added to a stream's Ecosystem Mappings table, update this
+classification table to define its category. All downstream rules (Case B, checklist,
+guardrails) reference this table rather than listing ecosystems individually.
+
 If the detected ecosystem is not listed in the stream's Ecosystem Mappings table (e.g.,
 Go modules), inform the user and stop automated triage for that ecosystem:
 
@@ -424,7 +435,7 @@ Both the lock file path and check command are configured per ecosystem in each s
 
 ```mermaid
 flowchart TD
-    A["Identify ecosystem\nfrom library + component"] --> B{"Source dependency?\n(Cargo, npm, ...)"}
+    A["Identify ecosystem\nfrom library + component"] --> B{"Source dependency\necosystem?\n(see classification table)"}
     B -->|Yes| C["Lock file inspection\n(git show commit:lock-file)"]
     B -->|No| D{"RPM / system\npackage?"}
     D -->|Yes| E{"RPM lock file\nconfigured?"}
@@ -606,7 +617,7 @@ flowchart TD
     C -->|Yes| E["Case A: Post cross-stream\nimpact comment"]
     C -->|No| F
     E --> F
-    F --> G{"Source dependency?\n(Cargo, npm)"}
+    F --> G{"Source dependency\necosystem?\n(see classification table)"}
     G -->|Yes| H["2 tasks: upstream\nbackport + downstream\npropagation"]
     G -->|No| I["1 task: Konflux\nrepo fix"]
     D --> J{"VEX Justification\nconfigured?"}
@@ -691,13 +702,12 @@ are affected:
 - Keep the current Vulnerability issue as-is (with corrected Affects Versions
   from Step 3).
 - Create remediation tasks for each affected stream within the issue's scope.
-  The number of tasks depends on the ecosystem:
-  - **Source dependency ecosystems** (Cargo, npm): create **two** tasks per
-    stream — an upstream backport task (fix in the source repo) and a downstream
-    propagation subtask (update the reference in the Konflux release repo). The
-    downstream subtask is blocked by the upstream task.
-  - **System package ecosystems** (RPM): create **one** task per stream — the
-    fix happens directly in the Konflux release repo.
+  The number of tasks depends on the ecosystem — see the **ecosystem
+  classification table** in the Ecosystem detection section above. Source
+  dependency ecosystems produce two tasks per stream (upstream backport +
+  downstream propagation, with the downstream subtask blocked by the upstream
+  task). System package ecosystems produce one task per stream (Konflux release
+  repo fix).
   See Remediation Task Creation below for full templates and API calls.
 - Link each Task to the Vulnerability issue.
 
@@ -738,8 +748,8 @@ rationale) to the engineer for confirmation before executing any Jira mutations.
 
 **Pre-creation checklist** — verify before presenting the recommendation:
 
-- [ ] **Task count per stream**: source dependency ecosystems (Cargo, npm) produce
-  2 tasks per stream (upstream + downstream); system package ecosystems produce 1.
+- [ ] **Task count per stream**: matches the ecosystem classification table
+  (source dependency → 2 tasks; system package → 1 task).
 - [ ] **Cross-stream coverage**: for scoped issues, all affected streams outside the
   issue's scope have either a preemptive task or an existing sibling CVE Jira.
 - [ ] **Link types**: "Depend" for tasks linked to their own CVE Jira, "Related" for
@@ -770,12 +780,9 @@ Read `remediation-templates.md` for the full task description templates, Jira
 issue creation API calls, digest comment procedures, and linkage procedures.
 The key distinction:
 
-- **Source dependency ecosystems** (Cargo, npm): create **two** tasks —
-  an upstream backport task (fix in the source repo) and a downstream propagation
-  subtask (update the reference in the Konflux release repo). The downstream subtask
-  is blocked by the upstream task.
-- **System package ecosystems** (RPM): create **one** task — the fix happens directly
-  in the Konflux release repo (Dockerfiles, lock files). No upstream step needed.
+- **Source dependency ecosystems**: create **two** tasks per the ecosystem
+  classification table — upstream backport + downstream propagation (blocked).
+- **System package ecosystems**: create **one** task — Konflux release repo fix.
 
 ## Post-Triage Summary
 
@@ -830,10 +837,10 @@ MUST include the Comment Footnote (see above).
 7. **Never create Vulnerability issues.** PSIRT owns Vulnerability issue creation.
    This skill only creates remediation Tasks. Cross-stream impact is reported via
    comment on the current issue.
-8. **Task count per stream depends on the ecosystem** — source dependencies
-   (Cargo, npm) produce two tasks (upstream + downstream), system packages
-   produce one. See Case B inline rule and the pre-creation checklist for
-   details. A single Task spanning multiple streams would be unimplementable
+8. **Task count per stream depends on the ecosystem** — see the ecosystem
+   classification table in the Ecosystem detection section. Source dependency
+   ecosystems produce two tasks, system packages produce one. A single Task
+   spanning multiple streams would be unimplementable
    by `/implement-task`. For dev-only or build-only dependencies (identified
    in Step 2.3.5), add the `dev-dependency` label and override priority to
    Normal — see the dependency scope decision tree in
