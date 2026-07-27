@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4 'Understand the Code' explicitly lists all 4 files for inspection: (1) 'modules/fundamental/src/advisory/endpoints/get.rs -- Inspect the GET /api/v2/advisory/{id} handler', (2) 'modules/fundamental/src/advisory/service/advisory.rs -- Inspect the AdvisoryService struct', (3) 'modules/fundamental/src/advisory/model/summary.rs -- Inspect the AdvisorySummary struct', (4) 'common/src/error.rs -- Inspect the AppError enum'. All 4 specified files are referenced for pre-modification inspection."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6 & 7 lists exactly 3 files to modify (model/mod.rs, service/advisory.rs, endpoints/mod.rs) and 3 files to create (model/severity_summary.rs, endpoints/severity_summary.rs, tests/api/advisory_summary.rs). The git add command in Step 10 stages only these 6 files. server/src/main.rs is explicitly listed under 'No changes needed'. The docs/api.md mention in Step 9 is a conditional check ('Check if docs/api.md needs updating'), not a committed modification."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md Step 6 & 7 'Files to Create' table lists: File 4 'modules/fundamental/src/advisory/model/severity_summary.rs' (SeveritySummary response struct), File 5 'modules/fundamental/src/advisory/endpoints/severity_summary.rs' (GET handler), File 6 'tests/api/advisory_summary.rs' (Integration tests). Detailed descriptions for each are in file-4-description.md, file-5-description.md, and file-6-description.md respectively, all marked as (CREATE)."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md Step 6 & 7 'Files to Modify' table lists: File 1 'modules/fundamental/src/advisory/model/mod.rs' (Add pub mod severity_summary), File 2 'modules/fundamental/src/advisory/service/advisory.rs' (Add severity_summary method), File 3 'modules/fundamental/src/advisory/endpoints/mod.rs' (Register new route). Detailed descriptions in file-1-description.md, file-2-description.md, and file-3-description.md respectively, all marked as (MODIFY)."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10 shows commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' (Conventional Commits format with type=feat, scope=advisory). The footer contains 'Implements TC-9201' referencing the Jira ticket."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md Step 10 'Commit command' shows: git commit --trailer='Assisted-by: Claude Code' -m \"feat(advisory): add severity aggregation endpoint for SBOM advisories...\" — the --trailer flag is explicitly included."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Step 5 shows: 'git checkout main', 'git pull', 'git checkout -b TC-9201' with note 'Branch TC-9201 created from Target Branch main'. Step 10 shows 'git push -u origin TC-9201' and 'gh pr create --base main'. The branch name TC-9201 and target branch main are both explicitly referenced."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md 'Discovered conventions' section explicitly identifies both patterns: (1) 'Error handling: All handlers return Result<T, AppError> with .context() wrapping for error propagation. The AppError enum is defined in common/src/error.rs and implements IntoResponse for Axum compatibility.' (2) 'Module structure: Each domain module follows model/ + service/ + endpoints/ tri-part structure. Models define data structs, services contain business logic, endpoints wire HTTP routes to service calls.'"
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md Step 1 'Parse Task Description' explicitly states: 'Target Branch: main'. Step 5 references it: 'Branch TC-9201 created from Target Branch main'. Step 10 uses it for PR creation: 'gh pr create --base main'. The task summary at the top also states 'Target Branch: main'."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "plan.md Step 1.5 'Verify Description Integrity' states: 'Check for description digest comment on TC-9201 issue comments:' followed by '> No description digest found -- skipping integrity check. This task may have been created before digest tracking was introduced.' and 'Proceeding with implementation.' This shows the digest check was performed, no digest was found, and execution continued with a warning rather than blocking."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

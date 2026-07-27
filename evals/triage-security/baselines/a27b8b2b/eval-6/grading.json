@@ -1,0 +1,73 @@
+{
+  "eval_id": 6,
+  "assertions": [
+    {
+      "assertion": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md \u2014 not hardcoded values (\u00a71.49)",
+      "grade": "PASS",
+      "evidence": "discovery-listing.md states 'Project key: TC (from Jira Configuration)' and 'Vulnerability issue type ID: 10024 (from Security Configuration > Product Lifecycle)'. All three JQL queries use 'project = TC AND issuetype = 10024', derived from the configuration."
+    },
+    {
+      "assertion": "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (\u00a71.48)",
+      "grade": "PASS",
+      "evidence": "discovery-listing.md contains three separate JQL queries: Query 1 uses 'labels NOT IN (ai-cve-triaged)', Query 2 uses 'labels IN (ai-cve-triaged) AND status = New', Query 3 uses 'labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA)'."
+    },
+    {
+      "assertion": "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
+      "grade": "PASS",
+      "evidence": "discovery-listing.md has three clearly separated sections with headers: 'Query 1: Untriaged Issues', 'Query 2: Triaged but still New', and 'Query 3: Ready for QA', each with its own results table."
+    },
+    {
+      "assertion": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "grade": "PASS",
+      "evidence": "All three query result tables include columns for Issue (key), Status, CVE ID, Summary, and Created date. For example, Query 1 table shows: 'TC-9001 | New | CVE-2026-40112 | CVE-2026-40112 h2 - HTTP/2 rapid reset vulnerability [rhtpa-2.2] | 2026-06-08'."
+    },
+    {
+      "assertion": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "grade": "PASS",
+      "evidence": "status-handling.md shows TC-9001, TC-9002, TC-9004 all with 'Handling: Proceed with full triage (default path)'. TC-9003 has 'Handling: Warning \u2014 active work detected' with text 'This issue is already in In Progress. It may be actively worked on.' Discovery-listing.md also contains a Warning block for TC-9003."
+    },
+    {
+      "assertion": "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)",
+      "grade": "PASS",
+      "evidence": "discovery-listing.md filtering analysis: TC-9020 'ALL linked Tasks are completed. INCLUDED in Ready for QA.' TC-9023 'TC-9025 is still In Progress -- remediation is not yet complete. EXCLUDED.' TC-9026 'No linked Tasks with type Depend found. No remediation to verify. EXCLUDED.' Only TC-9020 appears in the Ready for QA table."
+    }
+  ],
+  "summary": {
+    "pass_rate": 1.0,
+    "passed": 6,
+    "failed": 0,
+    "total": 6
+  },
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md \u2014 not hardcoded values (\u00a71.49)",
+      "passed": true,
+      "evidence": "discovery-listing.md states 'Project key: TC (from Jira Configuration)' and 'Vulnerability issue type ID: 10024 (from Security Configuration > Product Lifecycle)'. All three JQL queries use 'project = TC AND issuetype = 10024', derived from the configuration."
+    },
+    {
+      "text": "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (\u00a71.48)",
+      "passed": true,
+      "evidence": "discovery-listing.md contains three separate JQL queries: Query 1 uses 'labels NOT IN (ai-cve-triaged)', Query 2 uses 'labels IN (ai-cve-triaged) AND status = New', Query 3 uses 'labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA)'."
+    },
+    {
+      "text": "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
+      "passed": true,
+      "evidence": "discovery-listing.md has three clearly separated sections with headers: 'Query 1: Untriaged Issues', 'Query 2: Triaged but still New', and 'Query 3: Ready for QA', each with its own results table."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": true,
+      "evidence": "All three query result tables include columns for Issue (key), Status, CVE ID, Summary, and Created date. For example, Query 1 table shows: 'TC-9001 | New | CVE-2026-40112 | CVE-2026-40112 h2 - HTTP/2 rapid reset vulnerability [rhtpa-2.2] | 2026-06-08'."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "status-handling.md shows TC-9001, TC-9002, TC-9004 all with 'Handling: Proceed with full triage (default path)'. TC-9003 has 'Handling: Warning \u2014 active work detected' with text 'This issue is already in In Progress. It may be actively worked on.' Discovery-listing.md also contains a Warning block for TC-9003."
+    },
+    {
+      "text": "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)",
+      "passed": true,
+      "evidence": "discovery-listing.md filtering analysis: TC-9020 'ALL linked Tasks are completed. INCLUDED in Ready for QA.' TC-9023 'TC-9025 is still In Progress -- remediation is not yet complete. EXCLUDED.' TC-9026 'No linked Tasks with type Depend found. No remediation to verify. EXCLUDED.' Only TC-9020 appears in the Ready for QA table."
+    }
+  ]
+}

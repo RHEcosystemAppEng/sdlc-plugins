@@ -1,0 +1,63 @@
+{
+  "eval_id": 28,
+  "assertions": [
+    {
+      "assertion": "Step 2.3.5 dependency chain context identifies h2 as a transitive dependency with the chain: backend \u2192 reqwest \u2192 hyper \u2192 h2 (3 levels deep)",
+      "grade": "PASS",
+      "evidence": "version-impact.md lines 49-53: 'Dependency chain for h2: backend (workspace) -> reqwest -> hyper -> h2, Type: transitive (3 levels deep), Profile: production (reqwest is a runtime dependency)'. The exact chain and depth are identified."
+    },
+    {
+      "assertion": "The dependency chain output labels h2 as transitive (not direct) and includes the full chain path in the version impact output",
+      "grade": "PASS",
+      "evidence": "version-impact.md line 51: 'Type: transitive (3 levels deep)'. Lines 61-62: 'h2 is NOT a direct dependency of the backend workspace. It is pulled in transitively through the following chain'. Line 67: 'It is a **transitive production dependency**'. The full chain 'backend (workspace) -> reqwest -> hyper -> h2' is shown at line 50 within the version impact output."
+    },
+    {
+      "assertion": "Remediation task Implementation Notes include the dependency type as transitive with the dependency chain",
+      "grade": "PASS",
+      "evidence": "remediation.md line 60: '**Dependency type**: transitive (chain: backend -> reqwest -> hyper -> h2, 3 levels deep)'. Lines 62-71 elaborate: 'h2 is a transitive dependency of the backend workspace. It enters the dependency tree through the following chain: backend (workspace) -> reqwest -> hyper -> h2'."
+    },
+    {
+      "assertion": "Remediation task Implementation Notes describe the two-tier remediation approach: preferred is bumping reqwest (the direct dependency), fallback is pinning h2 directly",
+      "grade": "PASS",
+      "evidence": "remediation.md lines 76-94 under 'Remediation approach (transitive dependency)': '**Preferred: bump the direct dependency (reqwest)** - Check if a newer version of reqwest (the direct dependency) includes h2 >= 0.4.5 in its transitive closure - Bump reqwest to that version'. Then '**Fallback: pin h2 directly** If bumping reqwest is not viable... - cargo add h2@0.4.5 to add h2 as a direct dependency, overriding the transitive resolution'."
+    },
+    {
+      "assertion": "The fallback approach specifies the ecosystem-specific pinning mechanism: cargo add h2@0.4.5 for Cargo",
+      "grade": "PASS",
+      "evidence": "remediation.md line 90: '- `cargo add h2@0.4.5` to add h2 as a direct dependency, overriding the transitive resolution'. The exact Cargo-specific pinning command is specified."
+    }
+  ],
+  "summary": {
+    "pass_rate": 1.0,
+    "passed": 5,
+    "failed": 0,
+    "total": 5
+  },
+  "assertion_results": [
+    {
+      "text": "Step 2.3.5 dependency chain context identifies h2 as a transitive dependency with the chain: backend \u2192 reqwest \u2192 hyper \u2192 h2 (3 levels deep)",
+      "passed": true,
+      "evidence": "version-impact.md lines 49-53: 'Dependency chain for h2: backend (workspace) -> reqwest -> hyper -> h2, Type: transitive (3 levels deep), Profile: production (reqwest is a runtime dependency)'. The exact chain and depth are identified."
+    },
+    {
+      "text": "The dependency chain output labels h2 as transitive (not direct) and includes the full chain path in the version impact output",
+      "passed": true,
+      "evidence": "version-impact.md line 51: 'Type: transitive (3 levels deep)'. Lines 61-62: 'h2 is NOT a direct dependency of the backend workspace. It is pulled in transitively through the following chain'. Line 67: 'It is a **transitive production dependency**'. The full chain 'backend (workspace) -> reqwest -> hyper -> h2' is shown at line 50 within the version impact output."
+    },
+    {
+      "text": "Remediation task Implementation Notes include the dependency type as transitive with the dependency chain",
+      "passed": true,
+      "evidence": "remediation.md line 60: '**Dependency type**: transitive (chain: backend -> reqwest -> hyper -> h2, 3 levels deep)'. Lines 62-71 elaborate: 'h2 is a transitive dependency of the backend workspace. It enters the dependency tree through the following chain: backend (workspace) -> reqwest -> hyper -> h2'."
+    },
+    {
+      "text": "Remediation task Implementation Notes describe the two-tier remediation approach: preferred is bumping reqwest (the direct dependency), fallback is pinning h2 directly",
+      "passed": true,
+      "evidence": "remediation.md lines 76-94 under 'Remediation approach (transitive dependency)': '**Preferred: bump the direct dependency (reqwest)** - Check if a newer version of reqwest (the direct dependency) includes h2 >= 0.4.5 in its transitive closure - Bump reqwest to that version'. Then '**Fallback: pin h2 directly** If bumping reqwest is not viable... - cargo add h2@0.4.5 to add h2 as a direct dependency, overriding the transitive resolution'."
+    },
+    {
+      "text": "The fallback approach specifies the ecosystem-specific pinning mechanism: cargo add h2@0.4.5 for Cargo",
+      "passed": true,
+      "evidence": "remediation.md line 90: '- `cargo add h2@0.4.5` to add h2 as a direct dependency, overriding the transitive resolution'. The exact Cargo-specific pinning command is specified."
+    }
+  ]
+}

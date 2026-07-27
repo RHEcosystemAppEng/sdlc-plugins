@@ -1,0 +1,55 @@
+{
+  "assertion_results": [
+    {
+      "text": "Bug parsing correctly extracts all four required sections (Description, Steps to Reproduce, Expected Result, Actual Result) using the heading formats from bug-template-mock.md (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md lines 30-55 show all four required sections extracted and marked PRESENT: 'Issue Description (PRESENT)' (line 30), 'Steps to Reproduce (PRESENT)' (line 37), 'Expected Result (PRESENT)' (line 47), 'Actual Result (PRESENT)' (line 52). The section names match the heading formats from bug-template-mock.md (### **Issue Description**, ### **Steps to Reproduce**, ### **Expected Result**, ### **Actual Result**). Each section includes the extracted content from the bug report."
+    },
+    {
+      "text": "Bug validation confirms the issue type ID (10020) matches the Bug issue type ID from Bug Configuration (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md line 9 shows 'Bug issue type ID | 10020' in the Configuration Validated table, and line 23 states 'Issue Type | Bug (ID: 10020) -- matches Bug Configuration', explicitly confirming the match."
+    },
+    {
+      "text": "Investigation identifies the trailing-whitespace heading extraction as the root cause — line[3:] does not strip whitespace (Steps 2-3)",
+      "passed": true,
+      "evidence": "investigation.md lines 23-25: 'At step 3, `line[3:]` extracts everything after `## ` including trailing whitespace. For the heading line `## Migration Patterns  \\n`, the extracted key becomes `\"Migration Patterns  \"` (with two trailing spaces).' Lines 66-67 show the code: 'section_name = line[3:]  # BUG: does not strip trailing whitespace'. Line 69: '`line[3:]` preserves trailing whitespace from the heading line. Should use `line[3:].strip()` or `line[3:].rstrip()` to normalize the key.'"
+    },
+    {
+      "text": "Root cause comment includes: what is broken (heading extraction does not strip trailing whitespace), where it is broken (plan-feature convention lookup), and how to verify the fix (reproducer test with whitespace in heading) (Step 4)",
+      "passed": true,
+      "evidence": "root-cause.md: WHAT — lines 10-11: 'The plan-feature skill's convention heading extraction uses `line[3:]` to parse `## ` headings from `CONVENTIONS.md`, but does not strip trailing whitespace.' WHERE — lines 22-25: 'plugins/sdlc-workflow/skills/plan-feature/SKILL.md -- convention heading extraction loop: `section_name = line[3:]` does not call `.strip()`'. HOW TO VERIFY — lines 39-47 'Reproducer Strategy': 'Create a test fixture CONVENTIONS.md with trailing whitespace on at least one heading line... Assert that the extracted section name equals \"Migration Patterns\" (without trailing spaces)... The reproducer test should fail before the fix... and pass after the fix.'"
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md line 65 (first acceptance criterion): '- [ ] Reproducer test: a test using a CONVENTIONS.md fixture with trailing whitespace on headings demonstrates the bug (fails before fix, passes after fix)'. This precedes the fix criteria on lines 66-68 (convention heading extraction strips trailing whitespace, convention-aware task enrichment matches, no regression)."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST test requirement — with explicit assertion guidance derived from the Steps to Reproduce (Step 5 Test Requirements ordering)",
+      "passed": true,
+      "evidence": "task-description.md line 71 (first test requirement): '- [ ] Reproducer test: create a test fixture CONVENTIONS.md with trailing whitespace on at least one `## ` heading (e.g., `## Migration Patterns  ` with two trailing spaces followed by convention content `Add Index::create() for all FK columns.`). Run the convention extraction logic and assert: (a) the extracted key equals \"Migration Patterns\" without trailing spaces, and (b) the generated task Implementation Notes include `Per CONVENTIONS.md Migration Patterns: add Index::create() for all FK columns.`'. The assertion guidance directly derives from the Steps to Reproduce (the heading example and the expected Implementation Notes output)."
+    },
+    {
+      "text": "Task description includes a Bug Context section with Bug key (ACME-500), Steps to Reproduce, Expected/Actual Result, and Root Cause summary (Step 5 Bug Context extension)",
+      "passed": true,
+      "evidence": "task-description.md lines 76-81: '## Bug Context' section with: '- **Bug**: [ACME-500](https://mock-jira.example.com/browse/ACME-500)' (Bug key), '- **Steps to Reproduce**: Create a CONVENTIONS.md with trailing whitespace...' (Steps to Reproduce), '- **Expected Result**: The generated task's Implementation Notes should include...' (Expected Result), '- **Actual Result**: The generated task's Implementation Notes do NOT reference the Migration Patterns convention...' (Actual Result), '- **Root Cause**: The convention heading extraction uses `line[3:]` without stripping trailing whitespace...' (Root Cause summary)."
+    },
+    {
+      "text": "Task description sets Target Branch to main (Step 5 Target Branch)",
+      "passed": true,
+      "evidence": "task-description.md lines 13-14: '## Target Branch' followed by 'main'."
+    },
+    {
+      "text": "Task description output includes ai-generated-jira in the Jira API metadata block showing it would be passed as a label to jira.create_issue (Step 5 Task creation)",
+      "passed": true,
+      "evidence": "task-description.md lines 1-8 contain the Jira API Metadata Block as an HTML comment: '<!-- jira.create_issue parameters:\\n  project_key: ACME\\n  issue_type: Task\\n  labels: [\"ai-generated-jira\"]\\n  summary: \"Fix plan-feature convention extraction to strip trailing whitespace from CONVENTIONS.md headings\"\\n  link: { type: \"Blocks\", inward_issue: \"<created-task-key>\", outward_issue: \"ACME-500\" }\\n-->'. The labels field includes 'ai-generated-jira'."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 0,
+    "total": 9,
+    "pass_rate": 1.0
+  }
+}

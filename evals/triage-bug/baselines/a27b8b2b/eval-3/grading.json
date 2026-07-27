@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation identifies two independent root causes: (1) convention reference formatter using wrong case transform, (2) task creation using Feature issue type ID instead of Task (Steps 2-4)",
+      "passed": true,
+      "evidence": "investigation.md Step 2 Trace 1 identifies: 'The convention formatter is converting the heading text to kebab-case slug format (§migration-patterns) instead of preserving the original title-case heading (§Migration Patterns)'. Step 2 Trace 2 identifies: 'The task creation logic is reading the Feature issue type ID (10142) from CLAUDE.md Jira Configuration instead of using the dynamically discovered Task type (level 0)'. Both root causes are elaborated in Steps 3 and 4 with specific file paths, line numbers, and verification strategies."
+    },
+    {
+      "text": "Decomposition Guard is triggered because the two root causes are in different modules/code paths (Step 6)",
+      "passed": true,
+      "evidence": "investigation.md Step 6 states: 'The investigation identified **two independent root causes** affecting **different modules** with **no shared code path or causal relationship**' and concludes 'This triggers the Decomposition Guard'. The module independence analysis table in Step 3 explicitly shows Root Cause 1 in 'shared/convention-applicability-rules.md (convention formatting logic)' and Root Cause 2 in 'plan-feature/SKILL.md Step 6a (task creation logic)' with 'None' for shared state in both directions."
+    },
+    {
+      "text": "Decomposition Guard presents both issues with their affected files/modules (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md lists both issues with affected files: (1) 'Convention reference formatting produces kebab-case instead of title case (in plugins/sdlc-workflow/shared/convention-applicability-rules.md and the convention-aware task enrichment logic in plugins/sdlc-workflow/skills/plan-feature/SKILL.md Step 5)' and (2) 'Task creation uses Feature issue type ID instead of Task (in plugins/sdlc-workflow/skills/plan-feature/SKILL.md Step 6a)'. Each issue includes a description of the defect."
+    },
+    {
+      "text": "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md contains: 'Options: 1. **Proceed** -- create a single Task covering all fixes 2. **Split** -- I recommend creating separate Bugs for each independent issue, then triaging each one individually Choose (1/2):'"
+    },
+    {
+      "text": "The skill does NOT silently create a single Task bundling both fixes — it waits for user input (Step 6 stop rule)",
+      "passed": true,
+      "evidence": "decomposition-guard.md ends with 'Choose (1/2):' indicating it stops and waits for user input. No task creation output exists in the outputs directory (only investigation.md and decomposition-guard.md are present). investigation.md Step 6 concludes with 'This triggers the Decomposition Guard -- see outputs/decomposition-guard.md' and does not proceed to task creation. No Jira issue was created."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

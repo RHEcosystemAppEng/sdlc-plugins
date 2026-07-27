@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md lines 36-39 explicitly state: 'pass it to common/src/db/query.rs::apply_filter (Reuse Candidate #1) to handle comma-separated multi-value parsing and SQL IN clause generation. Do NOT write a custom parser for comma-separated values -- apply_filter already handles this.' Additionally, lines 63-68 reiterate: 'Apply the filter via apply_filter: Pass the license values through common/src/db/query.rs::apply_filter (Reuse Candidate #1) to generate the appropriate WHERE ... IN (...) clause on the license SPDX identifier column.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md lines 29-33 state: 'Following the pattern established in modules/fundamental/src/advisory/endpoints/list.rs (Reuse Candidate #2), add an optional license: Option<String> field to the endpoint's query parameter struct. This matches how the advisory list endpoint handles its severity filter -- an optional string field deserialized from query parameters by Axum's extractor.' Lines 54-56 also reference: 'Follow the same pattern used in modules/fundamental/src/advisory/service/advisory.rs where the advisory service accepts filter parameters from the endpoint layer.'"
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md lines 58-62 state: 'Build a JOIN query using entity::package_license: When the license filter is present, construct a query that JOINs the package table with the package_license table (Reuse Candidate #3, entity/src/package_license.rs). Use SeaORM's relation and join capabilities rather than raw SQL. The package_license entity already maps the package-to-license relationship, so leverage its defined Relation for the JOIN.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md covers all three candidates in dedicated sections: (1) 'Reuse Candidate 1: common/src/db/query.rs::apply_filter' (lines 9-35), explaining its use for comma-separated parsing in package/service/mod.rs; (2) 'Reuse Candidate 2: modules/fundamental/src/advisory/endpoints/list.rs' (lines 38-71), explaining its use as a structural guide for the Query struct and handler flow; (3) 'Reuse Candidate 3: entity/src/package_license.rs' (lines 75-108), explaining its use for the JOIN query. Each section includes 'What it provides', 'How it is reused', and 'Why reuse is appropriate' subsections with specific details on application."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "The plan's 'Files to Modify' section lists exactly 2 files: (1) modules/fundamental/src/package/endpoints/list.rs and (2) modules/fundamental/src/package/service/mod.rs. The 'Files to Create' section lists 1 file: tests/api/package_license_filter.rs. The plan's 'Scope Boundaries' section (lines 142-149) explicitly confirms: 'Only the files listed in Files to Modify and Files to Create are touched' and enumerates files that are NOT modified (entity/src/package_license.rs, common/src/db/query.rs, advisory/endpoints/list.rs, package/model/summary.rs, package/endpoints/mod.rs). The ancillary mention of adding a mod declaration to tests/api/mod.rs (line 119-120) is an inherent part of creating the test file, not scope creep."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md lines 37-39 explicitly prohibit this: 'Do NOT write a custom parser for comma-separated values -- apply_filter already handles this.' The plan consistently directs using apply_filter directly rather than creating new utilities. reuse-analysis.md lines 26-29 further confirm: 'No new utility functions created: The task explicitly requires not duplicating apply_filter functionality. No new helper, parser, or filter-builder is written. The existing apply_filter is called directly from the service layer.' The summary table in reuse-analysis.md (lines 113-115) reiterates: 'No new utility functions, parsers, or entity definitions are created that would duplicate existing functionality.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
