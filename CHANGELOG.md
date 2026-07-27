@@ -5,6 +5,17 @@ All notable changes to the sdlc-workflow plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.7] - 2026-07-27
+
+### Changed
+
+- Ecosystem classification rules consolidated in `triage-security`
+- Case naming aligned to document order (A→B→C) in `triage-security`
+
+### Fixed
+
+- Remediation task generation logic in Step 8 of `triage-security`
+
 ## [0.13.6] - 2026-07-24
 
 ### Added
