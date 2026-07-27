@@ -315,6 +315,35 @@ to inform the generated task's Implementation Notes.
 - Search for existing test files and patterns relevant to writing the reproducer test
 - Identify reusable utilities, helpers, or shared modules relevant to the fix
 
+### Persistence-impact analysis
+
+After identifying the buggy function(s), determine whether their output is persisted
+to the database at ingestion time or computed at query time. Fixing the code alone
+corrects future data, but if incorrect values were already written to the database,
+existing records remain stale — a data migration is needed to correct them.
+
+1. **Trace output to persistence boundary**: starting from the buggy function's
+   return value, use `find_referencing_symbols` (or Grep as fallback) to follow
+   all callers up the call chain. At each hop, check whether the caller writes
+   the value to a database (e.g., `insert`, `update`, `save`, `persist`, ORM
+   model creation, or raw SQL `INSERT`/`UPDATE` statements).
+2. **If a persistence boundary is found**: record the following and carry them
+   forward to Step 5 (Generate Task):
+   - The table name and column where the value is stored
+   - The write operation location (file and symbol)
+   - Whether the value is written at ingestion time (once, when data first enters
+     the system) or updated on every access — ingestion-time writes are the primary
+     concern, since they produce stale data that is never self-correcting
+3. **If no persistence boundary is found**: the output is computed at query time
+   (e.g., derived on each API request from source data). No data migration is
+   needed — proceed normally.
+
+> **Example trace:**
+>
+> `describing_packages()` → `suppliers()` → `SbomInformation` (struct field)
+> → `ingest_sbom()` → `insert_into(sbom::table).values(suppliers)` — **persistence
+> boundary found** at `sbom` table, `suppliers` column.
+
 ## Step 4 – Root Cause Analysis
 
 Synthesize the findings from Steps 2 and 3 into a root cause narrative.
@@ -498,6 +527,26 @@ Translate the Steps to Reproduce into test-level guidance for the reproducer. In
 - Any relevant conventions from CONVENTIONS.md
 
 Reference the Bug issue key for traceability (e.g., "Fixes PROJ-456").
+
+#### Data migration (when persistence impact is flagged)
+
+When Step 3's persistence-impact analysis found a persistence boundary, the
+generated task must include a data migration to correct existing records alongside
+the code fix. Add the following to the task:
+
+1. **Files to Create**: add a data migration file. To determine the correct
+   file name, location, and format, search the repository for existing migration
+   files using `search_for_pattern` (or Grep as fallback) — look for directories
+   named `migrations/`, `migration/`, or `db/migrate/`, and match the naming
+   convention used by existing migration files (e.g., timestamped filenames,
+   sequential numbering, version-prefixed names).
+2. **Implementation Notes**: describe the migration logic — the table and column
+   to update, the correct value to recompute from source data, and the query or
+   script that performs the correction. Reference the existing migration pattern
+   discovered in the repository so that implement-task follows the established
+   conventions.
+3. **Acceptance Criteria**: add a criterion that existing records with incorrect
+   persisted values are corrected by the migration.
 
 ### Bug Context extension section
 
