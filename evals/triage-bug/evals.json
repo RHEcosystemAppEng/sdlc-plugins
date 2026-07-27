@@ -80,6 +80,20 @@
         "Version resolution offers three options: Keep, Replace, or Augment the existing value (Step 4.5.1)",
         "The skill does NOT silently overwrite or skip the existing value — it waits for user input (Step 4.5.1)"
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "Triage Bug issue ACME-520. The issue details are in bug-issue-persistence-impact.md, the bug template is in bug-template-mock.md, the repository context is in repo-context-persistence-mock.md, and the project CLAUDE.md is in claude-md-bug-config.md. Do NOT actually call Jira MCP, Serena, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/bug-parsing.md with the parsed description sections from Step 1, write outputs/investigation.md with the codebase investigation findings from Steps 2-3 including the persistence-impact analysis, write outputs/root-cause.md with the root cause analysis from Step 4, and write outputs/task-description.md with the full Task description you would create in Step 5 (following shared/task-description-template.md format). At the top of outputs/task-description.md, before the task description body, include a Jira API metadata block showing the parameters you would pass to jira.create_issue: project key, issue type, and labels (including ai-generated-jira).",
+      "expected_output": "A complete triage demonstrating: correct Bug description parsing, codebase investigation that traces compute_risk_score() output through create_assessment() to the assessments table (persistence boundary found), and a Task description that includes both a code fix AND a data migration. The Task's Files to Create must include a migration file following the Diesel convention (YYYY-MM-DD-NNNNNN_description/up.sql). The Implementation Notes must describe the migration logic for correcting existing risk_score values in the assessments table.",
+      "files": ["files/bug-issue-persistence-impact.md", "files/bug-template-mock.md", "files/repo-context-persistence-mock.md", "files/claude-md-bug-config.md"],
+      "assertions": [
+        "Investigation traces compute_risk_score() output through create_assessment() to diesel::insert_into(assessments::table) and identifies the persistence boundary at the assessments table, risk_score column (Step 3 persistence-impact analysis)",
+        "Investigation records that risk_score is written at ingestion time (assessment creation) and is NOT recomputed on read, confirming a data migration is needed (Step 3 persistence-impact analysis)",
+        "Task description Files to Create includes a data migration file following the Diesel naming convention discovered in the repository (YYYY-MM-DD-NNNNNN_description/up.sql) (Step 5 data migration)",
+        "Task description Implementation Notes includes migration logic to recompute and update existing risk_score values in the assessments table (Step 5 data migration)",
+        "Task description Acceptance Criteria includes a criterion that existing assessments with incorrect persisted risk_score values are corrected by the migration (Step 5 data migration)",
+        "Task description has reproducer test as the FIRST acceptance criterion — before the data migration criterion and any fix criteria (Step 5 Acceptance Criteria ordering)"
+      ]
     }
   ]
 }
