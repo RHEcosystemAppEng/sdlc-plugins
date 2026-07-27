@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation identifies two independent root causes: (1) convention reference formatter using wrong case transform, (2) task creation using Feature issue type ID instead of Task (Steps 2-4)",
+      "passed": true,
+      "evidence": "investigation.md explicitly identifies two independent root causes. Root Cause 1 (lines 48-78): 'Convention reference formatter kebab-cases section headings instead of preserving original title case' in 'plugins/sdlc-workflow/shared/convention-applicability-rules.md'. Root Cause 2 (lines 82-100): 'Task creation uses Feature issue type ID from config instead of dynamically discovered Task type ID' -- 'Step 6a uses the Feature issue type ID (10142) from CLAUDE.md instead of the Task issue type ID (10050) that was dynamically discovered in Step 2.5'. The summary table on lines 106-109 labels both as independent root causes."
+    },
+    {
+      "text": "Decomposition Guard is triggered because the two root causes are in different modules/code paths (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md exists and is triggered. It states on line 9: 'These are independent root causes in different modules -- the convention formatter in shared/convention-applicability-rules.md and the task creation logic in plan-feature/SKILL.md Step 6a. Each can be fixed independently without affecting the other.' The guard was triggered specifically because the root causes span different modules/code paths."
+    },
+    {
+      "text": "Decomposition Guard presents both issues with their affected files/modules (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md presents both issues with files/modules: Issue 1 (line 5): 'Malformed convention references (in plugins/sdlc-workflow/shared/convention-applicability-rules.md)' with description of the formatting bug. Issue 2 (line 7): 'Wrong issue type in task creation (in plugins/sdlc-workflow/skills/plan-feature/SKILL.md Step 6a)' with description of the issue type bug."
+    },
+    {
+      "text": "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md lines 11-15 present exactly two options: '1. **Proceed** -- create a single Task covering all fixes' and '2. **Split** -- I recommend creating separate Bugs for each independent issue, then triaging each one individually'. Followed by 'Choose (1/2):' on line 15."
+    },
+    {
+      "text": "The skill does NOT silently create a single Task bundling both fixes -- it waits for user input (Step 6 stop rule)",
+      "passed": true,
+      "evidence": "decomposition-guard.md ends on line 15 with 'Choose (1/2):' -- clearly waiting for user input. No other output files exist that show task creation. The outputs directory contains only investigation.md and decomposition-guard.md, with no evidence of any Jira task being created. The workflow stopped at the decomposition guard and did not proceed to task creation."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

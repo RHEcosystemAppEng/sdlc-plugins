@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "The plan's Cross-Section Reference Consistency section (plan.md lines 76-79) references advisory/service/advisory.rs, advisory/model/summary.rs (read-only reference for severity field source), and common/src/error.rs (read-only reference for error pattern). The conventions.md (line 18) also references advisory/endpoints/get.rs as a sibling analyzed for path parameter extraction pattern. All 4 listed files are referenced across the outputs."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md lists exactly 3 files to modify (advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs) and 3 files to create (advisory/model/severity_summary.rs, advisory/endpoints/severity_summary.rs, tests/api/advisory_summary.rs). The plan explicitly includes a 'Scope Verification Notes' section (line 82-83) stating: 'All files in the implementation are within the scope defined by Files to Modify and Files to Create. No out-of-scope changes are needed.' The file-1 through file-6 descriptions correspond exactly to these 6 files with no additional files."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md lines 27-29 list: (4) modules/fundamental/src/advisory/model/severity_summary.rs as the SeveritySummary response struct, (5) modules/fundamental/src/advisory/endpoints/severity_summary.rs as the GET handler, (6) tests/api/advisory_summary.rs as integration tests. Each has a corresponding file description (file-1-description.md, file-4-description.md, file-6-description.md) marked as CREATE."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md lines 21-23 list: (1) modules/fundamental/src/advisory/service/advisory.rs to add severity_summary method, (2) modules/fundamental/src/advisory/endpoints/mod.rs to register the new route, (3) modules/fundamental/src/advisory/model/mod.rs to register the new model module. Each has a corresponding file description (file-3-description.md, file-5-description.md, file-2-description.md) marked as MODIFY."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md lines 49-58 show the commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' as the subject line (type=feat, scope=advisory, description follows colon), with 'Implements TC-9201' in the footer. This follows Conventional Commits format and references the Jira ticket."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md line 60 states: 'The commit would include the `--trailer=\"Assisted-by: Claude Code\"` flag.'"
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md line 17 has a 'Branch Name' section with value 'TC-9201'. plan.md lines 12-13 have a 'Target Branch' section with value 'main'. Both the branch name and target branch are explicitly stated."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md lines 36-38 identify error handling: 'Return type: All handlers return Result<T, AppError> where AppError is defined in common/src/error.rs' and 'Context wrapping: Errors are wrapped with .context(\"descriptive message\") for stack traces.' conventions.md line 9 identifies module structure: 'Module pattern: Each domain module follows a strict model/ + service/ + endpoints/ three-layer structure. The advisory/, sbom/, and package/ modules all follow this identical layout.'"
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md lines 12-13 contain a dedicated 'Target Branch' section with the value 'main'."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": false,
+      "evidence": "None of the output files (plan.md, conventions.md, file-1 through file-6 descriptions) contain any mention of 'description digest', 'digest comment', 'digest', 'Step 1.5', or 'backward compatibility'. The description digest protocol is not referenced anywhere in the outputs."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 1,
+    "total": 10,
+    "pass_rate": 0.9
+  }
+}

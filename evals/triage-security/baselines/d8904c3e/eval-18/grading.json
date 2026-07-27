@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md sections 3 and 4 explicitly detect TC-8100 and TC-8101 via Depend links with labels 'ai-generated-jira, Security, CVE-2026-31812' and set action to 'Skip'. triage-outcome.md Step 8 section confirms: 'TC-8100 (upstream backport) is already linked via Depend... TC-8101 (downstream propagation) is already linked via Depend... No new tasks are created.' Mutation audit table shows both 'Create TC-8100' and 'Create TC-8101' as 'Skipped' with reason 'Already exists and linked'. Total Jira mutations in second run: 0."
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 23 confirms labels include 'ai-cve-triaged'. idempotency-check.md section 1 states: 'The issue's labels array includes ai-cve-triaged... Action: Skip -- label already present.' triage-outcome.md Post-Triage Summary section: 'ai-cve-triaged label: Already present in the labels array. Adding it again is unnecessary.' Mutation audit shows 'Add ai-cve-triaged label' as 'Skipped' with reason 'Label already present'."
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md section 2 detects status as 'In Progress' which is 'past the Assigned and New states' and sets action to 'Skip transition'. It also includes a warning: 'This issue is already in In Progress. It may be actively worked on.' triage-outcome.md Step 0.7 confirms the transition is skipped per the rule 'If the issue is already in Assigned or any later status, skip the transition silently.' Mutation audit shows both 'Transition to Assigned' (Skipped, 'Status already past Assigned') and 'Transition to In Progress' (Skipped, 'Already in In Progress')."
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md section 5 detects the description digest comment matching pattern '[sdlc-workflow] Description digest: sha256-md:<hash>' posted by sdlc-workflow/triage-security on 2026-07-01T10:00:00Z. Action: 'Skip -- the description digest already exists.' triage-outcome.md mutation audit shows 'Post description digest comment' as 'Skipped' with reason 'Digest comment already exists'."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md section 6 detects the post-triage summary comment posted by sdlc-workflow/triage-security on 2026-07-01T10:01:00Z. Action: 'Skip -- posting a second summary comment would create a duplicate audit trail entry.' triage-outcome.md confirms: 'A post-triage summary comment already exists (posted 2026-07-01T10:01:00Z). Posting a second summary would create a confusing duplicate in the comment history.' Mutation audit shows 'Post summary comment' as 'Skipped' with reason 'Summary comment already exists'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

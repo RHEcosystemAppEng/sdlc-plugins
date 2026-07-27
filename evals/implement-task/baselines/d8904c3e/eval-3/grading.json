@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md references apply_filter extensively: Line 71 lists 'common/src/db/query.rs — shared query helpers; use find_symbol with include_body=true on apply_filter'; Line 91 states 'Filters use apply_filter from common/src/db/query.rs for comma-separated multi-value support'; Lines 154-156 describe using 'apply_filter from common/src/db/query.rs to parse the comma-separated values'; Line 170 states 'apply_filter from common/src/db/query.rs — directly reused for comma-separated value parsing'; Lines 268-269 confirm 'No new filter parsing logic written — reuses apply_filter from common/src/db/query.rs'."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md Line 68-69 lists 'modules/fundamental/src/advisory/endpoints/list.rs (sibling/reuse reference) — advisory list handler with severity filter' as a file to inspect. Line 123 states 'This follows the exact same pattern as the severity field in modules/fundamental/src/advisory/endpoints/list.rs'. Line 137-138 says 'The Query struct pattern is directly copied from the advisory list endpoint's Query struct'. Line 172 says 'The filter application pattern mirrors the advisory service's severity filter implementation'. Line 265 confirms 'Filter application uses same apply_filter + SeaORM pattern as advisory severity filter'."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Line 72-73 lists 'entity/src/package_license.rs — package-license join entity' for inspection. Lines 159-162 show the JOIN query using the entity: '.join(/* PackageLicense entity */).filter(package_license::Column::License.is_in(license_values))'. Line 171 states 'package_license entity from entity/src/package_license.rs — used for the JOIN query via SeaORM relations'. Line 270 confirms 'No new entity code — reuses existing package_license entity'. reuse-analysis.md Lines 66-96 detail Reuse Candidate 3 explaining how the entity is used directly with SeaORM's type-safe query builder."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md covers all three candidates with detailed sections: Reuse Candidate 1 (Lines 9-31): common/src/db/query.rs::apply_filter — includes 'What It Provides', 'How It Will Be Used' (calling apply_filter to split comma-separated values for SeaORM is_in clause), and 'Justification'. Reuse Candidate 2 (Lines 35-62): modules/fundamental/src/advisory/endpoints/list.rs — explains the Query struct pattern, handler-to-service propagation, and service-layer filter application. Reuse Candidate 3 (Lines 66-96): entity/src/package_license.rs — explains how the JOIN query uses the existing entity with SeaORM's Column and Relation definitions. The summary table on Lines 120-127 lists all three."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": false,
+      "evidence": "The task's defined scope (plan.md Lines 38-43) is: Files to Modify: modules/fundamental/src/package/endpoints/list.rs, modules/fundamental/src/package/service/mod.rs; Files to Create: tests/api/package_license_filter.rs. However, the plan proposes modifying two additional files outside this scope: (1) Line 217 proposes 'Add mod package_license_filter; to tests/api/mod.rs' (the plan itself acknowledges this as 'minor out-of-scope' at Line 258 but still includes it as an implementation step); (2) Lines 221-222 propose modifying docs/api.md: 'Check docs/api.md for the GET /api/v2/package endpoint documentation and add the license query parameter description.' Both files are outside the defined Files to Modify and Files to Create sections."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Lines 268-269 explicitly state 'No new filter parsing logic written — reuses apply_filter from common/src/db/query.rs'. The implementation in Step 6 shows only direct invocation of apply_filter (Line 158: 'let license_values = apply_filter(&license_filter)') with no new parsing or utility functions. reuse-analysis.md Line 128 confirms 'Net new code: Zero new utilities or helpers. The implementation is entirely composed from existing building blocks.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.8333333333333334
+  }
+}
