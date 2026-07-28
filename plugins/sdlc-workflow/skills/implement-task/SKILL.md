@@ -494,6 +494,27 @@ analysis. When writing new code, match the patterns found in sibling files rathe
 new approaches. If any Implementation Notes or task instructions conflict with a discovered
 convention, follow the guidance obtained from the user during Step 4.
 
+### Reuse over duplication
+
+When the implementation needs to use a function, method, or utility that exists in another
+module or package but is not publicly exported (e.g., a private function in a Rust crate,
+an unexported function in a Go package, a non-exported function in a Node.js module),
+decide whether to make it public or duplicate it:
+
+1. **Check dependency relationship**: determine whether the source package (where the
+   function lives) is already a dependency of the target package (where you need to use it).
+   Use the project's dependency manifest (e.g., `Cargo.toml`, `package.json`, `go.mod`,
+   `pom.xml`) to verify.
+2. **If the dependency already exists**: make the function public (`pub`, `export`, etc.)
+   and import it rather than duplicating the code. This follows the DRY principle and
+   ensures future bug fixes apply in one place.
+3. **If adding a new dependency would be required**: inlining or duplicating the function
+   is acceptable — introducing a new cross-package dependency for a single utility may
+   not be worth the coupling.
+4. **Flag the decision**: when choosing between options 2 and 3, state the choice and
+   rationale in the commit message or PR description so reviewers understand why code
+   was reused or duplicated.
+
 ### Serena symbolic editing (preferred)
 
 Use the dedicated Serena instance for the task's repository (look up the instance name
