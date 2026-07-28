@@ -99,6 +99,19 @@
         "The response offers the user a choice: (1) proceed with the current description, or (2) stop so they can re-run plan-feature",
         "The response stops execution and does not proceed to Step 2 or implementation planning until the user responds — following the same pause-and-ask pattern as the incomplete description handling"
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "Implement task TC-9206. The task description is in task-private-reuse.md, the target repository structure is in repo-backend.md, and the project CLAUDE.md is in claude-md-mock.md. Do NOT actually modify repository files or call external tools (Jira, git, Serena). Instead, write your implementation plan to the workspace outputs/ directory: write outputs/plan.md describing which files you would modify and create, what changes you would make to each, and how you would handle the private functions in the ingestor crate. Write outputs/reuse-decision.md detailing your decision about the private functions: whether to make them public and import them or to duplicate them, and why.",
+      "expected_output": "An implementation plan that identifies the describing_packages() and suppliers() functions as private in the ingestor crate, checks that the migration crate already depends on trustify-module-ingestor, and recommends making the functions pub rather than duplicating them. The reuse decision should explicitly reference the existing dependency relationship as the reason for choosing pub over duplication.",
+      "files": ["files/task-private-reuse.md", "files/repo-backend.md", "files/claude-md-mock.md"],
+      "assertions": [
+        "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+        "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+        "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+        "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+        "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place"
+      ]
     }
   ]
 }
