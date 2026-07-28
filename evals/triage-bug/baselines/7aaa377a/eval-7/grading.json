@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation traces compute_risk_score() output through create_assessment() to diesel::insert_into(assessments::table) and identifies the persistence boundary at the assessments table, risk_score column (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md, Persistence-Impact Analysis section (lines 155-163) contains an explicit trace diagram: 'compute_risk_score(total_deps, vulnerable_deps) [modules/risk/src/score.rs] └─► return value (f64: the wrong score) └─► create_assessment() assigns it to `score` [modules/risk/src/assessment.rs:38] └─► diesel::insert_into(assessments::table) .values(assessments::risk_score.eq(score)) [assessment.rs:41]'. The table ('assessments') and column ('risk_score') are identified in the Property/Value table that follows (lines 164-170)."
+    },
+    {
+      "text": "Investigation records that risk_score is written at ingestion time (assessment creation) and is NOT recomputed on read, confirming a data migration is needed (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md lines 172-173 state: 'Write timing | Ingestion time — written once when the assessment is first created' and 'Self-correcting? | No — get_assessment() reads the stored value; it never recomputes'. Lines 176-180 conclude: 'These records will not be corrected by a code fix alone. A data migration is required to recompute and overwrite the stale risk_score values for all existing rows in the assessments table.'"
+    },
+    {
+      "text": "Task description Files to Create includes a data migration file following the Diesel naming convention discovered in the repository (YYYY-MM-DD-NNNNNN_description/up.sql) (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md lines 36-39, Files to Create section: '- `migration/2026-07-28-000004_fix_risk_score_values/up.sql` — data migration to recompute and overwrite stale `risk_score` values in the `assessments` table'. This exactly matches the YYYY-MM-DD-NNNNNN_description/up.sql pattern documented in investigation.md's Migration Convention section (line 126)."
+    },
+    {
+      "text": "Task description Implementation Notes includes migration logic to recompute and update existing risk_score values in the assessments table (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md lines 107-115 (Data Migration subsection) include the SQL: 'UPDATE assessments SET risk_score = 1.0 / risk_score WHERE risk_score != 0;' with explanatory comments that this corrects risk_score values stored with inverted numerator/denominator. The section is labeled '`migration/2026-07-28-000004_fix_risk_score_values/up.sql`'."
+    },
+    {
+      "text": "Task description Acceptance Criteria includes a criterion that existing assessments with incorrect persisted risk_score values are corrected by the migration (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md line 156 in the Acceptance Criteria section: '- [ ] The data migration `migration/2026-07-28-000004_fix_risk_score_values/up.sql` corrects all existing rows in `assessments` where `risk_score != 0`, setting each value to `1.0 / risk_score`.' This directly asserts that existing incorrectly-persisted records are corrected by the migration."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before the data migration criterion and any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md Acceptance Criteria section starts at line 153. The first criterion (line 154) is: '- [ ] **Reproducer test** `test_risk_score_asymmetric` fails against the unfixed code (returns `20.0` for inputs `total=100, vulnerable=5`) and passes after the fix (returns `0.05`).' The fix criterion appears second (line 155) and the data migration criterion appears third (line 156). The reproducer test is unambiguously first."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

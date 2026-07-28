@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md states: 'The vulnerable library is openssl-libs, a system-level RPM package. Based on the library name and the component context (pscomponent:org/rhtpa-server), the ecosystem is identified as RPM -- not Cargo or npm.' It also references the Ecosystem Mappings table confirming RPM is a configured ecosystem with lock file rpms.lock.yaml."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md contains a table with all 5 versions: 2.2.0 (v0.4.5), 2.2.1 (v0.4.8), 2.2.2 (v0.4.9), 2.2.3 (v0.4.11), 2.2.4 (v0.4.12). The data source is explicitly stated as 'rpms.lock.yaml at each pinned commit tag from the supportability matrix' and the column header is 'openssl-libs version (rpms.lock.yaml)'."
+    },
+    {
+      "text": "Dependency chain context identifies openssl-libs as present in rpms.lock.yaml and uses this to determine the package origin — the lock file presence is the primary classification signal (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md dependency chain section states: 'rpms.lock.yaml: PRESENT --> explicit install' and 'Origin: explicit install (openssl-libs specified in rpms.lock.yaml)'. It further states: 'The primary classification signal is the rpms.lock.yaml lock file. The package openssl-libs is present in rpms.lock.yaml for all versions in the 2.2.x stream, which classifies it as an explicit install.'"
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 8 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md describes exactly one task: 'Remediation Task: Update openssl-libs in Konflux release repo (2.2.x stream)'. It explicitly states 'Task count per stream: 1 (Konflux release repo fix only)' and 'No upstream backport task is created for system package ecosystems.' The pre-creation checklist confirms: 'No upstream task: RPM ecosystem does not use two-task upstream + downstream flow.'"
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 8 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md task description contains all required sections: '## Repository' (rhtpa-release.0.4.z), '## Target Branch' (main), '## Description' (CVE remediation details), '## Implementation Notes' (package origin, update instructions), '## Acceptance Criteria' (3 acceptance criteria items). No '## Files to Modify' section exists anywhere in the task description."
+    },
+    {
+      "text": "The version impact output addresses SBOM verification in the dependency chain context — either noting that verification was skipped because cosign is not available or because external tools are prohibited, or presenting the SBOM classification result (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md addresses SBOM verification in two places: (1) inline in the dependency chain block: 'SBOM verification: skipped -- cosign is not available and external tool invocation is prohibited in this eval context. Using rpms.lock.yaml classification only.' (2) A dedicated subsection '### SBOM Verification (Step 2.3.5)' explaining: 'SBOM verification via cosign was not performed. The cosign CLI tool is not available in this environment, and the eval prohibits invocation of external tools.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

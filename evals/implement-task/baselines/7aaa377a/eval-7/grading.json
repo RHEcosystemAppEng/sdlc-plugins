@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The response describes locating the digest comment using the marker string '[sdlc-workflow] Description digest:' from shared/description-digest-protocol.md",
+      "passed": true,
+      "evidence": "Section '2. Locate the digest comment' (lines 25-31) explicitly states: 'Search through all returned comments for those whose body starts with the marker string `[sdlc-workflow] Description digest:`.' and shows the matching comment body '[sdlc-workflow] Description digest: sha256-md:0000...'."
+    },
+    {
+      "text": "The response describes detecting a mismatch between the stored digest and the computed digest of the current description",
+      "passed": true,
+      "evidence": "Section '7. Compare hex digests' (lines 69-74) compares the expected digest from the comment ('0000000000000000000000000000000000000000000000000000000000000000') against the computed value ('<different-64-char-hex-value>') and states: 'Result: MISMATCH. The hex digests differ, meaning the task description was modified after plan-feature created it.'"
+    },
+    {
+      "text": "The response alerts the user that the description was modified after plan-feature created the task and displays the expected vs actual digest values",
+      "passed": true,
+      "evidence": "Section '8. Alert the user and stop execution' (lines 78-91) shows a warning message: 'The description for TC-9201 was modified after plan-feature created it.' and displays both digests: 'Expected digest (from plan-feature comment): sha256-md:0000000000000000000000000000000000000000000000000000000000000000' and 'Actual digest (computed from current description): sha256-md:<computed-hash>'."
+    },
+    {
+      "text": "The response offers the user a choice: (1) proceed with the current description, or (2) stop so they can re-run plan-feature",
+      "passed": true,
+      "evidence": "Lines 87-89 present two numbered options: '1. **Proceed** -- implement using the current (modified) description as-is' and '2. **Stop** -- abort so you can re-run plan-feature to regenerate tasks with a fresh digest'. Section 9 (lines 106-110) further elaborates on handling each choice."
+    },
+    {
+      "text": "The response stops execution and does not proceed to Step 2 or implementation planning until the user responds — following the same pause-and-ask pattern as the incomplete description handling",
+      "passed": true,
+      "evidence": "Line 93 states: '**Execution stops immediately.** No subsequent steps (Step 2 through Step 11) are executed until the user responds.' Lines 94-104 explicitly enumerate all skipped steps including 'No dependency verification (Step 2)' through Step 11. Key protocol detail #3 (line 118) reiterates: 'The protocol mandates stopping execution immediately on a hex digest mismatch when tags match. This is not a soft warning -- implementation must not proceed without explicit user approval.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

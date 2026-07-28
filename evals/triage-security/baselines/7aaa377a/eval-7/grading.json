@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Sibling check correctly classifies TC-8001 as a different-stream companion (stream [rhtpa-2.2] vs current issue's [rhtpa-2.1]), not a same-stream duplicate (Step 4)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 20-26: TC-8006 identified as stream 2.1.x, TC-8001 as stream 2.2.x. Classification states: 'TC-8001 is a different-stream companion (stream 2.2.x vs current issue's 2.1.x). This is NOT a same-stream duplicate.'"
+    },
+    {
+      "text": "Step 4.2 checks the current issue's existing issuelinks before attempting to create a 'Related' link to TC-8001 (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 34-47: Section '4.2 -- Cross-Stream Coordination' contains 'Idempotent link check' subsection stating 'Before creating a Related link to TC-8001, check the current issue's existing issuelinks array (already fetched in Step 1)' and shows existing links table with Link ID 1990401, type Related, outward TC-8006 -> TC-8001."
+    },
+    {
+      "text": "Step 4.2 detects the pre-existing 'Related' link to TC-8001 and skips link creation — does NOT call jira.create_link (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 48-50: 'Decision: Related link to TC-8001 already exists -- skipping.' and 'The jira.create_link call is NOT executed because the pre-existing link already satisfies the cross-stream coordination requirement.'"
+    },
+    {
+      "text": "The output includes a log message indicating the link was skipped because it already exists (e.g., 'Related link to TC-8001 already exists — skipping')",
+      "passed": true,
+      "evidence": "sibling-check.md line 48: 'Related link to TC-8001 already exists -- skipping.' Also triage-outcome.md line 29: 'Logged the skip: Related link to TC-8001 already exists -- skipping'"
+    },
+    {
+      "text": "The sibling landscape table is still presented to the engineer despite the link already existing — the idempotent check only affects link creation, not the sibling summary",
+      "passed": true,
+      "evidence": "sibling-check.md lines 59-74: Sibling landscape table presented showing TC-8001 (2.2.x, In Progress) and TC-8006 (2.1.x, New). Explicit statement: 'The idempotent link check only affects whether jira.create_link is called -- it does not suppress the sibling summary table. The engineer needs to see the full companion issue landscape regardless of whether links were just created or already existed.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

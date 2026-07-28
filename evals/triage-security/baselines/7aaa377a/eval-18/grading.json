@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 3 states: 'Step 8 detects two existing remediation tasks linked to TC-8001 via the Depend link type' with TC-8100 and TC-8101 shown in a table with Depend link type. Decision: 'Skip remediation task creation. Existing Depend-linked remediation tasks TC-8100 and TC-8101 already cover the remediation for the 2.2.x stream. Creating new tasks would produce duplicates. No new tasks created, no new Depend links created.' triage-outcome.md confirms: 'Remediation task creation skipped: No new tasks created.'"
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 2 states: 'The ai-cve-triaged label is already present on the issue. This label is added during the Post-Triage Summary step to mark the issue as triaged.' Decision: 'Skip label addition. The ai-cve-triaged label already exists in the issue's labels array... No mutation performed.' triage-outcome.md confirms: 'ai-cve-triaged label: Already present. Not added again.'"
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 1 states: 'The issue is already in In Progress status, which is the post-triage target state.' Decision: 'Skip status transition. The issue is already in a post-triage state (In Progress). Attempting to transition again would either fail or cause an unintended state change. No mutation performed.' data-extraction.md also warns: 'This issue is already in In Progress. It may be actively worked on.'"
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 4 shows the existing digest comment: '[sdlc-workflow] Description digest: sha256-md:a1b2c3d4e5f6...' and states: 'The comment body starts with the marker string [sdlc-workflow] Description digest:, which matches the description digest protocol marker.' Decision: 'Skip digest comment posting. A description digest comment matching the [sdlc-workflow] Description digest: marker already exists on the issue. No duplicate digest comment posted.'"
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 5 shows the existing summary comment content ('Triage complete for CVE-2026-31812 (quinn-proto)...') with post date 2026-07-01T10:01:00Z. Decision: 'Skip summary comment posting. A post-triage summary comment already exists on the issue documenting the triage outcome. Posting a second summary would create redundant audit trail entries. No duplicate summary comment posted.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

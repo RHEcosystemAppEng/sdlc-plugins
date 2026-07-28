@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 2.3.5 dependency chain context identifies h2 as a transitive dependency with the chain: backend → reqwest → hyper → h2 (3 levels deep)",
+      "passed": true,
+      "evidence": "version-impact.md lines 49-52 show 'backend (workspace) -> reqwest -> hyper -> h2' and 'Type: transitive (3 levels deep)'. Line 58 confirms 'h2 is a transitive dependency. It is NOT a direct dependency of the backend workspace.'"
+    },
+    {
+      "text": "The dependency chain output labels h2 as transitive (not direct) and includes the full chain path in the version impact output",
+      "passed": true,
+      "evidence": "version-impact.md line 58: 'h2 is a transitive dependency. It is NOT a direct dependency of the backend workspace.' Full chain path at line 49: 'backend (workspace) -> reqwest -> hyper -> h2'. Lines 60-63 detail each hop: backend depends on reqwest, reqwest depends on hyper, hyper depends on h2."
+    },
+    {
+      "text": "Remediation task Implementation Notes include the dependency type as transitive with the dependency chain",
+      "passed": true,
+      "evidence": "remediation.md Task 1 line 49: '**Dependency type**: transitive (chain: backend -> reqwest -> hyper -> h2, 3 levels deep)'. Task 2 line 140: '**Dependency type**: transitive — carried forward from upstream task (chain: backend -> reqwest -> hyper -> h2, 3 levels deep)'."
+    },
+    {
+      "text": "Remediation task Implementation Notes describe the two-tier remediation approach: preferred is bumping reqwest (the direct dependency), fallback is pinning h2 directly",
+      "passed": true,
+      "evidence": "remediation.md lines 53-65: '**Preferred: bump the direct dependency**' section describes bumping reqwest to a version whose transitive closure includes h2 >= 0.4.5. '**Fallback: pin the transitive dependency directly**' section describes pinning h2 via cargo add h2@0.4.5 when bumping reqwest is not viable."
+    },
+    {
+      "text": "The fallback approach specifies the ecosystem-specific pinning mechanism: cargo add h2@0.4.5 for Cargo",
+      "passed": true,
+      "evidence": "remediation.md line 63: 'Cargo: `cargo add h2@0.4.5` to add h2 as a direct dependency, overriding the transitive resolution'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

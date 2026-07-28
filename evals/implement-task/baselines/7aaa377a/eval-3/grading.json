@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 3 item 2: 'Build the license filter query using `apply_filter`: When the `license` parameter is `Some`, use `common::db::query::apply_filter` to: Parse comma-separated license values, Generate an SQL `IN` clause'. reuse-analysis.md section 1: 'Direct reuse — call `apply_filter` from the `PackageService::list()` method when the `license` query parameter is present.' Commit message (plan.md line 186): 'Reuses apply_filter from common/db/query.rs'."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md Step 1 item 1: 'Read `modules/fundamental/src/advisory/endpoints/list.rs` to understand the severity filter pattern (the structural reference for this task).' plan.md Step 2 item 1: 'Following the pattern from the advisory list endpoint's severity filter, add an optional `license` field to the `Query` struct used for parameter extraction'. reuse-analysis.md section 2: 'Structural pattern reuse — follow the identical Query struct pattern with an optional `license: Option<String>` field, mirroring how the advisory endpoint declares `severity: Option<String>`.'."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Step 3 item 3: 'Join through the `package_license` entity: Use the SeaORM entity from `entity::package_license` to join the `package` table to the `package_license` table, then apply the license filter on the license column. This follows SeaORM's relation-based join pattern rather than raw SQL.' plan.md Step 1 item 3: 'Read `entity/src/package_license.rs` to understand: The SeaORM entity structure for the package-license join table'. reuse-analysis.md section 3: 'Direct reuse — import and use the `package_license` entity in the `PackageService::list()` method to construct a JOIN query.'."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md contains three dedicated sections matching the task's three Reuse Candidates: (1) 'common/src/db/query.rs::apply_filter' with 'How it will be reused: Direct reuse — call apply_filter from the PackageService::list() method'; (2) 'modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)' with 'How it will be reused: Structural pattern reuse — follow the identical Query struct pattern'; (3) 'entity/src/package_license.rs (package-license join entity)' with 'How it will be reused: Direct reuse — import and use the package_license entity... to construct a JOIN query'. Each section also includes rationale and alternatives considered."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": false,
+      "evidence": "The task defines Files to Modify as: 'modules/fundamental/src/package/endpoints/list.rs' and 'modules/fundamental/src/package/service/mod.rs'; Files to Create as: 'tests/api/package_license_filter.rs'. The plan's Files Summary lists these three plus a fourth entry: 'Test module registration file — Modify — Register package_license_filter test module' (plan.md Step 5, line 165-169). This test module registration file (likely tests/api/mod.rs or tests/Cargo.toml) is not listed in the task's Files to Modify or Files to Create sections, exceeding the defined scope."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "The plan consistently references reusing apply_filter directly rather than creating new parsing logic. plan.md Step 3 item 2: 'use `common::db::query::apply_filter`'. reuse-analysis.md section 1 explicitly rejects the alternative: 'Writing inline comma-splitting and SQL generation logic in the service layer. Rejected because apply_filter already does this correctly, handles edge cases (empty strings, whitespace), and is tested. Duplicating it would violate DRY'. No new utility functions for parsing or filtering are proposed anywhere in the plan."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.8333333333333334
+  }
+}
