@@ -364,6 +364,15 @@ If a convention conflict is detected — the task description or Implementation 
 contradict an established convention — flag it to the user and ask for guidance before
 proceeding with implementation.
 
+**Skill guidance takes precedence over sibling patterns:** When a discovered sibling
+pattern conflicts with the skill's built-in quality guidance (e.g., Step 7 says "prefer
+value-based assertions" but sibling tests use `.any()` existence checks, or Step 7 says
+"document every test function" but siblings have no doc comments), the skill's guidance
+takes precedence. Record the conflict in the convention output — note the sibling pattern
+and the overriding skill guidance — but follow the skill guidance, not the sibling
+pattern. Sibling conventions are a default to adopt when the skill has no opinion; they
+are not a license to override explicit skill instructions.
+
 > **Example output:**
 >
 > **Discovered conventions (from sibling analysis):**
@@ -642,6 +651,12 @@ convention analysis. When writing new tests, match the assertion patterns, respo
 validation style, error case coverage, and naming conventions found in sibling test files
 rather than inventing new approaches.
 
+**Skill guidance overrides sibling patterns:** The test conventions from Step 4 are
+defaults — they apply when this step has no stronger opinion. The guidance below
+(value-based assertions, parameterized tests, test documentation) is the skill's explicit
+quality standard. When a sibling pattern conflicts with any guidance below, follow the
+skill guidance and note the deviation from the sibling pattern in your convention output.
+
 **Prefer value-based assertions over length-only checks:** When verifying collections or
 response data, assert on the actual values — not just the count. Assert on specific items
 or key fields so that test failures reveal *what* changed, not just *how many*. Length
@@ -752,6 +767,40 @@ commit.
 > **Untracked file check results:**
 > - `src/data/schema.json` — **REFERENCED** by `src/parser.rs` via `include_str!("data/schema.json")` — stage for commit?
 > - `src/data/fixtures.json` — in directory with modified files but no code references found — stage for commit?
+
+### Dead parameter detection
+
+When the implementation removes code that references function parameters, scan the
+modified functions for parameters that are no longer used in the function body.
+
+1. **Identify candidate functions**: from the `git diff`, find functions where code
+   was removed (lines with `-` prefix). For each such function, check whether any
+   removed line was the only reference to a parameter.
+2. **Detect dead parameters**: look for indicators that a parameter is unused:
+   - Underscore-prefixed parameters (`_version`, `_ctx`) — languages like Rust and
+     Python use this convention to suppress unused-variable warnings, but the correct
+     fix is removal, not renaming.
+   - Compiler or linter warnings about unused parameters in the build output from
+     Step 7 or Step 9's CI checks.
+   - Parameters that appear in the function signature but have zero references in the
+     function body (search the function body for the parameter name).
+3. **Remove dead parameters**: for each confirmed dead parameter:
+   - Remove the parameter from the function signature.
+   - Use Serena's `find_referencing_symbols` (or Grep as fallback) to find all call
+     sites of the function.
+   - Update every call site to remove the corresponding argument.
+   - If the parameter is part of a trait or interface method, check whether other
+     implementations use it — only remove if no implementation references it.
+4. **Re-run tests**: after removing parameters and updating call sites, re-run the
+   relevant tests to confirm nothing broke.
+
+> **Example:**
+>
+> A function `fn filter_by_status(items: &[Item], version: &str)` had its body
+> changed to no longer use `version`. The agent renamed it to `_version` to suppress
+> the compiler warning. The correct action is to remove the `version` parameter
+> entirely, update all callers from `filter_by_status(items, "1.0")` to
+> `filter_by_status(items)`, and re-run tests.
 
 ### Sensitive-pattern check
 
