@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 45-48 lists TC-8100 and TC-8101 as existing Depend links. idempotency-check.md lines 19-28 explicitly states: 'Step 8 Case B would detect that remediation tasks already exist for this stream and CVE. The existing Depend links from the Vulnerability issue to these tasks confirm that remediation was already created. No new tasks should be created.' triage-outcome.md lines 89-100 confirms Step 8 detects both tasks via Depend links and concludes 'Net new mutations: 0'."
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 22 confirms current labels include 'ai-cve-triaged'. idempotency-check.md lines 8-11 detects the label and states 'The label already exists. Adding it again would be a no-op... No mutation needed.' triage-outcome.md line 122 confirms 'Skipped (label already present)'."
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 21 confirms status is 'In Progress'. idempotency-check.md lines 14-17 detects the status and warns: 'an issue in In Progress status triggers a warning: This issue is already in In Progress. It may be actively worked on.' and states 'no status transition mutation is needed'. triage-outcome.md lines 30-33 confirms: 'The issue is already in In Progress, which is past Assigned. The skill detects this and skips the transition.' Line 118 confirms 'Skipped (already past Assigned)'."
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 54-56 lists Comment #1 as the description digest with sha256-md hash. idempotency-check.md lines 30-34 detects the existing digest and states: 'The re-run should detect the existing digest and skip posting a new one.' triage-outcome.md line 124 confirms 'Skipped (digest comment already exists)'."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 56-57 lists Comment #2 as the post-triage summary. idempotency-check.md lines 36-46 detects the existing summary and states: 'The re-run should detect the existing summary and skip posting a new one.' triage-outcome.md line 123 confirms 'Skipped (summary comment already exists)'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

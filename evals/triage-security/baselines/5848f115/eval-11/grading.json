@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 4.4 searches for preemptive tasks using JQL with labels 'security-preemptive' and 'CVE-2026-55123' (§1.60)",
+      "passed": true,
+      "evidence": "reconciliation.md lines 9-13 show JQL query: 'project = TC AND issuetype = Task AND labels = 'security-preemptive' AND labels = 'CVE-2026-55123' ORDER BY created DESC'. Both required labels are present in the search."
+    },
+    {
+      "text": "Step 4.4 filters results to match the current stream (rhtpa-2.1) by checking the task summary for the stream name",
+      "passed": true,
+      "evidence": "reconciliation.md lines 30-33 contain a 'Stream Filter' section: 'Current issue stream suffix: [rhtpa-2.1] -- stream name rhtpa-2.1' and 'TC-8022 summary contains (rhtpa-2.1) -- match confirmed'. The output explicitly shows filtering by checking the task summary for the stream name."
+    },
+    {
+      "text": "Step 4.4 links the new CVE Jira TC-8021 to the preemptive task TC-8022 with 'Depend' link type (standard remediation linkage)",
+      "passed": true,
+      "evidence": "reconciliation.md lines 40-51 show: 'jira.create_link(inwardIssue: TC-8021, outwardIssue: TC-8022, type: \"Depend\")' with explanation 'This creates the standard remediation linkage (\"Depend\") between the CVE Jira TC-8021 and the remediation task TC-8022.'"
+    },
+    {
+      "text": "Step 4.4 removes the 'security-preemptive' label from TC-8022 — the task is now a standard remediation task linked to a proper CVE Jira",
+      "passed": true,
+      "evidence": "reconciliation.md lines 53-64 show current labels 'ai-generated-jira, Security, CVE-2026-55123, security-preemptive' updated to 'ai-generated-jira, Security, CVE-2026-55123' (security-preemptive removed). The explanation states: 'The security-preemptive label is removed because TC-8022 is now linked to a proper CVE Jira (TC-8021) for its stream. It is no longer a preemptive task -- it is a standard remediation task.'"
+    },
+    {
+      "text": "Step 8 skips remediation task creation for this stream because Step 4.4 reconciliation already linked an existing task",
+      "passed": true,
+      "evidence": "triage-outcome.md lines 36-37: 'Step 8 (Remediation) does not create new remediation tasks for stream 2.1.x. TC-8022 serves as the remediation task for TC-8021, just as if triage had created it directly.' Also reconciliation.md lines 80-82: 'Step 8 (Remediation) will skip task creation for this stream because a reconciled preemptive task covers it.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

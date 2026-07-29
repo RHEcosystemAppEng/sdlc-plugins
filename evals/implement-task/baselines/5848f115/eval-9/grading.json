@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md lines 45-48: '**Why remove the parameter entirely:** Removing the filter logic from the body leaves `version_filter` as a dead parameter -- it is accepted but never read. The correct fix is to remove it from the signature, not rename it to `_version_filter`.' Also plan.md lines 116-118: '**Remove, do not rename**: The parameter must be removed from the signature entirely. Prefixing with an underscore (`_version_filter`) would suppress the compiler warning but leave unnecessary API surface.'"
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md lines 16-39 show both old and new function signatures, with `version_filter: &str` removed from the parameter list. Line 17: 'Remove the `version_filter: &str` parameter from the `list` method signature.' Line 40-43 also addresses removing filter logic in the body: 'Remove the filtering logic in the method body that uses `version_filter` to apply a `VersionMatches` filter to the query.' Both signature and body changes are covered."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md lines 119-123: '**Update all 3 call sites**: - `modules/fundamental/src/sbom/endpoints/list.rs` -- the REST endpoint handler - `modules/search/src/service/mod.rs` -- the search service - `tests/api/sbom.rs` -- integration tests'. Each call site also has a dedicated section (sections 2, 3, 4 starting at lines 50, 78, 91) with specific change details."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md line 4: 'Principle: Remove Dead Parameters, Do Not Underscore-Prefix Them'. Lines 14-16: 'using it as a permanent fix for a parameter that is genuinely dead introduces several problems'. Lines 18-20: '1. **Unnecessary API surface**: The parameter remains part of the function’s public contract. Every caller must still construct and pass the argument, even though the function ignores it.' Lines 151-156: 'Dead parameters are API debt. They confuse callers, waste compute at call sites, and suppress compiler warnings that serve as useful maintenance signals... Underscore-prefixing is a suppression mechanism, not a cleanup strategy.'"
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md lines 123-124: '**Re-run tests** after removing the parameter and updating call sites to confirm nothing broke.' plan.md lines 129-135: 'Verification Steps... **Test suite**: Run `cargo test` to verify: - The `test_list_sboms_version_filtered` test is removed and no longer referenced. - All other SBOM list tests pass without modification. - The search service tests (if any) pass with the updated call.' Also parameter-cleanup.md lines 117-135: 'Step 3: Re-run tests... After removing the parameter and updating all call sites, run the full test suite: `cargo test`'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

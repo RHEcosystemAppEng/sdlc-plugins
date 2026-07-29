@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md lines 44-69 explicitly identify both patterns with code examples. Line 49: \"Pattern from `tests/api/advisory.rs` -- `.filter().any()` pattern\" with a code block showing `.filter(|a| a.severity == \"Critical\").any(|_| true)`. Line 57: \"Pattern from `tests/api/sbom.rs` -- `.filter().count() > 0` pattern\" with a code block showing `.filter(|s| s.name.contains(\"openssl\")).count()` and `assert!(matching > 0, ...)`. Both source files are correctly attributed."
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md lines 71-80 contain a section titled \"## Conflict: Sibling Assertion Patterns vs Skill Quality Guidance\" (line 71). Line 73-74: \"**Conflict identified:** The sibling `.filter().any()` and `.filter().count() > 0` assertion patterns conflict with the skill's built-in quality guidance in Step 7\". Lines 76-80 quote the skill guidance: \"Prefer value-based assertions over length-only checks: When verifying collections or response data, assert on the actual values -- not just the count.\""
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md line 82: \"**Resolution:** The skill guidance takes precedence over the sibling patterns.\" Lines 88-89 state: \"Sibling conventions are defaults when the skill has no opinion -- not overrides of explicit skill instructions.\" Lines 92-93 confirm the override: \"**OVERRIDE:** The `.filter().any()` and `.filter().count() > 0` assertion patterns will NOT be adopted.\""
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md uses value-based assertions throughout. Lines 57-69 show assert_eq! on exact counts and specific identifiers: `assert_eq!(summary.permissive.count, 2)`, `assert_eq!(summary.permissive.licenses.iter().collect::<HashSet<_>>(), HashSet::from([&\"MIT\".to_string(), &\"Apache-2.0\".to_string()]))`, `assert_eq!(summary.copyleft.count, 1)`, `assert_eq!(summary.copyleft.licenses, vec![\"GPL-3.0\"])`. Lines 71-75 explicitly note: \"We use `assert_eq!` on specific license identifiers and exact counts rather than the sibling `.filter().any()` or `.count() > 0` patterns.\" The summary table at lines 173-174 confirms: Collection values use \"assert_eq! on specific identifiers\" and Counts use \"assert_eq! on exact counts\"."
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md lines 7-19 list adopted sibling conventions: \"Test naming: test_<endpoint>_<scenario> pattern\" (line 12), \"Test setup: Real PostgreSQL test database with fixtures\" (line 14), \"Test organization: Separate file in tests/api/\" (line 16), \"Status code assertions: assert_eq!(resp.status(), StatusCode::OK)\" (line 17), \"Response handling: Deserialize response body into typed structs\" (line 19). Lines 21-24 state only the assertion approach is overridden: \"The sibling tests use `.filter().any()` and `.filter().count() > 0` existence checks. These are overridden in favor of value-based assertions per the skill's Step 7 guidance.\" The summary table at lines 170-179 explicitly marks each aspect as \"No conflict -- follow sibling\" or \"Skill guidance overrides sibling\", confirming only collection values and counts are overridden."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

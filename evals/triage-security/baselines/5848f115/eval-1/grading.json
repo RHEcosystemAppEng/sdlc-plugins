@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+      "passed": true,
+      "evidence": "In data-extraction.md, the Step 1 table correctly lists: CVE ID = CVE-2026-31812 (line 41), Vulnerable library = quinn-proto (line 46), Affected version range = 'versions before 0.11.14 (< 0.11.14)' (line 47), Fixed version = 0.11.14 (line 48). All four elements are present and correct."
+    },
+    {
+      "text": "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+      "passed": true,
+      "evidence": "In data-extraction.md line 55: 'Ecosystem | Cargo (Rust crate)'. The ecosystem is correctly identified as Cargo. Line 56 further classifies it as 'Source dependency (2 tasks per stream: upstream backport + downstream propagation)'."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the security-matrix.md supportability matrix — no versions are skipped (Important Rule 4)",
+      "passed": true,
+      "evidence": "In version-impact.md, the table includes 7 versions across both streams: 2.1.0 (v0.3.8), 2.1.1 (v0.3.12), 2.2.0 (v0.4.5), 2.2.1 (v0.4.8), 2.2.2 (v0.4.9), 2.2.3 (v0.4.11), 2.2.4 (v0.4.12). Build tags are sequential with no gaps. Both the 2.1.x and 2.2.x streams are covered. The summary section confirms coverage of all versions in both streams."
+    },
+    {
+      "text": "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+      "passed": true,
+      "evidence": "In version-impact.md, the Build Tag column lists specific pinned tags per version: v0.3.8, v0.3.12 (2.1.x stream), v0.4.5, v0.4.8, v0.4.9, v0.4.11, v0.4.12 (2.2.x stream). Each version row has its own distinct pinned tag. The Upstream Fix Status table references checking at these tags (e.g., 'git show release/0.3.z:Cargo.lock'). The analysis does not use branch HEAD."
+    },
+    {
+      "text": "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+      "passed": true,
+      "evidence": "In version-impact.md line 11: '2.2.2 | 2.2.x | v0.4.9 | -- | YES | retag of 2.2.1 (same as v0.4.8)'. Version 2.2.2 is explicitly identified as a retag of 2.2.1, the quinn-proto column shows '--' (indicating no independent lock-file check), and the affected status is YES, carried forward from 2.2.1."
+    },
+    {
+      "text": "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+      "passed": true,
+      "evidence": "In affects-versions.md lines 12-13, the correction table shows the diff: Current (PSIRT-assigned) = 'RHTPA 2.0.0' vs Proposed (lock file evidence) = 'RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2'. Line 15 explains: 'PSIRT version is wrong: \"RHTPA 2.0.0\" does not correspond to any version in the supportability matrix.' The comment on line 38 also shows the diff: '[RHTPA 2.0.0] -> [RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]'."
+    },
+    {
+      "text": "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+      "passed": true,
+      "evidence": "In affects-versions.md, the correction table (line 13) uses version names: 'RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2'. The Jira update code block (lines 24-30) uses placeholders '<jira-id-for-RHTPA-2.2.0>' etc. rather than hardcoded IDs. Line 31 states: 'Version IDs would be discovered dynamically via getJiraIssueTypeMetaWithFields (Step 3.1).' No hardcoded Jira version IDs appear anywhere in the output."
+    },
+    {
+      "text": "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+      "passed": true,
+      "evidence": "In remediation.md: Task 1 has Repository: rhtpa-backend (line 48), Target Branch: release/0.4.z (line 49), Acceptance Criteria checklist (lines 97-99), Dependencies section (lines 107-108). Task 2 has Repository: rhtpa-release.0.4.z (line 127), Target Branch: main (line 129), Acceptance Criteria (lines 156-157), and dependency linkage: 'Blocks (upstream task -> this task)' (line 120) and 'Depends on: [upstream-task-key]' (line 163). Tasks 3 and 4 mirror this structure for the 2.1.x stream."
+    },
+    {
+      "text": "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+      "passed": true,
+      "evidence": "In remediation.md, Cargo remediation creates paired tasks per stream. For 2.2.x: Task 1 = 'Upstream Backport' (line 33) and Task 2 = 'Downstream Propagation' (line 112) with 'Blocks (upstream task -> this task) -- this task is blocked by the upstream backport task' (line 120). For 2.1.x: Task 3 = 'Upstream Backport' (line 169) and Task 4 = 'Downstream Propagation' (line 255) with 'Blocks (preemptive upstream task -> this task)' (line 262). The task summary table (lines 331-336) confirms all four tasks with their dependency types."
+    },
+    {
+      "text": "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
+      "passed": true,
+      "evidence": "In affects-versions.md, the correction is framed as 'Proposed (lock file evidence)' (line 12), under 'Proposed Jira Update' header (line 19), with the qualifier 'After engineer confirmation:' (line 23). In data-extraction.md, Step 0.7 uses pseudo-code with unresolved placeholders ('<current-user-account-id>', '<assigned-transition-id>') indicating proposed API calls, not executed ones. In remediation.md, tasks are presented as specifications with descriptions, not as 'created' artifacts. No output file contains evidence of actual Jira mutations being executed."
+    },
+    {
+      "text": "The data-extraction output describes Step 0.7 actions before the Step 1 data table: assigning the CVE issue to the current user and transitioning it to Assigned status (Step 0.7)",
+      "passed": true,
+      "evidence": "In data-extraction.md, lines 1-30 contain 'Step 0.7 -- Early Assignment Actions' which describes: (1) assigning TC-8001 to the current user via 'jira.edit_issue(\"TC-8001\", assignee=<current-user-account-id>)' (line 12), and (2) transitioning to Assigned status via 'jira.transition_issue(\"TC-8001\", <assigned-transition-id>)' (line 27). This section appears BEFORE 'Step 1 -- Data Extraction' which begins at line 35 with the parsed CVE data table."
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "pass_rate": 1.0
+  }
+}
