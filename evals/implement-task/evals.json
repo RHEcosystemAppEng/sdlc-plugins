@@ -112,6 +112,32 @@
         "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
         "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place"
       ]
+    },
+    {
+      "id": 9,
+      "prompt": "Implement task TC-9207. The task description is in task-dead-parameter.md, the target repository structure is in repo-backend.md, and the project CLAUDE.md is in claude-md-mock.md. Do NOT actually modify repository files or call external tools (Jira, git, Serena). Instead, write your implementation plan to the workspace outputs/ directory: write outputs/plan.md describing which files you would modify, what changes you would make to each, and how you would handle the version_filter parameter after removing the filtering logic. Write outputs/parameter-cleanup.md detailing your approach to removing dead parameters and updating call sites.",
+      "expected_output": "An implementation plan that recognizes removing the version-based filtering logic from SbomService::list leaves the version_filter parameter dead. The plan should include removing the parameter from the function signature and updating all 3 call sites (endpoint handler, search service, tests) to stop passing the version_filter argument. The parameter cleanup document should explain the dead parameter detection reasoning.",
+      "files": ["files/task-dead-parameter.md", "files/repo-backend.md", "files/claude-md-mock.md"],
+      "assertions": [
+        "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+        "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+        "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+        "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+        "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Implement task TC-9208. The task description is in task-sibling-override.md, the target repository structure is in repo-backend.md, and the project CLAUDE.md is in claude-md-mock.md. Do NOT actually modify repository files or call external tools (Jira, git, Serena). Instead, write your implementation plan to the workspace outputs/ directory: write outputs/plan.md describing which files you would modify and create, what changes you would make to each. Write outputs/conventions.md listing the conventions you discovered from sibling analysis, including any conflicts with the skill's built-in quality guidance. Write outputs/test-plan.md describing the test assertion approach you would use.",
+      "expected_output": "An implementation plan where the conventions output identifies the sibling .filter().any() and .filter().count() > 0 assertion patterns from advisory.rs and sbom.rs tests, flags the conflict with the skill's 'prefer value-based assertions over length-only checks' guidance, and states that the skill guidance takes precedence. The test plan should describe value-based assertions (e.g., assert_eq on specific license names and counts) rather than copying the sibling existence-check patterns.",
+      "files": ["files/task-sibling-override.md", "files/repo-backend.md", "files/claude-md-mock.md"],
+      "assertions": [
+        "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+        "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+        "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+        "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+        "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style"
+      ]
     }
   ]
 }
