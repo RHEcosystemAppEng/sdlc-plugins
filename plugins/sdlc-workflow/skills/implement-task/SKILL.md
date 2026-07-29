@@ -364,14 +364,11 @@ If a convention conflict is detected — the task description or Implementation 
 contradict an established convention — flag it to the user and ask for guidance before
 proceeding with implementation.
 
-**Skill guidance takes precedence over sibling patterns:** When a discovered sibling
-pattern conflicts with the skill's built-in quality guidance (e.g., Step 7 says "prefer
-value-based assertions" but sibling tests use `.any()` existence checks, or Step 7 says
-"document every test function" but siblings have no doc comments), the skill's guidance
-takes precedence. Record the conflict in the convention output — note the sibling pattern
-and the overriding skill guidance — but follow the skill guidance, not the sibling
-pattern. Sibling conventions are a default to adopt when the skill has no opinion; they
-are not a license to override explicit skill instructions.
+**Skill guidance takes precedence over sibling patterns:** When a sibling pattern
+conflicts with this skill's built-in quality guidance (e.g., Step 7's "prefer value-based
+assertions" vs sibling `.any()` checks), follow the skill guidance. Record the conflict
+in the convention output but do not adopt the sibling pattern. Sibling conventions are
+defaults when the skill has no opinion — not overrides of explicit skill instructions.
 
 > **Example output:**
 >
@@ -613,12 +610,9 @@ endpoint contract against the backend repository before writing the call.
 If no Serena instance is available for the backend repository, use Grep, Glob, and Read
 on the backend repo to perform the same verification.
 
-> **Example output:**
->
-> **Cross-repo API verification results:**
-> - `GET /api/v2/sboms` — path ✓, method ✓, response shape ✓ (matches `SbomSummary` in `modules/fundamental/src/sbom/model/summary.rs`)
-> - `DELETE /api/v2/sbom/{id}` — path ✗ — **MISMATCH** (backend uses `/api/v2/sboms/{id}` with trailing 's', see `modules/fundamental/src/sbom/endpoints/mod.rs:48`)
-> - `GET /api/v2/risk-assessment/group/{groupId}` — sort order ✗ — **MISMATCH** (frontend picks `assessments[0]` expecting newest, but backend returns `ORDER BY created_at ASC` — oldest first, see `modules/risk/src/assessment/endpoints/mod.rs:92`)
+> **Example:** `GET /api/v2/sboms` — ✓. `DELETE /api/v2/sbom/{id}` — path mismatch
+> (backend uses `/sboms/{id}`). `GET /api/v2/risk-assessment/group/{id}` — sort mismatch
+> (frontend picks `[0]` expecting newest, backend returns oldest first).
 
 ### Code quality practices
 
@@ -652,10 +646,9 @@ validation style, error case coverage, and naming conventions found in sibling t
 rather than inventing new approaches.
 
 **Skill guidance overrides sibling patterns:** The test conventions from Step 4 are
-defaults — they apply when this step has no stronger opinion. The guidance below
-(value-based assertions, parameterized tests, test documentation) is the skill's explicit
-quality standard. When a sibling pattern conflicts with any guidance below, follow the
-skill guidance and note the deviation from the sibling pattern in your convention output.
+defaults. The guidance below (value-based assertions, parameterized tests, test
+documentation) is the skill's explicit quality standard and takes precedence over
+conflicting sibling patterns. Note any deviation in the convention output.
 
 **Prefer value-based assertions over length-only checks:** When verifying collections or
 response data, assert on the actual values — not just the count. Assert on specific items
@@ -773,34 +766,20 @@ commit.
 When the implementation removes code that references function parameters, scan the
 modified functions for parameters that are no longer used in the function body.
 
-1. **Identify candidate functions**: from the `git diff`, find functions where code
-   was removed (lines with `-` prefix). For each such function, check whether any
-   removed line was the only reference to a parameter.
-2. **Detect dead parameters**: look for indicators that a parameter is unused:
-   - Underscore-prefixed parameters (`_version`, `_ctx`) — languages like Rust and
-     Python use this convention to suppress unused-variable warnings, but the correct
-     fix is removal, not renaming.
-   - Compiler or linter warnings about unused parameters in the build output from
-     Step 7 or Step 9's CI checks.
-   - Parameters that appear in the function signature but have zero references in the
-     function body (search the function body for the parameter name).
-3. **Remove dead parameters**: for each confirmed dead parameter:
-   - Remove the parameter from the function signature.
-   - Use Serena's `find_referencing_symbols` (or Grep as fallback) to find all call
-     sites of the function.
-   - Update every call site to remove the corresponding argument.
-   - If the parameter is part of a trait or interface method, check whether other
-     implementations use it — only remove if no implementation references it.
-4. **Re-run tests**: after removing parameters and updating call sites, re-run the
-   relevant tests to confirm nothing broke.
+1. **Identify candidates**: from `git diff`, find functions where removed lines
+   contained the only reference to a parameter.
+2. **Detect dead parameters**: look for underscore-prefixed parameters (`_version`,
+   `_ctx`), compiler/linter warnings about unused parameters, or parameters with
+   zero references in the function body. The correct fix is removal, not renaming.
+3. **Remove dead parameters**: remove the parameter from the signature, use
+   `find_referencing_symbols` (or Grep) to find all call sites, and update every
+   caller to remove the corresponding argument. For trait/interface methods, only
+   remove if no implementation references the parameter.
+4. **Re-run tests** to confirm nothing broke.
 
-> **Example:**
->
-> A function `fn filter_by_status(items: &[Item], version: &str)` had its body
-> changed to no longer use `version`. The agent renamed it to `_version` to suppress
-> the compiler warning. The correct action is to remove the `version` parameter
-> entirely, update all callers from `filter_by_status(items, "1.0")` to
-> `filter_by_status(items)`, and re-run tests.
+> **Example:** `fn filter_by_status(items: &[Item], version: &str)` no longer uses
+> `version` after a code change. Remove the parameter and update all callers from
+> `filter_by_status(items, "1.0")` to `filter_by_status(items)`.
 
 ### Sensitive-pattern check
 
@@ -843,17 +822,9 @@ documented.
    is intentional. Do **not** proceed to commit until the user confirms or the
    missing use case is restored.
 
-> **Example:**
->
-> Original text: "Normalize the input by stripping leading/trailing whitespace."
-> (applies to both JSON and raw text)
->
-> Replacement text: "Normalize the input by parsing as JSON and re-serializing."
-> (applies only to JSON — raw text would fail)
->
-> **Flag:** "Raw text input" use case was covered by the original normalization
-> but is not addressed by the replacement. Confirm this is intentional or update
-> the text to handle both cases.
+> **Example:** Original: "Normalize by stripping whitespace" (covers JSON and raw text).
+> Replacement: "Normalize by parsing as JSON" (drops raw text support). Flag the
+> scope narrowing and confirm with the user.
 
 ### Eval coverage currency
 
@@ -929,14 +900,8 @@ not caught.
    descriptions, documentation), apply the same cross-section validation to those
    output files before committing.
 
-> **Example output:**
->
-> **Cross-section reference consistency results:**
-> - Entity `AdvisoryService` — **MISMATCH**:
->   - Files to Modify: `modules/fundamental/src/advisory/service/mod.rs`
->   - Implementation Notes: `modules/fundamental/src/advisory/service/advisory.rs`
->   - Resolution: actual file is `service/mod.rs` — Implementation Notes path is incorrect
-> - Entity `SbomParser` — paths consistent across sections ✓
+> **Example:** Entity `AdvisoryService` listed as `service/mod.rs` in Files to Modify
+> but `service/advisory.rs` in Implementation Notes — resolve by inspecting the actual codebase.
 
 ### Duplication check
 
@@ -1068,13 +1033,8 @@ the analysis across module boundaries to detect pattern inconsistencies.
    established cross-module pattern before proceeding. If the deviation is
    intentional, ask the user to confirm before proceeding.
 
-> **Example output:**
->
-> **Cross-module shared entity analysis results:**
-> - Entity `source_document` — 2 modules interact:
->   - `ingestor/graph/mod.rs`: uses nested transaction with `ON CONFLICT DO UPDATE` for duplicate-key handling
->   - `risk_assessment/service/mod.rs` (new code): uses plain `insert()` with no conflict handling — **ANOMALY**
->   - Recommendation: adopt the ingestor's `ON CONFLICT` pattern to handle duplicate inserts gracefully
+> **Example:** Entity `source_document` — `ingestor/graph/mod.rs` uses `ON CONFLICT DO UPDATE`
+> but new code in `risk_assessment/service/mod.rs` uses plain `insert()` — adopt the ingestor's pattern.
 
 #### Caller-site parity
 
@@ -1114,19 +1074,9 @@ other caller in the codebase uses that pattern.
 
 Output the contract verification, sibling parity, cross-module shared entity, and caller-site parity results to the user before proceeding.
 
-> **Example output:**
->
-> **Contract & sibling parity results:**
-> - `StorageProvider` implements `Provider` trait — `get()` ✓, `list()` ✓, `delete()` ✓, `update()` ✗ — **GAP** (missing `update` method)
-> - Sibling parity with `S3Provider`, `GcsProvider`:
->   - Retry logic ✓ (all siblings use exponential backoff)
->   - Logging ✗ — `StorageProvider` missing `info!()` on successful operations — **GAP**
->   - Config options ✓ (all accept `ProviderConfig`)
-> - Caller-site parity for `useDeleteSbomMutation`:
->   - 3 existing callers found: `SbomList.tsx`, `SbomDetail.tsx`, `SbomActions.tsx`
->   - Success handling: all use `queryClient.invalidateQueries()` + toast notification
->   - New code uses `window.location.reload()` — **ANOMALY** (0 of 3 callers use this pattern)
->   - Error handling ✓ (all callers including new code use `onError` toast)
+> **Example:** Contract: `StorageProvider` missing `update()` from `Provider` trait.
+> Sibling parity: `StorageProvider` missing `info!()` logging present in `S3Provider`/`GcsProvider`.
+> Caller-site: new code uses `window.location.reload()` but 3 existing callers use `queryClient.invalidateQueries()`.
 
 ## Step 10 – Commit and Push
 
