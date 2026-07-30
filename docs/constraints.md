@@ -174,6 +174,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 5.11 | `implement-task` MUST add a doc comment to every test function it creates, regardless of sibling test documentation patterns. | `implement-task/SKILL.md` — Step 7 |
 | 5.12 | `implement-task` MUST add given-when-then inline comments to non-trivial test functions (tests with distinct setup, action, and assertion phases). | `implement-task/SKILL.md` — Step 7 |
 | 5.13 | `implement-task` MUST NOT add given-when-then comments to trivial tests (single assertion, no distinct setup phase). | `implement-task/SKILL.md` — Step 7 |
+| 5.14 | When implementing batch operations that target a described subset of records, `implement-task` MUST verify that the query or iteration scope is filtered accordingly — broader queries MUST be flagged for review when a narrower query is possible at the data source level. | `implement-task/SKILL.md` — Step 9 |
 
 ---
 

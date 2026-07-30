@@ -138,6 +138,19 @@
         "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
         "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style"
       ]
+    },
+    {
+      "id": 11,
+      "prompt": "Implement task TC-9209. The task description is in task-query-scope.md, the target repository structure is in repo-backend.md, and the project CLAUDE.md is in claude-md-mock.md. Do NOT actually modify repository files or call external tools (Jira, git, Serena). Instead, write your implementation plan to the workspace outputs/ directory: write outputs/plan.md describing which files you would modify and create, what changes you would make to each, and how you would query the database for the migration. Write outputs/query-scope.md documenting your query-scope verification analysis — what the task targets, what query scope you chose, and why.",
+      "expected_output": "An implementation plan where the query-scope analysis identifies that the task targets only SPDX SBOMs (a subset), verifies that the sbom entity's labels column supports filtering by document type, and plans to use a filtered query (e.g., filtering by labels->>'type' = 'spdx') rather than loading all documents. The plan should explicitly reject using an unfiltered query like Sbom::find() or iterating all documents, citing the performance impact on production environments with hundreds of thousands of CycloneDX documents.",
+      "files": ["files/task-query-scope.md", "files/repo-backend.md", "files/claude-md-mock.md"],
+      "assertions": [
+        "The query-scope analysis identifies that the task targets a subset — specifically 'SPDX SBOMs' not all SBOMs — by extracting subset-indicating language from the Description section",
+        "The query-scope analysis verifies that the sbom entity's labels column (jsonb) supports filtering by document type at the database level, rather than requiring application-level filtering",
+        "The plan uses a filtered query to select only SPDX documents (e.g., WHERE labels->>'type' = 'spdx' or equivalent ORM filter) instead of loading all documents and discarding CycloneDX ones in application code",
+        "The plan or query-scope analysis explicitly mentions the performance impact of loading all documents — referencing that production environments have hundreds of thousands of non-target CycloneDX records",
+        "The plan does NOT propose using an unfiltered query like Sbom::find() or Document::all() followed by an application-level type check to discard CycloneDX documents"
+      ]
     }
   ]
 }
