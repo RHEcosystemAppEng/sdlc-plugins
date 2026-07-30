@@ -156,8 +156,9 @@ plan-feature created it. This uses the digest protocol defined in
    `shared/description-digest-protocol.md`. If multiple comments match (e.g., from
    plan-feature re-runs), select the most recent one by `created` timestamp.
 
-3. **If no digest comment found**: log a warning and proceed normally — do not block
-   execution:
+3. **If no digest comment found**: log a warning and proceed normally (backward
+   compatibility — tasks created before digest tracking was introduced have no
+   digest comment). Do not block execution:
 
    > "No description digest found — skipping integrity check. This task may have
    > been created before digest tracking was introduced."
