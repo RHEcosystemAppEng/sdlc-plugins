@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+      "passed": true,
+      "evidence": "discovery-listing.md explicitly states 'These values are extracted from the Security Configuration section of the project CLAUDE.md (Jira Configuration: Project key = TC; Security Configuration: Vulnerability issue type ID = 10024).' All three JQL queries use 'project = TC AND issuetype = 10024', matching the values in claude-md-security-config.md (Project key: TC, Vulnerability issue type ID: 10024)."
+    },
+    {
+      "text": "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (§1.48)",
+      "passed": true,
+      "evidence": "discovery-listing.md contains three distinct JQL queries: (1) 'labels NOT IN (ai-cve-triaged)' for untriaged, (2) 'labels IN (ai-cve-triaged) AND status = New' for triaged-but-new, (3) 'labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA)' for Ready for QA candidates. All three match the required structure exactly."
+    },
+    {
+      "text": "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
+      "passed": true,
+      "evidence": "discovery-listing.md uses three clearly separated sections with H2 headers and horizontal rules: '## 1. Untriaged Issues' (4 issues), '## 2. Triaged but still New' (1 issue), and '## 3. Ready for QA' (3 candidates, 1 qualifying)."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": true,
+      "evidence": "All tables in discovery-listing.md include columns for Key (e.g., TC-9001), Status (e.g., New), CVE ID (e.g., CVE-2026-40112), Summary (e.g., 'h2 - HTTP/2 rapid reset vulnerability [rhtpa-2.2]'), and Created (e.g., 2026-06-08). The Ready for QA table also includes these fields plus additional columns for remediation task status."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "status-handling.md shows TC-9001, TC-9002, and TC-9004 (all New) with handling 'Proceed with full triage (default path)'. TC-9003 (In Progress) receives 'WARNING — This issue is already in In Progress. It may be actively worked on. Before proceeding, the engineer must choose: 1. Proceed with triage anyway 2. Skip this issue.' The summary table also marks TC-9003 as 'Warning: active work — engineer must confirm before proceeding'."
+    },
+    {
+      "text": "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)",
+      "passed": true,
+      "evidence": "discovery-listing.md shows TC-9020 as 'Ready for QA? Yes' with TC-9021 (Done) and TC-9022 (Closed). TC-9023 is marked 'No - TC-9025 still In Progress' and listed under 'Excluded from Ready for QA' because 'linked Task TC-9025 is still In Progress'. TC-9026 is marked 'No - no remediation tasks linked' and excluded because 'no linked Tasks with link type Depend exist'."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

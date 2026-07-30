@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
+      "passed": true,
+      "evidence": "version-impact.md contains a table with 2.1.0 and 2.1.1 marked YES (both showing h2 0.4.5 below fix threshold 0.4.8), and all 2.2.x versions (2.2.0 through 2.2.4) marked NO (all shipping h2 >= 0.4.8). Summary states 'Mixed impact across streams.' Lock file evidence is cited via h2 versions extracted from pinned build tags (e.g., 'v0.3.8', 'v0.4.5')."
+    },
+    {
+      "text": "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md proposes 'Proposed: [RHTPA 2.1.0, RHTPA 2.1.1]' -- only 2.1.x versions. RHTPA 2.2.0 is explicitly removed ('ships h2 0.4.8 (at fix threshold)'). RHTPA 2.1.1 is added ('ships h2 0.4.5 (below fix threshold 0.4.8)'). The rationale table lists all 7 versions and only includes 2.1.0 and 2.1.1 in the 'Include?' column."
+    },
+    {
+      "text": "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 8 Case A scoping)",
+      "passed": true,
+      "evidence": "remediation.md creates exactly two tasks, both scoped to 2.1.x: Task 1 targets release/0.3.z (upstream backport), Task 2 targets rhtpa-release.0.3.z (downstream propagation). A dedicated section 'No Remediation for 2.2.x Stream' states 'No tasks are created for this stream' with a table confirming all 2.2.x versions ship h2 >= 0.4.8."
+    },
+    {
+      "text": "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
+      "passed": true,
+      "evidence": "data-extraction.md under 'Stream Scope Resolution' states: 'The issue summary... contains no stream suffix in brackets. Therefore this issue is unscoped -- it covers all configured version streams.' It lists both streams (2.1.x and 2.2.x) and states 'Both streams will be analyzed in Step 2.' The version-impact.md table then checks all 7 versions spanning both streams (2.1.0, 2.1.1, 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4)."
+    },
+    {
+      "text": "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 8 Case B applies only to scoped issues)",
+      "passed": true,
+      "evidence": "remediation.md explicitly states: 'Since the issue is unscoped (covers all streams), Case A (cross-stream impact) does not apply. An unscoped issue already spans all streams, so there are no \"other streams outside this issue's scope.\"' No cross-stream impact notice appears anywhere in the outputs. The reasoning matches the assertion: unscoped issues cover all streams by definition, so a cross-stream notice is unnecessary."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

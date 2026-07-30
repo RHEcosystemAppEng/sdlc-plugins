@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md lines 56-69 contain a section titled 'Assertion style (sibling pattern -- CONFLICT WITH SKILL GUIDANCE)' that explicitly identifies both patterns with code examples: '.filter(|a| a.severity == \"Critical\").any(|_| true)' and '.filter(|s| s.name.contains(\"openssl\")).count(); assert!(matching > 0, ...)'. The section header on line 58 explicitly names 'tests/api/advisory.rs' and 'tests/api/sbom.rs' as the sources."
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md line 56 titles the section 'Assertion style (sibling pattern -- CONFLICT WITH SKILL GUIDANCE)'. Lines 72-73 quote the skill guidance: 'Prefer value-based assertions over length-only checks: When verifying collections or response data, assert on the actual values -- not just the count.' Line 75 explicitly frames this as a 'Resolution' of the conflict between the two."
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md line 75 states: 'The skill explicitly states \"Skill guidance overrides sibling patterns\" and \"Skill guidance takes precedence over sibling patterns.\" Therefore, the new tests for TC-9208 will NOT follow the sibling .any() / .count() > 0 existence-check pattern.' Lines 78-83 then list what is adopted from siblings (non-conflicting aspects) versus line 85 listing what is overridden per skill guidance, establishing siblings as defaults that yield to explicit skill instructions."
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md Test 1 (lines 55-66) uses assert_eq!(summary.permissive.count, 2), assert!(summary.permissive.licenses.contains(&\"MIT\".to_string())), assert_eq!(summary.copyleft.licenses, vec![\"GPL-3.0\".to_string()]), assert_eq!(summary.unknown.licenses, vec![\"UnknownLicense-1.0\".to_string()]). Test 4 (lines 143-155) uses assert_eq!(summary.permissive.count, 1) and assert_eq!(summary.permissive.licenses, vec![\"MIT\".to_string()]). No test uses .any() or .count() > 0 patterns. Lines 9-11 explicitly state: 'all assertions in these tests will use assert_eq! to check exact counts and specific license identifiers.'"
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md lines 19-24 explicitly list adopted sibling conventions: status code checks ('assert_eq!(resp.status(), StatusCode::OK)'), response deserialization into typed structs, test naming ('test_<endpoint>_<scenario>' pattern), database setup using shared test infrastructure, no parameterized tests. The test file location follows siblings (tests/api/). Test names follow the pattern: test_license_summary_valid_sbom, test_license_summary_nonexistent_sbom, etc. Lines 9-11 state that only assertion style is overridden. Lines 85-86 in conventions.md confirm: 'What we override (per skill guidance): Assertion style: use assert_eq! with specific values instead of .filter().any() / .count() > 0'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md documents two existing Depend links: TC-8100 (upstream backport, In Progress) and TC-8101 (downstream propagation, Open). idempotency-check.md section 4 states 'Detected: YES -- two Depend links exist on the issue' and concludes 'Action: SKIP -- remediation tasks already exist and are linked. Creating duplicates would violate the skill's guardrails.' triage-outcome.md confirms in the step table: 'Step 8 | Remediation task creation | Existing Depend links to TC-8100/TC-8101 detected | Skip task creation' and further explains that creating duplicates would 'confuse engineers who are already working on TC-8100' and 'break the blocking relationship.'"
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 21 shows Labels include 'ai-cve-triaged'. idempotency-check.md section 1 states 'Detected: YES -- the label ai-cve-triaged is present in the issue's Labels field' and 'Action: SKIP -- no label mutation needed.' triage-outcome.md confirms: 'Post-Triage | Add ai-cve-triaged label | Label already present | Skip (Jira deduplicates).' The mutations-avoided table counts 1 label addition avoided."
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md section 2 states 'Detected: YES -- the issue status is In Progress, which is past the New and Assigned states' and explicitly warns: 'This issue is already in In Progress. It may be actively worked on.' The action is 'SKIP -- no status transition needed. The issue is already beyond Assigned.' triage-outcome.md confirms: 'Step 0.7 | Status transition to Assigned | Status is already In Progress (past Assigned) | Skip transition.' Both conditions of the assertion are met: a warning is issued AND the transition is skipped."
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 40 documents existing comment #1 as a description digest comment with marker 'sha256-md:a1b2c3d4...' posted by sdlc-workflow/triage-security. idempotency-check.md section 5 states 'Detected: YES -- comment #1 contains the digest marker [sdlc-workflow] Description digest: sha256-md:...' and concludes 'Action: SKIP -- digest comment already exists.' The pre-existing artifacts summary table confirms: 'Description digest comment | YES | SKIP.'"
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 41 documents existing comment #2 as a post-triage summary with Comment Footnote. idempotency-check.md section 6 states 'Detected: YES -- comment #2 is a full post-triage summary documenting version impact, Affects Versions correction, remediation tasks created, and the transition to In Progress. It includes the Comment Footnote referencing sdlc-workflow/triage-security v0.11.1.' Action: 'SKIP -- post-triage summary already exists.' triage-outcome.md confirms: 'Post-Triage | Post summary comment | Existing summary comment detected | Skip duplicate comment.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md lines 54-57: 'The `version_filter` parameter is only used to apply a `VersionMatches` filter in the query pipeline. Removing the filter logic makes the parameter dead. Per the skill's dead parameter detection guidance (Step 9), the correct fix is removal, not renaming to `_version_filter`.' parameter-cleanup.md lines 22-26: 'The Rust compiler will emit a warning: `unused variable: version_filter`. This confirms the parameter is dead. Per the skill's guidance: \"The correct fix is removal, not renaming.\" Do NOT prefix the parameter with an underscore (`_version_filter`). Remove it entirely from the function signature.'"
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md lines 30-52 show removing 'version_filter: &str' from the signature with before/after code blocks. Line 41: 'Remove the `version_filter: &str` parameter from the signature entirely.' parameter-cleanup.md Step 2 (lines 58-81) explicitly titled 'Remove the parameter from the signature' shows the updated signature without version_filter."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md identifies all three: Section 2 'modules/fundamental/src/sbom/endpoints/list.rs' (lines 59-80), Section 3 'modules/search/src/service/mod.rs' (lines 82-98), Section 4 'tests/api/sbom.rs' (lines 100-113). parameter-cleanup.md confirms all three as Call site 1 (list.rs, lines 89-108), Call site 2 (search/service/mod.rs, lines 110-125), Call site 3 (tests/api/sbom.rs, lines 127-139). Summary table on lines 180-185 lists all four files including the three call sites."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md lines 20-26: 'The Rust compiler will emit a warning: `unused variable: version_filter`. This confirms the parameter is dead. Per the skill's guidance: \"The correct fix is removal, not renaming.\" Do NOT prefix the parameter with an underscore (`_version_filter`). Remove it entirely from the function signature.' The document connects the compiler warning to the underscore convention (implying underscore suppresses it) and 'Remove it entirely from the function signature' addresses the API surface concern. plan.md line 57 reinforces: 'the correct fix is removal, not renaming to `_version_filter`.'"
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md Verification Strategy (lines 130-140): '1. Run `cargo check` to verify all code compiles after removing the parameter and updating call sites. 2. Run `cargo test` to verify all tests pass...' parameter-cleanup.md Step 6 'Re-run tests' (lines 167-177): 'After all call sites are updated: 1. `cargo check` -- verify compilation succeeds with zero errors... 2. `cargo test` -- verify all remaining tests pass.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
