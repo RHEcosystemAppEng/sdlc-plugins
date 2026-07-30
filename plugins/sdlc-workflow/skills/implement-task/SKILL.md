@@ -922,7 +922,7 @@ When Bookend Type is `merge-branch`:
 - Do not guess — use the Serena instance specified in the project's **Repository Registry** (CLAUDE.md) for the target repo, with tools like `get_symbols_overview`, `find_symbol`, `find_referencing_symbols` to inspect code before modifying it. Check the **Code Intelligence** section for per-instance limitations. Fall back to Read/Grep/Glob for repos without a Serena instance.
 - Follow the Implementation Notes closely — they reference real code patterns.
 - If the structured description is incomplete, ask the user for clarification and **stop execution**. Do not draft an implementation plan, create branches, or proceed with any subsequent steps until the user provides the missing information.
-- Keep changes scoped to what the task describes — no unrelated refactoring.
+- Keep changes strictly within **Files to Modify** and **Files to Create** — do not add, plan, or propose modifications to files outside these sections. If an out-of-scope file needs changes, flag it in Step 9's scope containment check for user approval.
 - Every commit must reference the Jira issue ID.
 - If the same test fails 3 times with the same error, stop and ask the user for guidance — do not retry the same approach.
 - If the same file is edited more than 5 times for the same change, stop and reassess your approach — present the problem and proposed alternatives to the user.
