@@ -959,55 +959,29 @@ lifecycle to catch partial implementations:
    connections before proceeding. If the missing stage is intentionally out of scope
    for this task, ask the user to confirm.
 
-Output the traced data flows and their completeness status to the user before proceeding.
+Output the traced data flows and their completeness status to the user.
 
-> **Example output:**
->
-> **Data-flow trace results:**
-> - `POST /api/v2/sbom` → parse request ✓ → validate ✓ → persist to DB ✓ → return response ✓ — **COMPLETE**
-> - `parseLicense()` → extract license ID ✓ → resolve to SPDX ✓ → attach to package ✗ — **INCOMPLETE** (output not connected)
+> **Example:** `POST /api/v2/sbom` → parse ✓ → validate ✓ → persist ✓ → respond ✓ — **COMPLETE**
+> `parseLicense()` → extract ✓ → resolve ✓ → attach ✗ — **INCOMPLETE** (not connected)
 
 ### Query-scope verification
 
-When the implementation writes batch operations — data migrations, batch updates,
-or any code that iterates database records — verify that the query or iteration
-scope matches the target scope described in the task.
+When implementing batch operations (data migrations, batch updates, or any code
+iterating database records), verify the query scope matches the task's target scope.
 
-1. **Extract the target scope**: review the task's **Description** section for
-   language that restricts the operation to a subset of records. Look for:
-   - Type qualifiers (e.g., "all SPDX SBOMs", "CycloneDX documents only")
-   - Status filters (e.g., "unprocessed records", "active users")
-   - Date ranges (e.g., "created before v2 migration", "last 30 days")
-   - Category selectors (e.g., "high-severity advisories", "external packages")
-2. **Inspect the query scope**: for each batch operation in the implementation,
-   examine the database query, ORM call, or iteration source. Determine whether
-   it fetches all records or applies a filter matching the target scope.
-3. **Check for scope mismatch**: if the task targets a subset but the query
-   loads all records (e.g., `Document::all()` when only SPDX documents are
-   needed), investigate whether the data source supports filtering at the query
-   level:
-   - Check for database columns, indexes, or labels that can discriminate the
-     target subset (e.g., `labels->>'type' = 'spdx'`, `status = 'active'`)
-   - Check for query builder parameters or ORM scopes that support the filter
-   - Check whether the API endpoint accepts filter parameters that would narrow
-     the result set
-4. **Flag broader queries**: if a narrower query is possible but the
-   implementation uses a broader one, flag it for review. Include:
-   - What the task targets (e.g., "only SPDX SBOMs")
-   - What the query fetches (e.g., "all documents regardless of type")
-   - The available filter mechanism (e.g., "`labels->>'type'` column supports
-     filtering by document type")
-   - The performance impact (e.g., "production environments have hundreds of
-     thousands of non-target records that would be loaded and discarded")
-5. **Accept intentional broad queries**: if the implementation deliberately
-   loads all records and filters in application code (e.g., because the filter
-   cannot be expressed at the query level, or because the full dataset is needed
-   for cross-record validation), document the rationale in a code comment.
+1. **Extract target scope**: scan the task **Description** for subset-restricting
+   language — type qualifiers, status filters, date ranges, category selectors.
+2. **Compare query scope**: check whether each batch query filters to the target
+   subset or loads all records indiscriminately.
+3. **Flag scope mismatches**: if the task targets a subset but a narrower query is
+   possible at the data source (via columns, indexes, ORM scopes, or API
+   parameters), flag for review with: target scope, actual query scope, available
+   filter, and performance impact.
+4. **Accept intentional broad queries**: when filtering cannot be expressed at the
+   query level or the full dataset is needed, document the rationale in a comment.
 
 > **Example:** Task: "re-process all SPDX SBOMs". Query: `Document::all()`.
-> Flag: database column `labels->>'type'` supports filtering — use
-> `Document::find_by_type("spdx")` instead of loading all documents and
-> discarding non-SPDX ones in application code.
+> Flag: `labels->>'type'` supports filtering — use filtered query instead.
 
 ### Contract & sibling parity
 
