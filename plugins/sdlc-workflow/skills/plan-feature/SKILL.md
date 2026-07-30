@@ -855,6 +855,55 @@ convention reference at all, convention enrichment was skipped — go back and
 apply the convention-aware enrichment process (above) to each task before
 proceeding. Convention enrichment is not optional when conventions exist.
 
+### Cross-cutting call-site enumeration
+
+When a task introduces a cross-cutting change — a parameter, flag, config option,
+behavior, or interface modification that must propagate to multiple consumers —
+enumerate all affected call sites before writing the task's **Files to Modify** and
+**Acceptance Criteria** sections.
+
+1. **Detect cross-cutting changes**: review each planned task for changes that affect
+   multiple consumers. Indicators include:
+   - Adding a parameter, flag, or option that multiple handlers, commands, or
+     endpoints must accept
+   - Modifying a function signature that has multiple callers
+   - Adding or renaming a configuration key consumed by multiple modules
+   - Changing a shared interface, trait, or type that multiple implementations conform to
+   - Adding middleware, decorators, or hooks that must be applied at multiple registration
+     points
+
+2. **Enumerate all affected call sites**: when a cross-cutting change is detected, use
+   Serena (`find_referencing_symbols`, `search_for_pattern`) or Grep/Glob to exhaustively
+   search for every consumer of the affected surface. Examples:
+   - For CLI flags: grep the CLI registration file for all command definitions that call
+     functions in scope for the change
+   - For API parameters: search for all route handlers that accept or propagate the
+     parameter
+   - For function signature changes: use `find_referencing_symbols` on the function to
+     find all callers
+   - For config keys: search for all consumers of the configuration value
+   - For interface changes: find all implementations of the interface
+
+3. **Include every call site in the task description**:
+   - **Files to Modify** must list every file containing an affected call site —
+     not a partial subset
+   - **Acceptance Criteria** must include one item per affected call site, so the
+     implementer has a complete checklist
+   - **Implementation Notes** should describe the propagation pattern once and
+     reference the enumerated list
+
+4. **Flag incomplete enumerations**: if the search reveals more call sites than
+   expected from the feature description, include all of them — do not assume the
+   feature description's partial list is exhaustive. The codebase search is
+   authoritative.
+
+> **Example:** A feature adds `--providers` and `--sources` flags to a CLI tool.
+> The feature description mentions "stack and component commands," but the CLI
+> registration file defines four commands: `stack`, `component`, `stack-batch`,
+> and `image`. The task must list all four in Files to Modify and include one
+> acceptance criterion per command — not just the two the feature description
+> mentioned.
+
 ### Eval coverage propagation
 
 For each task, apply the eval coverage propagation from
