@@ -68,6 +68,28 @@ Not applicable — this is a documentation repository with no runtime code.
     - **Correct**: `Json` extractor for response serialization (Axum)
     - **Incorrect**: `HttpResponse::Ok().json(...)` (Actix-Web response pattern)
 
+## CI Checks
+
+All CI checks must pass before merging. Run locally before pushing:
+
+```bash
+uvx skillsaw
+```
+
+### Skill Lint (Skillsaw)
+
+The Skillsaw linter validates agent instruction files. Token budget limits and rule configuration are defined in `.skillsaw.yaml` — check that file for current thresholds. CI workflow: `.github/workflows/skillsaw.yml` (strict mode disabled — only error-level findings fail CI).
+
+When modifying SKILL.md files, run `uvx skillsaw` locally to verify token counts stay within the configured limits before committing.
+
+### Plugin Validation
+
+```bash
+claude plugin validate plugins/sdlc-workflow
+```
+
+Validates plugin manifests under `plugins/`. CI workflow: `.github/workflows/validate-plugins.yml`.
+
 ## Commit Messages
 
 - **Format**: Conventional Commits — `type(scope): description`
