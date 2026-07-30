@@ -402,6 +402,9 @@ before skipping to Step 10.
 
 The **Description** section is your primary specification — implement exactly what it describes.
 Use **Files to Modify**, **Files to Create**, and **API Changes** as your working scope.
+Do not plan or implement changes to files outside these sections — if you discover a
+file that seems to need modification, flag it in Step 9's scope containment check
+instead of adding it to your plan.
 Follow the **Implementation Notes** for patterns and code references on how to implement the changes.
 
 **Reuse first:** Before writing new logic, check whether the Implementation Notes list reusable
