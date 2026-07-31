@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md Step 4 lines 65-67: 'Both `describing_packages()` and `suppliers()` are private functions (declared with `fn`, not `pub fn`)' in file '`modules/ingestor/src/graph/sbom/mod.rs`'. Step 6 lines 120-125 describe changing them from `fn` to `pub fn`. reuse-decision.md lines 5-9 also identify them as private in the same file path."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md Step 4 lines 72-77: '`migration/Cargo.toml` — Read to verify dependency relationships. **Critical finding**: The migration crate already depends on `trustify-module-ingestor`' with TOML snippet showing the dependency. Step 6 line 112: 'Verified that `migration/Cargo.toml` already depends on `trustify-module-ingestor`'. reuse-decision.md Section 1 lines 22-29: 'Verified that `migration/Cargo.toml` already declares a dependency on `trustify-module-ingestor`'."
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md line 14: 'Recommendation: Make `describing_packages()` and `suppliers()` public (`pub fn`) in `modules/ingestor/src/graph/sbom/mod.rs` and import them in the migration crate.' Line 16: 'Duplication is explicitly rejected.' Section 1 lines 28-29: 'Since the migration crate already depends on the ingestor crate, making the functions public introduces zero new coupling. The dependency relationship is already established, so reuse carries no architectural cost.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "plan.md line 114: 'Duplication is explicitly rejected: Copying or inlining the function bodies into the migration crate would violate DRY and create a maintenance burden where bug fixes would need to be applied in two places.' reuse-decision.md line 16: 'Duplication is explicitly rejected. The function bodies must not be copied or inlined into the migration crate.' Section 4 'Why Not Duplicate' provides further reasoning. The plan proposes only changing visibility to pub fn and importing, never copying function bodies."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md Section 2 'DRY Principle' line 32: 'The DRY (Don't Repeat Yourself) principle dictates that every piece of knowledge should have a single, authoritative representation.' Line 35: 'Making the functions public ensures that future bug fixes, performance improvements, or behavioral changes to the extraction logic apply in exactly one place.' Also plan.md line 113: 'This follows the DRY principle and ensures future bug fixes to the extraction logic apply in one place.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

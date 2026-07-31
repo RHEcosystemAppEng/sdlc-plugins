@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
+      "passed": true,
+      "evidence": "version-impact.md Step 2.4 shows a Version Impact Table with 2.1.0 and 2.1.1 marked **YES** (h2 0.4.5 < 0.4.8) and all 2.2.x versions (2.2.0 through 2.2.4) marked NO. Evidence is based on lock file extraction: Step 2.3 extracts h2 versions from 'git show <tag>:Cargo.lock' for each pinned commit tag. Summary states: 'Stream 2.1.x: ALL versions affected (2.1.0, 2.1.1 ship h2 0.4.5)' and 'Stream 2.2.x: NO versions affected (all versions ship h2 >= 0.4.8)'."
+    },
+    {
+      "text": "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md Step 3.2 states: 'Proposed (lock-file-verified): RHTPA 2.1.0, RHTPA 2.1.1'. The diff explicitly removes RHTPA 2.2.0: '- RHTPA 2.2.0 (REMOVE -- h2 0.4.8 is NOT affected, ships the fixed version)' and adds RHTPA 2.1.1: '+ RHTPA 2.1.1 (ADD -- h2 0.4.5 IS affected, < 0.4.8)'. The rationale confirms: 'RHTPA 2.2.1 through 2.2.4: Not included -- all ship h2 >= 0.4.8'. The proposed Jira mutation sets versions to only RHTPA 2.1.0 and RHTPA 2.1.1."
+    },
+    {
+      "text": "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 8 Case A scoping)",
+      "passed": true,
+      "evidence": "remediation.md Case B section explicitly states: 'Remediation tasks are created **only for stream 2.1.x**. Stream 2.2.x already ships the patched version and requires no action.' Two tasks are created, both scoped to 2.1.x: Task 1 (upstream backport targeting release/0.3.z branch) and Task 2 (downstream propagation for rhtpa-release.0.3.z). No tasks reference stream 2.2.x or its branches. The impact assessment confirms: 'Stream 2.1.x: AFFECTED... remediation required' and 'Stream 2.2.x: NOT AFFECTED... no remediation needed'."
+    },
+    {
+      "text": "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
+      "passed": true,
+      "evidence": "data-extraction.md Stream Scope Resolution section states: 'The issue summary... contains **no stream suffix** in brackets. Therefore this issue is treated as **unscoped** -- it covers all streams. The version impact analysis will check ALL versions across ALL configured streams (2.1.x and 2.2.x).' The extracted data shows 'Product version (PSIRT-claimed): _(no stream suffix -- unscoped)_'. version-impact.md confirms: 'Since the issue is **unscoped** (no stream suffix), ALL versions across ALL streams are included in the analysis.' The impact table includes all 7 versions: 2 from stream 2.1.x and 5 from stream 2.2.x."
+    },
+    {
+      "text": "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 8 Case B applies only to scoped issues)",
+      "passed": true,
+      "evidence": "remediation.md has an explicit section '## Cross-Stream Impact (Case A) -- Not Applicable' that states: 'Case A is **skipped** for this issue. The guard condition states: \"Case A applies exclusively to stream-scoped issues (those whose summary contains a stream suffix). Unscoped issues cover all streams by definition -- there are no 'other streams outside this issue's scope,' so the cross-stream impact check is not applicable.\"' and 'Since TC-8004 has no stream suffix (unscoped), Case A does not apply. No cross-stream impact notice is generated.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

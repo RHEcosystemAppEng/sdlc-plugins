@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 1: \"After removing the filtering logic, the `version_filter` parameter is no longer referenced anywhere in the method body. This makes it a dead parameter.\" and \"The `version_filter: &str` parameter is removed completely from the function signature. It is NOT renamed to `_version_filter` -- renaming to an underscore-prefixed name would suppress the compiler warning but leave unnecessary API surface. Dead parameters must be removed, not hidden.\" Step 9 Dead parameter detection: \"The correct fix is REMOVAL, not renaming to `_version_filter`.\""
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 1 shows the updated signature explicitly: \"Updated signature after dead parameter removal:\" followed by the signature without version_filter. Line 131: \"The `version_filter: &str` parameter is removed completely from the function signature.\" Step 9 Dead parameter detection step 3: \"Remove `version_filter: &str` from the `SbomService::list` function signature.\""
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md identifies all 3 call sites: (1) File 2 - endpoint handler in list.rs with before/after code showing removal of version_filter argument, (2) Call site 3 - modules/search/src/service/mod.rs with before/after code, (3) File 3 - tests/api/sbom.rs with before/after code. Step 9 Dead parameter detection step 3 also lists all three: \"modules/fundamental/src/sbom/endpoints/list.rs -- remove version_filter argument\", \"modules/search/src/service/mod.rs -- remove empty string argument\", \"tests/api/sbom.rs -- remove version_filter arguments from all test calls\"."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md section \"Why Removal, Not Underscore Prefix\": \"Dead parameters should be **removed from the function signature entirely**, not prefixed with an underscore (e.g., `_version_filter`).\" Subsection \"The underscore prefix is the wrong fix\": \"Prefixing a parameter with an underscore (`_version_filter`) suppresses the Rust compiler's unused-variable warning, but it does NOT fix the underlying problem.\" Bullet: \"**Unnecessary API surface**: Every caller must still pass a value for the dead parameter, even though it is ignored.\""
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md Step 9 Dead parameter detection step 4: \"**Re-run tests** to confirm nothing broke after the parameter removal and call site updates. Run `cargo test` and verify all tests pass.\" Also parameter-cleanup.md Verification section: \"After removing the parameter and updating all call sites, re-run the full test suite to confirm nothing broke: `cargo test`\" with detailed verification points."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.00
+  }
+}

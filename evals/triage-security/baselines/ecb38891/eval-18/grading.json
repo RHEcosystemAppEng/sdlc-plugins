@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 1 explicitly detects TC-8100 and TC-8101 via the issue's issuelinks Depend links: 'TC-8100 | Backport quinn-proto fix to >= 0.11.14 on release/0.4.z [rhtpa-2.2] | In Progress' and 'TC-8101 | Propagate quinn-proto bump to rhtpa-server release branch [rhtpa-2.2] | Open'. Decision states: 'Remediation tasks already exist for this stream. Skipping remediation task creation -- creating new tasks would produce duplicates.' Five skipped mutations listed including jira.create_issue for both tasks. triage-outcome.md Step 8 confirms: 'No new remediation tasks are created -- creating them would produce duplicates.'"
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 2 detects ai-cve-triaged in labels array: 'Labels: [\"CVE-2026-31812\", \"pscomponent:org/rhtpa-server\", \"ai-cve-triaged\"]'. Decision: 'Label already present. Skipping label addition -- adding it again would be a no-op but the mutation attempt is unnecessary.' Skipped mutation: 'jira.edit_issue(TC-8001, labels=[..., \"ai-cve-triaged\"])'. triage-outcome.md confirms: 'ai-cve-triaged label: Already present in the issue's labels array. The triage does NOT attempt to add it again.'"
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 3 detects In Progress status: 'The issue is already in In Progress status, which is a post-triage state. The triage does NOT attempt to transition the status again.' Includes warning: 'This issue is already in In Progress. It may be actively worked on.' Two skipped mutations listed: transition to Assigned (already past it) and transition to In Progress (already there). triage-outcome.md confirms: 'The issue is already In Progress. No transition is attempted.'"
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 4 detects the existing digest comment matching marker prefix '[sdlc-workflow] Description digest:' with hash sha256-md:a1b2c3d4e5f6..., posted 2026-07-01T10:00:00Z. Decision: 'Description digest comment already exists on the remediation tasks. Posting a new digest comment would create duplicates. Skipping.' Skipped mutation: 'jira.add_comment with [sdlc-workflow] Description digest: marker'. triage-outcome.md confirms: 'A digest comment already exists on the CVE issue (created 2026-07-01T10:00:00Z). No duplicate digest comment is posted.'"
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Section 5 detects the existing summary comment (created 2026-07-01T10:01:00Z) documenting version impact, Affects Versions correction, label addition, remediation task keys, status transition, and Comment Footnote. Decision: 'Post-triage summary comment already exists. Posting a new summary would create a duplicate comment with redundant information. Skipping.' Skipped mutation: 'jira.add_comment(TC-8001, <post-triage-summary>)'. triage-outcome.md confirms: 'A summary comment already exists (created 2026-07-01T10:01:00Z)... No duplicate summary comment is posted.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

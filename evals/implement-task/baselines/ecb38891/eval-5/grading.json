@@ -1,0 +1,45 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references checking out TC-9005 (the Target Branch) before creating the task branch — includes git checkout TC-9005 or equivalent, not git checkout main (constraint 3.1, Step 5)",
+      "passed": true,
+      "evidence": "plan.md Step 5 lines 92-94 show: 'git checkout TC-9005 / git pull / git checkout -b TC-9205'. Line 97 states: 'This checks out the feature branch TC-9005 first, pulls the latest changes, then creates a new task branch TC-9205 based on TC-9005.' No reference to 'git checkout main' appears in branch operations."
+    },
+    {
+      "text": "The plan specifies opening a PR with --base TC-9005 targeting the feature branch, not --base main (Step 10)",
+      "passed": true,
+      "evidence": "plan.md Step 10 PR Creation line 193 shows: 'gh pr create --base TC-9005 --title \"feat(migration): add migration to drop advisory status column\"'. Line 205 states: 'Note: `--base TC-9005` ensures the PR targets the feature branch, not main.'"
+    },
+    {
+      "text": "The plan names the task branch TC-9205 (the task issue ID), not TC-9005 (the feature branch) — the task branch is distinct from the Target Branch (constraint 3.1)",
+      "passed": true,
+      "evidence": "plan.md Step 5 line 87 states: 'The task branch is named after the task issue ID: **TC-9205**.' Line 94 shows: 'git checkout -b TC-9205'. Line 97 states: 'The task branch (TC-9205) is distinct from the target branch (TC-9005).' The branch push command on line 181 confirms: 'git push -u origin TC-9205'."
+    },
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 1 of: migration/src/m0001_initial/mod.rs, entity/src/advisory.rs, migration/src/lib.rs (constraint 1.5, Steps 4-9 unaffected by Target Branch)",
+      "passed": true,
+      "evidence": "plan.md Step 4 references all three: line 57 'Inspect migration/src/lib.rs — use mcp__serena_backend__get_symbols_overview', line 59 'Inspect migration/src/m0001_initial/mod.rs — use mcp__serena_backend__find_symbol with include_body=true', and line 61 'Inspect entity/src/advisory.rs — use mcp__serena_backend__get_symbols_overview on entity/src/advisory.rs to verify that the status column is no longer referenced'."
+    },
+    {
+      "text": "The plan includes --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md Step 10 line 165 shows: 'git commit --trailer=\"Assisted-by: Claude Code\" -m \"feat(migration): add migration to drop advisory status column'."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9205 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10 line 165 shows the commit message: 'feat(migration): add migration to drop advisory status column' which follows Conventional Commits format (type=feat, scope=migration, description). Line 173 shows 'Implements TC-9205' in the commit footer."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying TC-9005 as the target branch",
+      "passed": true,
+      "evidence": "plan.md Step 1 line 20 shows '| **Target Branch** | TC-9005 |' in the parsed task table. Lines 26-27 under 'Target Branch Extraction' state: 'The Target Branch is **TC-9005** — this is a feature branch, not main. All branch operations (checkout, branch creation, PR base) will use TC-9005 as the base.'"
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 0,
+    "total": 7,
+    "pass_rate": 1.00
+  }
+}
