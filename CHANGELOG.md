@@ -5,6 +5,27 @@ All notable changes to the sdlc-workflow plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.13.8] - 2026-07-31
+
+### Added
+
+- Cross-cutting call-site enumeration step in `plan-feature`
+- Query-scope verification for subset-targeted batch operations in `implement-task`
+- Dead parameter detection and sibling pattern override in `implement-task`
+- Reuse-over-duplication decision step in `implement-task`
+- Persistence-impact analysis to Step 3 in `triage-bug`
+- Skillsaw CI check documented in CONVENTIONS.md
+
+### Changed
+
+- Condensed `implement-task` SKILL.md to fit within 16,000-token context budget
+
+### Fixed
+
+- Scope containment rules strengthened in `implement-task`
+- Step 1.5 digest backward-compatibility wording in `implement-task`
+- Digest assertion accepts simulated hashes in eval mode for `plan-feature`
+
 ## [0.13.7] - 2026-07-27
 
 ### Changed
