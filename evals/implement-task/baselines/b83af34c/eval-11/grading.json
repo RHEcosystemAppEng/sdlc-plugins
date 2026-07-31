@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The query-scope analysis identifies that the task targets a subset — specifically 'SPDX SBOMs' not all SBOMs — by extracting subset-indicating language from the Description section",
+      "passed": true,
+      "evidence": "query-scope.md lines 5-8 quote the task description targeting 'SPDX SBOMs'. Lines 10 state 'Target scope: SPDX SBOM documents only -- a subset of all SBOM documents in the system.' Lines 14-19 extract three subset-restricting phrases: '\"all SPDX SBOMs\" -- type qualifier limiting to SPDX documents', '\"Only SPDX SBOMs need re-processing\" -- explicit exclusion of other types', '\"CycloneDX documents already have supplier information\" -- states CycloneDX is out of scope'."
+    },
+    {
+      "text": "The query-scope analysis verifies that the sbom entity's labels column (jsonb) supports filtering by document type at the database level, rather than requiring application-level filtering",
+      "passed": true,
+      "evidence": "query-scope.md lines 22-29 under 'Available Database Filter': 'The `sbom` entity (`entity/src/sbom.rs`) has a `labels` column of type `jsonb` that stores document metadata. Per the Implementation Notes: SPDX documents have {\"type\": \"spdx\"} in their labels; CycloneDX documents have {\"type\": \"cyclonedx\"} in their labels. This means the subset restriction can be expressed at the query level using a jsonb field extraction filter'. Lines 81-87 under 'Correctness of Database-Level Filtering' further confirm: 'The `labels` jsonb column on the `sbom` entity is the authoritative source for document type classification... PostgreSQL's jsonb operator ->>\"type\" efficiently extracts the type field for filtering'."
+    },
+    {
+      "text": "The plan uses a filtered query to select only SPDX documents (e.g., WHERE labels->>'type' = 'spdx' or equivalent ORM filter) instead of loading all documents and discarding CycloneDX ones in application code",
+      "passed": true,
+      "evidence": "plan.md lines 53-58 show the ORM code: `sbom::Entity::find().filter(Expr::cust(\"labels->>'type' = 'spdx'\")).all(db).await?;`. Lines 122-129 under 'Database Query Strategy' show the equivalent SQL: `SELECT * FROM sbom WHERE labels->>'type' = 'spdx'` and explain 'Filtering at the database level ensures only the relevant subset is loaded'. The code comments at lines 48-52 explicitly state 'CRITICAL: Do NOT use Sbom::find() or an unfiltered query'."
+    },
+    {
+      "text": "The plan or query-scope analysis explicitly mentions the performance impact of loading all documents — referencing that production environments have hundreds of thousands of non-target CycloneDX records",
+      "passed": true,
+      "evidence": "query-scope.md lines 58-59: 'The Implementation Notes explicitly state: \"Production environments have hundreds of thousands of CycloneDX documents alongside a smaller number of SPDX documents.\"' Lines 61-78 detail impacts: 'Load hundreds of thousands of unnecessary records into memory', 'Trigger unnecessary I/O', 'Risk migration timeout or OOM'. plan.md lines 94-99: 'production environments have hundreds of thousands of CycloneDX records. An unfiltered Sbom::find() or Document::all() would load all records into memory, causing severe performance degradation: unnecessary disk I/O reading hundreds of thousands of CycloneDX source documents'."
+    },
+    {
+      "text": "The plan does NOT propose using an unfiltered query like Sbom::find() or Document::all() followed by an application-level type check to discard CycloneDX documents",
+      "passed": true,
+      "evidence": "plan.md uses a filtered query at lines 53-58: `sbom::Entity::find().filter(Expr::cust(\"labels->>'type' = 'spdx'\"))`. Lines 48-52 comment: 'CRITICAL: Do NOT use Sbom::find() or an unfiltered query.' Lines 93-99 explicitly reject the unfiltered approach. query-scope.md summary table at line 96: 'Rejected approach: Sbom::find() / Document::all() + application-level filtering'. No part of the plan proposes an unfiltered query."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

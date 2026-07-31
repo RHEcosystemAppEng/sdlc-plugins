@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 detects the absence of the Deployment Context column in the Source Repositories table and defaults all repositories to upstream",
+      "passed": true,
+      "evidence": "In outputs/data-extraction.md, Step 0 configuration validation explicitly states: 'The Source Repositories table does NOT contain a Deployment Context column. Per SKILL.md Step 0 (backward compatibility rule): all repositories default to deployment context `upstream`.' The parsed Source Repositories mapping table shows rhtpa-backend with 'upstream (defaulted -- no Deployment Context column)'. This correctly implements SKILL.md lines 144-146: 'If the Deployment Context column is absent (backward compatibility), default all repos to upstream.'"
+    },
+    {
+      "text": "Remediation task descriptions do NOT include a Coordination Guidance subsection -- the section is omitted entirely when no Deployment Context column exists",
+      "passed": true,
+      "evidence": "In outputs/remediation.md, all four remediation task descriptions (upstream backport 2.2.x, downstream propagation 2.2.x, preemptive upstream backport 2.1.x, preemptive downstream propagation 2.1.x) contain Implementation Notes sections that do NOT include a '### Coordination Guidance' subsection. The file explicitly documents this at the bottom: 'The Source Repositories table in the project CLAUDE.md does NOT include a Deployment Context column... Therefore, no Coordination Guidance subsection is included in any of the remediation task descriptions above.' The pre-creation checklist confirms: 'Coordination guidance: OMITTED -- no Deployment Context column in Source Repositories table (backward compatibility).' This correctly implements remediation-templates.md lines 238-239: 'When the Deployment Context column is absent from the Source Repositories table (backward compatibility), omit the coordination guidance entirely -- do not add the subsection.'"
+    },
+    {
+      "text": "The triage proceeds normally through all steps without errors from the missing Deployment Context column",
+      "passed": true,
+      "evidence": "In outputs/data-extraction.md, the triage completes Step 0 (configuration validation including Source Repositories parsing), Step 1 (data extraction with deployment context lookup defaulting to upstream), and Step 2 (version impact analysis with full impact table). In outputs/remediation.md, the triage completes Step 8 (remediation) with Case B task creation for in-scope stream 2.2.x and Case A cross-stream preemptive tasks for stream 2.1.x. All steps proceed without errors. The missing Deployment Context column is handled gracefully through the backward compatibility default, not treated as a configuration error or missing field."
+    },
+    {
+      "text": "Backward compatibility is maintained -- existing eval behavior is unaffected by the absence of the Deployment Context column",
+      "passed": true,
+      "evidence": "The triage produces the same structural outputs as would be expected with a full configuration: (1) data-extraction.md contains a complete CVE data table with all fields parsed from TC-8001, (2) version impact analysis covers all versions across both streams with correct affected/not-affected determinations, (3) remediation.md contains 4 properly structured tasks (2 for in-scope 2.2.x, 2 preemptive for 2.1.x), (4) task descriptions follow the standard templates from remediation-templates.md with correct Repository, Target Branch, Description, Implementation Notes, Acceptance Criteria, Test Requirements, and Dependencies sections, (5) the pre-creation checklist is satisfied. The only difference is the omission of the Coordination Guidance subsection, which is the documented backward-compatible behavior -- not a degradation."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

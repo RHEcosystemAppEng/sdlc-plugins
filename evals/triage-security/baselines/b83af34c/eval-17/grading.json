@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 extracts the Embargo policy URL from the Security Configuration as an optional field without raising an error (backward compatible extraction)",
+      "passed": true,
+      "evidence": "In outputs/data-extraction.md, the configuration table lists 'Embargo policy URL | https://example.com/security/embargo-policy | Optional' and the note states: 'This is an optional field per SKILL.md. It was extracted successfully from the Security Configuration without raising an error. When present, it enables Step 1.7 (Embargo Check). When absent, Step 1.7 is skipped entirely. This ensures backward compatibility -- projects without an Embargo policy URL configured continue to function without any errors or interruptions.' The field is treated identically to other optional fields (ProdSec contact email, ProdSec Jira account ID, etc.) -- extracted when present, skipped silently when absent."
+    },
+    {
+      "text": "Step 1.7 evaluates the CVE severity -- CVSS 7.5 (High) meets the Critical/Important threshold (CVSS >= 7.0) and triggers the embargo warning gate",
+      "passed": true,
+      "evidence": "In outputs/embargo-check.md, the Severity Evaluation section states: 'CVSS score: 7.5', 'Severity level: High', 'Embargo trigger threshold: CVSS >= 7.0 (Critical or Important/High severity)', 'Evaluation result: 7.5 >= 7.0 -- threshold MET', 'Action: Present warning gate (embargo check triggers)'. The threshold comparison is explicit and correct."
+    },
+    {
+      "text": "Step 1.7 presents a warning gate to the engineer including the CVE ID (CVE-2026-31812), severity level, a statement about embargo risk, and a link to the configured embargo policy URL (https://example.com/security/embargo-policy)",
+      "passed": true,
+      "evidence": "In outputs/embargo-check.md, the Warning Gate section contains: 'EMBARGO CHECK -- CVE-2026-31812 (High severity)' (CVE ID and severity level present), 'High-severity vulnerabilities may be under embargo. Before proceeding, verify with your security team that this CVE is cleared for public triage.' (embargo risk statement present), 'Embargo policy: https://example.com/security/embargo-policy' (configured embargo policy URL present). All four required elements are included in the warning gate."
+    },
+    {
+      "text": "Step 1.7 requires explicit engineer confirmation (Yes/No) before proceeding to Step 2 -- the gate is a confirmation prompt, not an informational message",
+      "passed": true,
+      "evidence": "In outputs/embargo-check.md, the warning gate ends with 'Proceed with triage? (Yes / No)' -- an explicit Yes/No prompt. The Gate Behavior section states: 'This is a confirmation prompt requiring explicit engineer input, not merely an informational message.' It further specifies: 'If No: Execution stops immediately. The engineer is informed to check embargo status with their security team before re-running triage. No further steps are executed -- Step 2 and beyond are not reached.' and 'If Yes: Triage proceeds normally to Step 2 (Version Impact Analysis).' and 'The gate requires an explicit Yes or No response. The skill does not proceed until the engineer provides a response. There is no timeout or auto-proceed behavior.'"
+    },
+    {
+      "text": "The embargo warning gate does NOT trigger for Low or Moderate severity CVEs (CVSS < 7.0) -- it is skipped silently when severity is below threshold",
+      "passed": true,
+      "evidence": "In outputs/embargo-check.md, the Threshold Logic section states: 'CVSS < 7.0 (Low or Moderate severity): skip silently, proceed to Step 2'. The Low/Moderate Severity Behavior section explicitly states: 'For CVEs with CVSS < 7.0 (Low or Moderate severity), Step 1.7 is skipped silently. No warning is presented, no confirmation is required, and the skill proceeds directly to Step 2 (Version Impact Analysis). The gate only fires for high-severity vulnerabilities that may be under embargo.' Examples provided confirm: CVSS 3.1 (Low), 5.3 (Moderate), 6.9 (Moderate) all result in 'Step 1.7 skipped silently, proceed to Step 2'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

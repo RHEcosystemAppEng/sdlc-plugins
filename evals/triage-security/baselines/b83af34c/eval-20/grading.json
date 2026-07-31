@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0.3 reads the Last-Updated timestamp from the security-matrix.md HTML comment",
+      "passed": true,
+      "evidence": "File outputs/staleness-check.md documents: 'The <!-- Last-Updated: 2026-06-28T10:00:00Z --> HTML comment was read from line 1 of security-matrix-mock.md. Parsed ISO 8601 timestamp: 2026-06-28T10:00:00Z.' The timestamp was correctly extracted from the HTML comment in the fixture file security-matrix-mock.md line 1."
+    },
+    {
+      "text": "Step 0.3 determines the matrix is within the 14-day threshold and proceeds without displaying a staleness warning",
+      "passed": false,
+      "evidence": "File outputs/staleness-check.md documents: 'Days elapsed: 33 days. Threshold: 14 days. Result: STALE -- The matrix is 33 days old, which exceeds the 14-day threshold.' The fixture timestamp is 2026-06-28T10:00:00Z and today is 2026-07-31, yielding 33 days elapsed -- well outside the 14-day threshold. The staleness check correctly identified the matrix as stale, not within threshold. A staleness warning would be displayed, not suppressed."
+    },
+    {
+      "text": "No user prompt or options are presented for a fresh matrix -- the check is silent on success",
+      "passed": false,
+      "evidence": "File outputs/staleness-check.md documents that per SKILL.md Step 0.3, the skill would present a staleness warning with three options (Refresh now, Proceed anyway, Stop) and 'wait for the user's choice before proceeding. This is NOT a silent pass.' Because the matrix is 33 days old (exceeds 14-day threshold), the check is not silent -- it produces a user-facing warning and prompt."
+    },
+    {
+      "text": "The triage continues to Step 0.5 and beyond without interruption from the staleness check",
+      "passed": false,
+      "evidence": "File outputs/staleness-check.md concludes: 'A staleness warning and user prompt would be displayed. The triage would be interrupted at Step 0.3 pending user input.' The skill specification requires waiting for user input when the matrix is stale (33 days > 14-day threshold). Triage would only continue to Step 0.5 if the user chose option 2 ('Proceed anyway'). Without user input, triage is interrupted at Step 0.3."
+    }
+  ],
+  "summary": {
+    "passed": 1,
+    "failed": 3,
+    "total": 4,
+    "pass_rate": 0.25
+  }
+}

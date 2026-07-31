@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md section 1 explicitly states: 'Why remove the parameter instead of underscore-prefixing: The version_filter parameter becomes dead after removing the filtering logic. The correct action per Step 9's dead parameter detection guidance is removal, not renaming to _version_filter. Dead parameters pollute the API surface, mislead callers into thinking the argument is used, and accumulate technical debt.'"
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md section 1 Changes item 1 says: 'Remove the version_filter: &str parameter from the method signature entirely.' It also shows the resulting signature without version_filter: 'pub async fn list(&self, search: Query, paginated: Paginated, tx: &Transactional<'_>) -> Result<PaginatedResults<SbomSummary>, AppError>'"
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md identifies all 3 call sites in dedicated sections: Section 2 covers 'modules/fundamental/src/sbom/endpoints/list.rs' (endpoint handler), Section 3 covers 'modules/search/src/service/mod.rs' (search service), and Section 4 covers 'tests/api/sbom.rs' (tests). The Order of Operations (step 3) explicitly lists: 'a. endpoints/list.rs, b. search/service/mod.rs, c. tests/api/sbom.rs'."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md has a full section 'Why Dead Parameters Must Be Removed, Not Underscore-Prefixed' with 5 reasons. Reason 1 states: 'It hides a real API design problem. The parameter is part of the public method signature. Every caller must still construct and pass a value for it. Underscore-prefixing tells the compiler \"I know this is unused\" but does nothing to fix the fact that callers are doing unnecessary work.' Reason 3 adds: 'It accumulates technical debt. Dead parameters spread through the codebase.'"
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md Verification Steps item 1: 'After all code changes, run cargo test to verify compilation and test passage.' Order of Operations step 4: 'Run cargo test to confirm all tests pass.' parameter-cleanup.md Step 4: 'After updating all 3 call sites: cargo test. This confirms: The code compiles without the dead parameter, All remaining tests pass without the version filter argument, No test was silently depending on the version filtering behavior in a way we missed.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

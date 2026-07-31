@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation -- does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "In outputs/idempotency-check.md, section '3. Remediation Task Idempotency: TC-8100 and TC-8101 Already Linked' explicitly states: 'Detection: The issue's issuelinks array contains two existing Depend links: TC-8100: remediation Task (upstream backport)... TC-8101: remediation Task (downstream propagation)...' and 'Action: SKIP -- do NOT create duplicate remediation tasks. The existing tasks TC-8100 and TC-8101 already fulfill the Step 8 Case B requirements for the 2.2.x stream.' In outputs/triage-outcome.md, the Step 8 analysis confirms: 'Depend link to TC-8100 detected' and 'Depend link to TC-8101 detected' and 'The skill detects that remediation tasks already exist for this stream and skips task creation entirely to avoid duplicates.' The summary table shows both 'Create TC-8100' and 'Create TC-8101' as SKIP with reason 'already exists via Depend link'."
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue -- the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "In outputs/idempotency-check.md, section '1. Label Idempotency: ai-cve-triaged' states: 'Detection: The issue's labels array already contains ai-cve-triaged' and 'Action: SKIP -- do NOT add the label again.' In outputs/triage-outcome.md, the Post-Triage Summary section confirms: 'Label: ai-cve-triaged is already present in the issue's labels array. The skill does NOT attempt to add it again.' The summary table shows 'Add ai-cve-triaged label' as SKIP with reason 'already present'."
+    },
+    {
+      "text": "The issue is already In Progress -- the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "In outputs/idempotency-check.md, section '2. Status Idempotency: Already In Progress' states: 'Detection: The issue's current status is In Progress' and 'Action: SKIP -- do NOT attempt to transition the status again. The issue is already in a post-triage state.' It also references the SKILL.md status-aware handling: 'In Progress / Code Review / QA -- warn the user: This issue is already in <status>. It may be actively worked on.' In outputs/triage-outcome.md, Step 0.7 confirms: 'The issue is already assigned... and is in status In Progress (past Assigned). The status-aware handling detects that the issue is in In Progress and warns... No status transition is attempted.' The summary table shows both 'Transition to Assigned' and 'Transition to In Progress' as SKIP."
+    },
+    {
+      "text": "The existing description digest comment is detected -- no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "In outputs/idempotency-check.md, section '4. Description Digest Comment Idempotency' states: 'Detection: The issue's comment history contains a description digest comment: Content: [sdlc-workflow] Description digest: sha256-md:a1b2c3d4...' and 'Action: SKIP -- do NOT post a duplicate description digest comment.' In outputs/triage-outcome.md, the Post-Triage Summary section confirms: 'Description digest comment: A digest comment already exists (posted 2026-07-01T10:00:00Z). The skill does NOT post a duplicate.' The summary table shows 'Post description digest comment' as SKIP with reason 'already posted'."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected -- no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "In outputs/idempotency-check.md, section '5. Post-Triage Summary Comment Idempotency' states: 'Detection: The issue's comment history contains a post-triage summary comment... Posted by: sdlc-workflow/triage-security, Created: 2026-07-01T10:01:00Z' and 'Action: SKIP -- do NOT post a duplicate summary comment.' In outputs/triage-outcome.md, the Post-Triage Summary section confirms: 'Summary comment: A post-triage summary comment already exists in the issue's comment history (posted 2026-07-01T10:01:00Z). The skill does NOT post a duplicate.' The summary table shows 'Post summary comment' as SKIP with reason 'already posted'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 2.3.5 dependency chain context identifies rustls as a feature-gated optional dependency behind the non-default 'tls-rustls' feature flag",
+      "passed": true,
+      "evidence": "In outputs/version-impact.md, the Step 2.3.5 Dependency Chain Context section states: 'Profile: feature-gated (optional = true, behind non-default feature \"tls-rustls\")' and 'Default features do NOT include \"tls-rustls\" -- the product ships with the \"tls-native\" feature enabled by default'. The Dependency Scope Analysis further confirms: 'The vulnerable dependency rustls is declared as optional = true in Cargo.toml and is gated behind the tls-rustls feature flag. The default features are [\"tls-native\"], which does NOT include tls-rustls.'"
+    },
+    {
+      "text": "The dependency scope decision tree presents a VEX justification prompt to the user with two options: skip remediation or proceed with standard remediation",
+      "passed": true,
+      "evidence": "In outputs/feature-gate-prompt.md, the VEX Justification Prompt section presents exactly two options: '1. Skip remediation -- apply VEX justification and close as not affected' and '2. Proceed with remediation -- create tasks despite the feature gate'. This matches the dependency scope decision tree specification for feature-gated optional dependencies in version-impact-analysis.md."
+    },
+    {
+      "text": "The VEX justification prompt recommends 'Vulnerable Code not in Execute Path' as the justification for skipping remediation",
+      "passed": true,
+      "evidence": "In outputs/feature-gate-prompt.md, the prompt states: 'Recommended VEX justification: **Vulnerable Code not in Execute Path**.' This matches the skill specification which says to recommend this VEX value when the dependency is gated behind a non-default feature flag."
+    },
+    {
+      "text": "The VEX justification prompt includes the library name (rustls) and the feature flag name (tls-rustls) so the user has context for the decision",
+      "passed": true,
+      "evidence": "In outputs/feature-gate-prompt.md, the prompt includes both: 'The vulnerable dependency `rustls` is gated behind the `tls-rustls` feature' in the prompt text itself, and the Context for Decision section explicitly lists '- **Library**: rustls' and '- **Feature flag**: tls-rustls'."
+    },
+    {
+      "text": "If the user chooses to skip remediation, the version is closed as not affected with the VEX justification -- no remediation tasks are created for that version",
+      "passed": true,
+      "evidence": "In outputs/feature-gate-prompt.md, the 'Outcome if User Chooses Option 1 (Skip Remediation)' section states: 'The version is closed as **not affected** with VEX justification **\"Vulnerable Code not in Execute Path\"**', 'The VEX Justification custom field (customfield_12345) is set to \"Vulnerable Code not in Execute Path\"', 'No remediation tasks are created for any version in the 2.2.x stream', and 'The issue is transitioned to Closed with resolution \"Not a Bug\"'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

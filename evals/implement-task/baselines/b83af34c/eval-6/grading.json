@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "The response describes locating the digest comment using the marker string '[sdlc-workflow] Description digest:' from shared/description-digest-protocol.md",
+      "passed": true,
+      "evidence": "digest-match.md lines 20-21: \"Search the returned comments for any whose body starts with the marker string `[sdlc-workflow] Description digest:`.\" Also plan.md line 55: \"One comment found with marker `[sdlc-workflow] Description digest: sha256-md:a1b2c3d4e5f67890...`\". Both files explicitly reference the marker string for locating the digest comment."
+    },
+    {
+      "text": "The response describes computing a digest of the current description (using scripts/sha256-digest.py or SHA-256) and comparing it with the stored digest",
+      "passed": true,
+      "evidence": "digest-match.md lines 48-53: \"Extract the description field from the TC-9201 issue response. Write it to a temporary file and compute the digest: `python3 scripts/sha256-digest.py /tmp/desc-TC-9201.txt`\". Lines 64-76 compare format tags and hex digests. plan.md lines 57-59: \"Compute current digest via `python3 scripts/sha256-digest.py /tmp/desc-TC-9201.txt` -- output: `sha256-md:a1b2c3d4e5f67890...`. Format tags match (both `sha256-md`). Hex digests match.\""
+    },
+    {
+      "text": "The response confirms the digests match and states it will proceed silently without prompting the user — no additional latency for the happy path",
+      "passed": true,
+      "evidence": "digest-match.md line 76: \"**Match.** The description has not been modified since plan-feature created it.\" Lines 80-83: \"Per the SKILL.md specification for the match case: **proceed silently -- no additional user prompt, no added latency.** No warning, no confirmation dialog, no message to the user.\" plan.md line 60: \"**Result: Match. Proceed silently** -- no user prompt, no added latency.\""
+    },
+    {
+      "text": "The response does not alert the user or pause execution due to the digest check — it proceeds directly to subsequent steps",
+      "passed": true,
+      "evidence": "digest-match.md lines 80-83: \"No warning, no confirmation dialog, no message to the user. Step 1.5 completes and execution continues directly to Step 2 (Verify Dependencies) without any interruption.\" plan.md confirms the flow proceeds from Step 1.5 directly to Step 2 (line 62: \"The task has no dependencies. Skip this step.\") with no intervening user interaction or alert."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

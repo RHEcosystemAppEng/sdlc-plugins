@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Version impact table shows NO (not affected) for all supported versions -- every version ships a dependency version outside the CVE's affected range",
+      "passed": true,
+      "evidence": "In outputs/version-impact.md, the version impact table lists all 7 versions across both streams. Every row shows 'NO' in the Affected? column. Stream 2.1.x: 2.1.0 ships 1.0.137 (NO), 2.1.1 ships 1.0.137 (NO). Stream 2.2.x: 2.2.0 ships 1.0.138 (NO), 2.2.1 ships 1.0.138 (NO), 2.2.2 retag of 2.2.1 (NO), 2.2.3 ships 1.0.139 (NO), 2.2.4 ships 1.0.139 (NO). All serde_json versions (1.0.137, 1.0.138, 1.0.139) are >= 1.0.135 fix threshold, confirmed outside the CVE's affected range (< 1.0.135). Summary states '0 of 7 versions affected across all streams'."
+    },
+    {
+      "text": "Triage outcome recommends closing as Not a Bug with resolution, not creating remediation tasks (Step 8 Case C)",
+      "passed": true,
+      "evidence": "In outputs/triage-outcome.md, the decision heading reads 'Case C -- Close as Not a Bug (not affected)'. Proposed Jira action #2 states: 'Transition TC-8002 to Closed with resolution \"Not a Bug\"' with the API call 'jira.transition_issue(TC-8002, <closed-transition-id>, resolution=\"Not a Bug\")'. The Remediation Tasks section explicitly states: 'None created. Case C does not create any remediation tasks.'"
+    },
+    {
+      "text": "The close recommendation includes a comment documenting the version impact evidence -- listing each version and its dependency version as proof of non-impact",
+      "passed": true,
+      "evidence": "In outputs/triage-outcome.md, proposed Jira action #1 ('Add closing comment to TC-8002') includes a full version impact table inside the comment text. The comment lists all 7 versions with their serde_json versions: 2.1.0/1.0.137 NO, 2.1.1/1.0.137 NO, 2.2.0/1.0.138 NO, 2.2.1/1.0.138 NO, 2.2.2/1.0.138 (retag) NO, 2.2.3/1.0.139 NO, 2.2.4/1.0.139 NO. The comment concludes: 'All supported versions ship serde_json >= 1.0.135, which is outside the affected range (versions before 1.0.135). The vulnerable version of serde_json is not present in any supported product version.'"
+    },
+    {
+      "text": "VEX Justification is set to 'Component not Present' or appropriate value when the VEX field is configured (Step 8 VEX Justification)",
+      "passed": true,
+      "evidence": "In outputs/triage-outcome.md, proposed Jira action #3 ('Set VEX Justification') sets customfield_12345 to 'Component not Present'. The rationale states: 'The lock file analysis shows that the vulnerable package version (serde_json < 1.0.135) is not included in any supported product version. All versions ship serde_json at 1.0.137 or later... Per the VEX Justification table in the skill, \"Component not Present\" is the default when \"the lock file or SBOM analysis shows the vulnerable package version is not included.\"' The API call is: jira.edit_issue(TC-8002, fields={\"customfield_12345\": {\"value\": \"Component not Present\"}})"
+    },
+    {
+      "text": "The analysis does NOT create any remediation tasks -- no upstream backport, no downstream propagation (Step 8 Case C closes the issue)",
+      "passed": true,
+      "evidence": "In outputs/triage-outcome.md, the Remediation Tasks section explicitly states: 'None created. Case C does not create any remediation tasks. There is no upstream backport task and no downstream propagation task, because no supported version is affected.' The Cross-Stream Impact section also confirms: 'Not applicable. This is a Case C closure (no versions affected in any stream).' No task creation API calls appear anywhere in the triage outcome."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

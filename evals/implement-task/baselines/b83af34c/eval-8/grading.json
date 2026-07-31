@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md lines 9-14 explicitly state: 'modules/ingestor/src/graph/sbom/mod.rs' as the file, and specify changing 'fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>' to 'pub fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>' and 'fn suppliers(sbom: &Sbom) -> Vec<SupplierInfo>' to 'pub fn suppliers(sbom: &Sbom) -> Vec<SupplierInfo>'. reuse-decision.md lines 9-14 also identifies both as 'currently private (no pub modifier)' in 'modules/ingestor/src/graph/sbom/mod.rs'."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md lines 49-58 under 'Dependency verification' state: 'The migration/Cargo.toml already declares a dependency on trustify-module-ingestor' with the exact toml snippet. reuse-decision.md lines 17-27 under 'Dependency Relationship Verification' explicitly states: 'Verified: The migration/Cargo.toml already declares a dependency on the ingestor crate' and 'The dependency relationship already exists. No new cross-package coupling would be introduced by reusing these functions.'"
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md lines 4-5: 'Make describing_packages() and suppliers() public (pub fn) and import them in the migration crate. Do NOT duplicate the function bodies.' Lines 30-36 explain the rationale: 'If the dependency already exists: make the function public and import it rather than duplicating the code... Since the migration crate already depends on trustify-module-ingestor, case (1) applies.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "plan.md lines 60-62: 'Do NOT duplicate/copy the function bodies into the migration module.' reuse-decision.md lines 39-47 under 'Why NOT Duplicate' explicitly rejects duplication with multiple reasons: 'DRY violation: The exact same logic would exist in two places' and 'Bug fix divergence: If a bug is found in the extraction logic, it would need to be fixed in both the ingestor and the migration module.'"
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md line 33: 'This follows the DRY (Don't Repeat Yourself) principle and ensures future bug fixes apply in one place.' Also line 42: 'DRY violation: The exact same logic would exist in two places, creating a maintenance burden.' And lines 43-44: 'Bug fix divergence: If a bug is found in the extraction logic, it would need to be fixed in both the ingestor and the migration module.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
