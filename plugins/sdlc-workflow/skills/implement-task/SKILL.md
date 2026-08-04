@@ -438,6 +438,24 @@ decide whether to make it public or duplicate it:
    rationale in the commit message or PR description so reviewers understand why code
    was reused or duplicated.
 
+### Symbol deduplication
+
+Before declaring any new constant, enum, type alias, or configuration map, search the
+target package for an existing definition of the same symbol. This applies especially
+when the task description references a sibling module — the symbol may already exist there.
+
+1. **Search before declaring**: use `find_symbol`, `search_for_pattern`, or Grep to search
+   the target package (not just the file being edited) for the symbol name or its value.
+   Include common variations (e.g., `SEVERITY_ORDER`, `severityOrder`, `SeverityOrder`).
+2. **If found**: import and reuse the existing definition. If it is not exported, follow
+   the "Reuse over duplication" guidance above to decide whether to export it or inline it.
+3. **If not found**: declare the new symbol in the most appropriate shared location
+   (utilities module, constants file, or the file where it is used if truly local).
+
+> **Example:** Task says "sort remediations by severity". Before declaring
+> `const SEVERITY_ORDER = [...]`, grep the package for `SEVERITY_ORDER`. If
+> `src/remediation.js` already exports it, import from there instead of redeclaring.
+
 ### Serena symbolic editing (preferred)
 
 Use the dedicated Serena instance for the task's repository (look up the instance name
@@ -492,6 +510,19 @@ After implementing code changes, verify the following quality practices:
   functions where the name alone does not convey the full intent, add a brief
   explanation of behavior, parameters, or return value so that human reviewers can
   understand the code without reading the implementation.
+
+- **Defensive property access on external data**: when consuming data produced by another
+  module, service, or external API, add null/undefined guards before accessing nested
+  properties — especially arrays and objects that may be absent even when the upstream
+  type signature suggests otherwise. Use the language's idiomatic guard pattern (e.g.,
+  optional chaining `?.` in JavaScript/TypeScript, `if let` / `.unwrap_or_default()` in
+  Rust, `getattr(obj, 'field', default)` in Python). This applies to any property access
+  path where the data crosses a module boundary — the producer's schema may allow null,
+  return partial results, or evolve independently.
+
+  > **Example:** Upstream returns `{ cves: string[] | null }`. Before accessing
+  > `rem.cves.length` or `rem.cves.join(',')`, guard with `(rem.cves ?? [])` or
+  > equivalent.
 
 ### Documentation impact
 
