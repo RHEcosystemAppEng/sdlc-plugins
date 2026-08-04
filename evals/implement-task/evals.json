@@ -151,6 +151,32 @@
         "The plan or query-scope analysis explicitly mentions the performance impact of loading all documents — referencing that production environments have hundreds of thousands of non-target CycloneDX records",
         "The plan does NOT propose using an unfiltered query like Sbom::find() or Document::all() followed by an application-level type check to discard CycloneDX documents"
       ]
+    },
+    {
+      "id": 12,
+      "prompt": "Implement task TC-9210. The task description is in task-symbol-dedup.md, the target repository structure is in repo-backend.md, and the project CLAUDE.md is in claude-md-mock.md. Do NOT actually modify repository files or call external tools (Jira, git, Serena). Instead, write your implementation plan to the workspace outputs/ directory: write outputs/plan.md describing which files you would modify and create, what changes you would make to each, and how you would handle the SEVERITY_ORDER constant. Write outputs/symbol-search.md documenting your symbol deduplication analysis — what you searched for, where you found it, and your decision to reuse or redeclare.",
+      "expected_output": "An implementation plan where the symbol search analysis demonstrates searching the target package for SEVERITY_ORDER before declaring a new constant. The plan should find the existing definition in modules/fundamental/src/advisory/service/advisory.rs and plan to import it rather than redeclaring it in the sbom service. The symbol search document should show the search process: grepping or using find_symbol for SEVERITY_ORDER across the package, finding the match, and deciding to reuse.",
+      "files": ["files/task-symbol-dedup.md", "files/repo-backend.md", "files/claude-md-mock.md"],
+      "assertions": [
+        "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+        "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+        "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+        "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+        "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions"
+      ]
+    },
+    {
+      "id": 13,
+      "prompt": "Implement task TC-9211. The task description is in task-external-data.md, the target repository structure is in repo-backend.md, and the project CLAUDE.md is in claude-md-mock.md. Do NOT actually modify repository files or call external tools (Jira, git, Serena). Instead, write your implementation plan to the workspace outputs/ directory: write outputs/plan.md describing which files you would modify and create, what changes you would make to each, and how you would handle the nullable fields from AdvisoryIngestResult. Write outputs/null-guards.md documenting your defensive property access analysis — which fields need guards, what guard pattern you would use, and why.",
+      "expected_output": "An implementation plan where the null guards analysis identifies the three nullable fields (cves, affected_packages, severity_counts) from AdvisoryIngestResult and plans defensive access patterns for each. The plan should use Rust's idiomatic guard patterns (unwrap_or_default, as_ref, match/if-let) rather than accessing Option fields directly. The null guards document should explain why guards are needed: the data crosses a module boundary from the ingestor, and the producer's schema uses Option types.",
+      "files": ["files/task-external-data.md", "files/repo-backend.md", "files/claude-md-mock.md"],
+      "assertions": [
+        "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+        "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+        "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+        "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+        "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly"
+      ]
     }
   ]
 }
