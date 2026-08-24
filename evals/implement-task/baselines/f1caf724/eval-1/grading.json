@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4 explicitly lists all 4 files: (1) 'modules/fundamental/src/advisory/endpoints/get.rs -- Read this file using mcp__serena_backend__get_symbols_overview to understand the existing endpoint pattern', (2) 'modules/fundamental/src/advisory/service/advisory.rs -- Read this file using mcp__serena_backend__find_symbol with include_body=true on the fetch and list methods', (3) 'modules/fundamental/src/advisory/model/summary.rs -- Read using mcp__serena_backend__get_symbols_overview to understand the AdvisorySummary struct', (4) 'common/src/error.rs -- Read to understand the AppError enum and how .context() wrapping is used'"
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6 lists exactly the 3 files from Files to Modify (advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs) and the 3 files from Files to Create (advisory/model/severity_summary.rs, advisory/endpoints/severity_summary.rs, tests/api/advisory_summary.rs). Step 9 states: 'Scope containment: All modified/created files are within Files to Modify and Files to Create sections'. No additional files are modified."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md Step 6 (cont.) lists: '4. modules/fundamental/src/advisory/model/severity_summary.rs Create: SeveritySummary response struct', '5. modules/fundamental/src/advisory/endpoints/severity_summary.rs Create: GET handler for /api/v2/sbom/{id}/advisory-summary', '6. tests/api/advisory_summary.rs Create: Integration tests for the new endpoint'"
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md Step 6 lists: '1. modules/fundamental/src/advisory/service/advisory.rs Change: Add a severity_summary method to AdvisoryService', '2. modules/fundamental/src/advisory/endpoints/mod.rs Change: Register the new severity summary route', '3. modules/fundamental/src/advisory/model/mod.rs Change: Add pub mod severity_summary; to register the new model submodule'"
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10 shows: 'git commit --trailer=\"Assisted-by: Claude Code\" -m \"feat(advisory): add severity aggregation endpoint for SBOM advisories ... Implements TC-9201\"'. The format is feat(advisory): description (Conventional Commits), and the footer references TC-9201."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md Step 10 shows: 'git commit --trailer=\"Assisted-by: Claude Code\"' and also states: 'The commit uses --trailer=\\'Assisted-by: Claude Code\\' to attribute AI assistance per constraint 2.3.'"
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Step 5 shows: 'git checkout main\\ngit pull\\ngit checkout -b TC-9201' and states: 'The branch is named TC-9201 after the Jira issue ID, based off main (the Target Branch extracted in Step 1).' The Target Branch 'main' is explicitly referenced."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md explicitly identifies: (1) Error Handling: 'All handlers and service methods return Result<T, AppError> where AppError is defined in common/src/error.rs' and 'Error wrapping uses .context(\"descriptive message\") from the anyhow pattern', (2) Module Structure: 'Each domain module follows the model/ + service/ + endpoints/ three-directory structure'"
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md Step 1 includes: 'Target Branch: main' in the parsed description, and the 'Target Branch Extraction' subsection states: 'Target Branch is main. This will be used as the base for branch creation (Step 5) and as the --base flag for the PR (Step 10).'"
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "plan.md Step 1.5 states: 'Retrieve issue comments using jira.get_issue_comments(TC-9201) and search for comments whose body starts with the marker string [sdlc-workflow] Description digest:.' For no digest found: 'If no digest comment is found: Log a warning and proceed normally -- backward compatibility with tasks created before digest tracking was introduced.' It also quotes the warning message and states: 'This follows the protocol in shared/description-digest-protocol.md. Execution is not blocked; we proceed to Step 2 without interruption.'"
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

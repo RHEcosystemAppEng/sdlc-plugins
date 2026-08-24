@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "From plan.md Step 6: \"After removing the filtering logic from the method body, the `version_filter` parameter is no longer referenced anywhere in the function body. It is now a dead parameter. The correct action is to **remove the parameter entirely from the function signature**, not to prefix it with an underscore (`_version_filter`). Renaming to `_version_filter` would suppress the Rust compiler's unused-variable warning but would leave unnecessary API surface\". Also from parameter-cleanup.md: \"After the removal, scanning the entire `list` method body reveals zero references to `version_filter`. The parameter is declared in the signature but never read, passed, or otherwise used.\" and \"The alternative -- prefixing with an underscore (`_version_filter`) -- is explicitly rejected\"."
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "From plan.md Step 6: \"Updated signature after removing the dead parameter:\" followed by a code block showing the signature without version_filter: \"pub async fn list(&self, search: Query, paginated: Paginated, tx: &Transactional<'_>) -> Result<PaginatedResults<SbomSummary>, AppError>\". The plan explicitly shows removing the parameter from the signature, not just the body logic."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "From plan.md Step 6, three call site files are updated: File 2 (modules/fundamental/src/sbom/endpoints/list.rs) - \"Update the call to `SbomService::list` to remove the `version_filter` argument\"; File 3 (modules/search/src/service/mod.rs) - \"Update the call to `SbomService::list` to remove the `version_filter` argument\"; File 4 (tests/api/sbom.rs) - \"Update all remaining test calls to `SbomService::list` to remove the `version_filter` argument\". Also from parameter-cleanup.md: \"There are exactly 3 call sites\" with dedicated subsections for each: \"Call site 1: Endpoint handler (modules/fundamental/src/sbom/endpoints/list.rs)\", \"Call site 2: Search service (modules/search/src/service/mod.rs)\", \"Call site 3: Integration tests (tests/api/sbom.rs)\"."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "From parameter-cleanup.md: \"The correct fix is to **remove the `version_filter` parameter entirely from the function signature**. The alternative -- prefixing with an underscore (`_version_filter`) -- is explicitly rejected for the following reasons: **Underscore prefixes suppress compiler warnings but leave unnecessary API surface.** Every caller of `SbomService::list` would still be required to pass a `version_filter` value, even though the function ignores it completely.\" Also: \"Clean API surface matters. Function signatures are contracts. A parameter in the signature communicates 'this value affects behavior.' A dead parameter violates that contract and misleads callers.\""
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "From plan.md Step 9 Dead parameter detection: \"5. **Re-ran tests**: Run `cargo test` to confirm nothing broke after removing the parameter and updating all call sites. All tests pass.\" Also from parameter-cleanup.md Verification section: \"After removing the parameter and updating all 3 call sites, re-run the full test suite to verify nothing broke: `cargo test`. This confirms: All 3 call sites compile correctly without the removed argument; Existing SBOM list tests that do not depend on version filtering still pass\"."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

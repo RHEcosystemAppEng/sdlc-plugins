@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md explicitly identifies all three fields with their exact types in dedicated subsections: 'Field 1: `cves` -- `Option<Vec<String>>`', 'Field 2: `affected_packages` -- `Option<Vec<AffectedPackage>>`', 'Field 3: `severity_counts` -- `Option<HashMap<String, u32>>`'. The summary table also lists all three: '| `cves` | `Option<Vec<String>>` |', '| `affected_packages` | `Option<Vec<AffectedPackage>>` |', '| `severity_counts` | `Option<HashMap<String, u32>>` |'."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md shows three guard patterns: cves uses '.clone().unwrap_or_default()', affected_packages uses '.as_ref().map(|pkgs| pkgs.len() as u32).unwrap_or(0)', severity_counts uses '.clone().unwrap_or_default()'. The plan explicitly states: 'No `.unwrap()` calls are used. Each field is handled defensively.' null-guards.md confirms: '`.unwrap()` -- would panic on None; never used on any of the three fields'."
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "plan.md states: 'No field is accessed with `.unwrap()`, `.len()` on Option, `.join()` on Option, or direct iteration on Option. All access goes through safe unwrapping patterns.' The code shows: cves uses unwrap_or_default() before .len(); affected_packages uses as_ref().map().unwrap_or(0); severity_counts uses unwrap_or_default(). null-guards.md reiterates: 'Direct `.len()` on Option -- would not compile; all `.len()` calls operate on the unwrapped inner type' and 'Direct `.join()` on Option -- would not compile; any string joining would happen after unwrapping'."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md states: 'The data crosses a module boundary from the ingestor module to the fundamental/advisory module, and the producer's schema explicitly uses `Option<T>` types for all three aggregate fields.' It further explains: '1. The producer's schema allows None values: The ingestor module defines `cves`, `affected_packages`, and `severity_counts` as `Option<T>` because not all advisories contain all types of data.' and '2. The producer may evolve independently: The ingestor module may change its behavior in future versions'."
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md includes test function 'test_extract_vulnerability_summary_all_none' with: 'let ingest_result = AdvisoryIngestResult { cves: None, affected_packages: None, severity_counts: None, // ... other fields };' and doc comment: 'Verifies extraction with all-None fields produces a zeroed summary without panicking. This test validates that all three null guards work correctly when every nullable field is None: cves=None, affected_packages=None, severity_counts=None.' null-guards.md also documents this test: 'Tests with `cves=None`, `affected_packages=None`, `severity_counts=None` -- all three fields are None simultaneously.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
