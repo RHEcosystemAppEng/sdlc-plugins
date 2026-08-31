@@ -18,7 +18,9 @@ version: 1
 #     the skill/prefetch — NOT a reason to add a github egress rule here.
 #
 # curl and gh are excluded from the binary allowlist to prevent raw HTTP
-# egress with any injected token; only claude/node may open the network.
+# egress with any injected token; only the fullsend runtimes (claude/pi/node)
+# may open the network. `**/pi` is the runtime that brokers Vertex AI
+# (`*.googleapis.com`) inference, so it must be present alongside claude/node.
 #
 # include_workdir: false — the fullsend dir is not mounted into the sandbox;
 # the target repo is delivered read-only under /sandbox (readonly_repo: true).
@@ -66,4 +68,5 @@ network_policies:
         access: read-write
     binaries:
       - path: "**/claude"
+      - path: "**/pi"
       - path: "**/node"
