@@ -67,7 +67,12 @@ pre_script: plugins/sdlc-workflow/scripts/pre-verify-pr.sh
 post_script: plugins/sdlc-workflow/scripts/post-verify-pr.sh
 
 validation_loop:
-  # script: added in TC-5810 alongside the schema's producer/validator.
+  # Custom validator: the result schema uses additionalProperties:false
+  # throughout to document the contract, so strip_extra_properties.py drops
+  # benign agent-added metadata before jsonschema validates (fullsend's
+  # native schema-only check would reject it). fullsend requires a script for
+  # validation_loop regardless — schema alone is not sufficient.
+  script: plugins/sdlc-workflow/scripts/validate-output-schema.sh
   schema: plugins/sdlc-workflow/schemas/verify-pr-result.schema.json
   max_iterations: 2
 
