@@ -114,7 +114,11 @@ echo "PR: ${PR_REPO}#${PR_NUM}"
 : "${GH_TOKEN:?GH_TOKEN is required to prefetch PR ${PR_REPO}#${PR_NUM}}"
 
 HEAD_REF=$(gh pr view "${PR_NUM}" -R "${PR_REPO}" --json headRefName --jq .headRefName)
-COMMIT_SHA=$(gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq '.commits[-1].oid')
+# Derive the head SHA from the ref tip OID, not from `.commits[-1].oid`: gh's
+# `pr view` commits connection is bounded, so on a PR with more commits than the
+# cap `.commits[-1]` is the last commit of a truncated page rather than the head
+# — a silently-wrong SHA that still satisfies the result schema's hex pattern.
+COMMIT_SHA=$(gh pr view "${PR_NUM}" -R "${PR_REPO}" --json headRefOid --jq .headRefOid)
 
 gh pr diff "${PR_NUM}" -R "${PR_REPO}"                  > "${PRE_OUTPUT_DIR}/pr.diff"
 # `gh pr diff` has no --stat flag; derive the per-file diffstat from the patch we
@@ -134,6 +138,12 @@ fi
 gh api --paginate --slurp "repos/${PR_REPO}/pulls/${PR_NUM}/reviews"  | jq 'add' > "${PRE_OUTPUT_DIR}/reviews.json"
 gh api --paginate --slurp "repos/${PR_REPO}/pulls/${PR_NUM}/comments" | jq 'add' > "${PRE_OUTPUT_DIR}/review-comments.json"
 gh api --paginate --slurp "repos/${PR_REPO}/issues/${PR_NUM}/comments" | jq 'add' > "${PRE_OUTPUT_DIR}/issue-comments.json"
+# The bundled commits list uses gh's bounded `pr view` commits connection, so it
+# may be truncated on a very large PR. The authoritative head SHA is taken from
+# headRefOid above; this list is best-effort context for commit-traceability. If
+# a consumer ever treats it as authoritative, switch to a paginated
+# `gh api --paginate .../pulls/${PR_NUM}/commits` (which returns a different,
+# `sha`-shaped object needing reshaping to match the `oid` contract).
 gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq .commits > "${PRE_OUTPUT_DIR}/commits.json"
 
 echo "GitHub read bundle prefetched to ${PRE_OUTPUT_DIR}"
