@@ -69,7 +69,10 @@ def transform_to_input(issue, task_id, pr_url, github=None):
         "task_id": task_id,
         "task": {
             "summary": fields.get("summary", ""),
-            "description": fields.get("description", {}),
+            # Jira may return an explicit null description; `.get(key, {})` only
+            # defaults on an ABSENT key, so `or {}` also coerces null → {} to
+            # keep task.description an object per verify-pr-input.schema.json.
+            "description": fields.get("description") or {},
             "status": (fields.get("status") or {}).get("name", ""),
             "labels": fields.get("labels", []),
             "issue_links": [
