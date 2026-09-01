@@ -252,6 +252,53 @@ def test_adf_to_markdown_renders_task_list():
     assert result == "- [x] done item\n- [ ] todo item", f"Got: {result!r}"
 
 
+def test_adf_to_markdown_escapes_markdown_active_chars_in_literal_text():
+    """Literal markdown-active characters in a plain text node are backslash-escaped
+    so the native CLI renders them verbatim instead of reinterpreting them as
+    formatting."""
+    # Given a paragraph whose literal text contains * _ [ ] and a backtick
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "a*b_c[d]e`f"},
+            ]},
+        ],
+    }
+    # When rendering the ADF to markdown
+    result = execute_actions.adf_to_markdown(doc)
+    # Then each active character is escaped with a leading backslash
+    assert result == "a\\*b\\_c\\[d\\]e\\`f", f"Got: {result!r}"
+
+
+def test_adf_to_markdown_does_not_double_escape_marks_or_code():
+    """Intentional marks (strong/link) and inline code render correctly: the mark
+    syntax the renderer adds is not escaped, inline-code content stays literal, and
+    link hrefs are not escaped."""
+    # Given marked text, an inline-code span containing an asterisk, and a link
+    # whose href contains an underscore
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "bold", "marks": [{"type": "strong"}]},
+                {"type": "text", "text": " and "},
+                {"type": "text", "text": "a*b", "marks": [{"type": "code"}]},
+                {"type": "text", "text": " see "},
+                {"type": "text", "text": "here",
+                 "marks": [{"type": "link", "attrs": {"href": "https://x.example/a_b"}}]},
+            ]},
+        ],
+    }
+    # When rendering the ADF to markdown
+    result = execute_actions.adf_to_markdown(doc)
+    # Then the ** stays, the code asterisk stays literal, and the href underscore
+    # is preserved (none are escaped)
+    assert result == "**bold** and `a*b` see [here](https://x.example/a_b)", f"Got: {result!r}"
+
+
 def test_execute_post_comment_routes_to_native():
     """execute_post_comment resolves refs in body_adf, renders to markdown, and posts it."""
     recorder = _RunRecorder()
@@ -466,6 +513,8 @@ if __name__ == "__main__":
     test_post_jira_comment_native_invalid_key_exits()
     test_adf_to_markdown_renders_blocks_and_marks()
     test_adf_to_markdown_renders_task_list()
+    test_adf_to_markdown_escapes_markdown_active_chars_in_literal_text()
+    test_adf_to_markdown_does_not_double_escape_marks_or_code()
     test_execute_post_comment_routes_to_native()
     test_execute_post_report_posts_github_then_jira()
     test_execute_post_report_updates_existing_github_comment_on_retry()

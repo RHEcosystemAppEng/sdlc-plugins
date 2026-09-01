@@ -83,6 +83,26 @@ def resolve_refs_in_obj(obj: Any, registry: dict[str, dict[str, str]]) -> Any:
 # spec) rather than being wrapped in a paragraph block.
 _INLINE_NODE_TYPES = {"text", "hardBreak", "mention", "emoji", "inlineCard", "date", "status"}
 
+# Markdown-active characters that the native fullsend CLI reinterprets when it
+# re-parses the emitted markdown. Literal occurrences in ADF text nodes must be
+# backslash-escaped so they render verbatim (e.g. a literal ``*note*`` stays
+# ``*note*`` instead of becoming emphasized). Backslash is listed first so the
+# escapes inserted for the other characters are not themselves re-escaped.
+_MARKDOWN_ESCAPE_CHARS = ("\\", "`", "*", "_", "[", "]")
+
+
+def _escape_markdown(text: str) -> str:
+    """Backslash-escape markdown-active characters in literal text.
+
+    Applied to a text node's plain value before the renderer wraps it in the
+    mark syntax it intentionally adds (``**``, backticks, ``[]()``), so literal
+    text round-trips faithfully without double-escaping the marks. Not applied to
+    inline-code content, which the CLI treats literally.
+    """
+    for ch in _MARKDOWN_ESCAPE_CHARS:
+        text = text.replace(ch, f"\\{ch}")
+    return text
+
 
 def _render_adf_inline(nodes: list) -> str:
     """Render a list of ADF inline nodes to markdown."""
@@ -93,6 +113,11 @@ def _render_adf_inline(nodes: list) -> str:
             text = node.get("text", "")
             marks = node.get("marks", [])
             mark_types = {m.get("type") for m in marks}
+            # Escape markdown-active characters in the literal text before mark
+            # wrapping. Inline code is exempt: its content is literal to the CLI
+            # and escaping would corrupt inline-code semantics.
+            if "code" not in mark_types:
+                text = _escape_markdown(text)
             if "code" in mark_types:
                 text = f"`{text}`"
             if "strong" in mark_types:
