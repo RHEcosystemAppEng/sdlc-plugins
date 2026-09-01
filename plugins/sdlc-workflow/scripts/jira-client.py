@@ -443,15 +443,17 @@ def get_issue(issue_key: str, fields: str = "*all") -> Dict[str, Any]:
 def create_issue(
     project_key: str,
     summary: str,
-    description_md: str,
-    issue_type: str,
+    description_md: Optional[str] = None,
+    issue_type: str = "",
     labels: Optional[List[str]] = None,
     assignee_id: Optional[str] = None,
     priority: Optional[str] = None,
     fix_versions: Optional[List[str]] = None,
-    custom_fields: Optional[Dict[str, Any]] = None
+    custom_fields: Optional[Dict[str, Any]] = None,
+    description_adf: Optional[Dict[str, Any]] = None,
+    parent: Optional[str] = None
 ) -> Dict[str, Any]:
-    """Create JIRA issue with markdown description.
+    """Create JIRA issue with a markdown or pre-rendered ADF description.
 
     Args:
         project_key: Project key (e.g., TC)
@@ -463,18 +465,32 @@ def create_issue(
         priority: Optional priority name (e.g., "Major")
         fix_versions: Optional list of fixVersion names
         custom_fields: Optional custom field values (field_id: value)
+        description_adf: Pre-rendered ADF description (takes precedence over description_md)
+        parent: Optional parent issue key (creates a sub-task under it)
 
     Returns:
         Created issue object with key and ID
     """
+    # Prefer a pre-rendered ADF description; fall back to converting markdown,
+    # then to an empty document when neither is supplied.
+    if description_adf is not None:
+        description = description_adf
+    elif description_md is not None:
+        description = markdown_to_adf(description_md)
+    else:
+        description = {"type": "doc", "version": 1, "content": []}
+
     data = {
         "fields": {
             "project": {"key": project_key},
             "summary": summary,
-            "description": sanitize_adf(markdown_to_adf(description_md)),
+            "description": sanitize_adf(description),
             "issuetype": {"id": issue_type} if issue_type.isdigit() else {"name": issue_type},
         }
     }
+
+    if parent:
+        data["fields"]["parent"] = {"key": parent}
 
     if labels:
         data["fields"]["labels"] = labels
