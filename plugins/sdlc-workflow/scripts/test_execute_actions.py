@@ -233,6 +233,24 @@ def test_adf_to_markdown_renders_blocks_and_marks():
     assert result == expected, f"Got: {result!r}"
 
 
+def test_adf_to_markdown_renders_task_list():
+    """adf_to_markdown renders taskList DONE/TODO items as - [x] / - [ ] markers, for both paragraph-wrapped and inline taskItem content."""
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "taskList", "content": [
+                {"type": "taskItem", "attrs": {"state": "DONE"}, "content": [
+                    {"type": "paragraph", "content": [{"type": "text", "text": "done item"}]}]},
+                {"type": "taskItem", "attrs": {"state": "TODO"}, "content": [
+                    {"type": "text", "text": "todo item"}]},
+            ]},
+        ],
+    }
+    result = execute_actions.adf_to_markdown(doc)
+    assert result == "- [x] done item\n- [ ] todo item", f"Got: {result!r}"
+
+
 def test_execute_post_comment_routes_to_native():
     """execute_post_comment resolves refs in body_adf, renders to markdown, and posts it."""
     recorder = _RunRecorder()
@@ -314,6 +332,7 @@ if __name__ == "__main__":
     test_post_jira_comment_native_nonzero_exits()
     test_post_jira_comment_native_invalid_key_exits()
     test_adf_to_markdown_renders_blocks_and_marks()
+    test_adf_to_markdown_renders_task_list()
     test_execute_post_comment_routes_to_native()
     test_execute_post_report_posts_github_then_jira()
     print("All tests passed.")
