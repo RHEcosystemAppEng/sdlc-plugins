@@ -299,6 +299,63 @@ def test_adf_to_markdown_does_not_double_escape_marks_or_code():
     assert result == "**bold** and `a*b` see [here](https://x.example/a_b)", f"Got: {result!r}"
 
 
+def test_adf_to_markdown_renders_non_text_inline_nodes():
+    """Each non-text inline leaf node (mention/emoji/inlineCard/date/status)
+    renders its attrs-sourced displayable value instead of being dropped to an
+    empty string."""
+    # Given a paragraph containing one of each non-text inline leaf type, with
+    # an underscore in the inlineCard URL (URLs must not be escaped) and an
+    # epoch-millisecond date timestamp for 2021-01-01 UTC
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [
+                {"type": "mention", "attrs": {"id": "abc", "text": "@Marco Rizzi"}},
+                {"type": "text", "text": " "},
+                {"type": "emoji", "attrs": {"shortName": ":smile:", "text": "😄"}},
+                {"type": "text", "text": " "},
+                {"type": "inlineCard", "attrs": {"url": "https://example.com/a_b"}},
+                {"type": "text", "text": " "},
+                {"type": "date", "attrs": {"timestamp": "1609459200000"}},
+                {"type": "text", "text": " "},
+                {"type": "status", "attrs": {"text": "In Progress", "color": "yellow"}},
+            ]},
+        ],
+    }
+    # When rendering the ADF to markdown
+    result = execute_actions.adf_to_markdown(doc)
+    # Then every node contributes its attrs value (URL underscore preserved, date
+    # formatted as YYYY-MM-DD) and nothing is silently dropped
+    assert result == "@Marco Rizzi 😄 https://example.com/a_b 2021-01-01 In Progress", \
+        f"Got: {result!r}"
+
+
+def test_adf_to_markdown_renders_inline_nodes_in_task_item():
+    """A taskItem whose inline content mixes text with a mention and an
+    inlineCard renders all of them — the inline nodes are not dropped in the
+    taskItem context."""
+    # Given a TODO taskItem with inline mention and inlineCard nodes
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "taskList", "content": [
+                {"type": "taskItem", "attrs": {"state": "TODO"}, "content": [
+                    {"type": "text", "text": "ping "},
+                    {"type": "mention", "attrs": {"text": "@dev"}},
+                    {"type": "text", "text": " re "},
+                    {"type": "inlineCard", "attrs": {"url": "https://example.com/pr/1"}},
+                ]},
+            ]},
+        ],
+    }
+    # When rendering the ADF to markdown
+    result = execute_actions.adf_to_markdown(doc)
+    # Then the checklist item retains the mention and inlineCard values
+    assert result == "- [ ] ping @dev re https://example.com/pr/1", f"Got: {result!r}"
+
+
 def test_execute_post_comment_routes_to_native():
     """execute_post_comment resolves refs in body_adf, renders to markdown, and posts it."""
     recorder = _RunRecorder()
@@ -515,6 +572,8 @@ if __name__ == "__main__":
     test_adf_to_markdown_renders_task_list()
     test_adf_to_markdown_escapes_markdown_active_chars_in_literal_text()
     test_adf_to_markdown_does_not_double_escape_marks_or_code()
+    test_adf_to_markdown_renders_non_text_inline_nodes()
+    test_adf_to_markdown_renders_inline_nodes_in_task_item()
     test_execute_post_comment_routes_to_native()
     test_execute_post_report_posts_github_then_jira()
     test_execute_post_report_updates_existing_github_comment_on_retry()
