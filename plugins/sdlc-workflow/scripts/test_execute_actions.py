@@ -332,15 +332,17 @@ def test_execute_post_report_posts_github_then_jira():
 
 def test_execute_post_report_updates_existing_github_comment_on_retry():
     """A retry for the same commit PATCH-updates the existing GitHub report comment instead of creating a duplicate."""
-    # Given a prior report comment for this commit already exists on the PR
+    # Given a prior report comment for this commit already exists on the PR.
+    # `gh api --paginate --slurp` wraps each page's comment array in one outer
+    # array, so the listing is a single-page array-of-pages here.
     calls = []
-    existing = [{"id": 555,
-                 "body": "old report\n\n<!-- sdlc-workflow:verify-pr report commit:946556e -->"}]
+    existing_page = [{"id": 555,
+                      "body": "old report\n\n<!-- sdlc-workflow:verify-pr report commit:946556e -->"}]
 
     def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
         calls.append({"cmd": cmd, "input": input, "env": env})
         if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
-            return _FakeCompleted(0, "", json.dumps(existing))
+            return _FakeCompleted(0, "", json.dumps([existing_page]))
         return _FakeCompleted(0, "")
 
     saved_run = execute_actions.subprocess.run
@@ -376,6 +378,80 @@ def test_execute_post_report_updates_existing_github_comment_on_retry():
         "Jira report must still be posted on retry"
 
 
+def test_execute_post_report_updates_comment_on_later_page():
+    """When the listing spans multiple pages, an existing report comment on a
+    non-first page is still found and PATCH-updated (no duplicate created)."""
+    # Given a slurped, multi-page listing (array-of-pages) where the marked report
+    # comment lives on the SECOND page — the exact case a single json.loads on
+    # concatenated per-page arrays could not parse.
+    calls = []
+    page_one = [
+        {"id": 101, "body": "just a normal review comment"},
+        {"id": 102, "body": "another unrelated comment"},
+    ]
+    page_two = [
+        {"id": 103, "body": "chatter"},
+        {"id": 555,
+         "body": "old report\n\n<!-- sdlc-workflow:verify-pr report commit:946556e -->"},
+    ]
+
+    def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
+        calls.append({"cmd": cmd, "input": input, "env": env})
+        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
+            # --paginate --slurp wraps each page's array in one outer array.
+            return _FakeCompleted(0, "", json.dumps([page_one, page_two]))
+        return _FakeCompleted(0, "")
+
+    saved_run = execute_actions.subprocess.run
+    saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
+    execute_actions.subprocess.run = fake_run
+    os.environ.update(_JIRA_ENV)
+    try:
+        report = {
+            "pr_repo": "acme/widget",
+            "pr_number": 42,
+            "jira_issue_id": "TC-777",
+            "commit_sha": "946556e",
+            "report_md": "## Verify report\nAll good.",
+        }
+        # When posting the report again for the same commit
+        execute_actions.execute_post_report({"type": "post_report"}, {}, report)
+    finally:
+        execute_actions.subprocess.run = saved_run
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # Then the comment on the second page is PATCH-updated, not duplicated.
+    assert not any(c["cmd"][:3] == ["gh", "pr", "comment"] for c in calls), \
+        "must not create a new GitHub comment when the report exists on a later page"
+    patch_calls = [c for c in calls if "PATCH" in c["cmd"]]
+    assert len(patch_calls) == 1, f"Expected one PATCH update, got {len(patch_calls)}"
+    assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
+
+
+def test_find_report_comment_id_exits_on_unparseable_json():
+    """A JSON parse failure aborts with sys.exit(1) instead of silently returning
+    None (which would let a retry create a duplicate report comment)."""
+    # Given `gh` returns malformed JSON (e.g. concatenated per-page arrays, the
+    # pre-fix --paginate-without-slurp shape that is not valid combined JSON)
+    def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
+        return _FakeCompleted(0, "", "[{\"id\": 1}][{\"id\": 2}]")
+
+    saved_run = execute_actions.subprocess.run
+    execute_actions.subprocess.run = fake_run
+    try:
+        # When the id lookup runs, it must fail loudly rather than swallow the error
+        execute_actions._find_report_comment_id("acme/widget", 42, "marker")
+        assert False, "Should have exited on unparseable JSON"
+    except SystemExit as e:
+        assert e.code == 1
+    finally:
+        execute_actions.subprocess.run = saved_run
+
+
 if __name__ == "__main__":
     test_resolve_refs_replaces_key()
     test_resolve_refs_no_placeholders()
@@ -393,4 +469,6 @@ if __name__ == "__main__":
     test_execute_post_comment_routes_to_native()
     test_execute_post_report_posts_github_then_jira()
     test_execute_post_report_updates_existing_github_comment_on_retry()
+    test_execute_post_report_updates_comment_on_later_page()
+    test_find_report_comment_id_exits_on_unparseable_json()
     print("All tests passed.")

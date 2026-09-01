@@ -367,18 +367,30 @@ def _find_report_comment_id(repo: str, pr_number: int, marker: str) -> int | Non
     Lists the PR's issue-level comments and matches on the commit-scoped marker
     so a retry updates the same commit's report comment instead of duplicating
     it. Returns ``None`` when no marked comment exists yet.
+
+    ``--slurp`` is required alongside ``--paginate``: without it ``gh`` emits one
+    JSON array per page concatenated (``[...][...]``), which is not valid combined
+    JSON once the PR has more than one page of comments (>30) and would fail to
+    parse. ``--slurp`` wraps the per-page arrays in a single outer array, so the
+    output is valid JSON regardless of page count; the pages are then flattened
+    into one comment list. A parse failure is a real error (surfaced via
+    ``sys.exit``), never silently treated as "no existing comment" — doing so
+    would defeat retry idempotency by creating a duplicate report comment.
     """
     result = subprocess.run(
-        ["gh", "api", f"repos/{repo}/issues/{pr_number}/comments", "--paginate"],
+        ["gh", "api", f"repos/{repo}/issues/{pr_number}/comments",
+         "--paginate", "--slurp"],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
         print(f"Failed to list PR comments: {result.stderr}", file=sys.stderr)
         sys.exit(1)
     try:
-        comments = json.loads(result.stdout or "[]")
-    except json.JSONDecodeError:
-        return None
+        pages = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError as e:
+        print(f"Failed to parse PR comments JSON: {e}", file=sys.stderr)
+        sys.exit(1)
+    comments = [comment for page in pages for comment in page]
     for comment in comments:
         if marker in (comment.get("body") or ""):
             return comment.get("id")
