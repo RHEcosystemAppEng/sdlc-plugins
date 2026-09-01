@@ -244,14 +244,17 @@ def test_stat_produced_by_git_apply_stat():
         " line3\n"
     )
     with tempfile.TemporaryDirectory() as d:
-        diff_path = os.path.join(d, "pr.diff")
-        with open(diff_path, "w") as f:
+        with open(os.path.join(d, "pr.diff"), "w") as f:
             f.write(patch)
 
-        # When producing the stat with the exact command pre-verify-pr.sh uses
+        # When producing the stat with the exact command pre-verify-pr.sh uses.
+        # Run it from the (non-repo) temp dir: `git apply --stat` is CWD-sensitive
+        # — inside a repo subdirectory it scopes the patch to that subtree and
+        # reports "0 files changed", so cwd=d keeps this a pure textual diffstat
+        # independent of where the test runner is launched.
         result = subprocess.run(
-            ["git", "apply", "--stat", diff_path],
-            capture_output=True, text=True,
+            ["git", "apply", "--stat", "pr.diff"],
+            cwd=d, capture_output=True, text=True,
         )
 
     # Then it succeeds and emits a git diffstat downstream can consume
@@ -275,6 +278,68 @@ def test_pre_verify_sh_uses_supported_stat_command():
         if "gh pr diff" in line:
             assert "--stat" not in line, f"unsupported gh flag reintroduced: {line!r}"
     assert "git apply --stat" in script, "expected git apply --stat stat mechanism"
+
+
+# --- paginated fetch aggregation (pre-verify-pr.sh) ---
+
+def test_paginated_pages_aggregate_into_flat_array():
+    """Multi-page fetches merge into one complete array, not truncated at page 1.
+
+    Exercises the exact merge pre-verify-pr.sh runs on the `gh api --paginate
+    --slurp` output — a per-page array-of-arrays piped through `jq 'add'` — and
+    asserts every page's items survive in order with their object shape intact.
+    """
+    # Given the array-of-pages that `gh api --paginate --slurp` emits: three
+    # pages, so page-2 and page-3 items only appear if pagination is honored.
+    slurped_pages = [
+        [{"id": 1}, {"id": 2}],
+        [{"id": 3}, {"id": 4}],
+        [{"id": 5}],
+    ]
+
+    # When merged with the same standalone `jq 'add'` the script pipes through
+    result = subprocess.run(
+        ["jq", "add"],
+        input=json.dumps(slurped_pages), capture_output=True, text=True,
+    )
+
+    # Then the pages flatten into one array carrying items beyond the first page
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    merged = json.loads(result.stdout)
+    assert merged == [{"id": 1}, {"id": 2}, {"id": 3}, {"id": 4}, {"id": 5}], \
+        f"expected flat concatenation, got: {merged!r}"
+    assert [o["id"] for o in merged] == [1, 2, 3, 4, 5]  # order preserved
+    assert {"id": 5} in merged  # last page (beyond first) not truncated
+
+
+def test_pre_verify_sh_paginates_review_comment_fetches():
+    """Regression guard: all three gh api review/comment fetches request every
+    page and merge with `jq 'add'` (Sourcery id 3896899429), keeping the stored
+    value a flat array for pre_verify_pr.py.
+    """
+    # Given the current pre-verify-pr.sh source
+    with open(pre_verify_sh) as f:
+        script = f.read()
+
+    # Then each of the three paginated endpoints is fetched with --paginate
+    # --slurp and merged via jq add on a non-comment line.
+    endpoints = [
+        "/pulls/${PR_NUM}/reviews",
+        "/pulls/${PR_NUM}/comments",
+        "/issues/${PR_NUM}/comments",
+    ]
+    for endpoint in endpoints:
+        matches = [
+            line for line in script.splitlines()
+            if endpoint in line and not line.lstrip().startswith("#")
+        ]
+        assert matches, f"no fetch line found for {endpoint}"
+        for line in matches:
+            if "gh api" not in line:
+                continue
+            assert "--paginate" in line, f"missing --paginate: {line!r}"
+            assert "--slurp" in line, f"missing --slurp: {line!r}"
+            assert "jq 'add'" in line, f"missing jq 'add' merge: {line!r}"
 
 
 # --- runner ---
