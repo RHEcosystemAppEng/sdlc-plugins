@@ -19,13 +19,18 @@ set -euo pipefail
 
 RESULT_FILE=""
 for dir in iteration-*/output; do
+  # Prefer agent-result.json; fall back to result.json when it is absent,
+  # matching the precedence in validate-output-schema.sh (agents sometimes
+  # write "result.json" instead of "agent-result.json").
   if [[ -f "${dir}/agent-result.json" ]]; then
     RESULT_FILE="${dir}/agent-result.json"
+  elif [[ -f "${dir}/result.json" ]]; then
+    RESULT_FILE="${dir}/result.json"
   fi
 done
 
 if [[ -z "${RESULT_FILE}" ]]; then
-  echo "ERROR: agent-result.json not found in any iteration output directory"
+  echo "ERROR: no agent-result.json or result.json found in any iteration output directory"
   exit 1
 fi
 
