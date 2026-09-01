@@ -18,7 +18,14 @@
 set -euo pipefail
 
 RESULT_FILE=""
-for dir in iteration-*/output; do
+# Iterate iteration directories in ascending numeric order so the
+# highest-numbered iteration that has a result file wins. Plain glob order is
+# lexicographic (iteration-9 sorts after iteration-20), which would select a
+# stale iteration once there are >= 10 iterations. `sort -V` orders the
+# embedded iteration numbers numerically; the `[[ -d ]]` guard skips the
+# literal glob pattern when no iteration directory exists.
+while IFS= read -r dir; do
+  [[ -d "${dir}" ]] || continue
   # Prefer agent-result.json; fall back to result.json when it is absent,
   # matching the precedence in validate-output-schema.sh (agents sometimes
   # write "result.json" instead of "agent-result.json").
@@ -27,7 +34,7 @@ for dir in iteration-*/output; do
   elif [[ -f "${dir}/result.json" ]]; then
     RESULT_FILE="${dir}/result.json"
   fi
-done
+done < <(printf '%s\n' iteration-*/output | sort -V)
 
 if [[ -z "${RESULT_FILE}" ]]; then
   echo "ERROR: no agent-result.json or result.json found in any iteration output directory"
