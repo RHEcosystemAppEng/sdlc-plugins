@@ -194,21 +194,74 @@ def test_post_jira_comment_native_invalid_key_exits():
     assert recorder.cmd is None, "CLI should not run for an invalid key"
 
 
+def test_adf_to_markdown_renders_blocks_and_marks():
+    """adf_to_markdown renders headings, lists, code blocks, rules, and inline marks."""
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "heading", "attrs": {"level": 2},
+             "content": [{"type": "text", "text": "Title"}]},
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "See "},
+                {"type": "text", "text": "TC-1", "marks": [{"type": "strong"}]},
+                {"type": "text", "text": " and "},
+                {"type": "text", "text": "run", "marks": [{"type": "code"}]},
+                {"type": "text", "text": " at "},
+                {"type": "text", "text": "here",
+                 "marks": [{"type": "link", "attrs": {"href": "https://x.example/y"}}]},
+            ]},
+            {"type": "bulletList", "content": [
+                {"type": "listItem", "content": [
+                    {"type": "paragraph", "content": [{"type": "text", "text": "first"}]}]},
+                {"type": "listItem", "content": [
+                    {"type": "paragraph", "content": [{"type": "text", "text": "second"}]}]},
+            ]},
+            {"type": "rule"},
+            {"type": "codeBlock", "attrs": {"language": "python"},
+             "content": [{"type": "text", "text": "x = 1"}]},
+        ],
+    }
+    result = execute_actions.adf_to_markdown(doc)
+    expected = (
+        "## Title\n\n"
+        "See **TC-1** and `run` at [here](https://x.example/y)\n\n"
+        "- first\n- second\n\n"
+        "---\n\n"
+        "```python\nx = 1\n```"
+    )
+    assert result == expected, f"Got: {result!r}"
+
+
 def test_execute_post_comment_routes_to_native():
-    """execute_post_comment resolves refs then posts body_md to the action's issue."""
+    """execute_post_comment resolves refs in body_adf, renders to markdown, and posts it."""
     recorder = _RunRecorder()
     restore = _with_jira_env_and_recorder(recorder)
     registry = {"sub-1": {"key": "TC-500", "url": "https://jira.example.com/browse/TC-500"}}
+    body_adf = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "See "},
+                {"type": "text", "text": "{{sub-1.key}}", "marks": [{"type": "strong"}]},
+                {"type": "text", "text": " at "},
+                {"type": "text", "text": "link",
+                 "marks": [{"type": "link", "attrs": {"href": "{{sub-1.url}}"}}]},
+            ]},
+        ],
+    }
     try:
         execute_actions.execute_post_comment(
-            {"type": "post_comment", "issue": "{{sub-1.key}}", "body_md": "See {{sub-1.url}}"},
+            {"type": "post_comment", "issue": "{{sub-1.key}}", "body_adf": body_adf},
             registry,
         )
     finally:
         restore()
 
     assert recorder.cmd[recorder.cmd.index("--number") + 1] == "500"
-    assert recorder.input == "See https://jira.example.com/browse/TC-500"
+    assert recorder.input == "See **TC-500** at [link](https://jira.example.com/browse/TC-500)", \
+        f"Got: {recorder.input!r}"
 
 
 def test_execute_post_report_posts_github_then_jira():
@@ -260,6 +313,7 @@ if __name__ == "__main__":
     test_post_jira_comment_native_maps_env()
     test_post_jira_comment_native_nonzero_exits()
     test_post_jira_comment_native_invalid_key_exits()
+    test_adf_to_markdown_renders_blocks_and_marks()
     test_execute_post_comment_routes_to_native()
     test_execute_post_report_posts_github_then_jira()
     print("All tests passed.")
