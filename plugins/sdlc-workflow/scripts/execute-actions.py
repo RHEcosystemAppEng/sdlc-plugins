@@ -68,6 +68,11 @@ def resolve_refs_in_obj(obj: Any, registry: dict[str, dict[str, str]]) -> Any:
     return obj
 
 
+# ADF inline node types that may appear directly inside a taskItem (per the ADF
+# spec) rather than being wrapped in a paragraph block.
+_INLINE_NODE_TYPES = {"text", "hardBreak", "mention", "emoji", "inlineCard", "date", "status"}
+
+
 def _render_adf_inline(nodes: list) -> str:
     """Render a list of ADF inline nodes to markdown."""
     parts = []
@@ -108,6 +113,31 @@ def _render_adf_list(node: dict, *, ordered: bool) -> str:
     return "\n".join(lines)
 
 
+def _render_adf_task_list(node: dict) -> str:
+    """Render an ADF taskList to a markdown checklist.
+
+    Each taskItem carries a ``state`` attr of ``DONE`` or ``TODO``, rendered as
+    ``- [x]`` / ``- [ ]``. taskItem content may be inline nodes (ADF spec) or
+    paragraph blocks (as ``sanitize_adf`` and some producers treat them); both
+    are handled so no variant falls through to the flattening unknown-block path.
+    """
+    lines = []
+    for item in node.get("content", []):
+        if item.get("type") != "taskItem":
+            continue
+        state = item.get("attrs", {}).get("state", "TODO")
+        marker = "- [x]" if state == "DONE" else "- [ ]"
+        content = item.get("content", [])
+        if content and all(child.get("type") in _INLINE_NODE_TYPES for child in content):
+            item_md = _render_adf_inline(content)
+        else:
+            item_md = _render_adf_blocks(content)
+        for line_number, line in enumerate(item_md.split("\n")):
+            prefix = f"{marker} " if line_number == 0 else "  "
+            lines.append(f"{prefix}{line}")
+    return "\n".join(lines)
+
+
 def _render_adf_block(node: dict) -> str:
     """Render a single ADF block node to markdown."""
     node_type = node.get("type")
@@ -126,6 +156,8 @@ def _render_adf_block(node: dict) -> str:
         return _render_adf_list(node, ordered=False)
     if node_type == "orderedList":
         return _render_adf_list(node, ordered=True)
+    if node_type == "taskList":
+        return _render_adf_task_list(node)
     # Unknown block — recurse into nested content.
     return _render_adf_blocks(node.get("content", []))
 
@@ -143,7 +175,9 @@ def adf_to_markdown(doc: dict) -> str:
     but the result schema carries ``post_comment`` bodies as ADF (``body_adf``).
     This renders the ADF back to markdown covering the node set markdown_to_adf
     produces: headings, paragraphs, bullet/ordered lists, code blocks, rules, and
-    the strong/em/code/link inline marks.
+    the strong/em/code/link inline marks. taskList/taskItem nodes (which agents may
+    emit directly in ``body_adf``) render as markdown checklists (``- [ ]`` /
+    ``- [x]``).
     """
     if not isinstance(doc, dict):
         raise TypeError("adf_to_markdown expects an ADF document object")
