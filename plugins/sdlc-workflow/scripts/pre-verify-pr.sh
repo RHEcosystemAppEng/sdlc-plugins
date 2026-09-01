@@ -122,9 +122,15 @@ if [[ -s "${PRE_OUTPUT_DIR}/pr.diff" ]]; then
 else
   : > "${PRE_OUTPUT_DIR}/pr.stat"
 fi
-gh api "repos/${PR_REPO}/pulls/${PR_NUM}/reviews"       > "${PRE_OUTPUT_DIR}/reviews.json"
-gh api "repos/${PR_REPO}/pulls/${PR_NUM}/comments"      > "${PRE_OUTPUT_DIR}/review-comments.json"
-gh api "repos/${PR_REPO}/issues/${PR_NUM}/comments"     > "${PRE_OUTPUT_DIR}/issue-comments.json"
+# GitHub REST returns ~30 items per page; without --paginate the reviews and
+# comments are silently truncated on any active PR. --slurp aggregates the
+# per-page arrays into an array-of-pages, which `jq 'add'` concatenates back
+# into the single flat array that pre_verify_pr.py's build_github_bundle
+# expects. (--slurp cannot be combined with gh's built-in --jq, so the merge
+# uses a standalone jq.) pipefail makes a failed gh or jq abort the script.
+gh api --paginate --slurp "repos/${PR_REPO}/pulls/${PR_NUM}/reviews"  | jq 'add' > "${PRE_OUTPUT_DIR}/reviews.json"
+gh api --paginate --slurp "repos/${PR_REPO}/pulls/${PR_NUM}/comments" | jq 'add' > "${PRE_OUTPUT_DIR}/review-comments.json"
+gh api --paginate --slurp "repos/${PR_REPO}/issues/${PR_NUM}/comments" | jq 'add' > "${PRE_OUTPUT_DIR}/issue-comments.json"
 gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq .commits > "${PRE_OUTPUT_DIR}/commits.json"
 
 echo "GitHub read bundle prefetched to ${PRE_OUTPUT_DIR}"
