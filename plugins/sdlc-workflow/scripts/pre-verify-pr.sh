@@ -114,7 +114,14 @@ HEAD_REF=$(gh pr view "${PR_NUM}" -R "${PR_REPO}" --json headRefName --jq .headR
 COMMIT_SHA=$(gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq '.commits[-1].oid')
 
 gh pr diff "${PR_NUM}" -R "${PR_REPO}"                  > "${PRE_OUTPUT_DIR}/pr.diff"
-gh pr diff "${PR_NUM}" -R "${PR_REPO}" --stat           > "${PRE_OUTPUT_DIR}/pr.stat"
+# `gh pr diff` has no --stat flag; derive the per-file diffstat from the patch we
+# just fetched using a supported git command. Guard the empty-diff case: `git
+# apply --stat` errors on an empty patch, which would abort under set -euo pipefail.
+if [[ -s "${PRE_OUTPUT_DIR}/pr.diff" ]]; then
+  git apply --stat "${PRE_OUTPUT_DIR}/pr.diff"         > "${PRE_OUTPUT_DIR}/pr.stat"
+else
+  : > "${PRE_OUTPUT_DIR}/pr.stat"
+fi
 gh api "repos/${PR_REPO}/pulls/${PR_NUM}/reviews"       > "${PRE_OUTPUT_DIR}/reviews.json"
 gh api "repos/${PR_REPO}/pulls/${PR_NUM}/comments"      > "${PRE_OUTPUT_DIR}/review-comments.json"
 gh api "repos/${PR_REPO}/issues/${PR_NUM}/comments"     > "${PRE_OUTPUT_DIR}/issue-comments.json"
