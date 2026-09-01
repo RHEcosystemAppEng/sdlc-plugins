@@ -28,6 +28,7 @@ Required env vars:
     JIRA_PROJECT_KEY — Jira project key (for root-cause task creation)
 """
 
+import datetime
 import importlib.util
 import json
 import os
@@ -104,8 +105,36 @@ def _escape_markdown(text: str) -> str:
     return text
 
 
+def _render_adf_date(timestamp: Any) -> str:
+    """Render an ADF ``date`` node's timestamp as a readable ``YYYY-MM-DD`` date.
+
+    ADF ``date`` nodes store ``attrs.timestamp`` as a string of milliseconds
+    since the Unix epoch. It is formatted as a UTC calendar date. If the value is
+    missing or not an integer, its literal form is returned so the node still
+    contributes its value instead of being dropped.
+    """
+    try:
+        ms = int(timestamp)
+    except (TypeError, ValueError):
+        return str(timestamp) if timestamp else ""
+    return datetime.datetime.fromtimestamp(
+        ms / 1000, tz=datetime.timezone.utc
+    ).strftime("%Y-%m-%d")
+
+
 def _render_adf_inline(nodes: list) -> str:
-    """Render a list of ADF inline nodes to markdown."""
+    """Render a list of ADF inline nodes to markdown.
+
+    Handles every inline leaf type in ``_INLINE_NODE_TYPES``: ``text`` and
+    ``hardBreak``, plus the leaf nodes that carry their displayable value in
+    ``attrs`` rather than a ``content`` array — ``mention``/``emoji``/``status``
+    (``attrs.text``), ``inlineCard`` (``attrs.url``) and ``date``
+    (``attrs.timestamp``). These are rendered explicitly so they are not routed
+    to the final ``else`` (which recurses into ``content``) and silently dropped
+    as empty strings; that keeps the renderer in sync with ``_INLINE_NODE_TYPES``.
+    The ``else`` remains for genuinely unknown container-like inline nodes so they
+    still degrade gracefully by rendering any nested content.
+    """
     parts = []
     for node in nodes:
         node_type = node.get("type")
@@ -131,6 +160,19 @@ def _render_adf_inline(nodes: list) -> str:
             parts.append(text)
         elif node_type == "hardBreak":
             parts.append("\n")
+        elif node_type in ("mention", "status"):
+            # Displayable text lives in attrs.text; escape it as literal text.
+            parts.append(_escape_markdown(node.get("attrs", {}).get("text", "")))
+        elif node_type == "emoji":
+            # Prefer the unicode/text fallback; custom emoji may only have a
+            # shortName. Escaped as literal text.
+            attrs = node.get("attrs", {})
+            parts.append(_escape_markdown(attrs.get("text") or attrs.get("shortName", "")))
+        elif node_type == "inlineCard":
+            # Render the card's URL as a bare link target; URLs are not escaped.
+            parts.append(node.get("attrs", {}).get("url", ""))
+        elif node_type == "date":
+            parts.append(_render_adf_date(node.get("attrs", {}).get("timestamp", "")))
         else:
             # Unknown inline node — recurse into any nested content.
             parts.append(_render_adf_inline(node.get("content", [])))
