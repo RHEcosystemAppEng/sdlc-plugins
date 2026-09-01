@@ -156,6 +156,57 @@ def test_transform_null_status():
     assert result["task"]["status"] == ""
 
 
+def test_transform_null_description_coerced_to_object():
+    """An explicit null description becomes {} so task.description stays an object.
+
+    Regression for Sourcery id 3896899434: `fields.get("description", {})` only
+    defaults on an absent key, so an explicit JSON null (an issue with no
+    description) yielded task.description = null, violating the input schema.
+    """
+    # Given a Jira issue whose description field is an explicit null
+    issue = {"fields": {"summary": "S", "description": None, "status": {"name": "Open"},
+                        "labels": [], "issuelinks": []}}
+
+    # When transforming it to the tracker-agnostic input
+    result = pre_verify_pr.transform_to_input(issue, "TC-1", "")
+
+    # Then the null is coerced to an empty object, not left as null
+    assert result["task"]["description"] == {}, \
+        f"expected {{}}, got: {result['task']['description']!r}"
+    assert isinstance(result["task"]["description"], dict)
+
+
+def test_null_description_input_validates_against_schema():
+    """A produced input with a null-source description validates against the schema.
+
+    Drives the full transform (task + github bundle) for an issue with a null
+    description and asserts the result satisfies verify-pr-input.schema.json —
+    the acceptance criterion for TC-5886. Without the null coercion the instance
+    would carry task.description = null and fail (description must be an object).
+    """
+    from jsonschema import validate
+
+    # Given an issue with a null description and the prefetched github bundle a
+    # real run embeds (the schema requires `github`, so a bare task won't do)
+    issue = {"fields": {"summary": "S", "description": None, "status": {"name": "Open"},
+                        "labels": [], "issuelinks": []}}
+    github = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "feat/x", "deadbee", "diff", "stat", [], [], [], [],
+    )
+
+    # When producing the input and loading the input schema
+    result = pre_verify_pr.transform_to_input(
+        issue, "TC-1", "https://github.com/o/r/pull/5", github)
+    schema_path = os.path.join(
+        script_dir, "..", "schemas", "verify-pr-input.schema.json")
+    with open(schema_path) as f:
+        schema = json.load(f)
+
+    # Then it validates cleanly (validate raises ValidationError on failure)
+    assert result["task"]["description"] == {}
+    validate(instance=result, schema=schema)
+
+
 def test_transform_large_payload():
     """Regression test: large payloads must work via stdin, not argv."""
     issue = {"fields": {
