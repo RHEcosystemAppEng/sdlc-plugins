@@ -492,6 +492,85 @@ def test_pr_url_extra_path_segment_rejected():
     assert not matched, f"expected rejection, but matched with number={number!r}"
 
 
+# --- COMMIT_SHA derivation (pre-verify-pr.sh) ---
+
+def _commit_sha_command():
+    """Extract the COMMIT_SHA assignment command from pre-verify-pr.sh.
+
+    The behavioral test below runs the *actual* command the script ships (not a
+    re-typed copy), so a regression back to the bounded commits connection is
+    caught by execution, not just by source inspection.
+    """
+    with open(pre_verify_sh) as f:
+        for line in f:
+            if line.lstrip().startswith("COMMIT_SHA="):
+                return line.strip()
+    raise AssertionError("COMMIT_SHA assignment not found in pre-verify-pr.sh")
+
+
+def test_commit_sha_derived_from_head_ref_oid():
+    """The prefetched COMMIT_SHA is the PR head ref tip OID, not the last commit
+    of gh's bounded commits connection.
+
+    Runs the exact COMMIT_SHA command pre-verify-pr.sh ships against a gh stub
+    whose headRefOid and commits[-1].oid disagree (simulating a large PR whose
+    commits connection is truncated below the head). Regression for Sourcery id
+    3902563589: the old `.commits[-1].oid` read returns the truncated oid.
+    """
+    # Given a gh stub where the head ref OID and the (truncated) commits
+    # connection's last oid disagree
+    head_oid = "a" * 40
+    truncated_oid = "b" * 40
+    with tempfile.TemporaryDirectory() as d:
+        gh_stub = os.path.join(d, "gh")
+        with open(gh_stub, "w") as f:
+            f.write(
+                "#!/usr/bin/env bash\n"
+                "for arg in \"$@\"; do\n"
+                f'  if [[ "$arg" == headRefOid ]]; then echo {head_oid}; exit 0; fi\n'
+                f'  if [[ "$arg" == commits ]]; then echo {truncated_oid}; exit 0; fi\n'
+                "done\n"
+                "echo UNEXPECTED >&2; exit 1\n"
+            )
+        os.chmod(gh_stub, 0o755)
+
+        # When running the exact COMMIT_SHA assignment the script ships, with the
+        # stub gh ahead on PATH and PR_NUM/PR_REPO supplied
+        command = _commit_sha_command()
+        env = {**os.environ, "PATH": d + os.pathsep + os.environ["PATH"],
+               "PR_NUM": "275", "PR_REPO": "o/r"}
+        result = subprocess.run(
+            ["bash", "-c", command + "\nprintf '%s' \"$COMMIT_SHA\""],
+            capture_output=True, text=True, env=env,
+        )
+
+    # Then the emitted commit SHA is the head ref OID, not the truncated last commit
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    assert result.stdout == head_oid, f"Got: {result.stdout!r} (stderr: {result.stderr!r})"
+    assert result.stdout != truncated_oid
+
+
+def test_pre_verify_sh_derives_commit_sha_from_head_ref_oid():
+    """Regression guard: COMMIT_SHA reads headRefOid and never the truncatable
+    commits connection (.commits[-1].oid) (Sourcery id 3902563589).
+    """
+    # Given the current pre-verify-pr.sh source
+    with open(pre_verify_sh) as f:
+        script = f.read()
+
+    # Then every COMMIT_SHA assignment reads headRefOid and none falls back to
+    # gh's bounded commits connection
+    commit_sha_lines = [
+        line for line in script.splitlines()
+        if line.lstrip().startswith("COMMIT_SHA=")
+    ]
+    assert commit_sha_lines, "no COMMIT_SHA assignment found in pre-verify-pr.sh"
+    for line in commit_sha_lines:
+        assert "headRefOid" in line, f"COMMIT_SHA not derived from headRefOid: {line!r}"
+        assert ".commits[-1]" not in line, \
+            f"COMMIT_SHA reintroduced the bounded commits read: {line!r}"
+
+
 # --- runner ---
 
 if __name__ == "__main__":
