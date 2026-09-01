@@ -968,11 +968,22 @@ Store the full SHA and its short form (first 7 characters) for use in the report
 
 ### Post to GitHub PR
 
-Each verification run creates a **new** PR comment (never overwrites previous reports).
-This provides a verification history over time, with each report clearly referencing
-the commit SHA it verified.
+The report comment is **scoped to the commit it verifies**. Posting is idempotent
+per commit: a re-run (or a retry after a partial failure) on the **same commit**
+updates the existing report comment in place, while a **later commit** gets a fresh
+comment. This preserves a **per-commit** verification history — one report comment
+per commit, refreshed on re-runs — rather than a new comment on every run.
 
-Update the report header from Step 8 to include the commit SHA:
+To make this work, the report body embeds an invisible commit-scoped marker (the
+mechanism GitHub lacks a native sticky-comment for):
+
+```
+<!-- sdlc-workflow:verify-pr report commit:<full-sha> -->
+```
+
+Update the report header from Step 8 to include the commit SHA — the
+`(commit <short-sha>)` makes which commit each comment verifies legible in the PR
+timeline:
 
 ```
 ## Verification Report for <JIRA-ID> (commit <short-sha>)
@@ -988,8 +999,21 @@ Append a markdown footnote at the end of the report body, separated by a horizon
 Read the plugin version from `plugins/sdlc-workflow/.claude-plugin/plugin.json` and
 substitute `{version}` before posting.
 
+Build the comment body as the report (with the commit-scoped header and footnote)
+followed by the commit marker, then post it via a find-then-update-or-create path
+(as implemented by `_find_report_comment_id` + `execute_post_report` in
+`scripts/execute-actions.py`):
+
 ```
-gh pr comment <pr-number> --body "<report-with-footnote>" -R <owner/repo>
+# Find an existing report comment for this commit, matched by the marker above.
+# --slurp is required with --paginate so multi-page (>30) comment output is valid JSON.
+gh api repos/<owner/repo>/issues/<pr-number>/comments --paginate --slurp
+
+# If a comment carrying this commit's marker exists → update it in place:
+gh api repos/<owner/repo>/issues/comments/<comment-id> -X PATCH -f body="<report-with-marker>"
+
+# Otherwise (first report for this commit) → create a new comment:
+gh pr comment <pr-number> --body "<report-with-marker>" -R <owner/repo>
 ```
 
 ### Post to Jira
