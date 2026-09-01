@@ -68,6 +68,88 @@ def resolve_refs_in_obj(obj: Any, registry: dict[str, dict[str, str]]) -> Any:
     return obj
 
 
+def _render_adf_inline(nodes: list) -> str:
+    """Render a list of ADF inline nodes to markdown."""
+    parts = []
+    for node in nodes:
+        node_type = node.get("type")
+        if node_type == "text":
+            text = node.get("text", "")
+            marks = node.get("marks", [])
+            mark_types = {m.get("type") for m in marks}
+            if "code" in mark_types:
+                text = f"`{text}`"
+            if "strong" in mark_types:
+                text = f"**{text}**"
+            if "em" in mark_types:
+                text = f"*{text}*"
+            link = next((m for m in marks if m.get("type") == "link"), None)
+            if link:
+                href = link.get("attrs", {}).get("href", "")
+                text = f"[{text}]({href})"
+            parts.append(text)
+        elif node_type == "hardBreak":
+            parts.append("\n")
+        else:
+            # Unknown inline node — recurse into any nested content.
+            parts.append(_render_adf_inline(node.get("content", [])))
+    return "".join(parts)
+
+
+def _render_adf_list(node: dict, *, ordered: bool) -> str:
+    """Render an ADF bulletList/orderedList to markdown."""
+    lines = []
+    for index, item in enumerate(node.get("content", []), start=1):
+        marker = f"{index}." if ordered else "-"
+        item_md = _render_adf_blocks(item.get("content", []))
+        for line_number, line in enumerate(item_md.split("\n")):
+            prefix = f"{marker} " if line_number == 0 else "  "
+            lines.append(f"{prefix}{line}")
+    return "\n".join(lines)
+
+
+def _render_adf_block(node: dict) -> str:
+    """Render a single ADF block node to markdown."""
+    node_type = node.get("type")
+    if node_type == "paragraph":
+        return _render_adf_inline(node.get("content", []))
+    if node_type == "heading":
+        level = node.get("attrs", {}).get("level", 1)
+        return f"{'#' * level} {_render_adf_inline(node.get('content', []))}"
+    if node_type == "rule":
+        return "---"
+    if node_type == "codeBlock":
+        language = node.get("attrs", {}).get("language", "") or ""
+        code = "".join(child.get("text", "") for child in node.get("content", []))
+        return f"```{language}\n{code}\n```"
+    if node_type == "bulletList":
+        return _render_adf_list(node, ordered=False)
+    if node_type == "orderedList":
+        return _render_adf_list(node, ordered=True)
+    # Unknown block — recurse into nested content.
+    return _render_adf_blocks(node.get("content", []))
+
+
+def _render_adf_blocks(nodes: list) -> str:
+    """Render a list of ADF block nodes to markdown, separated by blank lines."""
+    blocks = [_render_adf_block(node) for node in nodes]
+    return "\n\n".join(block for block in blocks if block)
+
+
+def adf_to_markdown(doc: dict) -> str:
+    """Render an ADF document to markdown (inverse of jira-client's markdown_to_adf).
+
+    The native ``fullsend issues post-comment`` CLI consumes markdown on stdin,
+    but the result schema carries ``post_comment`` bodies as ADF (``body_adf``).
+    This renders the ADF back to markdown covering the node set markdown_to_adf
+    produces: headings, paragraphs, bullet/ordered lists, code blocks, rules, and
+    the strong/em/code/link inline marks.
+    """
+    if not isinstance(doc, dict):
+        raise TypeError("adf_to_markdown expects an ADF document object")
+    return _render_adf_blocks(doc.get("content", []))
+
+
 def build_issue_url(key: str) -> str:
     """Build Jira issue browse URL from key."""
     server = os.environ.get("JIRA_SERVER_URL", "").rstrip("/")
@@ -227,7 +309,8 @@ def execute_create_root_cause_task(action: dict, registry: dict) -> None:
 
 def execute_post_comment(action: dict, registry: dict) -> None:
     issue = resolve_refs(action["issue"], registry)
-    body_md = resolve_refs(action["body_md"], registry)
+    body_adf = resolve_refs_in_obj(action["body_adf"], registry)
+    body_md = adf_to_markdown(body_adf)
 
     post_jira_comment_native(issue, body_md)
     print(f"  Posted comment on {issue}")
