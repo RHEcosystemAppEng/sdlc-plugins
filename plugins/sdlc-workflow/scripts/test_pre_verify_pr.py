@@ -3,6 +3,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -391,6 +392,104 @@ def test_pre_verify_sh_paginates_review_comment_fetches():
             assert "--paginate" in line, f"missing --paginate: {line!r}"
             assert "--slurp" in line, f"missing --slurp: {line!r}"
             assert "jq 'add'" in line, f"missing jq 'add' merge: {line!r}"
+
+
+# --- PR-URL parsing regex (pre-verify-pr.sh) ---
+
+def _github_pr_url_regex():
+    """Extract the github.com PR-URL match regex from pre-verify-pr.sh.
+
+    The tests below run the *actual* regex the script ships (not a re-typed
+    copy), so an accidental loss of the end anchor is caught behaviorally.
+    """
+    with open(pre_verify_sh) as f:
+        for line in f:
+            if "=~" in line and "github" in line and "/pull/" in line:
+                m = re.search(r"=~\s+(\S.*?)\s+\]\]", line)
+                if m:
+                    return m.group(1)
+    raise AssertionError("github.com PR-URL regex not found in pre-verify-pr.sh")
+
+
+def _match_pr_url(url):
+    """Run pre-verify-pr.sh's exact `[[ =~ ]]` test against url.
+
+    Returns (matched, repo, number) using the same BASH_REMATCH groups the
+    script consumes downstream, so a truncating match surfaces as a wrong
+    `number` rather than a silent pass.
+    """
+    regex = _github_pr_url_regex()
+    snippet = (
+        'r="$1"; u="$2"\n'
+        'if [[ "$u" =~ $r ]]; then\n'
+        '  printf "MATCH\\t%s\\t%s" "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"\n'
+        'else\n'
+        '  printf "NOMATCH"\n'
+        'fi\n'
+    )
+    result = subprocess.run(
+        ["bash", "-c", snippet, "bash", regex, url],
+        capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"bash error: {result.stderr}"
+    parts = result.stdout.split("\t")
+    if parts[0] == "MATCH":
+        return True, parts[1], parts[2]
+    return False, None, None
+
+
+def test_pr_url_wellformed_accepted():
+    """A canonical github.com PR URL parses to its owner/repo and PR number."""
+    # Given a well-formed PR URL like a Jira inlineCard stores
+    # When matched by the script's regex
+    matched, repo, number = _match_pr_url("https://github.com/org/repo/pull/42")
+
+    # Then it matches and captures the exact repo and number
+    assert matched, "well-formed URL should match"
+    assert repo == "org/repo", f"Got repo: {repo!r}"
+    assert number == "42", f"Got number: {number!r}"
+
+
+def test_pr_url_trailing_slash_accepted():
+    """A well-formed PR URL with a trailing slash still parses correctly."""
+    # Given a PR URL with a trailing slash
+    # When matched by the script's regex
+    matched, repo, number = _match_pr_url("https://github.com/org/repo/pull/42/")
+
+    # Then it matches with the same repo and number (the slash is tolerated)
+    assert matched, "trailing-slash URL should match"
+    assert repo == "org/repo", f"Got repo: {repo!r}"
+    assert number == "42", f"Got number: {number!r}"
+
+
+def test_pr_url_nonnumeric_suffix_rejected():
+    """A pull number with a trailing non-numeric suffix is rejected, not truncated.
+
+    Regression for Sourcery id 3902059934: the un-anchored regex accepted
+    `.../pull/42abc` and truncated the number to 42, so the pre-script fetched
+    the wrong PR. The end-anchored regex must reject it outright.
+    """
+    # Given a malformed URL with a non-numeric suffix on the pull number
+    # When matched by the script's regex
+    matched, _repo, number = _match_pr_url("https://github.com/org/repo/pull/42abc")
+
+    # Then it does not match (rather than truncating to 42)
+    assert not matched, f"expected rejection, but matched with number={number!r}"
+
+
+def test_pr_url_extra_path_segment_rejected():
+    """An extra path segment after the pull number is rejected, not truncated.
+
+    Regression for Sourcery id 3902059934: `.../pull/42/invalid` previously
+    matched and truncated to PR 42. The end anchor must reject it.
+    """
+    # Given a malformed URL with an extra path segment after the number
+    # When matched by the script's regex
+    matched, _repo, number = _match_pr_url(
+        "https://github.com/org/repo/pull/42/invalid")
+
+    # Then it does not match (rather than truncating to 42)
+    assert not matched, f"expected rejection, but matched with number={number!r}"
 
 
 # --- runner ---

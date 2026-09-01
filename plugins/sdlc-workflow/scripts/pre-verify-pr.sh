@@ -96,8 +96,11 @@ fi
 
 echo "PR linked: ${PR_URL}"
 
-# 6. Parse owner/repo/number from the PR URL.
-if [[ ! "${PR_URL}" =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+) ]]; then
+# 6. Parse owner/repo/number from the PR URL. End-anchor the pattern (allowing
+#    only an optional trailing slash) so a malformed value like `.../pull/42abc`
+#    or `.../pull/42/extra` is rejected outright instead of silently truncating
+#    the pull number to 42 and prefetching the wrong PR.
+if [[ ! "${PR_URL}" =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+)/?$ ]]; then
   echo "ERROR: PR URL '${PR_URL}' is not a github.com pull request URL"
   exit 1
 fi
