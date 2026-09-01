@@ -219,6 +219,64 @@ def test_cli_transform_github_dir():
     assert gh["commits"] == [{"oid": "abc1234def"}]
 
 
+# --- stat production (pre-verify-pr.sh) ---
+
+pre_verify_sh = os.path.join(script_dir, "pre-verify-pr.sh")
+
+
+def test_stat_produced_by_git_apply_stat():
+    """The stat mechanism (git apply --stat) yields a diffstat matching the
+    downstream github.stat contract: a per-file line plus a summary line.
+
+    Exercises the real command pre-verify-pr.sh runs, not a gh stub that
+    silently accepts the unsupported --stat flag.
+    """
+    # Given a unified diff like the one gh pr diff writes to pr.diff
+    patch = (
+        "diff --git a/foo.txt b/foo.txt\n"
+        "index 1111111..2222222 100644\n"
+        "--- a/foo.txt\n"
+        "+++ b/foo.txt\n"
+        "@@ -1,3 +1,3 @@\n"
+        " line1\n"
+        "-line2\n"
+        "+CHANGED\n"
+        " line3\n"
+    )
+    with tempfile.TemporaryDirectory() as d:
+        diff_path = os.path.join(d, "pr.diff")
+        with open(diff_path, "w") as f:
+            f.write(patch)
+
+        # When producing the stat with the exact command pre-verify-pr.sh uses
+        result = subprocess.run(
+            ["git", "apply", "--stat", diff_path],
+            capture_output=True, text=True,
+        )
+
+    # Then it succeeds and emits a git diffstat downstream can consume
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    assert "foo.txt" in result.stdout, f"Got: {result.stdout!r}"
+    assert "1 file changed" in result.stdout, f"Got: {result.stdout!r}"
+
+
+def test_pre_verify_sh_uses_supported_stat_command():
+    """Regression guard: the prefetch derives the stat with git apply --stat and
+    never passes the unsupported --stat flag to gh pr diff (Sourcery id 3896899424).
+    """
+    # Given the current pre-verify-pr.sh source
+    with open(pre_verify_sh) as f:
+        script = f.read()
+
+    # Then no gh pr diff invocation uses --stat, and git apply --stat is present
+    for line in script.splitlines():
+        if line.lstrip().startswith("#"):
+            continue  # skip comments (which may mention the removed flag)
+        if "gh pr diff" in line:
+            assert "--stat" not in line, f"unsupported gh flag reintroduced: {line!r}"
+    assert "git apply --stat" in script, "expected git apply --stat stat mechanism"
+
+
 # --- runner ---
 
 if __name__ == "__main__":
