@@ -13,8 +13,11 @@ side), not inside the sandbox.
 
 Not idempotent for entity creation: if an action fails mid-execution,
 previously created Jira sub-tasks are not rolled back. Manual cleanup may be
-needed after partial failures. Comment posting is idempotent — the sticky
-marker updates an existing comment instead of duplicating it.
+needed after partial failures. Comment posting is idempotent: the Jira sticky
+marker updates the existing comment instead of duplicating it, and the GitHub
+report comment carries a commit-scoped marker so a retry after a partial
+failure updates the same commit's report comment rather than posting a
+duplicate.
 
 Usage:
     execute-actions.py <result-json>
@@ -45,6 +48,14 @@ REF_PATTERN = re.compile(r"\{\{([a-z0-9-]+)\.(key|url)\}\}")
 # Stable marker so the native sticky-comment CLI updates the same Jira
 # comment across re-runs instead of posting duplicates.
 STICKY_COMMENT_MARKER = "<!-- sdlc-workflow:verify-pr -->"
+
+# GitHub has no native sticky-comment mechanism, so the verify-pr report comment
+# embeds this marker (an invisible HTML comment) in its body. The commit SHA is
+# appended per post, scoping dedup to a single verification run/commit: a retry
+# for the same commit updates the existing comment instead of duplicating it,
+# while a later commit gets a fresh comment — preserving the per-run
+# verification history that verify-pr SKILL.md Step 9 posts.
+GITHUB_REPORT_MARKER_PREFIX = "<!-- sdlc-workflow:verify-pr report commit:"
 
 
 def resolve_refs(text: str, registry: dict[str, dict[str, str]]) -> str:
@@ -350,20 +361,70 @@ def execute_post_comment(action: dict, registry: dict) -> None:
     print(f"  Posted comment on {issue}")
 
 
-def execute_post_report(action: dict, registry: dict, report: dict) -> None:
-    repo = report["pr_repo"]
-    pr_number = report["pr_number"]
-    jira_issue_id = report["jira_issue_id"]
-    report_md = resolve_refs(report["report_md"], registry)
+def _find_report_comment_id(repo: str, pr_number: int, marker: str) -> int | None:
+    """Return the id of an existing PR report comment whose body carries ``marker``.
 
+    Lists the PR's issue-level comments and matches on the commit-scoped marker
+    so a retry updates the same commit's report comment instead of duplicating
+    it. Returns ``None`` when no marked comment exists yet.
+    """
     result = subprocess.run(
-        ["gh", "pr", "comment", str(pr_number), "--body", report_md, "-R", repo],
+        ["gh", "api", f"repos/{repo}/issues/{pr_number}/comments", "--paginate"],
         capture_output=True, text=True,
     )
     if result.returncode != 0:
-        print(f"Failed to post GitHub PR comment: {result.stderr}", file=sys.stderr)
+        print(f"Failed to list PR comments: {result.stderr}", file=sys.stderr)
         sys.exit(1)
-    print(f"  Posted report to PR #{pr_number}")
+    try:
+        comments = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return None
+    for comment in comments:
+        if marker in (comment.get("body") or ""):
+            return comment.get("id")
+    return None
+
+
+def execute_post_report(action: dict, registry: dict, report: dict) -> None:
+    """Post the verification report to the GitHub PR and the Jira issue.
+
+    The GitHub comment carries a commit-scoped marker
+    (``GITHUB_REPORT_MARKER_PREFIX`` + commit SHA): if a prior report comment for
+    the same commit exists it is updated in place (``gh api ... -X PATCH``)
+    instead of creating a duplicate, so a retry after a partial failure is
+    idempotent while a new commit still gets a fresh comment. The Jira side is
+    already idempotent via its sticky marker; only ``report_md`` (without the
+    GitHub marker) is sent there.
+    """
+    repo = report["pr_repo"]
+    pr_number = report["pr_number"]
+    jira_issue_id = report["jira_issue_id"]
+    commit_sha = report["commit_sha"]
+    report_md = resolve_refs(report["report_md"], registry)
+
+    marker = f"{GITHUB_REPORT_MARKER_PREFIX}{commit_sha} -->"
+    github_body = f"{report_md}\n\n{marker}"
+
+    existing_id = _find_report_comment_id(repo, pr_number, marker)
+    if existing_id is not None:
+        result = subprocess.run(
+            ["gh", "api", f"repos/{repo}/issues/comments/{existing_id}",
+             "-X", "PATCH", "-f", f"body={github_body}"],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print(f"Failed to update GitHub PR comment: {result.stderr}", file=sys.stderr)
+            sys.exit(1)
+        print(f"  Updated existing report comment on PR #{pr_number}")
+    else:
+        result = subprocess.run(
+            ["gh", "pr", "comment", str(pr_number), "--body", github_body, "-R", repo],
+            capture_output=True, text=True,
+        )
+        if result.returncode != 0:
+            print(f"Failed to post GitHub PR comment: {result.stderr}", file=sys.stderr)
+            sys.exit(1)
+        print(f"  Posted report to PR #{pr_number}")
 
     post_jira_comment_native(jira_issue_id, report_md)
     print(f"  Posted report to Jira {jira_issue_id}")

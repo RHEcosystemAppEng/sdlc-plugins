@@ -87,9 +87,10 @@ def test_resolve_refs_mixed_key_url_same_ref():
 class _FakeCompleted:
     """Stand-in for subprocess.CompletedProcess."""
 
-    def __init__(self, returncode=0, stderr=""):
+    def __init__(self, returncode=0, stderr="", stdout=""):
         self.returncode = returncode
         self.stderr = stderr
+        self.stdout = stdout
 
 
 class _RunRecorder:
@@ -283,12 +284,13 @@ def test_execute_post_comment_routes_to_native():
 
 
 def test_execute_post_report_posts_github_then_jira():
-    """execute_post_report posts the report to GitHub via gh, then to Jira via the native CLI."""
+    """execute_post_report lists PR comments, creates a marked GitHub comment when none exists, then posts to Jira."""
     calls = []
 
     def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
         calls.append({"cmd": cmd, "input": input, "env": env})
-        return _FakeCompleted(0, "")
+        # No existing report comment on the PR yet.
+        return _FakeCompleted(0, "", "[]")
 
     saved_run = execute_actions.subprocess.run
     saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
@@ -299,6 +301,7 @@ def test_execute_post_report_posts_github_then_jira():
             "pr_repo": "acme/widget",
             "pr_number": 42,
             "jira_issue_id": "TC-777",
+            "commit_sha": "946556e",
             "report_md": "## Verify report\nAll good.",
         }
         execute_actions.execute_post_report({"type": "post_report"}, {}, report)
@@ -310,13 +313,67 @@ def test_execute_post_report_posts_github_then_jira():
             else:
                 os.environ[k] = v
 
-    assert len(calls) == 2, f"Expected gh + native calls, got {len(calls)}"
-    gh_call, jira_call = calls
+    assert len(calls) == 3, f"Expected list + create + native calls, got {len(calls)}"
+    list_call, gh_call, jira_call = calls
+    # Existing comments are listed first to check for a prior report.
+    assert list_call["cmd"][:2] == ["gh", "api"]
+    assert list_call["cmd"][2] == "repos/acme/widget/issues/42/comments"
+    # No existing comment → a new PR comment is created, carrying the commit marker.
     assert gh_call["cmd"][:3] == ["gh", "pr", "comment"]
     assert "acme/widget" in gh_call["cmd"]
+    gh_body = gh_call["cmd"][gh_call["cmd"].index("--body") + 1]
+    assert gh_body.startswith("## Verify report\nAll good.")
+    assert "<!-- sdlc-workflow:verify-pr report commit:946556e -->" in gh_body
+    # Jira side is unchanged: sticky CLI, clean body without the GitHub marker.
     assert jira_call["cmd"][:3] == ["fullsend", "issues", "post-comment"]
     assert jira_call["cmd"][jira_call["cmd"].index("--number") + 1] == "777"
     assert jira_call["input"] == "## Verify report\nAll good."
+
+
+def test_execute_post_report_updates_existing_github_comment_on_retry():
+    """A retry for the same commit PATCH-updates the existing GitHub report comment instead of creating a duplicate."""
+    # Given a prior report comment for this commit already exists on the PR
+    calls = []
+    existing = [{"id": 555,
+                 "body": "old report\n\n<!-- sdlc-workflow:verify-pr report commit:946556e -->"}]
+
+    def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
+        calls.append({"cmd": cmd, "input": input, "env": env})
+        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
+            return _FakeCompleted(0, "", json.dumps(existing))
+        return _FakeCompleted(0, "")
+
+    saved_run = execute_actions.subprocess.run
+    saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
+    execute_actions.subprocess.run = fake_run
+    os.environ.update(_JIRA_ENV)
+    try:
+        report = {
+            "pr_repo": "acme/widget",
+            "pr_number": 42,
+            "jira_issue_id": "TC-777",
+            "commit_sha": "946556e",
+            "report_md": "## Verify report\nAll good.",
+        }
+        # When posting the report again (e.g. after a prior Jira failure)
+        execute_actions.execute_post_report({"type": "post_report"}, {}, report)
+    finally:
+        execute_actions.subprocess.run = saved_run
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # Then no new GitHub comment is created; the existing one is PATCH-updated
+    assert not any(c["cmd"][:3] == ["gh", "pr", "comment"] for c in calls), \
+        "retry must not create a new GitHub comment"
+    patch_calls = [c for c in calls if "PATCH" in c["cmd"]]
+    assert len(patch_calls) == 1, f"Expected one PATCH update, got {len(patch_calls)}"
+    assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
+    # And the Jira report is still posted
+    assert any(c["cmd"][:3] == ["fullsend", "issues", "post-comment"] for c in calls), \
+        "Jira report must still be posted on retry"
 
 
 if __name__ == "__main__":
@@ -335,4 +392,5 @@ if __name__ == "__main__":
     test_adf_to_markdown_renders_task_list()
     test_execute_post_comment_routes_to_native()
     test_execute_post_report_posts_github_then_jira()
+    test_execute_post_report_updates_existing_github_comment_on_retry()
     print("All tests passed.")
