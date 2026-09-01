@@ -6,6 +6,8 @@ import os
 import json
 import importlib.util
 
+from jsonschema import validate, ValidationError
+
 script_dir = os.path.dirname(os.path.abspath(__file__))
 spec = importlib.util.spec_from_file_location(
     "execute_actions",
@@ -15,6 +17,24 @@ execute_actions = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(execute_actions)
 
 resolve_refs = execute_actions.resolve_refs
+
+# The result schema the fullsend validation_loop enforces before the post_script
+# runs. Loaded once so the schema-validation tests below assert against the real
+# shipped constraints rather than a reimplementation.
+_RESULT_SCHEMA_PATH = os.path.join(
+    script_dir, "..", "schemas", "verify-pr-result.schema.json"
+)
+with open(_RESULT_SCHEMA_PATH) as _schema_f:
+    _RESULT_SCHEMA = json.load(_schema_f)
+
+# Validate a single action instance against the schema's action definition. The
+# action def carries no external $refs, so wrapping it with the document's $defs
+# and dialect lets `validate` exercise the post_comment if/then branch directly.
+_ACTION_SCHEMA = {
+    "$schema": _RESULT_SCHEMA["$schema"],
+    "$defs": _RESULT_SCHEMA["$defs"],
+    "$ref": "#/$defs/action",
+}
 
 
 def test_resolve_refs_replaces_key():
@@ -193,6 +213,40 @@ def test_post_jira_comment_native_invalid_key_exits():
     finally:
         restore()
     assert recorder.cmd is None, "CLI should not run for an invalid key"
+
+
+def test_schema_post_comment_accepts_valid_jira_key():
+    """The post_comment schema accepts a well-formed hyphenated Jira key so a
+    legitimate action still validates and routes to the native CLI."""
+    # Given a post_comment action whose issue is a valid Jira key
+    action = {"type": "post_comment", "issue": "TC-5811", "body_adf": {}}
+    # When validating it against the result schema's action definition
+    # Then validation passes (validate raises ValidationError on failure)
+    validate(instance=action, schema=_ACTION_SCHEMA)
+
+
+def test_schema_post_comment_rejects_non_key_issue():
+    """A schema-valid-string-but-non-key issue (numeric ID, URL, lowercase, or
+    missing hyphen) is rejected at validation, so it can never pass the producer
+    boundary only to hit the executor's rpartition guard and sys.exit(1)."""
+    # Given post_comment actions whose issue is not a hyphenated Jira key
+    non_keys = [
+        "12345",                                        # numeric Jira ID
+        "https://jira.example.com/browse/TC-5811",      # URL
+        "tc-5811",                                      # lowercase project
+        "TC5811",                                       # missing hyphen
+        "TC-",                                          # missing number
+        "-5811",                                        # missing project
+    ]
+    for issue in non_keys:
+        action = {"type": "post_comment", "issue": issue, "body_adf": {}}
+        # When validating each against the schema
+        # Then validation fails before the action can reach the executor
+        try:
+            validate(instance=action, schema=_ACTION_SCHEMA)
+            assert False, f"non-key issue should be rejected: {issue!r}"
+        except ValidationError:
+            pass
 
 
 def test_adf_to_markdown_renders_blocks_and_marks():
@@ -568,6 +622,8 @@ if __name__ == "__main__":
     test_post_jira_comment_native_maps_env()
     test_post_jira_comment_native_nonzero_exits()
     test_post_jira_comment_native_invalid_key_exits()
+    test_schema_post_comment_accepts_valid_jira_key()
+    test_schema_post_comment_rejects_non_key_issue()
     test_adf_to_markdown_renders_blocks_and_marks()
     test_adf_to_markdown_renders_task_list()
     test_adf_to_markdown_escapes_markdown_active_chars_in_literal_text()
