@@ -121,11 +121,9 @@ touch anything under `scripts/`:
 python3 -m pytest plugins/sdlc-workflow/scripts/ -q
 ```
 
-This suite is **required before every commit that changes a script and before merge**.
-It is not yet wired into a GitHub Actions workflow, so it will not block the PR
-automatically — running it locally (and confirming a green run in the PR) is the
-current enforcement point. Adding a CI workflow that runs it is a recommended
-follow-up.
+This suite is **required before every commit that changes a script and before merge**,
+and is enforced in CI by `.github/workflows/python-tests.yml` (runs on pushes and pull
+requests targeting `main`). Run it locally before pushing so failures surface before CI.
 
 ## Commit Messages
 
