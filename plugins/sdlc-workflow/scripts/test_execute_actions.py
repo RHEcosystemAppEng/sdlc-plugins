@@ -225,11 +225,25 @@ def test_schema_post_comment_accepts_valid_jira_key():
     validate(instance=action, schema=_ACTION_SCHEMA)
 
 
+def test_schema_post_comment_accepts_ref_key_placeholder():
+    """The post_comment schema accepts a {{<ref>.key}} placeholder so a comment
+    targeting an issue created by an earlier action (which execute_post_comment
+    resolves via resolve_refs) survives fullsend's validation_loop instead of
+    being rejected before the reference can be resolved."""
+    # Given a post_comment action whose issue is a {{<ref>.key}} placeholder
+    action = {"type": "post_comment", "issue": "{{sub-1.key}}", "body_adf": {}}
+    # When validating it against the result schema's action definition
+    # Then validation passes (validate raises ValidationError on failure)
+    validate(instance=action, schema=_ACTION_SCHEMA)
+
+
 def test_schema_post_comment_rejects_non_key_issue():
-    """A schema-valid-string-but-non-key issue (numeric ID, URL, lowercase, or
-    missing hyphen) is rejected at validation, so it can never pass the producer
-    boundary only to hit the executor's rpartition guard and sys.exit(1)."""
-    # Given post_comment actions whose issue is not a hyphenated Jira key
+    """A schema-valid-string-but-non-key issue (numeric ID, URL, lowercase,
+    missing hyphen, or a non-.key placeholder) is rejected at validation, so it
+    can never pass the producer boundary only to hit the executor's rpartition
+    guard and sys.exit(1)."""
+    # Given post_comment actions whose issue is neither a hyphenated Jira key
+    # nor a {{<ref>.key}} placeholder
     non_keys = [
         "12345",                                        # numeric Jira ID
         "https://jira.example.com/browse/TC-5811",      # URL
@@ -237,6 +251,11 @@ def test_schema_post_comment_rejects_non_key_issue():
         "TC5811",                                       # missing hyphen
         "TC-",                                          # missing number
         "-5811",                                        # missing project
+        "{{sub-1.url}}",                                # .url placeholder (not a key)
+        "{{SUB.key}}",                                  # uppercase ref name
+        "{{sub-1.status}}",                             # unsupported placeholder attr
+        "sub-1.key",                                    # missing braces
+        "prefix {{sub-1.key}}",                         # placeholder not anchored
     ]
     for issue in non_keys:
         action = {"type": "post_comment", "issue": issue, "body_adf": {}}
@@ -623,6 +642,7 @@ if __name__ == "__main__":
     test_post_jira_comment_native_nonzero_exits()
     test_post_jira_comment_native_invalid_key_exits()
     test_schema_post_comment_accepts_valid_jira_key()
+    test_schema_post_comment_accepts_ref_key_placeholder()
     test_schema_post_comment_rejects_non_key_issue()
     test_adf_to_markdown_renders_blocks_and_marks()
     test_adf_to_markdown_renders_task_list()
