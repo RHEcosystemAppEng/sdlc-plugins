@@ -471,6 +471,20 @@ def create_issue(
     Returns:
         Created issue object with key and ID
     """
+    # Fail fast on a missing issue type: an empty (or whitespace-only) value would
+    # otherwise serialize to {"name": ""} below and surface as an opaque Jira 400
+    # instead of a clear programming error at the call site.
+    if not issue_type or not issue_type.strip():
+        print(
+            "❌ Missing issue type: create_issue requires a non-empty issue_type",
+            file=sys.stderr,
+        )
+        print(
+            "Pass an issue type ID (e.g., 10001) or name (e.g., Task, Sub-task).",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
     # Prefer a pre-rendered ADF description; fall back to converting markdown,
     # then to an empty document when neither is supplied.
     if description_adf is not None:
