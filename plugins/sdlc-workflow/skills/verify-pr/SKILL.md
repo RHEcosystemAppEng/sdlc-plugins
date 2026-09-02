@@ -149,8 +149,30 @@ If the file validates against the schema:
   (checkout), Step 4a (review/comment fetches), Step 5a (diff/stat/commits), and
   Step 9's HEAD-SHA retrieval — using the bundle fields instead.
 
-If the file is missing or invalid, log a warning and fall back to Steps 1–3 and the
-direct GitHub reads (interactive behavior).
+If the validation above fails (file missing, not valid JSON, or not conforming to the
+schema), the handling depends on the mode:
+
+- **Sandbox mode (`FULLSEND_OUTPUT_DIR` is set):** do **not** fall back to Steps 1–3 or
+  the direct Jira/GitHub reads. The sandbox has no tokens, no `gh` CLI, and no network
+  egress, so a credentialed fallback cannot succeed — it would fail obscurely or hang.
+  Fail fast and loud instead: write a structured failure result and stop the skill
+  without performing any further steps or write operations.
+
+```bash
+cat > "$FULLSEND_OUTPUT_DIR/agent-result.json" << 'RESULT_EOF'
+{
+  "error": "verify-pr aborted: pre-fetched input (/sandbox/workspace/.pre-script/verify-pr-input.json) is missing, unparseable, or does not conform to verify-pr-input.schema.json. The pre_script must produce a valid input bundle before the sandbox runs; no credentialed fallback is possible inside the sandbox."
+}
+RESULT_EOF
+```
+
+  This result intentionally omits the `report` and `actions` keys required by
+  `verify-pr-result.schema.json`, so the runner's output validation rejects it and
+  surfaces the `error` message as a hard failure rather than silently attempting the
+  interactive path. **Stop execution here — do not run any subsequent step.**
+
+- **Interactive mode (`FULLSEND_OUTPUT_DIR` is unset):** log a warning and fall back to
+  Steps 1–3 and the direct GitHub reads (existing interactive behavior, unchanged).
 
 ## Inputs
 
