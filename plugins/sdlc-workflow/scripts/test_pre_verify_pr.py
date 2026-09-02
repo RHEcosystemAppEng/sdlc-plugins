@@ -271,6 +271,155 @@ def test_cli_transform_github_dir():
     assert gh["commits"] == [{"oid": "abc1234def"}]
 
 
+# --- idempotency prefetch (related_keys, build_idempotency_bundle, transform) ---
+
+def test_related_keys_from_subtasks_and_links():
+    """related_keys collects sub-task keys and linked-issue keys, deduped/sorted."""
+    issue = {"fields": {
+        "subtasks": [{"key": "TC-201"}, {"key": "TC-202"}],
+        "issuelinks": [
+            {"type": {"name": "Blocks"}, "inwardIssue": {"key": "TC-202"}},
+            {"type": {"name": "Related"}, "outwardIssue": {"key": "TC-300"}},
+        ],
+    }}
+    # TC-202 appears as both a sub-task and a link — deduped; result is sorted
+    assert pre_verify_pr.related_keys(issue) == ["TC-201", "TC-202", "TC-300"]
+
+
+def test_related_keys_empty_when_no_relations():
+    issue = {"fields": {"summary": "S"}}
+    assert pre_verify_pr.related_keys(issue) == []
+
+
+def test_build_idempotency_bundle_extracts_fields_and_comments():
+    """The bundle carries the fields the dedup checks inspect, incl. comment bodies."""
+    ri = {
+        "key": "TC-500",
+        "fields": {
+            "summary": "Fix eval-3 assertion failures",
+            "labels": ["ai-generated-jira", "eval-failure"],
+            "description": {"type": "doc", "content": []},
+            "issuetype": {"name": "Sub-task"},
+            "comment": {"comments": [
+                {"body": {"type": "doc", "content": [{"type": "text"}]}},
+                {"body": {"type": "doc"}},
+            ]},
+        },
+    }
+    bundle = pre_verify_pr.build_idempotency_bundle([ri])
+    entry = bundle["related_issues"][0]
+    assert entry["key"] == "TC-500"
+    assert entry["summary"] == "Fix eval-3 assertion failures"
+    assert entry["labels"] == ["ai-generated-jira", "eval-failure"]
+    assert entry["description"] == {"type": "doc", "content": []}
+    assert entry["issuetype"] == "Sub-task"
+    assert len(entry["comments"]) == 2
+    assert entry["comments"][0] == {"type": "doc", "content": [{"type": "text"}]}
+
+
+def test_build_idempotency_bundle_handles_missing_fields():
+    """A related issue lacking comments/description yields empty defaults, not errors."""
+    bundle = pre_verify_pr.build_idempotency_bundle([{"key": "TC-9", "fields": {}}])
+    entry = bundle["related_issues"][0]
+    assert entry["summary"] == ""
+    assert entry["labels"] == []
+    assert entry["description"] == {}  # null/absent coerced to object
+    assert entry["issuetype"] == ""
+    assert entry["comments"] == []
+
+
+def test_build_idempotency_bundle_empty():
+    assert pre_verify_pr.build_idempotency_bundle([]) == {"related_issues": []}
+
+
+def test_transform_with_idempotency_attaches_key():
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    idem = pre_verify_pr.build_idempotency_bundle([{"key": "TC-1", "fields": {}}])
+    result = pre_verify_pr.transform_to_input(issue, "TC-1", "", None, idem)
+    assert result["idempotency"]["related_issues"][0]["key"] == "TC-1"
+
+
+def test_transform_without_idempotency_omits_key():
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    result = pre_verify_pr.transform_to_input(issue, "TC-1", "")
+    assert "idempotency" not in result
+
+
+def test_cli_transform_idempotency_dir():
+    """CLI transform globs the related-issue JSONs and embeds the idempotency bundle."""
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "TC-501.json"), "w") as f:
+            json.dump({"key": "TC-501", "fields": {
+                "summary": "Existing sub-task", "labels": ["review-feedback"],
+                "description": {"type": "doc"}, "issuetype": {"name": "Sub-task"},
+                "comment": {"comments": [{"body": {"type": "doc"}}]},
+            }}, f)
+        result = subprocess.run(
+            [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"),
+             "transform", "TC-1", "https://github.com/o/r/pull/1",
+             "--idempotency-dir", d],
+            input=json.dumps(issue), capture_output=True, text=True,
+        )
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    output = json.loads(result.stdout)
+    related = output["idempotency"]["related_issues"]
+    assert len(related) == 1
+    assert related[0]["key"] == "TC-501"
+    assert related[0]["labels"] == ["review-feedback"]
+    assert related[0]["comments"] == [{"type": "doc"}]
+
+
+def test_cli_transform_empty_idempotency_dir():
+    """An empty related-issues dir yields an empty related_issues list, not an error."""
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    with tempfile.TemporaryDirectory() as d:
+        result = subprocess.run(
+            [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"),
+             "transform", "TC-1", "https://github.com/o/r/pull/1",
+             "--idempotency-dir", d],
+            input=json.dumps(issue), capture_output=True, text=True,
+        )
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    assert json.loads(result.stdout)["idempotency"] == {"related_issues": []}
+
+
+def test_cli_related_keys():
+    """The related-keys subcommand prints sub-task and linked-issue keys."""
+    issue = {"fields": {
+        "subtasks": [{"key": "TC-201"}],
+        "issuelinks": [{"type": {"name": "Related"}, "outwardIssue": {"key": "TC-300"}}],
+    }}
+    result = subprocess.run(
+        [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"), "related-keys"],
+        input=json.dumps(issue), capture_output=True, text=True,
+    )
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    assert result.stdout.split() == ["TC-201", "TC-300"]
+
+
+def test_idempotency_input_validates_against_schema():
+    """A produced input carrying the idempotency bundle validates against the schema."""
+    from jsonschema import validate
+
+    issue = {"fields": {"summary": "S", "description": {}, "status": {"name": "Open"},
+                        "labels": [], "issuelinks": []}}
+    github = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "feat/x", "deadbee", "diff", "stat", [], [], [], [])
+    idem = pre_verify_pr.build_idempotency_bundle([{"key": "TC-9", "fields": {
+        "summary": "Existing", "labels": ["review-feedback"],
+        "description": {"type": "doc"}, "issuetype": {"name": "Sub-task"},
+        "comment": {"comments": [{"body": {"type": "doc"}}]},
+    }}])
+    result = pre_verify_pr.transform_to_input(
+        issue, "TC-1", "https://github.com/o/r/pull/5", github, idem)
+    schema_path = os.path.join(
+        script_dir, "..", "schemas", "verify-pr-input.schema.json")
+    with open(schema_path) as f:
+        schema = json.load(f)
+    validate(instance=result, schema=schema)  # raises on failure
+
+
 # --- stat production (pre-verify-pr.sh) ---
 
 pre_verify_sh = os.path.join(script_dir, "pre-verify-pr.sh")
@@ -330,6 +479,31 @@ def test_pre_verify_sh_uses_supported_stat_command():
         if "gh pr diff" in line:
             assert "--stat" not in line, f"unsupported gh flag reintroduced: {line!r}"
     assert "git apply --stat" in script, "expected git apply --stat stat mechanism"
+
+
+# --- idempotency prefetch (pre-verify-pr.sh) ---
+
+def test_pre_verify_sh_prefetches_related_issues():
+    """Regression guard: pre-verify-pr.sh fetches related-issue metadata for the
+    sandbox idempotency checks (TC-5982) — it lists related keys, fetches each
+    issue including its comments, and passes --idempotency-dir to transform.
+    """
+    with open(pre_verify_sh) as f:
+        script = f.read()
+
+    # It enumerates the task's related keys via pre_verify_pr.py related-keys
+    assert "related-keys" in script, "expected related-keys enumeration"
+    # It fetches each related issue including the comment field (for Step 7c)
+    non_comment = [
+        line for line in script.splitlines()
+        if 'get_issue "${key}"' in line and not line.lstrip().startswith("#")
+    ]
+    assert non_comment, "expected a per-key get_issue fetch"
+    # The fields list feeding that fetch must include comment, description, labels
+    assert "summary,labels,description,issuetype,comment" in script, \
+        "related-issue fetch must request comment/description/labels"
+    # And it wires the prefetched dir into transform
+    assert "--idempotency-dir" in script, "transform must receive --idempotency-dir"
 
 
 # --- paginated fetch aggregation (pre-verify-pr.sh) ---

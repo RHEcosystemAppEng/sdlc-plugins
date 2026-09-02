@@ -148,6 +148,11 @@ If the file validates against the schema:
   the already-checked-out PR-head tree. **Skip every GitHub read step** — Step 3
   (checkout), Step 4a (review/comment fetches), Step 5a (diff/stat/commits), and
   Step 9's HEAD-SHA retrieval — using the bundle fields instead.
+- Read the `idempotency.related_issues` array (each entry has `key`, `summary`,
+  `labels`, `description`, `issuetype`, `comments`) — the task's existing sub-tasks
+  and linked issues, prefetched on the runner. **Use it for every idempotency read**
+  (Steps 6d, 6f, 7c) instead of calling Jira; the sandbox has no token. The array is
+  empty when the task has no sub-tasks or linked issues yet.
 
 If the validation above fails (file missing, not valid JSON, or not conforming to the
 schema), the handling depends on the mode:
@@ -670,7 +675,9 @@ Process `create-sub-task` actions from the Correctness sub-agent. For each actio
 1. **Idempotency check:** check the parent task's existing sub-tasks (issue links)
    for sub-tasks with labels `["ai-generated-jira", "review-feedback"]` whose
    descriptions reference the same CI check name or failure. If a matching sub-task
-   already exists, skip creation for that failure.
+   already exists, skip creation for that failure. **Sandbox mode:** read the
+   candidate sub-tasks from `idempotency.related_issues` (Step 0.7) — match on
+   `labels` and `description` — instead of a live Jira read.
 
 2. **Create sub-task:** create a Jira sub-task using the action's Title, Relevant
    files, and Root cause fields:
@@ -717,7 +724,9 @@ and sub-task creation below.
 2. **Idempotency check:** Check the parent task's existing sub-tasks (issue links)
    for sub-tasks with labels `["ai-generated-jira", "eval-failure"]` whose summaries
    reference the same eval ID. If a matching sub-task already exists, skip creation
-   for that eval.
+   for that eval. **Sandbox mode:** read the candidate sub-tasks from
+   `idempotency.related_issues` (Step 0.7) — match on `labels` and `summary` —
+   instead of a live Jira read.
 
 3. **Create sub-task:** For each failing eval, create a Jira sub-task:
 
@@ -857,6 +866,8 @@ check the parent task's issue links for existing sub-tasks whose descriptions
 reference the same review comment or review body. If a matching sub-task already
 exists, skip creation. This guards against edge cases where a classification reply
 was not posted (e.g., due to a network error) but the sub-task was created.
+**Sandbox mode:** read these existing sub-tasks from `idempotency.related_issues`
+(Step 0.7) — inspect each entry's `description` — instead of a live Jira read.
 
 Do **not** interpret this step as a top-level decision that can skip item
 enumeration. The enumeration in Step 4a is always mandatory; this step only
@@ -1114,6 +1125,11 @@ linked to the parent task. For each linked task with label `root-cause`, fetch i
 comments and search for a comment containing "Root-cause analysis from
 <PARENT-TASK-ID>". If a root-cause task already exists for the same phase and the
 same defect, skip creation.
+
+**Sandbox mode:** do not fetch comments from Jira. Read the linked tasks from
+`idempotency.related_issues` (Step 0.7), filter to entries whose `labels` include
+`root-cause`, and search each entry's `comments` for the "Root-cause analysis from
+<PARENT-TASK-ID>" marker.
 
 Record the Root-Cause Investigation result:
 - **N/A** — no sub-tasks were created in Step 6d (nothing to investigate)
