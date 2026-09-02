@@ -616,6 +616,20 @@ def test_render_adf_date_falls_back_on_out_of_range_timestamp():
     assert result == out_of_range, f"Got: {result!r}"
 
 
+# A report's tracker-native body. execute_post_report renders this (not the
+# GitHub-only report_md) to markdown for Jira via adf_to_markdown, so the fixtures
+# below give it text that renders to a string distinct from report_md — proving
+# Jira receives the ADF-derived body while GitHub keeps report_md + its marker.
+_REPORT_ADF = {
+    "type": "doc",
+    "version": 1,
+    "content": [
+        {"type": "paragraph", "content": [{"type": "text", "text": "Jira native body."}]}
+    ],
+}
+_REPORT_ADF_MD = "Jira native body."
+
+
 def test_execute_post_comment_routes_to_native():
     """execute_post_comment resolves refs in body_adf, renders to markdown, and posts it."""
     recorder = _RunRecorder()
@@ -682,6 +696,7 @@ def test_post_comment_and_report_use_distinct_sticky_markers():
             "jira_issue_id": "TC-777",
             "commit_sha": "946556e",
             "report_md": "## Verify report",
+            "report_adf": _REPORT_ADF,
         }
         execute_actions.execute_post_report({"type": "post_report"}, {}, report)
     finally:
@@ -720,6 +735,7 @@ def test_execute_post_report_posts_github_then_jira():
             "jira_issue_id": "TC-777",
             "commit_sha": "946556e",
             "report_md": "## Verify report\nAll good.",
+            "report_adf": _REPORT_ADF,
         }
         execute_actions.execute_post_report({"type": "post_report"}, {}, report)
     finally:
@@ -743,10 +759,14 @@ def test_execute_post_report_posts_github_then_jira():
     gh_body = gh_call["cmd"][gh_call["cmd"].index("--body") + 1]
     assert gh_body.startswith("## Verify report\nAll good.")
     assert "<!-- sdlc-workflow:verify-pr report commit:946556e -->" in gh_body
-    # Jira side is unchanged: sticky CLI, clean body without the GitHub marker.
+    # Jira side: sticky CLI, and the body is rendered from report_adf (the
+    # tracker-native content) via adf_to_markdown — NOT the GitHub-only report_md,
+    # which carries the commit marker Jira must never receive.
     assert jira_call["cmd"][:3] == ["fullsend", "issues", "post-comment"]
     assert jira_call["cmd"][jira_call["cmd"].index("--number") + 1] == "777"
-    assert jira_call["input"] == "## Verify report\nAll good."
+    assert jira_call["input"] == _REPORT_ADF_MD
+    assert jira_call["input"] != report["report_md"], "Jira must not receive report_md"
+    assert "sdlc-workflow:verify-pr report commit:" not in jira_call["input"]
 
 
 def test_execute_post_report_updates_existing_github_comment_on_retry():
@@ -775,6 +795,7 @@ def test_execute_post_report_updates_existing_github_comment_on_retry():
             "jira_issue_id": "TC-777",
             "commit_sha": "946556e",
             "report_md": "## Verify report\nAll good.",
+            "report_adf": _REPORT_ADF,
         }
         # When posting the report again (e.g. after a prior Jira failure)
         execute_actions.execute_post_report({"type": "post_report"}, {}, report)
@@ -832,6 +853,7 @@ def test_execute_post_report_updates_comment_on_later_page():
             "jira_issue_id": "TC-777",
             "commit_sha": "946556e",
             "report_md": "## Verify report\nAll good.",
+            "report_adf": _REPORT_ADF,
         }
         # When posting the report again for the same commit
         execute_actions.execute_post_report({"type": "post_report"}, {}, report)
@@ -877,6 +899,7 @@ def _run_post_report_with_sha_resolution(commit_sha, existing_comments, resolve)
             "jira_issue_id": "TC-777",
             "commit_sha": commit_sha,
             "report_md": "## Verify report",
+            "report_adf": _REPORT_ADF,
         }
         execute_actions.execute_post_report({"type": "post_report"}, {}, report)
     finally:
@@ -1000,6 +1023,14 @@ def test_post_report_resolves_ref_created_by_later_action():
             "jira_issue_id": "TC-777",
             "commit_sha": "946556e",
             "report_md": "Filed sub-task {{sub-1.key}}.",
+            "report_adf": {
+                "type": "doc",
+                "version": 1,
+                "content": [
+                    {"type": "paragraph",
+                     "content": [{"type": "text", "text": "Filed sub-task {{sub-1.key}}."}]}
+                ],
+            },
         },
         "actions": [
             {"type": "post_report"},
@@ -1043,6 +1074,10 @@ def test_post_report_resolves_ref_created_by_later_action():
     gh_body = create_call["cmd"][create_call["cmd"].index("--body") + 1]
     assert "Filed sub-task TC-999." in gh_body, f"ref not resolved: {gh_body}"
     assert "{{sub-1.key}}" not in gh_body, "placeholder leaked into report body"
+    # The Jira body is rendered from report_adf, and its refs resolve too.
+    jira_call = next(c for c in calls if c["cmd"][:3] == ["fullsend", "issues", "post-comment"])
+    assert jira_call["input"] == "Filed sub-task TC-999.", f"ref not resolved in ADF: {jira_call['input']}"
+    assert "{{sub-1.key}}" not in jira_call["input"], "placeholder leaked into Jira body"
 
 
 def test_find_report_comment_id_exits_on_unparseable_json():
