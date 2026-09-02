@@ -58,6 +58,75 @@ Before attempting any JIRA operations throughout this skill, determine the acces
 
 Refer to `shared/jira-rest-fallback.md` for complete implementation details.
 
+## Step 0.6 – Sandbox Mode Detection
+
+Check whether the `FULLSEND_OUTPUT_DIR` environment variable is set:
+
+```bash
+echo ${FULLSEND_OUTPUT_DIR:-not-set}
+```
+
+If **set**, this skill is running inside a fullsend sandbox (no Jira or GitHub
+tokens, no `gh` CLI, no network egress). Switch to **sandbox mode**:
+
+- Do NOT call Jira write APIs (`create_issue`, `add_comment`, `create_issue_link`,
+  `transition_issue`) directly.
+- Do NOT call GitHub read APIs (`gh pr view`/`gh pr diff`/`gh api`) — every PR read
+  is pre-fetched into `verify-pr-input.json` and the PR head is already checked out
+  (GitHub is tier-1; there is no `gh`/`GH_TOKEN` in the sandbox).
+- Do NOT post GitHub PR comments or replies directly.
+- Instead, accumulate every write operation as an action in an in-memory JSON
+  structure, and at the end of execution write the complete result to
+  `$FULLSEND_OUTPUT_DIR/agent-result.json` (see Step 9's **Sandbox Mode Output**).
+
+If **not set**, execute in **interactive mode** — the current behavior, calling Jira
+and GitHub APIs directly. Marketplace users are unaffected.
+
+Throughout the remaining steps, when you encounter a write operation:
+- **Interactive mode:** execute it directly (existing behavior).
+- **Sandbox mode:** append it to the actions array instead — each step below gives the
+  matching action shape.
+
+Initialize the accumulator as an in-memory JSON structure:
+
+```json
+{
+  "report": {},
+  "actions": []
+}
+```
+
+The `report` object and every action conform to
+`plugins/sdlc-workflow/schemas/verify-pr-result.schema.json`; the runner's
+`post_script` executes the accumulated actions after the sandbox exits.
+
+## Step 0.7 – Load Pre-Fetched Data (sandbox mode only)
+
+**Skip this step in interactive mode.**
+
+In sandbox mode the `pre_script` fetches all task and PR data on the trusted runner
+(where the tokens live) and mounts it read-only into the sandbox. Read it:
+
+```bash
+cat /sandbox/workspace/.pre-script/verify-pr-input.json | python3 -m json.tool > /dev/null 2>&1 && echo "Pre-fetched data available" || echo "ERROR: Pre-fetched data missing or invalid"
+```
+
+If the file exists and contains valid JSON (shape defined by
+`plugins/sdlc-workflow/schemas/verify-pr-input.schema.json`):
+
+- Read `task` (`summary`, `description` in the tracker's native ADF, `status`,
+  `labels`, `issue_links`, `custom_fields`) and `pr_url`. **Skip Step 1 (Fetch and
+  Parse Jira Task) and Step 2 (Identify PR)** — parse the task sections from
+  `task.description` and take the PR URL from `pr_url`.
+- Read the `github` bundle (`pr_repo`, `pr_number`, `headRefName`, `commit_sha`,
+  `diff`, `stat`, `reviews`, `review_comments`, `issue_comments`, `commits`) and use
+  the already-checked-out PR-head tree. **Skip every GitHub read step** — Step 3
+  (checkout), Step 4a (review/comment fetches), Step 5a (diff/stat/commits), and
+  Step 9's HEAD-SHA retrieval — using the bundle fields instead.
+
+If the file is missing or invalid, log a warning and fall back to Steps 1–3 and the
+direct GitHub reads (interactive behavior).
+
 ## Inputs
 
 The user will provide a Jira issue ID for a task that has an associated PR.
@@ -140,6 +209,10 @@ or not configured, ask the user to provide the PR URL.
 
 Extract the PR number and repository from the URL for use in subsequent `gh` commands.
 
+**Sandbox mode:** skip the custom-field read — take the PR URL from `pr_url` and the
+`owner/repo` + PR number from `github.pr_repo` / `github.pr_number` in the pre-fetched
+data (Step 0.7).
+
 ## Step 3 – Checkout PR Branch
 
 Ensure the PR branch is checked out locally so that subsequent steps inspect the correct code.
@@ -169,6 +242,10 @@ This step supports two use cases:
 - **Author self-verification** — the contributor already has the PR branch checked out; no checkout needed.
 - **Reviewer/CI audit** — another person or CI job runs `/verify-pr` from an arbitrary branch; the PR branch must be checked out first.
 
+**Sandbox mode:** skip this step entirely — the runner has already checked out the PR
+head tree (`github.headRefName` at `github.commit_sha`) and there is no `gh` CLI in
+the sandbox. Inspect the working tree directly.
+
 ## Step 4 – Classify Review Feedback
 
 Read PR review feedback and classify each comment thread for downstream processing
@@ -182,6 +259,10 @@ Fetch all reviews and review comments from the PR:
 gh api repos/<owner/repo>/pulls/<pr-number>/reviews
 gh api repos/<owner/repo>/pulls/<pr-number>/comments
 ```
+
+**Sandbox mode:** do not call `gh api` — use `github.reviews`, `github.review_comments`,
+and (for the enumeration below) `github.issue_comments` from the pre-fetched data
+(Step 0.7).
 
 Group inline comments into threads using the `in_reply_to_id` field. Each top-level
 comment (no `in_reply_to_id`) starts a thread; replies are grouped under their parent.
@@ -311,6 +392,10 @@ constructs dispatch envelopes following the structure defined in
 `plugins/sdlc-workflow/skills/verify-pr/dispatch-template.md`.
 
 ### Step 5a – Gather Dispatch Inputs
+
+**Sandbox mode:** do not run the `gh pr diff`/`gh pr view` commands below — the full
+diff, diffstat, and commits are pre-fetched as `github.diff`, `github.stat`, and
+`github.commits` (Step 0.7). Use those values as the corresponding dispatch inputs.
 
 Collect all inputs needed for sub-agent dispatch envelopes:
 
@@ -502,6 +587,35 @@ After creating each sub-task, create a "Blocks" issue link from the sub-task to 
 
 jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
+**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`,
+append a `create_subtask` action and a `create_link` action. Use this pattern for **all**
+sub-task categories below (review feedback, CI failure, eval failure):
+
+```json
+{
+  "type": "create_subtask",
+  "ref": "subtask-N",
+  "parent": "<parent-task-id>",
+  "summary": "<summary>",
+  "labels": ["ai-generated-jira", "<category-label>"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Blocks",
+  "inward": "{{subtask-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
+Use incrementing refs (`subtask-1`, `subtask-2`, …). The `{{subtask-N.key}}` (and, in
+replies, `{{subtask-N.url}}`) placeholders are resolved by the `post_script` once the
+sub-task is created. Set `<category-label>` to `review-feedback` for review-feedback and
+CI-failure sub-tasks, or `eval-failure` for eval-failure sub-tasks.
+
 #### CI failure sub-tasks
 
 Process `create-sub-task` actions from the Correctness sub-agent. For each action:
@@ -528,6 +642,9 @@ Process `create-sub-task` actions from the Correctness sub-agent. For each actio
 
 3. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
+
+**Sandbox mode:** use the `create_subtask` + `create_link` pattern from the review
+feedback sandbox-mode block above, with labels `["ai-generated-jira", "review-feedback"]`.
 
 #### Eval failure sub-tasks
 
@@ -572,6 +689,9 @@ and sub-task creation below.
 
 4. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
+
+**Sandbox mode:** use the `create_subtask` + `create_link` pattern from the review
+feedback sandbox-mode block above, with labels `["ai-generated-jira", "eval-failure"]`.
 
 ### Step 6e – Reply to Review Comments
 
@@ -638,6 +758,31 @@ gh api repos/<owner/repo>/issues/<pr-number>/comments -f body="[sdlc-workflow/ve
 When a review body contains multiple classified suggestions (sub-identifiers), post
 a single standalone comment that lists all classifications together rather than one
 comment per sub-identifier.
+
+**Sandbox mode:** Instead of calling `gh api`, append one action per reply.
+
+For **inline comment threads** (they have a `comment_id`), use `post_pr_reply`:
+
+```json
+{
+  "type": "post_pr_reply",
+  "repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "comment_id": <comment-id>,
+  "body": "<reply body; use {{subtask-N.key}} / {{subtask-N.url}} placeholders when referencing a created sub-task>"
+}
+```
+
+For **review body items** (no `comment_id`), use `post_pr_comment`:
+
+```json
+{
+  "type": "post_pr_comment",
+  "repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "body": "<standalone comment body>"
+}
+```
 
 ### Step 6f – Idempotency Guarantees
 
@@ -864,6 +1009,29 @@ Link the root-cause task to the parent task:
 
 jira.create_issue_link(type="Relates", inwardIssue=<root-cause-task-id>, outwardIssue=<parent-task-id>)
 
+**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`,
+append a `create_root_cause_task` action and a `create_link` action (the schema's
+`link_type` enum uses `Related`, the equivalent of the interactive `Relates`):
+
+```json
+{
+  "type": "create_root_cause_task",
+  "ref": "rc-N",
+  "summary": "Root-cause: <description>",
+  "labels": ["ai-generated-jira", "root-cause"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Related",
+  "inward": "{{rc-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
 #### Action 2 – Post the root-cause analysis as a comment
 
 After creating the task, post a Jira comment on the newly created root-cause task
@@ -880,6 +1048,17 @@ The comment must include:
 
 Include the **Comment Footnote** at the end of the comment (see the Comment Footnote
 section at the top of this skill for the required ADF format).
+
+**Sandbox mode:** Instead of calling `jira.add_comment`, append a `post_comment` action
+targeting the not-yet-created root-cause task by its ref:
+
+```json
+{
+  "type": "post_comment",
+  "issue": "{{rc-N.key}}",
+  "body_adf": <pre-rendered ADF with the root-cause analysis and the Comment Footnote>
+}
+```
 
 ### Step 7c – Idempotency Check
 
@@ -966,6 +1145,9 @@ gh pr view <pr-number> --json commits --jq '.commits[-1].oid' -R <owner/repo>
 
 Store the full SHA and its short form (first 7 characters) for use in the report.
 
+**Sandbox mode:** do not call `gh pr view` — use `github.commit_sha` from the
+pre-fetched data (Step 0.7) as the full SHA.
+
 ### Post to GitHub PR
 
 The report comment is **scoped to the commit it verifies**. Posting is idempotent
@@ -1026,6 +1208,52 @@ Include the Comment Footnote at the end of the Jira comment.
 
 **Important:** This skill does NOT merge the PR and does NOT transition the Jira issue.
 The report is informational — a human reviewer decides whether to merge.
+
+### Sandbox Mode Output
+
+**Sandbox mode only:** Instead of posting to GitHub and Jira directly, populate the
+`report` object and append a single `post_report` action. The runner's `post_script`
+posts the GitHub PR comment (from `report_md`, applying the commit-scoped
+find-then-update-or-create path above) and the Jira comment (from `report_adf`) after
+the sandbox exits.
+
+Populate `report` (all fields required by
+`plugins/sdlc-workflow/schemas/verify-pr-result.schema.json`):
+
+```json
+{
+  "jira_issue_id": "<JIRA-ID>",
+  "pr_repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "commit_sha": "<PR head commit SHA — github.commit_sha; 7–40 hex, canonicalized by the runner>",
+  "overall": "PASS|WARN|FAIL",
+  "table_md": "<the markdown verification table from Step 8>",
+  "report_md": "<full GitHub PR comment body: commit-scoped header + table + summary + markdown footnote>",
+  "report_adf": <full Jira comment ADF: report + Comment Footnote>,
+  "plugin_version": "<version from plugins/sdlc-workflow/.claude-plugin/plugin.json>"
+}
+```
+
+Append the final action:
+
+```json
+{ "type": "post_report" }
+```
+
+Write the complete accumulated JSON (the `report` object plus every action collected
+across Steps 6–9) to the output file:
+
+```bash
+cat > $FULLSEND_OUTPUT_DIR/agent-result.json << 'RESULT_EOF'
+<the complete { "report": {...}, "actions": [...] } JSON>
+RESULT_EOF
+```
+
+Verify it is valid JSON:
+
+```bash
+python3 -m json.tool $FULLSEND_OUTPUT_DIR/agent-result.json > /dev/null && echo "Output validated"
+```
 
 ## Important Rules
 
