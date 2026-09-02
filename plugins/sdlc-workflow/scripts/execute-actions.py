@@ -59,12 +59,31 @@ STICKY_COMMENT_MARKER = "<!-- sdlc-workflow:verify-pr -->"
 POST_COMMENT_STICKY_MARKER = "<!-- sdlc-workflow:verify-pr post_comment -->"
 
 # GitHub has no native sticky-comment mechanism, so the verify-pr report comment
-# embeds this marker (an invisible HTML comment) in its body. The commit SHA is
-# appended per post, scoping dedup to a single verification run/commit: a retry
-# for the same commit updates the existing comment instead of duplicating it,
-# while a later commit gets a fresh comment — preserving the per-run
-# verification history that verify-pr SKILL.md Step 9 posts.
+# embeds this marker (an invisible HTML comment) in its body. A length-normalized
+# commit SHA is appended per post, scoping dedup to a single verification
+# run/commit: a retry for the same commit updates the existing comment instead of
+# duplicating it, while a later commit gets a fresh comment — preserving the
+# per-run verification history that verify-pr SKILL.md Step 9 posts.
 GITHUB_REPORT_MARKER_PREFIX = "<!-- sdlc-workflow:verify-pr report commit:"
+
+# The dedup marker embeds a normalized commit SHA. The result schema allows
+# commit_sha to be 7-40 hex chars, and git abbreviations are always prefixes of
+# the full SHA, so truncating every form to the schema-minimum 7 chars yields a
+# marker that is stable for the same commit regardless of the length the report
+# happened to record — a full SHA on one run and an abbreviation on a retry then
+# still resolve to the same comment. (Truncating to a longer length, e.g. 12,
+# would leave a 7-char abbreviation unchanged and still mismatch a full SHA.)
+COMMIT_SHA_MARKER_LENGTH = 7
+
+
+def _normalize_commit_sha(commit_sha: str) -> str:
+    """Truncate a commit SHA to the canonical dedup-marker length.
+
+    See ``COMMIT_SHA_MARKER_LENGTH``: normalizing both the composed marker and
+    the lookup to the same fixed prefix length makes the GitHub report dedup
+    invariant to the SHA form (full vs abbreviated) supplied across runs.
+    """
+    return commit_sha[:COMMIT_SHA_MARKER_LENGTH]
 
 
 def resolve_refs(text: str, registry: dict[str, dict[str, str]]) -> str:
@@ -484,8 +503,9 @@ def execute_post_report(action: dict, registry: dict, report: dict) -> None:
     """Post the verification report to the GitHub PR and the Jira issue.
 
     The GitHub comment carries a commit-scoped marker
-    (``GITHUB_REPORT_MARKER_PREFIX`` + commit SHA): if a prior report comment for
-    the same commit exists it is updated in place (``gh api ... -X PATCH``)
+    (``GITHUB_REPORT_MARKER_PREFIX`` + a length-normalized commit SHA): if a prior
+    report comment for the same commit exists it is updated in place
+    (``gh api ... -X PATCH``)
     instead of creating a duplicate, so a retry after a partial failure is
     idempotent while a new commit still gets a fresh comment. The Jira side is
     already idempotent via its sticky marker; only ``report_md`` (without the
@@ -497,7 +517,7 @@ def execute_post_report(action: dict, registry: dict, report: dict) -> None:
     commit_sha = report["commit_sha"]
     report_md = resolve_refs(report["report_md"], registry)
 
-    marker = f"{GITHUB_REPORT_MARKER_PREFIX}{commit_sha} -->"
+    marker = f"{GITHUB_REPORT_MARKER_PREFIX}{_normalize_commit_sha(commit_sha)} -->"
     github_body = f"{report_md}\n\n{marker}"
 
     existing_id = _find_report_comment_id(repo, pr_number, marker)

@@ -677,6 +677,62 @@ def test_execute_post_report_updates_comment_on_later_page():
     assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
 
 
+def test_execute_post_report_dedup_marker_invariant_to_sha_length():
+    """A full-length SHA on one run and an abbreviated SHA for the same commit on
+    a retry resolve to the SAME report comment (PATCH-update, not duplicate),
+    because the dedup marker normalizes the SHA to a canonical length."""
+    full_sha = "946556e" + "a" * 33   # 40 hex chars
+    short_sha = "946556e"             # 7-char abbreviation of the same commit
+
+    def _run_report(commit_sha, existing_comments):
+        """Run execute_post_report; return (calls, created_body_or_None)."""
+        calls = []
+
+        def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
+            calls.append({"cmd": cmd, "input": input})
+            if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
+                return _FakeCompleted(0, "", json.dumps([existing_comments]))
+            return _FakeCompleted(0, "")
+
+        saved_run = execute_actions.subprocess.run
+        saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
+        execute_actions.subprocess.run = fake_run
+        os.environ.update(_JIRA_ENV)
+        try:
+            report = {
+                "pr_repo": "acme/widget",
+                "pr_number": 42,
+                "jira_issue_id": "TC-777",
+                "commit_sha": commit_sha,
+                "report_md": "## Verify report",
+            }
+            execute_actions.execute_post_report({"type": "post_report"}, {}, report)
+        finally:
+            execute_actions.subprocess.run = saved_run
+            for k, v in saved_env.items():
+                if v is None:
+                    os.environ.pop(k, None)
+                else:
+                    os.environ[k] = v
+        return calls
+
+    # First run with the FULL SHA and no existing comment → a comment is created;
+    # capture the marker it embedded.
+    first_calls = _run_report(full_sha, [])
+    create_call = next(c for c in first_calls if c["cmd"][:3] == ["gh", "pr", "comment"])
+    created_body = create_call["cmd"][create_call["cmd"].index("--body") + 1]
+
+    # Retry with the ABBREVIATED SHA; the PR already has the comment created above.
+    retry_calls = _run_report(short_sha, [{"id": 555, "body": created_body}])
+
+    # Then the retry PATCH-updates the existing comment instead of duplicating it.
+    assert not any(c["cmd"][:3] == ["gh", "pr", "comment"] for c in retry_calls), \
+        "abbreviated-SHA retry must not create a duplicate report comment"
+    patch_calls = [c for c in retry_calls if "PATCH" in c["cmd"]]
+    assert len(patch_calls) == 1, f"Expected one PATCH update, got {len(patch_calls)}"
+    assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
+
+
 def test_find_report_comment_id_exits_on_unparseable_json():
     """A JSON parse failure aborts with sys.exit(1) instead of silently returning
     None (which would let a retry create a duplicate report comment)."""
@@ -724,5 +780,6 @@ if __name__ == "__main__":
     test_execute_post_report_posts_github_then_jira()
     test_execute_post_report_updates_existing_github_comment_on_retry()
     test_execute_post_report_updates_comment_on_later_page()
+    test_execute_post_report_dedup_marker_invariant_to_sha_length()
     test_find_report_comment_id_exits_on_unparseable_json()
     print("All tests passed.")
