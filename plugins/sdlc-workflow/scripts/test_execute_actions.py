@@ -429,6 +429,21 @@ def test_adf_to_markdown_renders_inline_nodes_in_task_item():
     assert result == "- [ ] ping @dev re https://example.com/pr/1", f"Got: {result!r}"
 
 
+def test_render_adf_date_falls_back_on_out_of_range_timestamp():
+    """An integer-parseable but out-of-range epoch-ms timestamp renders as its
+    literal string instead of raising, so a single malformed date node cannot
+    abort the whole post_script. datetime.fromtimestamp raises OverflowError/OSError
+    (or ValueError) for out-of-range values, and that call now sits inside the
+    guarded try; before the fix it was outside and any such exception propagated."""
+    # Given an integer-parseable epoch-millisecond value far outside the
+    # representable datetime range
+    out_of_range = "99999999999999999"
+    # When rendering it as an ADF date node
+    result = execute_actions._render_adf_date(out_of_range)
+    # Then the literal value is returned and no exception propagates
+    assert result == out_of_range, f"Got: {result!r}"
+
+
 def test_execute_post_comment_routes_to_native():
     """execute_post_comment resolves refs in body_adf, renders to markdown, and posts it."""
     recorder = _RunRecorder()
@@ -650,6 +665,7 @@ if __name__ == "__main__":
     test_adf_to_markdown_does_not_double_escape_marks_or_code()
     test_adf_to_markdown_renders_non_text_inline_nodes()
     test_adf_to_markdown_renders_inline_nodes_in_task_item()
+    test_render_adf_date_falls_back_on_out_of_range_timestamp()
     test_execute_post_comment_routes_to_native()
     test_execute_post_report_posts_github_then_jira()
     test_execute_post_report_updates_existing_github_comment_on_retry()
