@@ -475,6 +475,59 @@ def test_execute_post_comment_routes_to_native():
         f"Got: {recorder.input!r}"
 
 
+def test_post_comment_and_report_use_distinct_sticky_markers():
+    """A post_comment and a post_report pass DIFFERENT --marker values to the
+    native CLI, so two sticky comments on the same Jira issue never share one
+    marker identity and clobber each other."""
+    # Given the comment path
+    comment_recorder = _RunRecorder()
+    restore = _with_jira_env_and_recorder(comment_recorder)
+    try:
+        execute_actions.execute_post_comment(
+            {"type": "post_comment", "issue": "TC-777",
+             "body_adf": {"type": "doc", "version": 1, "content": []}},
+            {},
+        )
+    finally:
+        restore()
+    comment_marker = comment_recorder.cmd[comment_recorder.cmd.index("--marker") + 1]
+
+    # And the report path (no existing GitHub comment → lists then posts)
+    report_calls = []
+
+    def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
+        report_calls.append(cmd)
+        return _FakeCompleted(0, "", "[]")
+
+    saved_run = execute_actions.subprocess.run
+    saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
+    execute_actions.subprocess.run = fake_run
+    os.environ.update(_JIRA_ENV)
+    try:
+        report = {
+            "pr_repo": "acme/widget",
+            "pr_number": 42,
+            "jira_issue_id": "TC-777",
+            "commit_sha": "946556e",
+            "report_md": "## Verify report",
+        }
+        execute_actions.execute_post_report({"type": "post_report"}, {}, report)
+    finally:
+        execute_actions.subprocess.run = saved_run
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    jira_cmd = next(c for c in report_calls if c[:3] == ["fullsend", "issues", "post-comment"])
+    report_marker = jira_cmd[jira_cmd.index("--marker") + 1]
+
+    # Then the two markers differ, and each matches its dedicated constant
+    assert comment_marker == execute_actions.POST_COMMENT_STICKY_MARKER
+    assert report_marker == execute_actions.STICKY_COMMENT_MARKER
+    assert comment_marker != report_marker, "post_comment and post_report must use distinct markers"
+
+
 def test_execute_post_report_posts_github_then_jira():
     """execute_post_report lists PR comments, creates a marked GitHub comment when none exists, then posts to Jira."""
     calls = []
@@ -667,6 +720,7 @@ if __name__ == "__main__":
     test_adf_to_markdown_renders_inline_nodes_in_task_item()
     test_render_adf_date_falls_back_on_out_of_range_timestamp()
     test_execute_post_comment_routes_to_native()
+    test_post_comment_and_report_use_distinct_sticky_markers()
     test_execute_post_report_posts_github_then_jira()
     test_execute_post_report_updates_existing_github_comment_on_retry()
     test_execute_post_report_updates_comment_on_later_page()

@@ -47,8 +47,16 @@ _spec.loader.exec_module(_jira_mod)
 REF_PATTERN = re.compile(r"\{\{([a-z0-9-]+)\.(key|url)\}\}")
 
 # Stable marker so the native sticky-comment CLI updates the same Jira
-# comment across re-runs instead of posting duplicates.
+# comment across re-runs instead of posting duplicates. Used by post_report
+# (the verification report on the main task).
 STICKY_COMMENT_MARKER = "<!-- sdlc-workflow:verify-pr -->"
+
+# Distinct sticky marker for standalone analysis comments (post_comment). The
+# native CLI treats the marker as the sticky-comment identity, so a post_comment
+# and a post_report targeting the SAME Jira issue in one run must not share one
+# marker — otherwise the second post would overwrite the first. Each path keeps
+# its own stable marker, so per-path re-run idempotency is preserved.
+POST_COMMENT_STICKY_MARKER = "<!-- sdlc-workflow:verify-pr post_comment -->"
 
 # GitHub has no native sticky-comment mechanism, so the verify-pr report comment
 # embeds this marker (an invisible HTML comment) in its body. The commit SHA is
@@ -294,12 +302,16 @@ def _jira_native_env() -> dict[str, str]:
         sys.exit(1)
 
 
-def post_jira_comment_native(issue_key: str, body_md: str) -> None:
+def post_jira_comment_native(
+    issue_key: str, body_md: str, marker: str = STICKY_COMMENT_MARKER
+) -> None:
     """Post a Jira comment via the native fullsend sticky-comment CLI.
 
-    The body is passed as markdown on stdin (``--result -``). A stable marker
-    makes the post idempotent: re-runs update the existing comment rather than
-    creating duplicates.
+    The body is passed as markdown on stdin (``--result -``). The ``marker`` is
+    the sticky-comment identity: re-runs with the same marker update the existing
+    comment rather than creating duplicates. Callers pass a per-purpose marker so
+    two comments on the same issue (report vs analysis) do not clobber each other;
+    the default preserves the report path's historical marker.
     """
     project, _, number = issue_key.rpartition("-")
     if not project or not number:
@@ -309,7 +321,7 @@ def post_jira_comment_native(issue_key: str, body_md: str) -> None:
     result = subprocess.run(
         ["fullsend", "issues", "post-comment", "--tracker", "jira",
          "--project", project, "--number", number,
-         "--marker", STICKY_COMMENT_MARKER, "--result", "-"],
+         "--marker", marker, "--result", "-"],
         input=body_md, text=True, capture_output=True,
         env=_jira_native_env(),
     )
@@ -428,7 +440,7 @@ def execute_post_comment(action: dict, registry: dict) -> None:
     body_adf = resolve_refs_in_obj(action["body_adf"], registry)
     body_md = adf_to_markdown(body_adf)
 
-    post_jira_comment_native(issue, body_md)
+    post_jira_comment_native(issue, body_md, marker=POST_COMMENT_STICKY_MARKER)
     print(f"  Posted comment on {issue}")
 
 
