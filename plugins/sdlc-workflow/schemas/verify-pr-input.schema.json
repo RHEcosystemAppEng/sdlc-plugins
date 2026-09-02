@@ -95,6 +95,32 @@
         }
       }
     },
+    "idempotency": {
+      "type": "object",
+      "description": "Related-issue metadata prefetched on the trusted runner so the sandbox can run the Steps 6d/6f/7c idempotency checks (duplicate sub-task and root-cause detection) without a Jira token or egress. Optional: absent or empty when the task has no sub-tasks or linked issues yet.",
+      "additionalProperties": false,
+      "properties": {
+        "related_issues": {
+          "type": "array",
+          "description": "The task's existing sub-tasks and linked issues (e.g., root-cause tasks), each with the fields the dedup checks inspect.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": { "type": "string", "description": "Issue key (e.g., TC-4742)" },
+              "summary": { "type": "string" },
+              "labels": { "type": "array", "items": { "type": "string" } },
+              "description": { "type": "object", "description": "Issue description in the tracker's native format (e.g., ADF)" },
+              "issuetype": { "type": "string", "description": "Issue type name (e.g., Sub-task, Task)" },
+              "comments": {
+                "type": "array",
+                "description": "Comment bodies in the tracker's native format; searched by Step 7c for the root-cause marker.",
+                "items": { "type": "object" }
+              }
+            }
+          }
+        }
+      }
+    },
     "source": {
       "type": "object",
       "description": "Raw issue tracker response for fields not captured above",

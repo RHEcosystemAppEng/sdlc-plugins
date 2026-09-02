@@ -148,15 +148,34 @@ gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq .commits > "${PRE_OUT
 
 echo "GitHub read bundle prefetched to ${PRE_OUTPUT_DIR}"
 
+# 7b. Idempotency prefetch — the sandbox has no Jira token, but Steps 6d/6f/7c
+#     dedupe against the task's existing sub-tasks and linked (e.g., root-cause)
+#     issues. Fetch each related issue here on the trusted runner (summary,
+#     labels, description, issuetype, and comments) so the sandbox can run those
+#     checks tokenlessly. No `|| true`: a related issue the token created should
+#     be readable, so a fetch failure is a real error surfaced under set -e.
+REL_DIR="${PRE_OUTPUT_DIR}/related-issues"
+rm -rf "${REL_DIR}"
+mkdir -p "${REL_DIR}"
+RELATED_KEYS=$(printf '%s\n' "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" related-keys)
+for key in ${RELATED_KEYS}; do
+  python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${key}" \
+    --fields "summary,labels,description,issuetype,comment" \
+    > "${REL_DIR}/${key}.json"
+done
+echo "Idempotency read bundle prefetched to ${REL_DIR}"
+
 # 8. Write pre-fetched data for sandbox consumption (tracker-agnostic format,
-#    with the GitHub bundle embedded under `github`).
+#    with the GitHub bundle embedded under `github` and the idempotency
+#    related-issue metadata under `idempotency`).
 printf '%s\n' "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" transform \
   "${JIRA_ISSUE_ID}" "${PR_URL}" \
   --github-dir "${PRE_OUTPUT_DIR}" \
   --pr-repo "${PR_REPO}" \
   --pr-number "${PR_NUM}" \
   --head-ref "${HEAD_REF}" \
-  --commit-sha "${COMMIT_SHA}" > "${PRE_OUTPUT_DIR}/verify-pr-input.json"
+  --commit-sha "${COMMIT_SHA}" \
+  --idempotency-dir "${REL_DIR}" > "${PRE_OUTPUT_DIR}/verify-pr-input.json"
 
 echo "Pre-fetched data written to ${PRE_OUTPUT_DIR}/verify-pr-input.json"
 echo "Input validation passed"
