@@ -430,6 +430,95 @@ def test_adf_to_markdown_renders_inline_nodes_in_task_item():
     assert result == "- [ ] ping @dev re https://example.com/pr/1", f"Got: {result!r}"
 
 
+def test_adf_to_markdown_renders_table():
+    """A table renders as a GFM table: first tableRow is the header (with a ---
+    separator), tableCell/tableHeader content is rendered, and literal pipes in a
+    cell are escaped so they do not break the column grid."""
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "table", "content": [
+                {"type": "tableRow", "content": [
+                    {"type": "tableHeader", "content": [
+                        {"type": "paragraph", "content": [{"type": "text", "text": "Name"}]}]},
+                    {"type": "tableHeader", "content": [
+                        {"type": "paragraph", "content": [{"type": "text", "text": "Note"}]}]},
+                ]},
+                {"type": "tableRow", "content": [
+                    {"type": "tableCell", "content": [
+                        {"type": "paragraph", "content": [{"type": "text", "text": "a"}]}]},
+                    {"type": "tableCell", "content": [
+                        {"type": "paragraph", "content": [{"type": "text", "text": "b|c"}]}]},
+                ]},
+            ]},
+        ],
+    }
+    result = execute_actions.adf_to_markdown(doc)
+    assert result == (
+        "| Name | Note |\n"
+        "| --- | --- |\n"
+        "| a | b\\|c |"
+    ), f"Got: {result!r}"
+
+
+def test_adf_to_markdown_renders_blockquote_and_panel():
+    """blockquote renders as > -prefixed lines; a panel renders as a quote with a
+    bold panelType label so its kind is preserved."""
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "blockquote", "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "quoted"}]}]},
+            {"type": "panel", "attrs": {"panelType": "info"}, "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "heads up"}]}]},
+        ],
+    }
+    result = execute_actions.adf_to_markdown(doc)
+    assert result == (
+        "> quoted\n"
+        "\n"
+        "> **info**\n"
+        ">\n"
+        "> heads up"
+    ), f"Got: {result!r}"
+
+
+def test_adf_to_markdown_renders_media_instead_of_dropping():
+    """media/mediaSingle render a non-empty image link (or [alt] placeholder when
+    no URL is present) rather than being silently dropped — media nodes have no
+    text content, so the pre-fix flattening fallback emitted nothing."""
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "mediaSingle", "content": [
+                {"type": "media", "attrs": {"url": "https://ex.com/i.png", "alt": "chart"}}]},
+            {"type": "mediaSingle", "content": [
+                {"type": "media", "attrs": {"type": "file", "id": "abc-123"}}]},
+        ],
+    }
+    result = execute_actions.adf_to_markdown(doc)
+    assert result == "![chart](https://ex.com/i.png)\n\n[abc-123]", f"Got: {result!r}"
+
+
+def test_adf_to_markdown_unknown_block_still_flattens():
+    """A genuinely unknown container block still degrades gracefully by recursing
+    into its nested content (the preserved fallback), so the fix does not regress
+    forward-compat handling of block nodes it does not explicitly cover."""
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "someFutureBlock", "content": [
+                {"type": "paragraph", "content": [{"type": "text", "text": "still here"}]}]},
+        ],
+    }
+    result = execute_actions.adf_to_markdown(doc)
+    assert result == "still here", f"Got: {result!r}"
+
+
 def test_render_adf_date_falls_back_on_out_of_range_timestamp():
     """An integer-parseable but out-of-range epoch-ms timestamp renders as its
     literal string instead of raising, so a single malformed date node cannot
@@ -844,6 +933,10 @@ if __name__ == "__main__":
     test_adf_to_markdown_does_not_double_escape_marks_or_code()
     test_adf_to_markdown_renders_non_text_inline_nodes()
     test_adf_to_markdown_renders_inline_nodes_in_task_item()
+    test_adf_to_markdown_renders_table()
+    test_adf_to_markdown_renders_blockquote_and_panel()
+    test_adf_to_markdown_renders_media_instead_of_dropping()
+    test_adf_to_markdown_unknown_block_still_flattens()
     test_render_adf_date_falls_back_on_out_of_range_timestamp()
     test_execute_post_comment_routes_to_native()
     test_post_comment_and_report_use_distinct_sticky_markers()
