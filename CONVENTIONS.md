@@ -34,7 +34,7 @@
 - **`plugins/sdlc-workflow/`** — main plugin directory
   - **`skills/<skill-name>/`** — individual skill directories, each containing a `SKILL.md` file
   - **`shared/`** — shared resources like `task-description-template.md`
-  - **`scripts/`** — executable Python and shell helpers (e.g., `execute-actions.py`, `jira-client.py`, `pre-verify-pr.sh`) with a `pytest` unit-test suite (`test_*.py`) alongside them
+  - **`scripts/`** — executable Python and shell helpers (e.g., `execute-actions.py`, `jira-client.py`, `pre-verify-pr.sh`); the core Python modules have a `pytest` unit-test suite (`test_*.py`) alongside them, while `strip_extra_properties.py` and the shell helpers are not yet unit-tested
   - **`.claude-plugin/`** — plugin manifest (`plugin.json`)
 - **`.claude-plugin/`** — marketplace manifest at root level (`marketplace.json`)
 - **`.serena/`** — Serena configuration files
@@ -60,11 +60,14 @@ tests (see **Testing Conventions**).
   3. Run `/agents` to verify no plugin agents are missing
   4. Edit a `SKILL.md`, then `/reload-plugins` to verify changes are picked up
 - **CI validation**: Uses `claude plugin validate` on all plugin directories under `plugins/`
-- **Automated unit tests (mandatory)**: The Python scripts under
-  `plugins/sdlc-workflow/scripts/` have a `pytest` suite in sibling `test_*.py` files
-  (e.g., `test_execute_actions.py`, `test_jira_client.py`, `test_pre_verify_pr.py`).
-  Any change to a script under `scripts/` **must** add or update the matching test and
-  keep the whole suite green. Run it before every commit and before opening or updating
+- **Automated unit tests (mandatory)**: The core Python modules under
+  `plugins/sdlc-workflow/scripts/` (`execute-actions.py`, `jira-client.py`,
+  `pre_verify_pr.py`) have a `pytest` suite in sibling `test_*.py` files
+  (`test_execute_actions.py`, `test_jira_client.py`, `test_jira_client_cli.py`,
+  `test_pre_verify_pr.py`). `strip_extra_properties.py` and the shell helpers
+  (`pre-verify-pr.sh`, `post-verify-pr.sh`, `validate-output-schema.sh`) are not yet
+  unit-tested. Any change to a script under `scripts/` **must** add or update the
+  matching test and keep the whole suite green. Run it before every commit and before opening or updating
   a PR:
   ```bash
   python3 -m pytest plugins/sdlc-workflow/scripts/ -q
@@ -113,9 +116,12 @@ Validates plugin manifests under `plugins/`. CI workflow: `.github/workflows/val
 
 ### Python Unit Tests
 
-The executable scripts under `plugins/sdlc-workflow/scripts/` are covered by a `pytest`
-suite in sibling `test_*.py` files. Run the full suite and keep it green whenever you
-touch anything under `scripts/`:
+The core Python modules under `plugins/sdlc-workflow/scripts/` (`execute-actions.py`,
+`jira-client.py`, `pre_verify_pr.py`) are covered by a `pytest` suite in sibling
+`test_*.py` files; `strip_extra_properties.py` and the shell helpers
+(`pre-verify-pr.sh`, `post-verify-pr.sh`, `validate-output-schema.sh`) are not yet
+covered. Run the full suite and keep it green whenever you touch anything under
+`scripts/`:
 
 ```bash
 python3 -m pytest plugins/sdlc-workflow/scripts/ -q
@@ -178,7 +184,7 @@ requests targeting `main`). Run it locally before pushing so failures surface be
 
 ## Dependencies
 
-- **No external dependencies** — this repository contains only documentation and configuration files
+- **No external dependencies for the plugins themselves** — the Claude Code plugins are Markdown, YAML, and JSON. The repository also ships executable Python and shell helpers under `plugins/sdlc-workflow/scripts/`: these require Python 3 (`validate-output-schema.sh` additionally requires the `jsonschema` package at runtime), and the test suite requires `pytest` (plus `jsonschema`)
 - **Runtime dependency**: Claude Code CLI (users must have Claude Code installed to use the plugins)
 - **Plugin system**: Uses Claude Code's plugin marketplace and validation system (`claude plugin validate`)
 - **Version synchronization**: The plugin version must be kept in sync between:
