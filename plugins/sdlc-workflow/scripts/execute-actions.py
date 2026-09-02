@@ -110,16 +110,20 @@ def _render_adf_date(timestamp: Any) -> str:
 
     ADF ``date`` nodes store ``attrs.timestamp`` as a string of milliseconds
     since the Unix epoch. It is formatted as a UTC calendar date. If the value is
-    missing or not an integer, its literal form is returned so the node still
-    contributes its value instead of being dropped.
+    missing, not an integer, or outside the representable date range, its literal
+    form is returned so the node still contributes its value instead of aborting
+    the run. ``datetime.fromtimestamp`` can raise ``OverflowError`` or ``OSError``
+    (platform-dependent) for out-of-range epoch values, so both are caught here
+    alongside the ``int()`` parse errors — an uncaught exception would otherwise
+    abort the entire post_script and post nothing.
     """
     try:
         ms = int(timestamp)
-    except (TypeError, ValueError):
+        return datetime.datetime.fromtimestamp(
+            ms / 1000, tz=datetime.timezone.utc
+        ).strftime("%Y-%m-%d")
+    except (TypeError, ValueError, OverflowError, OSError):
         return str(timestamp) if timestamp else ""
-    return datetime.datetime.fromtimestamp(
-        ms / 1000, tz=datetime.timezone.utc
-    ).strftime("%Y-%m-%d")
 
 
 def _render_adf_inline(nodes: list) -> str:
