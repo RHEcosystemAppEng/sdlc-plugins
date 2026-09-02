@@ -570,17 +570,30 @@ def main():
 
     print(f"Executing {len(actions)} actions for {report['jira_issue_id']}...")
 
+    # post_report resolves {{ref.key}} placeholders in report_md against the
+    # registry, which the entity-creating actions (create_subtask,
+    # create_root_cause_task) populate as they run. Defer every post_report until
+    # after the actions loop so the registry is fully populated first — otherwise
+    # a post_report ordered before an action it references would raise an
+    # uncaught KeyError from resolve_refs and abort the run. verify-pr already
+    # emits post_report last, so this only removes an undocumented,
+    # order-dependent trap; it does not change the observed behavior.
+    deferred_reports: list[dict] = []
+
     for i, action in enumerate(actions):
         action_type = action["type"]
         print(f"[{i + 1}/{len(actions)}] {action_type}")
 
         if action_type == "post_report":
-            execute_post_report(action, registry, report)
+            deferred_reports.append(action)
         elif action_type in EXECUTORS:
             EXECUTORS[action_type](action, registry)
         else:
             print(f"  Unknown action type: {action_type}", file=sys.stderr)
             sys.exit(1)
+
+    for action in deferred_reports:
+        execute_post_report(action, registry, report)
 
     print(f"Done. {len(actions)} actions executed successfully.")
 

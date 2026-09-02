@@ -4,6 +4,7 @@
 import sys
 import os
 import json
+import tempfile
 import importlib.util
 
 from jsonschema import validate, ValidationError
@@ -733,6 +734,75 @@ def test_execute_post_report_dedup_marker_invariant_to_sha_length():
     assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
 
 
+def test_post_report_resolves_ref_created_by_later_action():
+    """report_md refs resolve regardless of action ordering: a post_report ordered
+    BEFORE the create_subtask it references still resolves, because main() defers
+    every post_report until after the actions loop populates the registry."""
+    calls = []
+
+    def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
+        calls.append({"cmd": cmd, "input": input})
+        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
+            return _FakeCompleted(0, "", "[]")  # no existing report comment
+        return _FakeCompleted(0, "")
+
+    def fake_create_issue(**kwargs):
+        return {"key": "TC-999"}
+
+    # Actions deliberately order post_report FIRST, then the create_subtask whose
+    # ref its report_md interpolates — the pre-fix inline order would KeyError.
+    data = {
+        "report": {
+            "pr_repo": "acme/widget",
+            "pr_number": 42,
+            "jira_issue_id": "TC-777",
+            "commit_sha": "946556e",
+            "report_md": "Filed sub-task {{sub-1.key}}.",
+        },
+        "actions": [
+            {"type": "post_report"},
+            {
+                "type": "create_subtask",
+                "ref": "sub-1",
+                "parent": "TC-100",
+                "summary": "A sub-task",
+                "labels": ["review-feedback"],
+                "description_adf": {"type": "doc", "version": 1, "content": []},
+            },
+        ],
+    }
+
+    saved_run = execute_actions.subprocess.run
+    saved_create = execute_actions._jira_mod.create_issue
+    saved_argv = sys.argv
+    saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
+    execute_actions.subprocess.run = fake_run
+    execute_actions._jira_mod.create_issue = fake_create_issue
+    os.environ.update(_JIRA_ENV)
+    fd, path = tempfile.mkstemp(suffix=".json")
+    try:
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f)
+        sys.argv = ["execute-actions.py", path]
+        execute_actions.main()
+    finally:
+        execute_actions.subprocess.run = saved_run
+        execute_actions._jira_mod.create_issue = saved_create
+        sys.argv = saved_argv
+        os.remove(path)
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+
+    # The GitHub report body carries the resolved key, not the raw placeholder.
+    create_call = next(c for c in calls if c["cmd"][:3] == ["gh", "pr", "comment"])
+    gh_body = create_call["cmd"][create_call["cmd"].index("--body") + 1]
+    assert "Filed sub-task TC-999." in gh_body, f"ref not resolved: {gh_body}"
+    assert "{{sub-1.key}}" not in gh_body, "placeholder leaked into report body"
+
+
 def test_find_report_comment_id_exits_on_unparseable_json():
     """A JSON parse failure aborts with sys.exit(1) instead of silently returning
     None (which would let a retry create a duplicate report comment)."""
@@ -781,5 +851,6 @@ if __name__ == "__main__":
     test_execute_post_report_updates_existing_github_comment_on_retry()
     test_execute_post_report_updates_comment_on_later_page()
     test_execute_post_report_dedup_marker_invariant_to_sha_length()
+    test_post_report_resolves_ref_created_by_later_action()
     test_find_report_comment_id_exits_on_unparseable_json()
     print("All tests passed.")
