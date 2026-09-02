@@ -107,12 +107,37 @@ The `report` object and every action conform to
 In sandbox mode the `pre_script` fetches all task and PR data on the trusted runner
 (where the tokens live) and mounts it read-only into the sandbox. Read it:
 
+Validate it against `plugins/sdlc-workflow/schemas/verify-pr-input.schema.json`
+before using it — a syntactically valid but structurally wrong or incomplete
+prefetch (e.g., missing the `github` bundle or `task` fields) must be treated as
+invalid rather than passing and failing deep inside a later step:
+
 ```bash
-cat /sandbox/workspace/.pre-script/verify-pr-input.json | python3 -m json.tool > /dev/null 2>&1 && echo "Pre-fetched data available" || echo "ERROR: Pre-fetched data missing or invalid"
+python3 - << 'PYEOF'
+import json, sys
+from jsonschema import validate, ValidationError
+
+INPUT = "/sandbox/workspace/.pre-script/verify-pr-input.json"
+SCHEMA = "plugins/sdlc-workflow/schemas/verify-pr-input.schema.json"
+try:
+    with open(INPUT) as f:
+        instance = json.load(f)
+    with open(SCHEMA) as f:
+        schema = json.load(f)
+    validate(instance=instance, schema=schema)
+    print("Pre-fetched data available")
+except FileNotFoundError:
+    print("ERROR: Pre-fetched data missing"); sys.exit(1)
+except json.JSONDecodeError as e:
+    print(f"ERROR: Pre-fetched data is not valid JSON: {e}"); sys.exit(1)
+except ValidationError as e:
+    path = ".".join(str(p) for p in e.path) or "<root>"
+    print(f"ERROR: Pre-fetched data failed schema validation at {path}: {e.message}")
+    sys.exit(1)
+PYEOF
 ```
 
-If the file exists and contains valid JSON (shape defined by
-`plugins/sdlc-workflow/schemas/verify-pr-input.schema.json`):
+If the file validates against the schema:
 
 - Read `task` (`summary`, `description` in the tracker's native ADF, `status`,
   `labels`, `issue_links`, `custom_fields`) and `pr_url`. **Skip Step 1 (Fetch and
