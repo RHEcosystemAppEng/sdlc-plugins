@@ -556,6 +556,36 @@ def test_create_issue_fix_versions_filters_empty_names():
     print("✓ create_issue fix_versions filters empty names test passed")
 
 
+def test_create_issue_fails_fast_on_empty_issue_type():
+    """Verifies create_issue with an empty issue_type fails fast without issuing a request."""
+    called = {"made": False}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        called["made"] = True
+        return {"key": "TEST-1", "id": "1"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        # When creating an issue with an empty issue_type
+        exit_code = None
+        try:
+            create_issue("TC", "Test", "desc", "")
+            raised = False
+        except SystemExit as e:
+            raised = True
+            exit_code = e.code
+
+        # Then it fails fast (SystemExit 1) and issues no HTTP request
+        assert raised, "Expected create_issue to fail fast (SystemExit) on empty issue_type"
+        assert exit_code == 1, f"Expected exit code 1, got {exit_code}"
+        assert not called["made"], "Expected no HTTP request to be issued"
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ create_issue fails fast on empty issue_type test passed")
+
+
 def run_all_tests():
     """Run all tests and report results."""
     tests = [
@@ -578,6 +608,7 @@ def run_all_tests():
         test_create_issue_omits_fix_versions_when_none,
         test_create_issue_all_optional_fields_together,
         test_create_issue_fix_versions_filters_empty_names,
+        test_create_issue_fails_fast_on_empty_issue_type,
     ]
 
     failed = []
