@@ -247,6 +247,77 @@ def _render_adf_task_list(node: dict) -> str:
     return "\n".join(lines)
 
 
+def _render_adf_blockquote(node: dict) -> str:
+    """Render an ADF ``blockquote``/``panel`` as markdown ``> ``-prefixed lines.
+
+    The framing children are rendered as ordinary blocks and every resulting line
+    (blank lines included, so the quote stays contiguous) gets the ``> `` prefix.
+    A ``panel``'s ``attrs.panelType`` (e.g. ``info``/``warning``) is emitted as a
+    leading bold label so the panel's kind is not lost in the markdown, which has
+    no native panel construct.
+    """
+    inner = _render_adf_blocks(node.get("content", []))
+    lines = inner.split("\n") if inner else [""]
+    panel_type = node.get("attrs", {}).get("panelType")
+    if panel_type:
+        lines = [f"**{panel_type}**", ""] + lines
+    return "\n".join(f"> {line}".rstrip() for line in lines)
+
+
+def _render_adf_table_cell(cell: dict) -> str:
+    """Render one ADF ``tableCell``/``tableHeader`` to a single GFM table cell.
+
+    Cell content is block-level (usually a paragraph), but a GFM cell must be one
+    line, so inter-block newlines are collapsed to spaces and any literal pipe is
+    escaped so it does not break the column structure.
+    """
+    text = _render_adf_blocks(cell.get("content", []))
+    return text.replace("\n", " ").replace("|", "\\|").strip()
+
+
+def _render_adf_table(node: dict) -> str:
+    """Render an ADF ``table`` to a GitHub-flavored markdown table.
+
+    The first ``tableRow`` is treated as the header row (followed by the ``---``
+    separator); remaining rows are body rows. The separator is sized to the header
+    column count so the table is well-formed even when body rows are ragged.
+    """
+    rows = [row for row in node.get("content", []) if row.get("type") == "tableRow"]
+    if not rows:
+        return ""
+    rendered = [
+        [_render_adf_table_cell(cell) for cell in row.get("content", [])]
+        for row in rows
+    ]
+    header = rendered[0]
+    lines = [
+        "| " + " | ".join(header) + " |",
+        "| " + " | ".join(["---"] * len(header)) + " |",
+    ]
+    for body_row in rendered[1:]:
+        lines.append("| " + " | ".join(body_row) + " |")
+    return "\n".join(lines)
+
+
+def _render_adf_media(node: dict) -> str:
+    """Render an ADF ``media``/``mediaSingle``/``mediaGroup`` node.
+
+    A ``mediaSingle``/``mediaGroup`` wraps one or more ``media`` children; each is
+    rendered as a markdown image ``![alt](url)`` when a URL attr is present, or a
+    non-empty ``[alt]`` placeholder otherwise — never dropped silently. Attachment
+    media (``type: file`` with only an ``id``) has no dereferenceable URL here, so
+    it falls back to the alt/id placeholder.
+    """
+    if node.get("type") in ("mediaSingle", "mediaGroup"):
+        parts = [_render_adf_media(child) for child in node.get("content", [])
+                 if child.get("type") == "media"]
+        return "\n".join(part for part in parts if part)
+    attrs = node.get("attrs", {})
+    url = attrs.get("url", "")
+    alt = attrs.get("alt") or attrs.get("id") or "media"
+    return f"![{alt}]({url})" if url else f"[{alt}]"
+
+
 def _render_adf_block(node: dict) -> str:
     """Render a single ADF block node to markdown."""
     node_type = node.get("type")
@@ -267,6 +338,12 @@ def _render_adf_block(node: dict) -> str:
         return _render_adf_list(node, ordered=True)
     if node_type == "taskList":
         return _render_adf_task_list(node)
+    if node_type in ("blockquote", "panel"):
+        return _render_adf_blockquote(node)
+    if node_type == "table":
+        return _render_adf_table(node)
+    if node_type in ("media", "mediaSingle", "mediaGroup"):
+        return _render_adf_media(node)
     # Unknown block — recurse into nested content.
     return _render_adf_blocks(node.get("content", []))
 
@@ -286,7 +363,13 @@ def adf_to_markdown(doc: dict) -> str:
     produces: headings, paragraphs, bullet/ordered lists, code blocks, rules, and
     the strong/em/code/link inline marks. taskList/taskItem nodes (which agents may
     emit directly in ``body_adf``) render as markdown checklists (``- [ ]`` /
-    ``- [x]``).
+    ``- [x]``). Additional block nodes an agent may emit in ``body_adf`` are also
+    rendered rather than flattened: ``blockquote``/``panel`` as ``> `` quotes,
+    ``table`` as a GitHub-flavored markdown table, and ``media``/``mediaSingle``/
+    ``mediaGroup`` as an image link or ``[alt]`` placeholder. Non-text inline leaf
+    nodes (``mention``/``emoji``/``status``/``inlineCard``/``date``) are rendered
+    from their ``attrs``. Genuinely unknown container nodes still degrade
+    gracefully by recursing into their nested content.
     """
     if not isinstance(doc, dict):
         raise TypeError("adf_to_markdown expects an ADF document object")
