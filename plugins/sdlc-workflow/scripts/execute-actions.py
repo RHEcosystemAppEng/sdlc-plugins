@@ -666,14 +666,18 @@ def execute_post_report(action: dict, registry: dict, report: dict) -> None:
     (``gh api ... -X PATCH``)
     instead of creating a duplicate, so a retry after a partial failure is
     idempotent while a new commit still gets a fresh comment. The Jira side is
-    already idempotent via its sticky marker; only ``report_md`` (without the
-    GitHub marker) is sent there.
+    already idempotent via its sticky marker; it receives the report rendered
+    from ``report_adf`` (the tracker-native body) via ``adf_to_markdown``, which
+    the native CLI converts back to ADF — the GitHub-only ``report_md`` (and its
+    embedded marker) is never sent to Jira.
     """
     repo = report["pr_repo"]
     pr_number = report["pr_number"]
     jira_issue_id = report["jira_issue_id"]
     commit_sha = report["commit_sha"]
     report_md = resolve_refs(report["report_md"], registry)
+    report_adf = resolve_refs_in_obj(report["report_adf"], registry)
+    jira_body_md = adf_to_markdown(report_adf)
 
     marker = f"{GITHUB_REPORT_MARKER_PREFIX}{_normalize_commit_sha(commit_sha)} -->"
     github_body = f"{report_md}\n\n{marker}"
@@ -699,7 +703,7 @@ def execute_post_report(action: dict, registry: dict, report: dict) -> None:
             sys.exit(1)
         print(f"  Posted report to PR #{pr_number}")
 
-    post_jira_comment_native(jira_issue_id, report_md)
+    post_jira_comment_native(jira_issue_id, jira_body_md)
     print(f"  Posted report to Jira {jira_issue_id}")
 
 
