@@ -126,10 +126,62 @@ def _escape_markdown(text: str) -> str:
     mark syntax it intentionally adds (``**``, backticks, ``[]()``), so literal
     text round-trips faithfully without double-escaping the marks. Not applied to
     inline-code content, which the CLI treats literally.
+
+    Only *inline* markers are handled here; line-leading block markers (headings,
+    lists, blockquotes) are neutralized separately by
+    ``_escape_line_leading_markers`` because they are position-sensitive.
     """
     for ch in _MARKDOWN_ESCAPE_CHARS:
         text = text.replace(ch, f"\\{ch}")
     return text
+
+
+# Line-leading Markdown block markers the native CLI reinterprets when a rendered
+# line *starts* with one: ATX headings (``#``..``######`` + space/EOL), blockquotes
+# (``>``), bullet lists (``-``/``+`` + space/EOL) and ordered lists (``N.``/``N)`` +
+# space/EOL). ``*`` bullets need no entry: ``_escape_markdown`` already escapes ``*``
+# everywhere. Each alternative only matches where the construct actually forms, so
+# non-markers like ``-5`` or ``1.5`` are left untouched.
+_LINE_LEADING_MARKER_RE = re.compile(
+    r"""^(?P<indent>[ \t]*)
+        (?:
+            (?P<heading>\#{1,6})(?=\s|$)
+          | (?P<quote>>)
+          | (?P<bullet>[-+])(?=\s|$)
+          | (?P<ordnum>\d+)(?P<ordsep>[.)])(?=\s|$)
+        )
+    """,
+    re.VERBOSE,
+)
+
+
+def _escape_line_leading_markers(text: str) -> str:
+    """Backslash-escape a Markdown block marker at the start of each line.
+
+    Applied to fully-rendered *paragraph* content (the only place literal text
+    sits at a true line start, and where a leading ``#``/``-``/``>``/``N.`` would
+    otherwise be re-parsed by the native CLI as a heading/list/blockquote). Runs
+    per line so markers after a hardBreak are covered too. Intentional block
+    markers the renderer itself emits (heading prefixes, list bullets) are added
+    by other code paths and never flow through here, so they are not affected.
+
+    A backslash before ASCII punctuation renders as that punctuation, so an
+    escape is visually invisible; for ordered lists the ``.``/``)`` separator is
+    escaped (``1\\.``) since a backslash before the digit is not a valid escape.
+    """
+    def _escape_line(line: str) -> str:
+        match = _LINE_LEADING_MARKER_RE.match(line)
+        if not match:
+            return line
+        rest = line[match.end():]
+        if match.group("ordsep") is not None:
+            marker = f"{match.group('ordnum')}\\{match.group('ordsep')}"
+        else:
+            token = match.group("heading") or match.group("quote") or match.group("bullet")
+            marker = f"\\{token}"
+        return f"{match.group('indent')}{marker}{rest}"
+
+    return "\n".join(_escape_line(line) for line in text.split("\n"))
 
 
 def _render_adf_date(timestamp: Any) -> str:
@@ -322,7 +374,7 @@ def _render_adf_block(node: dict) -> str:
     """Render a single ADF block node to markdown."""
     node_type = node.get("type")
     if node_type == "paragraph":
-        return _render_adf_inline(node.get("content", []))
+        return _escape_line_leading_markers(_render_adf_inline(node.get("content", [])))
     if node_type == "heading":
         level = node.get("attrs", {}).get("level", 1)
         return f"{'#' * level} {_render_adf_inline(node.get('content', []))}"

@@ -373,6 +373,88 @@ def test_adf_to_markdown_does_not_double_escape_marks_or_code():
     assert result == "**bold** and `a*b` see [here](https://x.example/a_b)", f"Got: {result!r}"
 
 
+def test_adf_to_markdown_escapes_line_leading_block_markers():
+    """A paragraph whose literal text begins with a Markdown block marker
+    (heading/bullet/blockquote/ordered-list) has that marker backslash-escaped so
+    the native CLI renders it verbatim instead of re-parsing it as a block."""
+    # Given paragraphs each starting with a different line-leading block marker
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "# not a heading"}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "### also not"}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "- not a bullet"}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "+ not a bullet"}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "> not a quote"}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "1. not ordered"}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "2) not ordered"}]},
+        ],
+    }
+    # When rendering the ADF to markdown
+    result = execute_actions.adf_to_markdown(doc)
+    # Then the leading marker of each line is escaped (heading/bullet/quote escape
+    # the first char; ordered lists escape the . / ) separator)
+    assert result == (
+        "\\# not a heading\n\n"
+        "\\### also not\n\n"
+        "\\- not a bullet\n\n"
+        "\\+ not a bullet\n\n"
+        "\\> not a quote\n\n"
+        "1\\. not ordered\n\n"
+        "2\\) not ordered"
+    ), f"Got: {result!r}"
+
+
+def test_adf_to_markdown_escapes_line_leading_marker_after_hardbreak():
+    """A block marker that starts a line *after* a hardBreak inside a paragraph is
+    escaped too, since it is at a real line start once rendered."""
+    # Given a paragraph with a hardBreak followed by text starting with "# "
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [
+                {"type": "text", "text": "see:"},
+                {"type": "hardBreak"},
+                {"type": "text", "text": "# heading"},
+            ]},
+        ],
+    }
+    # When rendering the ADF to markdown
+    result = execute_actions.adf_to_markdown(doc)
+    # Then only the post-hardBreak line-leading marker is escaped
+    assert result == "see:\n\\# heading", f"Got: {result!r}"
+
+
+def test_adf_to_markdown_does_not_escape_midline_or_non_marker_text():
+    """Escaping is line-position-sensitive: a marker char mid-line, or a
+    marker-like prefix that does not actually form a block (no trailing space, a
+    heading start intentionally emitted by the heading renderer), is left alone."""
+    # Given a heading node, a paragraph with a mid-line '#', and paragraphs whose
+    # leading chars do not form a block construct ("-5", "1.5" have no space)
+    doc = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "heading", "attrs": {"level": 2},
+             "content": [{"type": "text", "text": "Real Heading"}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "not # a heading"}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "-5 degrees"}]},
+            {"type": "paragraph", "content": [{"type": "text", "text": "1.5 times"}]},
+        ],
+    }
+    # When rendering the ADF to markdown
+    result = execute_actions.adf_to_markdown(doc)
+    # Then the real heading keeps its intentional prefix and nothing else is escaped
+    assert result == (
+        "## Real Heading\n\n"
+        "not # a heading\n\n"
+        "-5 degrees\n\n"
+        "1.5 times"
+    ), f"Got: {result!r}"
+
+
 def test_adf_to_markdown_renders_non_text_inline_nodes():
     """Each non-text inline leaf node (mention/emoji/inlineCard/date/status)
     renders its attrs-sourced displayable value instead of being dropped to an
@@ -931,6 +1013,9 @@ if __name__ == "__main__":
     test_adf_to_markdown_renders_task_list()
     test_adf_to_markdown_escapes_markdown_active_chars_in_literal_text()
     test_adf_to_markdown_does_not_double_escape_marks_or_code()
+    test_adf_to_markdown_escapes_line_leading_block_markers()
+    test_adf_to_markdown_escapes_line_leading_marker_after_hardbreak()
+    test_adf_to_markdown_does_not_escape_midline_or_non_marker_text()
     test_adf_to_markdown_renders_non_text_inline_nodes()
     test_adf_to_markdown_renders_inline_nodes_in_task_item()
     test_adf_to_markdown_renders_table()
