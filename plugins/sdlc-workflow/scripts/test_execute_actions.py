@@ -730,10 +730,12 @@ def test_execute_post_report_posts_github_then_jira():
             else:
                 os.environ[k] = v
 
-    assert len(calls) == 3, f"Expected list + create + native calls, got {len(calls)}"
-    list_call, gh_call, jira_call = calls
-    # Existing comments are listed first to check for a prior report.
-    assert list_call["cmd"][:2] == ["gh", "api"]
+    # SHA canonicalization (git rev-parse) + list + create + native.
+    assert len(calls) == 4, f"Expected rev-parse + list + create + native calls, got {len(calls)}"
+    list_call = next(c for c in calls if c["cmd"][:2] == ["gh", "api"])
+    gh_call = next(c for c in calls if c["cmd"][:3] == ["gh", "pr", "comment"])
+    jira_call = next(c for c in calls if c["cmd"][:3] == ["fullsend", "issues", "post-comment"])
+    # Existing comments are listed to check for a prior report.
     assert list_call["cmd"][2] == "repos/acme/widget/issues/42/comments"
     # No existing comment → a new PR comment is created, carrying the commit marker.
     assert gh_call["cmd"][:3] == ["gh", "pr", "comment"]
@@ -849,53 +851,64 @@ def test_execute_post_report_updates_comment_on_later_page():
     assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
 
 
+def _run_post_report_with_sha_resolution(commit_sha, existing_comments, resolve):
+    """Run execute_post_report with a fake ``git rev-parse`` that maps each input
+    ref to a canonical full SHA via ``resolve``. Returns the recorded calls."""
+    calls = []
+
+    def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
+        calls.append({"cmd": cmd, "input": input})
+        if cmd[:2] == ["git", "rev-parse"]:
+            # cmd[-1] is "<ref>^{commit}"; strip the peel suffix to look up.
+            ref = cmd[-1].split("^", 1)[0]
+            return _FakeCompleted(0, "", resolve.get(ref, ""))
+        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
+            return _FakeCompleted(0, "", json.dumps([existing_comments]))
+        return _FakeCompleted(0, "")
+
+    saved_run = execute_actions.subprocess.run
+    saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
+    execute_actions.subprocess.run = fake_run
+    os.environ.update(_JIRA_ENV)
+    try:
+        report = {
+            "pr_repo": "acme/widget",
+            "pr_number": 42,
+            "jira_issue_id": "TC-777",
+            "commit_sha": commit_sha,
+            "report_md": "## Verify report",
+        }
+        execute_actions.execute_post_report({"type": "post_report"}, {}, report)
+    finally:
+        execute_actions.subprocess.run = saved_run
+        for k, v in saved_env.items():
+            if v is None:
+                os.environ.pop(k, None)
+            else:
+                os.environ[k] = v
+    return calls
+
+
 def test_execute_post_report_dedup_marker_invariant_to_sha_length():
     """A full-length SHA on one run and an abbreviated SHA for the same commit on
     a retry resolve to the SAME report comment (PATCH-update, not duplicate),
-    because the dedup marker normalizes the SHA to a canonical length."""
+    because git rev-parse canonicalizes both forms to the same full SHA."""
     full_sha = "946556e" + "a" * 33   # 40 hex chars
     short_sha = "946556e"             # 7-char abbreviation of the same commit
-
-    def _run_report(commit_sha, existing_comments):
-        """Run execute_post_report; return (calls, created_body_or_None)."""
-        calls = []
-
-        def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
-            calls.append({"cmd": cmd, "input": input})
-            if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
-                return _FakeCompleted(0, "", json.dumps([existing_comments]))
-            return _FakeCompleted(0, "")
-
-        saved_run = execute_actions.subprocess.run
-        saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
-        execute_actions.subprocess.run = fake_run
-        os.environ.update(_JIRA_ENV)
-        try:
-            report = {
-                "pr_repo": "acme/widget",
-                "pr_number": 42,
-                "jira_issue_id": "TC-777",
-                "commit_sha": commit_sha,
-                "report_md": "## Verify report",
-            }
-            execute_actions.execute_post_report({"type": "post_report"}, {}, report)
-        finally:
-            execute_actions.subprocess.run = saved_run
-            for k, v in saved_env.items():
-                if v is None:
-                    os.environ.pop(k, None)
-                else:
-                    os.environ[k] = v
-        return calls
+    # git rev-parse resolves either form of this one commit to its full SHA.
+    resolve = {full_sha: full_sha, short_sha: full_sha}
 
     # First run with the FULL SHA and no existing comment → a comment is created;
     # capture the marker it embedded.
-    first_calls = _run_report(full_sha, [])
+    first_calls = _run_post_report_with_sha_resolution(full_sha, [], resolve)
     create_call = next(c for c in first_calls if c["cmd"][:3] == ["gh", "pr", "comment"])
     created_body = create_call["cmd"][create_call["cmd"].index("--body") + 1]
+    assert f"commit:{full_sha} -->" in created_body, \
+        f"marker should carry the canonical full SHA: {created_body!r}"
 
     # Retry with the ABBREVIATED SHA; the PR already has the comment created above.
-    retry_calls = _run_report(short_sha, [{"id": 555, "body": created_body}])
+    retry_calls = _run_post_report_with_sha_resolution(
+        short_sha, [{"id": 555, "body": created_body}], resolve)
 
     # Then the retry PATCH-updates the existing comment instead of duplicating it.
     assert not any(c["cmd"][:3] == ["gh", "pr", "comment"] for c in retry_calls), \
@@ -903,6 +916,64 @@ def test_execute_post_report_dedup_marker_invariant_to_sha_length():
     patch_calls = [c for c in retry_calls if "PATCH" in c["cmd"]]
     assert len(patch_calls) == 1, f"Expected one PATCH update, got {len(patch_calls)}"
     assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
+
+
+def test_execute_post_report_distinct_commits_same_prefix_do_not_collide():
+    """Two distinct commits sharing a 7-hex prefix get DISTINCT dedup markers
+    (each resolved up to its full 40-char SHA), so the second commit's report is
+    created as a new comment instead of PATCH-overwriting the first commit's."""
+    full_a = "946556e" + "a" * 33   # commit A
+    full_b = "946556e" + "b" * 33   # commit B — same first 7 hex chars, distinct object
+    resolve = {full_a: full_a, full_b: full_b}
+
+    # Commit A posts first with no existing comment → a comment carrying A's marker.
+    a_calls = _run_post_report_with_sha_resolution(full_a, [], resolve)
+    a_create = next(c for c in a_calls if c["cmd"][:3] == ["gh", "pr", "comment"])
+    a_body = a_create["cmd"][a_create["cmd"].index("--body") + 1]
+    assert f"commit:{full_a} -->" in a_body
+
+    # Commit B posts while A's comment already exists on the PR.
+    b_calls = _run_post_report_with_sha_resolution(
+        full_b, [{"id": 555, "body": a_body}], resolve)
+
+    # Then B does NOT PATCH A's comment (no collision); it creates its own.
+    assert not any("PATCH" in c["cmd"] for c in b_calls), \
+        "distinct commit must not overwrite another commit's report comment"
+    b_create = next(c for c in b_calls if c["cmd"][:3] == ["gh", "pr", "comment"])
+    b_body = b_create["cmd"][b_create["cmd"].index("--body") + 1]
+    assert f"commit:{full_b} -->" in b_body
+
+
+def test_normalize_commit_sha_falls_back_to_prefix_when_unresolvable():
+    """When git cannot resolve the SHA (git missing or object absent),
+    _normalize_commit_sha falls back to the fixed-length prefix so dedup keeps
+    working instead of being disabled."""
+    long_sha = "946556e" + "f" * 33
+
+    # git rev-parse reports failure (non-zero, empty stdout) → fallback to prefix.
+    def failing_run(cmd, input=None, text=None, capture_output=None, env=None):
+        return _FakeCompleted(1, "fatal: Needed a single revision", "")
+
+    saved_run = execute_actions.subprocess.run
+    execute_actions.subprocess.run = failing_run
+    try:
+        result = execute_actions._normalize_commit_sha(long_sha)
+    finally:
+        execute_actions.subprocess.run = saved_run
+    assert result == long_sha[:execute_actions.COMMIT_SHA_MARKER_LENGTH], \
+        f"Got: {result!r}"
+
+    # git binary missing (OSError) → same fallback.
+    def raising_run(cmd, input=None, text=None, capture_output=None, env=None):
+        raise FileNotFoundError("git")
+
+    execute_actions.subprocess.run = raising_run
+    try:
+        result = execute_actions._normalize_commit_sha(long_sha)
+    finally:
+        execute_actions.subprocess.run = saved_run
+    assert result == long_sha[:execute_actions.COMMIT_SHA_MARKER_LENGTH], \
+        f"Got: {result!r}"
 
 
 def test_post_report_resolves_ref_created_by_later_action():
@@ -1029,6 +1100,8 @@ if __name__ == "__main__":
     test_execute_post_report_updates_existing_github_comment_on_retry()
     test_execute_post_report_updates_comment_on_later_page()
     test_execute_post_report_dedup_marker_invariant_to_sha_length()
+    test_execute_post_report_distinct_commits_same_prefix_do_not_collide()
+    test_normalize_commit_sha_falls_back_to_prefix_when_unresolvable()
     test_post_report_resolves_ref_created_by_later_action()
     test_find_report_comment_id_exits_on_unparseable_json()
     print("All tests passed.")

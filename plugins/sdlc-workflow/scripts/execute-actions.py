@@ -59,30 +59,53 @@ STICKY_COMMENT_MARKER = "<!-- sdlc-workflow:verify-pr -->"
 POST_COMMENT_STICKY_MARKER = "<!-- sdlc-workflow:verify-pr post_comment -->"
 
 # GitHub has no native sticky-comment mechanism, so the verify-pr report comment
-# embeds this marker (an invisible HTML comment) in its body. A length-normalized
-# commit SHA is appended per post, scoping dedup to a single verification
-# run/commit: a retry for the same commit updates the existing comment instead of
-# duplicating it, while a later commit gets a fresh comment — preserving the
-# per-run verification history that verify-pr SKILL.md Step 9 posts.
+# embeds this marker (an invisible HTML comment) in its body. A canonical
+# (full-length) commit SHA is appended per post, scoping dedup to a single
+# verification run/commit: a retry for the same commit updates the existing
+# comment instead of duplicating it, while a later commit gets a fresh comment —
+# preserving the per-run verification history that verify-pr SKILL.md Step 9 posts.
 GITHUB_REPORT_MARKER_PREFIX = "<!-- sdlc-workflow:verify-pr report commit:"
 
-# The dedup marker embeds a normalized commit SHA. The result schema allows
-# commit_sha to be 7-40 hex chars, and git abbreviations are always prefixes of
-# the full SHA, so truncating every form to the schema-minimum 7 chars yields a
-# marker that is stable for the same commit regardless of the length the report
-# happened to record — a full SHA on one run and an abbreviation on a retry then
-# still resolve to the same comment. (Truncating to a longer length, e.g. 12,
+# Fallback dedup-marker SHA length used only when the commit cannot be resolved to
+# its full form (see ``_normalize_commit_sha``). The result schema allows
+# commit_sha to be 7-40 hex chars and git abbreviations are prefixes of the full
+# SHA, so the schema-minimum 7 chars is the one fixed length that stays invariant
+# across a full-vs-abbreviated form of the same commit. (A longer length, e.g. 12,
 # would leave a 7-char abbreviation unchanged and still mismatch a full SHA.)
 COMMIT_SHA_MARKER_LENGTH = 7
 
+# A canonical, resolved full commit SHA is exactly 40 lowercase hex characters.
+_FULL_SHA_RE = re.compile(r"[0-9a-f]{40}")
+
 
 def _normalize_commit_sha(commit_sha: str) -> str:
-    """Truncate a commit SHA to the canonical dedup-marker length.
+    """Canonicalize a commit SHA to its full 40-char form for the dedup marker.
 
-    See ``COMMIT_SHA_MARKER_LENGTH``: normalizing both the composed marker and
-    the lookup to the same fixed prefix length makes the GitHub report dedup
-    invariant to the SHA form (full vs abbreviated) supplied across runs.
+    The result schema allows ``commit_sha`` to be 7-40 hex chars. Truncating every
+    form *down* to a shared prefix keeps a full SHA and an abbreviation of the same
+    commit invariant, but makes two *distinct* commits that happen to share that
+    prefix collide — so a later commit's report could PATCH-overwrite an earlier
+    commit's comment. Resolving *up* to the full 40-char SHA via ``git rev-parse``
+    keeps the same-commit invariance (a full SHA and any abbreviation of it resolve
+    to the same object) while giving distinct commits distinct markers.
+
+    The write path runs host-side in the checked-out repo, so the commit is
+    normally resolvable. If ``git`` is unavailable or the value cannot be resolved
+    to a full SHA (git missing, object absent, ambiguous abbreviation), it falls
+    back to truncating to ``COMMIT_SHA_MARKER_LENGTH`` — the prior fixed-prefix
+    behavior, which keeps dedup working (with the rare prefix-collision caveat)
+    rather than disabling it.
     """
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--verify", "--quiet", f"{commit_sha}^{{commit}}"],
+            capture_output=True, text=True,
+        )
+    except OSError:
+        return commit_sha[:COMMIT_SHA_MARKER_LENGTH]
+    resolved = result.stdout.strip()
+    if result.returncode == 0 and _FULL_SHA_RE.fullmatch(resolved):
+        return resolved
     return commit_sha[:COMMIT_SHA_MARKER_LENGTH]
 
 
@@ -638,7 +661,7 @@ def execute_post_report(action: dict, registry: dict, report: dict) -> None:
     """Post the verification report to the GitHub PR and the Jira issue.
 
     The GitHub comment carries a commit-scoped marker
-    (``GITHUB_REPORT_MARKER_PREFIX`` + a length-normalized commit SHA): if a prior
+    (``GITHUB_REPORT_MARKER_PREFIX`` + the canonical full commit SHA): if a prior
     report comment for the same commit exists it is updated in place
     (``gh api ... -X PATCH``)
     instead of creating a duplicate, so a retry after a partial failure is
