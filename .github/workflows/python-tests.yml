@@ -1,0 +1,39 @@
+name: Python Tests
+
+on:
+  push:
+    # TEMPORARY: the TC-5787-verify-pr-fullsend-v037 entry runs the suite on the
+    # feature branch before it merges to main. Remove it (leave only `main`) once
+    # the feature branch is merged — tracked by TC-5816.
+    branches: [main, TC-5787-verify-pr-fullsend-v037]
+  pull_request:
+    # TEMPORARY: the TC-5787-verify-pr-fullsend-v037 entry makes this workflow run
+    # as a required check on PRs targeting the feature branch (e.g. PR #285).
+    # Remove it (leave only `main`) once the feature branch merges to main — TC-5816.
+    branches: [main, TC-5787-verify-pr-fullsend-v037]
+
+jobs:
+  pytest:
+    name: Script Unit Tests
+    runs-on: ubuntu-latest
+    strategy:
+      # Run every version so one failure doesn't hide others.
+      fail-fast: false
+      matrix:
+        # No declared minimum Python; test the range contributors are likely
+        # to run locally, up to the latest stable (3.14, Oct 2025).
+        python-version: ['3.11', '3.12', '3.13', '3.14']
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install test dependencies
+        run: pip install pytest jsonschema
+
+      - name: Run pytest
+        run: python3 -m pytest plugins/sdlc-workflow/scripts/ -q

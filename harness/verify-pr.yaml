@@ -1,0 +1,100 @@
+# verify-pr — standalone root-level fullsend harness (no base composition).
+#
+# Runs /sdlc-workflow:verify-pr as a fullsend BYOA agent that checks a PR
+# against its Jira task's acceptance criteria. Placed at the REPO ROOT so
+# fullsend (invoked with --fullsend-dir = repo root) resolves this harness's
+# relative children against the repo root: `plugins/sdlc-workflow` is delivered
+# in place as a whole plugin (fullsend fabricates the marketplace cache) and its
+# sibling `shared/` resources resolve intact. Confirmed against fullsend v0.37.0
+# — see docs/plans/notes/task1-findings.md (TC-5805).
+#
+# No base composition and no explicit `security:` block: the Go defaults already
+# supply security (enabled: true, fail_mode: closed) plus the ADR-0090 sandbox
+# hooks. Composing agents/review.yaml would only leak its review-agent semantics.
+#
+# Split-trust I/O: the Jira and GitHub tokens live ONLY on the runner (pre_script
+# prefetch + post_script writes) and are NEVER exposed to the sandbox. The
+# sandbox receives read-only context only (JIRA_ISSUE_ID, JIRA_BASE_URL).
+#
+# Several referenced children are authored by later tasks in this epic and do not
+# exist yet — providers/vertex-ai.yaml (TC-5808), policies/verify-pr.yaml
+# (TC-5809), profiles/fullsend-vertex-ai.yaml + schemas/verify-pr-result.schema.json
+# + scripts/pre-verify-pr.sh (TC-5810), scripts/post-verify-pr.sh (TC-5811). This
+# task validates the harness syntactically only; full fullsend resolution is
+# deferred to TC-5810/TC-5811.
+
+role: verify-pr
+agent: plugins/sdlc-workflow/agents/verify-pr.md
+model: opus
+# Reasoning effort pinned to the fleet's implicit default: Claude Code runs at
+# high effort on effort-capable models, and the fullsend pi runtime passes
+# --thinking high when effort is unset. Revisit if `model:` moves to a
+# generation with a different default effort.
+effort: high
+image: ghcr.io/fullsend-ai/fullsend-code@sha256:9743bc7b6e451e0bcea25ae4a67e0c040c296f1fee04c08988ae80c53fafcfe6
+readonly_repo: true
+
+# In-place whole-plugin delivery — resolved at the repo root.
+plugins:
+  - plugins/sdlc-workflow
+
+policy: plugins/sdlc-workflow/policies/verify-pr.yaml
+
+# Vertex only — GitHub is tier-1 and needs no provider.
+providers:
+  - plugins/sdlc-workflow/providers/vertex-ai.yaml
+
+openshell:
+  profiles:
+    - plugins/sdlc-workflow/profiles/fullsend-vertex-ai.yaml
+
+host_files:
+  - src: plugins/sdlc-workflow/env/gcp-vertex.env
+    dest: /sandbox/workspace/.env.d/gcp-vertex.env
+    expand: true
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/.gcp-credentials.json
+  - src: ${GCP_OIDC_TOKEN_FILE}
+    dest: /sandbox/workspace/.gcp-oidc-token
+    optional: true
+  # pre_script prefetch output, mounted read-only into the sandbox (optional —
+  # absent until pre-verify-pr.sh runs, authored in TC-5810).
+  - src: /tmp/fullsend-pre-output/verify-pr-input.json
+    dest: /sandbox/workspace/.pre-script/verify-pr-input.json
+    optional: true
+
+pre_script: plugins/sdlc-workflow/scripts/pre-verify-pr.sh
+post_script: plugins/sdlc-workflow/scripts/post-verify-pr.sh
+
+validation_loop:
+  # Custom validator: the result schema uses additionalProperties:false
+  # throughout to document the contract, so strip_extra_properties.py drops
+  # benign agent-added metadata before jsonschema validates (fullsend's
+  # native schema-only check would reject it). fullsend requires a script for
+  # validation_loop regardless — schema alone is not sufficient.
+  script: plugins/sdlc-workflow/scripts/validate-output-schema.sh
+  schema: plugins/sdlc-workflow/schemas/verify-pr-result.schema.json
+  max_iterations: 2
+
+env:
+  # Tokens (JIRA_API_TOKEN, GH_TOKEN) live on the runner ONLY — the pre_script
+  # prefetch and post_script writes need them; they are never placed in
+  # env.sandbox.
+  runner:
+    JIRA_ISSUE_ID: "${JIRA_ISSUE_ID}"
+    JIRA_SERVER_URL: "${JIRA_SERVER_URL}"
+    JIRA_EMAIL: "${JIRA_EMAIL}"
+    JIRA_API_TOKEN: "${JIRA_API_TOKEN}"
+    JIRA_PROJECT_KEY: "${JIRA_PROJECT_KEY}"
+    GH_TOKEN: "${GH_TOKEN}"
+    FULLSEND_OUTPUT_SCHEMA: "${FULLSEND_DIR}/plugins/sdlc-workflow/schemas/verify-pr-result.schema.json"
+    FULLSEND_OUTPUT_FILE: "agent-result.json"
+  # Read-only context only — no tokens, and no atlassian/github egress from the
+  # sandbox (network policy enforced in TC-5809). JIRA_ISSUE_ID is required by
+  # the agent prompt; JIRA_BASE_URL is the base for display links only and is
+  # sourced from the canonical JIRA_SERVER_URL host var (no token).
+  sandbox:
+    JIRA_ISSUE_ID: "${JIRA_ISSUE_ID}"
+    JIRA_BASE_URL: "${JIRA_SERVER_URL}"
+
+timeout_minutes: 30

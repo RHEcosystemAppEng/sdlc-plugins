@@ -9,7 +9,7 @@
 - **Primary format**: Markdown documentation
 - **Configuration**: YAML (`.serena/project.yml`) and JSON (plugin manifests)
 - **Plugin system**: Claude Code plugin format
-- **No source code**: This is a documentation-heavy repository — skills are defined in Markdown (`SKILL.md` files) rather than traditional programming languages
+- **Documentation-first, with Python tooling**: Skills are defined in Markdown (`SKILL.md` files), but the repository also ships executable Python and shell helpers under `plugins/sdlc-workflow/scripts/` that back the workflow. Changes to those scripts require running their automated test suite (see **Testing Conventions**)
 
 ## Code Style
 
@@ -34,7 +34,7 @@
 - **`plugins/sdlc-workflow/`** — main plugin directory
   - **`skills/<skill-name>/`** — individual skill directories, each containing a `SKILL.md` file
   - **`shared/`** — shared resources like `task-description-template.md`
-  - **`scripts/`** — utility scripts (if any)
+  - **`scripts/`** — executable Python and shell helpers (e.g., `execute-actions.py`, `jira-client.py`, `pre-verify-pr.sh`); the core Python modules have a `pytest` unit-test suite (`test_*.py`) alongside them, while `strip_extra_properties.py` and the shell helpers are not yet unit-tested
   - **`.claude-plugin/`** — plugin manifest (`plugin.json`)
 - **`.claude-plugin/`** — marketplace manifest at root level (`marketplace.json`)
 - **`.serena/`** — Serena configuration files
@@ -46,7 +46,11 @@
 
 ## Error Handling
 
-Not applicable — this is a documentation repository with no runtime code.
+The Markdown skills have no runtime error handling, but the Python scripts under
+`plugins/sdlc-workflow/scripts/` do. They must fail fast and loud: validate inputs,
+exit non-zero (`sys.exit(1)`) with a message on `stderr` on error, and never swallow
+an exception into a silent fallback. Cover both the success and the failure path with
+tests (see **Testing Conventions**).
 
 ## Testing Conventions
 
@@ -56,7 +60,20 @@ Not applicable — this is a documentation repository with no runtime code.
   3. Run `/agents` to verify no plugin agents are missing
   4. Edit a `SKILL.md`, then `/reload-plugins` to verify changes are picked up
 - **CI validation**: Uses `claude plugin validate` on all plugin directories under `plugins/`
-- **No automated tests**: Skills are validated through CI and manual testing; no unit test framework
+- **Automated unit tests (mandatory)**: The core Python modules under
+  `plugins/sdlc-workflow/scripts/` (`execute-actions.py`, `jira-client.py`,
+  `pre_verify_pr.py`) have a `pytest` suite in sibling `test_*.py` files
+  (`test_execute_actions.py`, `test_jira_client.py`, `test_jira_client_cli.py`,
+  `test_pre_verify_pr.py`). `strip_extra_properties.py` and the shell helpers
+  (`pre-verify-pr.sh`, `post-verify-pr.sh`, `validate-output-schema.sh`) are not yet
+  unit-tested. Any change to a script under `scripts/` **must** add or update the
+  matching test and keep the whole suite green. Run it before every commit and before opening or updating
+  a PR:
+  ```bash
+  python3 -m pytest plugins/sdlc-workflow/scripts/ -q
+  ```
+  A passing run is a precondition for merge, not an optional step — do not commit a
+  script change without running it.
 - **Fixture documentation**: Eval and test fixture files must include a leading comment header in the file's native comment syntax (e.g., `<!-- ... -->` for Markdown/HTML, `// ...` for JSON with comments, `# ...` for YAML) explaining that the content is deliberate test material. Use the canonical prefixes below so tooling (linters, scanners, grep filters) can reliably identify annotated fixtures. Two categories require annotation:
   - **Adversarial fixtures** — files containing intentionally adversarial, malicious-looking, or unusual content (e.g., injection vectors, malformed input, security-sensitive patterns). Use the prefix `ADVERSARIAL TEST FIXTURE — <purpose>` (e.g., `<!-- ADVERSARIAL TEST FIXTURE — contains intentional injection patterns for eval testing -->`).
   - **Synthetic data fixtures** — files representing synthetic or mock entities (e.g., fake repository structures, mock Jira issues, fabricated API responses). Use the prefix `SYNTHETIC TEST DATA — <purpose>` (e.g., `<!-- SYNTHETIC TEST DATA — names, URLs, and identifiers are fictional -->`).
@@ -70,10 +87,17 @@ Not applicable — this is a documentation repository with no runtime code.
 
 ## CI Checks
 
-All CI checks must pass before merging. Run locally before pushing:
+All checks must pass before merging. Run locally before pushing:
 
 ```bash
+# 1. Skill instruction lint
 uvx skillsaw
+
+# 2. Plugin manifest validation
+claude plugin validate plugins/sdlc-workflow
+
+# 3. Python unit tests — required whenever anything under scripts/ changes
+python3 -m pytest plugins/sdlc-workflow/scripts/ -q
 ```
 
 ### Skill Lint (Skillsaw)
@@ -89,6 +113,23 @@ claude plugin validate plugins/sdlc-workflow
 ```
 
 Validates plugin manifests under `plugins/`. CI workflow: `.github/workflows/validate-plugins.yml`.
+
+### Python Unit Tests
+
+The core Python modules under `plugins/sdlc-workflow/scripts/` (`execute-actions.py`,
+`jira-client.py`, `pre_verify_pr.py`) are covered by a `pytest` suite in sibling
+`test_*.py` files; `strip_extra_properties.py` and the shell helpers
+(`pre-verify-pr.sh`, `post-verify-pr.sh`, `validate-output-schema.sh`) are not yet
+covered. Run the full suite and keep it green whenever you touch anything under
+`scripts/`:
+
+```bash
+python3 -m pytest plugins/sdlc-workflow/scripts/ -q
+```
+
+This suite is **required before every commit that changes a script and before merge**,
+and is enforced in CI by `.github/workflows/python-tests.yml` (runs on pushes and pull
+requests targeting `main`). Run it locally before pushing so failures surface before CI.
 
 ## Commit Messages
 
@@ -143,7 +184,7 @@ Validates plugin manifests under `plugins/`. CI workflow: `.github/workflows/val
 
 ## Dependencies
 
-- **No external dependencies** — this repository contains only documentation and configuration files
+- **No external dependencies for the plugins themselves** — the Claude Code plugins are Markdown, YAML, and JSON. The repository also ships executable Python and shell helpers under `plugins/sdlc-workflow/scripts/`: these require Python 3 (`validate-output-schema.sh` additionally requires the `jsonschema` package at runtime), and the test suite requires `pytest` (plus `jsonschema`)
 - **Runtime dependency**: Claude Code CLI (users must have Claude Code installed to use the plugins)
 - **Plugin system**: Uses Claude Code's plugin marketplace and validation system (`claude plugin validate`)
 - **Version synchronization**: The plugin version must be kept in sync between:
