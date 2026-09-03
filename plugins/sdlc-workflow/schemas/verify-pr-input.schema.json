@@ -4,7 +4,7 @@
   "title": "Verify PR Pre-Script Input",
   "description": "Pre-fetched task data written by the pre_script and mounted into the sandbox. The skill reads this instead of calling the issue tracker or GitHub APIs directly.",
   "type": "object",
-  "required": ["task_id", "task", "pr_url", "github"],
+  "required": ["task_id", "task", "pr_url", "github", "idempotency"],
   "additionalProperties": false,
   "properties": {
     "task_id": {
@@ -97,8 +97,9 @@
     },
     "idempotency": {
       "type": "object",
-      "description": "Related-issue metadata prefetched on the trusted runner so the sandbox can run the Steps 6d/6f/7c idempotency checks (duplicate sub-task and root-cause detection) without a Jira token or egress. Optional: absent or empty when the task has no sub-tasks or linked issues yet.",
+      "description": "Related-issue metadata prefetched on the trusted runner so the sandbox can run the Steps 6d/6f/7c idempotency checks (duplicate sub-task and root-cause detection) without a Jira token or egress. Always present in a valid prefetch: the producer runs on the trusted runner with a Jira token, so it can always emit the bundle — with an empty related_issues array when the task has no sub-tasks or linked issues yet. Requiring it (rather than leaving it optional) closes the gap that let a schema-valid prefetch omit the bundle and silently skip dedup in the tokenless sandbox.",
       "additionalProperties": false,
+      "required": ["related_issues"],
       "properties": {
         "related_issues": {
           "type": "array",

@@ -339,10 +339,16 @@ def test_transform_with_idempotency_attaches_key():
     assert result["idempotency"]["related_issues"][0]["key"] == "TC-1"
 
 
-def test_transform_without_idempotency_omits_key():
+def test_transform_without_idempotency_defaults_to_empty():
+    """With no idempotency supplied, transform still emits an empty bundle.
+
+    Option 1 of TC-6026: the key is always present so the tokenless sandbox
+    always has a data source for the Steps 6d/6f/7c dedup checks — a missing
+    argument degrades to "no known duplicates", never an omitted key.
+    """
     issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
     result = pre_verify_pr.transform_to_input(issue, "TC-1", "")
-    assert "idempotency" not in result
+    assert result["idempotency"] == {"related_issues": []}
 
 
 def test_cli_transform_idempotency_dir():
@@ -418,6 +424,39 @@ def test_idempotency_input_validates_against_schema():
     with open(schema_path) as f:
         schema = json.load(f)
     validate(instance=result, schema=schema)  # raises on failure
+
+
+def test_prefetch_omitting_idempotency_fails_schema_validation():
+    """A prefetch lacking the idempotency bundle is rejected by the schema.
+
+    Option 1 of TC-6026: idempotency is a top-level required key, so Step 0.7
+    validation rejects a bundle that omits it *before* any consuming step runs —
+    the fail-fast contract from TC-5980/TC-5981. This closes the gap that let a
+    schema-valid prefetch skip the tokenless dedup checks silently.
+    """
+    from jsonschema import validate
+    from jsonschema.exceptions import ValidationError
+
+    # Given an otherwise-valid input (task + github) with no idempotency key
+    issue = {"fields": {"summary": "S", "description": {}, "status": {"name": "Open"},
+                        "labels": [], "issuelinks": []}}
+    github = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "feat/x", "deadbee", "diff", "stat", [], [], [], [])
+    instance = pre_verify_pr.transform_to_input(
+        issue, "TC-1", "https://github.com/o/r/pull/5", github)
+    del instance["idempotency"]  # simulate an older/hand-supplied bundle
+
+    schema_path = os.path.join(
+        script_dir, "..", "schemas", "verify-pr-input.schema.json")
+    with open(schema_path) as f:
+        schema = json.load(f)
+
+    # When validating it against the input schema, Then it is rejected
+    try:
+        validate(instance=instance, schema=schema)
+        assert False, "schema accepted a prefetch missing idempotency"
+    except ValidationError as e:
+        assert "idempotency" in str(e), f"unexpected error: {e}"
 
 
 # --- stat production (pre-verify-pr.sh) ---
