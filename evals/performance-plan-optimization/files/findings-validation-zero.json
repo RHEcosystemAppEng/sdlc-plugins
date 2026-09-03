@@ -1,0 +1,61 @@
+{
+  "_comment": "SYNTHETIC TEST DATA — DO NOT USE IN PRODUCTION",
+  "schema_version": "1.0",
+  "generated_at": "2026-06-09T11:00:00Z",
+  "workflow": "package-listing",
+  "validation_run": true,
+  "statistics": {
+    "submitted": 3,
+    "confirmed": 0,
+    "confirmed_low_confidence": 0,
+    "downgraded": 0,
+    "discarded": 3
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "anti_pattern": "Over-Fetching",
+      "step": "8.A",
+      "file": "src/handlers/packages.rs",
+      "line": 87,
+      "detection_method": "Grep",
+      "evidence_excerpt": "advisory::Entity::find().filter(...).all(&db)",
+      "checks": {"9.1-B": "FAILED: code pattern not found at recorded location", "9.1-B2": "PASS"},
+      "disposition": "Discarded",
+      "confidence": "Low",
+      "severity": "Low",
+      "timeline": "1-4 hours",
+      "reason": "Source file was refactored since baseline capture. The advisory query at line 87 no longer exists; handler now uses a DTO projection introduced in commit abc1234."
+    },
+    {
+      "id": "F2",
+      "anti_pattern": "Unused Code",
+      "step": "6.5",
+      "file": "src/utils/formatters.ts",
+      "line": 12,
+      "detection_method": "Grep",
+      "evidence_excerpt": "export function formatCurrency(amount: number)",
+      "checks": {"9.1-B": "PASS", "9.1-B2": "FAILED: function is referenced in test files and storybook"},
+      "disposition": "Discarded",
+      "confidence": "Low",
+      "severity": "Low",
+      "timeline": "< 1 hour",
+      "reason": "Function appears unused in production code but is referenced in 3 test files and 1 Storybook story. Removing it would break tests."
+    },
+    {
+      "id": "F3",
+      "anti_pattern": "Missing Memoization",
+      "step": "6.2",
+      "file": "src/components/PackageCard.tsx",
+      "line": 15,
+      "detection_method": "Grep",
+      "evidence_excerpt": "const PackageCard = ({ pkg }: Props) => {",
+      "checks": {"9.1-B": "FAILED: component already wrapped in React.memo", "9.1-B2": "PASS"},
+      "disposition": "Discarded",
+      "confidence": "Low",
+      "severity": "Low",
+      "timeline": "< 1 hour",
+      "reason": "Component is already wrapped in React.memo at line 45 (export default React.memo(PackageCard)). Initial grep missed the memo wrapper at the bottom of the file."
+    }
+  ]
+}
