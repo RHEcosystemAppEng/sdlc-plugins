@@ -538,6 +538,8 @@ Do NOT suppress findings based on scope_context. All contexts produce valid find
 
 **Backward compatibility:** Findings from prior analysis runs that lack `scope_context` should be treated as `scope_context = "unknown"` by downstream steps.
 
+**Finding output (all 7.8.x sub-steps):** Include `scope_context` (assignment rules above). For inline SQL (INSERT...SELECT, CTE), default to `"migration"`, noting any idempotency guards (ON CONFLICT, WHERE NOT EXISTS). For named PL/pgSQL functions, grep all application source (excluding `migration/`) for the function name to set caller context — a migration-defined function called from application source (e.g., `modules/ingestor/`) is NOT migration-only; it runs at ingestion time and its performance matters beyond the initial migration.
+
 #### Step 7.8.1 – Missing Statistics Refresh
 
 Detect bulk INSERT...SELECT or UPDATE...FROM operations that write to or read from tables without a preceding ANALYZE statement in the same migration file.
@@ -559,8 +561,6 @@ Detect bulk INSERT...SELECT or UPDATE...FROM operations that write to or read fr
 - INSERT...SELECT where the source query has explicit LIMIT < 1000
 
 **Severity:** Classify per severity table.
-
-**Finding output:** Include `scope_context` per Step 7.8 Scope independence. For inline SQL patterns (INSERT...SELECT, CTE), default to `"migration"`. If the migration contains idempotency guards (ON CONFLICT, WHERE NOT EXISTS) suggesting periodic re-execution during deployments, note this in the finding but keep `scope_context = "migration"`.
 
 #### Step 7.8.2 – Non-Materialized CTE Re-evaluation
 
@@ -587,8 +587,6 @@ Detect CTEs in migration DML that contain expensive operations AND are reference
 - Recursive CTEs (`WITH RECURSIVE`) — these are always materialized by PostgreSQL
 
 **Severity:** Classify per severity table.
-
-**Finding output:** Include `scope_context` per Step 7.8 Scope independence. For inline SQL patterns (INSERT...SELECT, CTE), default to `"migration"`. If the migration contains idempotency guards (ON CONFLICT, WHERE NOT EXISTS) suggesting periodic re-execution during deployments, note this in the finding but keep `scope_context = "migration"`.
 
 #### Step 7.8.3 – Uniform Processing of Partitionable Data
 
@@ -624,8 +622,6 @@ Detect queries that apply an expensive operation to all rows when a filterable p
 
 **Severity:** Classify per severity table.
 
-**Finding output:** Include `scope_context` per Step 7.8 Scope independence. For named PL/pgSQL functions, grep all application source code (excluding `migration/`) for the function name to determine caller context. A function defined in migration SQL that is referenced from application source code (e.g., `modules/ingestor/`) is NOT a "migration-only" function — it runs at ingestion time and its performance matters beyond the initial migration.
-
 #### Step 7.8.4 – Expensive PL/pgSQL Function Patterns
 
 Detect known slow patterns inside CREATE [OR REPLACE] FUNCTION definitions found in migration files.
@@ -654,8 +650,6 @@ Detect known slow patterns inside CREATE [OR REPLACE] FUNCTION definitions found
 - A loop with a small fixed-size input (e.g., `FOREACH mapping IN ARRAY mappings` where `mappings` has bounded cardinality < 10 from the calling context)
 
 **Severity:** Classify per severity table.
-
-**Finding output:** Include `scope_context` per Step 7.8 Scope independence. For named PL/pgSQL functions, grep all application source code (excluding `migration/`) for the function name to determine caller context. A function defined in migration SQL that is referenced from application source code (e.g., `modules/ingestor/`) is NOT a "migration-only" function — it runs at ingestion time and its performance matters beyond the initial migration.
 
 ## Step 8 – Cross-Reference Over-Fetching
 
