@@ -459,6 +459,43 @@ def test_prefetch_omitting_idempotency_fails_schema_validation():
         assert "idempotency" in str(e), f"unexpected error: {e}"
 
 
+def test_incomplete_related_issue_fails_schema_validation():
+    """A related-issue entry missing a per-item field is rejected by the schema.
+
+    TC-6032: idempotency.related_issues.items requires the fields the dedup
+    checks consume (Steps 6d/6f/7c). Without a per-item `required` list, a
+    structurally incomplete entry passed Step 0.7 and dedup silently treated it
+    as non-matching — the item-level analogue of the TC-6026 array-level gap.
+    """
+    from jsonschema import validate
+    from jsonschema.exceptions import ValidationError
+
+    # Given an otherwise-valid input whose sole related issue omits `comments`
+    issue = {"fields": {"summary": "S", "description": {}, "status": {"name": "Open"},
+                        "labels": [], "issuelinks": []}}
+    github = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "feat/x", "deadbee", "diff", "stat", [], [], [], [])
+    instance = pre_verify_pr.transform_to_input(
+        issue, "TC-1", "https://github.com/o/r/pull/5", github)
+    instance["idempotency"] = {"related_issues": [{
+        "key": "TC-9", "summary": "Existing", "labels": [],
+        "description": {}, "issuetype": "Sub-task",
+        # `comments` intentionally omitted
+    }]}
+
+    schema_path = os.path.join(
+        script_dir, "..", "schemas", "verify-pr-input.schema.json")
+    with open(schema_path) as f:
+        schema = json.load(f)
+
+    # When validating it against the input schema, Then it is rejected
+    try:
+        validate(instance=instance, schema=schema)
+        assert False, "schema accepted a related issue missing a required field"
+    except ValidationError as e:
+        assert "comments" in str(e), f"unexpected error: {e}"
+
+
 # --- stat production (pre-verify-pr.sh) ---
 
 pre_verify_sh = os.path.join(script_dir, "pre-verify-pr.sh")
