@@ -60,14 +60,29 @@ Refer to `shared/jira-rest-fallback.md` for complete implementation details.
 
 ## Step 0.6 – Sandbox Mode Detection
 
-Check whether the `FULLSEND_OUTPUT_DIR` environment variable is set:
+Detect whether the `FULLSEND_OUTPUT_DIR` environment variable is **present** in the
+environment (exported at all), independently of whether it holds a value. Use
+presence detection (`${VAR+x}`), not a default-value expansion (`${VAR:-...}`): the
+`:-` operator treats an exported-but-empty value the same as unset, which would send
+a runner that exported the gate with an empty value down the credentialed
+interactive path — the opposite of the intended tokenless behavior. An
+exported-but-empty value is a misconfiguration and must fail fast, not silently fall
+back:
 
 ```bash
-echo ${FULLSEND_OUTPUT_DIR:-not-set}
+if [ "${FULLSEND_OUTPUT_DIR+x}" = x ]; then
+  if [ -z "$FULLSEND_OUTPUT_DIR" ]; then
+    echo "ERROR: FULLSEND_OUTPUT_DIR is set but empty" >&2
+    exit 1
+  fi
+  echo "sandbox mode: $FULLSEND_OUTPUT_DIR"
+else
+  echo "interactive mode"
+fi
 ```
 
-If **set**, this skill is running inside a fullsend sandbox (no Jira or GitHub
-tokens, no `gh` CLI, no network egress). Switch to **sandbox mode**:
+If **present** (and non-empty), this skill is running inside a fullsend sandbox (no
+Jira or GitHub tokens, no `gh` CLI, no network egress). Switch to **sandbox mode**:
 
 - Do NOT call Jira write APIs (`create_issue`, `add_comment`, `create_issue_link`,
   `transition_issue`) directly.
@@ -79,8 +94,9 @@ tokens, no `gh` CLI, no network egress). Switch to **sandbox mode**:
   structure, and at the end of execution write the complete result to
   `$FULLSEND_OUTPUT_DIR/agent-result.json` (see Step 9's **Sandbox Mode Output**).
 
-If **not set**, execute in **interactive mode** — the current behavior, calling Jira
-and GitHub APIs directly. Marketplace users are unaffected.
+If **genuinely unset** (absent from the environment), execute in **interactive
+mode** — the current behavior, calling Jira and GitHub APIs directly. Marketplace
+users are unaffected.
 
 Throughout the remaining steps, when you encounter a write operation:
 - **Interactive mode:** execute it directly (existing behavior).
