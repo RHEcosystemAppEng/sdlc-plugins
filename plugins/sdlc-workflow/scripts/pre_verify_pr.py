@@ -123,7 +123,14 @@ def build_idempotency_bundle(related_issue_jsons):
 
 
 def transform_to_input(issue, task_id, pr_url, github=None, idempotency=None):
-    """Transform Jira issue JSON to tracker-agnostic input schema."""
+    """Transform Jira issue JSON to tracker-agnostic input schema.
+
+    The ``idempotency`` bundle is always emitted (defaulting to an empty
+    ``related_issues`` list when none is supplied) so the tokenless sandbox
+    always has a data source for the Steps 6d/6f/7c dedup checks. This matches
+    verify-pr-input.schema.json, which requires ``idempotency.related_issues``:
+    a schema-valid prefetch can never omit the bundle and silently skip dedup.
+    """
     fields = issue.get("fields", {})
     result = {
         "task_id": task_id,
@@ -159,8 +166,9 @@ def transform_to_input(issue, task_id, pr_url, github=None, idempotency=None):
     }
     if github is not None:
         result["github"] = github
-    if idempotency is not None:
-        result["idempotency"] = idempotency
+    result["idempotency"] = (
+        idempotency if idempotency is not None else {"related_issues": []}
+    )
     return result
 
 

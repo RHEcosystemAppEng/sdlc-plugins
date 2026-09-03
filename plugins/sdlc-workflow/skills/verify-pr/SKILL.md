@@ -151,8 +151,12 @@ If the file validates against the schema:
 - Read the `idempotency.related_issues` array (each entry has `key`, `summary`,
   `labels`, `description`, `issuetype`, `comments`) — the task's existing sub-tasks
   and linked issues, prefetched on the runner. **Use it for every idempotency read**
-  (Steps 6d, 6f, 7c) instead of calling Jira; the sandbox has no token. The array is
-  empty when the task has no sub-tasks or linked issues yet.
+  (Steps 6d, 6f, 7c) instead of calling Jira; the sandbox has no token. The schema
+  **requires** `idempotency.related_issues`, so a prefetch that passes the Step 0.7
+  validation above always carries this array — it is an empty list (never absent)
+  when the task has no sub-tasks or linked issues yet. Treat a present-but-empty
+  array as "no known duplicates"; you never need to fall back to a Jira read for
+  the dedup checks.
 
 If the validation above fails (file missing, not valid JSON, or not conforming to the
 schema), the handling depends on the mode:
