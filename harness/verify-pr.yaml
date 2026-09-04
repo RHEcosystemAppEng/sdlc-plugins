@@ -48,20 +48,18 @@ openshell:
   profiles:
     - plugins/sdlc-workflow/profiles/fullsend-vertex-ai.yaml
 
+# URL-pinned base: only repo-relative host_files may live here. When this harness
+# is consumed via a pinned raw URL (config.yaml / a child's `base:`), fullsend
+# fetches these entries from the base URL and rewrites their paths (ADR-0038).
+# Runner-local absolute mounts — the GCP credential/OIDC files and the pre_script
+# prefetch output — CANNOT be URL-sourced (fullsend v0.37.0 rejects an absolute
+# host_files.src that is inherited from a URL-sourced harness). They are declared
+# instead in the local composing child (.fullsend/harness/verify-pr.yaml), whose
+# host_files are concatenated with these (dedup by dest, child wins).
 host_files:
   - src: plugins/sdlc-workflow/env/gcp-vertex.env
     dest: /sandbox/workspace/.env.d/gcp-vertex.env
     expand: true
-  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
-    dest: /tmp/.gcp-credentials.json
-  - src: ${GCP_OIDC_TOKEN_FILE}
-    dest: /sandbox/workspace/.gcp-oidc-token
-    optional: true
-  # pre_script prefetch output, mounted read-only into the sandbox (optional —
-  # absent until pre-verify-pr.sh runs, authored in TC-5810).
-  - src: /tmp/fullsend-pre-output/verify-pr-input.json
-    dest: /sandbox/workspace/.pre-script/verify-pr-input.json
-    optional: true
 
 pre_script: plugins/sdlc-workflow/scripts/pre-verify-pr.sh
 post_script: plugins/sdlc-workflow/scripts/post-verify-pr.sh
