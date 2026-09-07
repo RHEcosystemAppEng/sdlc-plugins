@@ -468,6 +468,10 @@ constructs dispatch envelopes following the structure defined in
 **Sandbox mode:** do not run the `gh pr diff`/`gh pr view` commands below — the full
 diff, diffstat, and commits are pre-fetched as `github.diff`, `github.stat`, and
 `github.commits` (Step 0.7). Use those values as the corresponding dispatch inputs.
+The sandbox has no `gh` CLI; do NOT substitute a live repository read (e.g.
+`git log`) for any pre-fetched value — for commit traceability in particular,
+`git log --oneline`/`--format=%s` emit subject lines only and will miss a Jira
+ID in a commit body/trailer, producing a false FAIL.
 
 Collect all inputs needed for sub-agent dispatch envelopes:
 
@@ -482,10 +486,16 @@ Collect all inputs needed for sub-agent dispatch envelopes:
    gh pr diff <pr-number> --stat -R <owner/repo>
    ```
 
-3. **PR commits** — for Intent Alignment sub-agent:
+3. **PR commits** — for Intent Alignment sub-agent. Pass each commit's `oid`, its
+   **full** `messageHeadline` and `messageBody` (do NOT truncate the body — a Jira
+   trailer such as `Implements PROJ-231` typically sits at the very end), and, in
+   sandbox mode, the runner-computed `references_task_id` boolean. In interactive
+   mode fetch with:
    ```
    gh pr view <pr-number> --json commits --jq '.commits[] | {oid: .oid, messageHeadline: .messageHeadline, messageBody: .messageBody}' -R <owner/repo>
    ```
+   In sandbox mode use `github.commits` as-is (each item already carries
+   `references_task_id`); never re-slice or subject-only-summarize the bodies.
 
 4. **Task specification sections** — extracted from the Jira task description
    parsed in Step 1:

@@ -27,7 +27,28 @@ import argparse
 import glob
 import json
 import os
+import re
 import sys
+
+
+def commit_references_task(commit, task_id):
+    """True if the commit references ``task_id`` in its headline OR body.
+
+    The Jira task ID conventionally sits in a trailer or body line (e.g.
+    ``Implements TC-5812``), not only the subject, so BOTH ``messageHeadline``
+    and ``messageBody`` are scanned. Word boundaries keep ``TC-5812`` from
+    matching ``TC-58120`` or another ID like ``TC-5982``. This computes the
+    Commit Traceability fact deterministically on the runner so the tokenless
+    sandbox agent never has to re-derive it from ``git log`` (which, with
+    ``--oneline``/``%s``, would see subjects only and miss the trailer).
+    """
+    if not task_id:
+        return False
+    text = "{}\n{}".format(
+        commit.get("messageHeadline", "") or "",
+        commit.get("messageBody", "") or "",
+    )
+    return re.search(r"\b{}\b".format(re.escape(task_id)), text) is not None
 
 
 def extract_pr_url(issue):
@@ -165,6 +186,16 @@ def transform_to_input(issue, task_id, pr_url, github=None, idempotency=None):
         },
     }
     if github is not None:
+        # Annotate each commit with the deterministic Commit Traceability fact
+        # (Check 3). commits.items is unconstrained in the input schema, so the
+        # extra key is schema-valid; the sandbox agent reads references_task_id
+        # instead of running its own subjects-only git log.
+        commits = github.get("commits")
+        if isinstance(commits, list):
+            for commit in commits:
+                if isinstance(commit, dict):
+                    commit["references_task_id"] = commit_references_task(
+                        commit, task_id)
         result["github"] = github
     result["idempotency"] = (
         idempotency if idempotency is not None else {"related_issues": []}
