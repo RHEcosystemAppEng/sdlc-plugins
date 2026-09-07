@@ -9,6 +9,30 @@ argument-hint: "[jira-issue-id]"
 
 You are an AI verification assistant that orchestrates PR verification through parallel domain sub-agents. You verify a pull request against its Jira task's acceptance criteria and deterministic guardrails. You classify PR review feedback, dispatch domain sub-agents for parallel analysis, aggregate their findings, create tracked Jira sub-tasks for required code fixes, and investigate root causes of implementation mistakes across the full workflow chain. You post findings to both GitHub and Jira, but you do **NOT** modify code and do **NOT** auto-merge.
 
+## Resolving this skill's own files
+
+This skill reads several of its own bundled files: sub-skill instruction files,
+dispatch/finding templates, JSON schemas, and the plugin manifest. **Always resolve
+these from `${CLAUDE_PLUGIN_ROOT}`** — the environment variable Claude Code sets to
+this plugin's installation directory — never from a repo-relative path like
+`plugins/sdlc-workflow/...`.
+
+This matters because the current working directory is **not** always the plugin's
+repository. When verify-pr reviews a PR against the `sdlc-plugins` repo itself, the
+CWD is the target checkout (whatever branch is under review), so a repo-relative path
+would read that branch's copy of these files and let the PR under review **shadow**
+the pinned, stable skill actually running. `${CLAUDE_PLUGIN_ROOT}` always points at
+the delivered plugin, so the stable skill reads its own bundled files in every mode —
+interactive (Claude Code) and sandbox (fullsend).
+
+`${CLAUDE_PLUGIN_ROOT}` expands in this skill's body text and in Bash commands. Inside
+a quoted heredoc (`<< 'PYEOF'`), the shell does **not** expand it — read it with
+`os.environ["CLAUDE_PLUGIN_ROOT"]` in Python instead.
+
+Note: path patterns used to **filter the PR diff** (e.g., detecting changes under
+`plugins/sdlc-workflow/skills/run-evals/`) stay repo-relative — those describe files
+inside the PR being reviewed, not files this skill reads.
+
 ## Step 0 – Validate Project Configuration
 
 Before proceeding, read the project's CLAUDE.md and verify that the following sections exist under `# Project Configuration`:
@@ -113,7 +137,7 @@ Initialize the accumulator as an in-memory JSON structure:
 ```
 
 The `report` object and every action conform to
-`plugins/sdlc-workflow/schemas/verify-pr-result.schema.json`; the runner's
+`${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-result.schema.json`; the runner's
 `post_script` executes the accumulated actions after the sandbox exits.
 
 ## Step 0.7 – Load Pre-Fetched Data (sandbox mode only)
@@ -123,18 +147,19 @@ The `report` object and every action conform to
 In sandbox mode the `pre_script` fetches all task and PR data on the trusted runner
 (where the tokens live) and mounts it read-only into the sandbox. Read it:
 
-Validate it against `plugins/sdlc-workflow/schemas/verify-pr-input.schema.json`
+Validate it against `${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-input.schema.json`
 before using it — a syntactically valid but structurally wrong or incomplete
 prefetch (e.g., missing the `github` bundle or `task` fields) must be treated as
 invalid rather than passing and failing deep inside a later step:
 
 ```bash
 python3 - << 'PYEOF'
-import json, sys
+import json, os, sys
 from jsonschema import validate, ValidationError
 
 INPUT = "/sandbox/workspace/.pre-script/verify-pr-input.json"
-SCHEMA = "plugins/sdlc-workflow/schemas/verify-pr-input.schema.json"
+# ${CLAUDE_PLUGIN_ROOT} is not expanded inside a quoted heredoc — read it from the env.
+SCHEMA = os.path.join(os.environ["CLAUDE_PLUGIN_ROOT"], "schemas/verify-pr-input.schema.json")
 try:
     with open(INPUT) as f:
         instance = json.load(f)
@@ -213,7 +238,7 @@ Every comment posted to Jira by this skill MUST end with the following footnote,
 separated from the main content by a horizontal rule.
 
 Before posting any Jira comment, read the plugin version from
-`plugins/sdlc-workflow/.claude-plugin/plugin.json` and extract the `version` field.
+`${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` and extract the `version` field.
 Use this value as `{version}` in the footer below.
 
 Use ADF `contentFormat` to ensure the rule and text render correctly:
@@ -461,7 +486,7 @@ change requests before sub-task creation.
 Dispatch four domain sub-agents in parallel for comprehensive PR analysis. Each
 sub-agent performs focused checks and returns structured findings. The orchestrator
 constructs dispatch envelopes following the structure defined in
-`plugins/sdlc-workflow/skills/verify-pr/dispatch-template.md`.
+`${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/dispatch-template.md`.
 
 ### Step 5a – Gather Dispatch Inputs
 
@@ -528,13 +553,13 @@ Collect all inputs needed for sub-agent dispatch envelopes:
 
 Read the following files to construct dispatch prompts:
 
-1. **Dispatch template:** `plugins/sdlc-workflow/skills/verify-pr/dispatch-template.md`
-2. **Finding template:** `plugins/sdlc-workflow/skills/verify-pr/finding-template.md`
+1. **Dispatch template:** `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/dispatch-template.md`
+2. **Finding template:** `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/finding-template.md`
 3. **Sub-agent skill files:**
-   - `plugins/sdlc-workflow/skills/verify-pr/intent-alignment.md`
-   - `plugins/sdlc-workflow/skills/verify-pr/security.md`
-   - `plugins/sdlc-workflow/skills/verify-pr/correctness.md`
-   - `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/intent-alignment.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/security.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/correctness.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/style-conventions.md`
 
 ### Step 5c – Construct and Dispatch
 
@@ -576,7 +601,7 @@ execute side effects (sub-task creation, PR comment replies).
 ### Step 6a – Collect Sub-Agent Results
 
 Parse the structured findings returned by each sub-agent using the format defined
-in `plugins/sdlc-workflow/skills/verify-pr/finding-template.md`:
+in `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/finding-template.md`:
 
 1. **Extract verdicts** from each sub-agent's Verdicts table. Map sub-agent check
    names to report rows:
@@ -1271,7 +1296,7 @@ Append a markdown footnote at the end of the report body, separated by a horizon
 *This comment was AI-generated by [sdlc-workflow/verify-pr](https://github.com/RHEcosystemAppEng/sdlc-plugins) v{version}.*
 ```
 
-Read the plugin version from `plugins/sdlc-workflow/.claude-plugin/plugin.json` and
+Read the plugin version from `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` and
 substitute `{version}` before posting.
 
 Build the comment body as the report (with the commit-scoped header and footnote)
@@ -1311,7 +1336,7 @@ find-then-update-or-create path above) and the Jira comment (from `report_adf`) 
 the sandbox exits.
 
 Populate `report` (all fields required by
-`plugins/sdlc-workflow/schemas/verify-pr-result.schema.json`):
+`${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-result.schema.json`):
 
 ```json
 {
@@ -1323,7 +1348,7 @@ Populate `report` (all fields required by
   "table_md": "<the markdown verification table from Step 8>",
   "report_md": "<full GitHub PR comment body: commit-scoped header + table + summary + markdown footnote>",
   "report_adf": <full Jira comment ADF: report + Comment Footnote>,
-  "plugin_version": "<version from plugins/sdlc-workflow/.claude-plugin/plugin.json>"
+  "plugin_version": "<version from ${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json>"
 }
 ```
 
