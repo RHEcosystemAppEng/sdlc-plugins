@@ -25,9 +25,14 @@ the pinned, stable skill actually running. `${CLAUDE_PLUGIN_ROOT}` always points
 the delivered plugin, so the stable skill reads its own bundled files in every mode —
 interactive (Claude Code) and sandbox (fullsend).
 
-`${CLAUDE_PLUGIN_ROOT}` expands in this skill's body text and in Bash commands. Inside
-a quoted heredoc (`<< 'PYEOF'`), the shell does **not** expand it — read it with
-`os.environ["CLAUDE_PLUGIN_ROOT"]` in Python instead.
+`${CLAUDE_PLUGIN_ROOT}` is a **textual token** that Claude Code substitutes into this
+skill's markdown body (this whole file, including fenced code blocks) before the skill
+runs — it is **not** an OS environment variable. Write the literal token wherever you
+need the path: prose, Read/Glob paths, and inside a `<< 'PYEOF'` heredoc alike. Do
+**not** read it at runtime via `os.environ["CLAUDE_PLUGIN_ROOT"]` or `$CLAUDE_PLUGIN_ROOT`
+in a shell — it is not exported to the shell or to subprocesses, so those resolve to
+empty / `KeyError`. Substitution happens before execution, so a literal token even
+inside a single-quoted heredoc is already the absolute path by the time Python runs.
 
 Note: path patterns used to **filter the PR diff** (e.g., detecting changes under
 `plugins/sdlc-workflow/skills/run-evals/`) stay repo-relative — those describe files
@@ -154,12 +159,13 @@ invalid rather than passing and failing deep inside a later step:
 
 ```bash
 python3 - << 'PYEOF'
-import json, os, sys
+import json, sys
 from jsonschema import validate, ValidationError
 
 INPUT = "/sandbox/workspace/.pre-script/verify-pr-input.json"
-# ${CLAUDE_PLUGIN_ROOT} is not expanded inside a quoted heredoc — read it from the env.
-SCHEMA = os.path.join(os.environ["CLAUDE_PLUGIN_ROOT"], "schemas/verify-pr-input.schema.json")
+# ${CLAUDE_PLUGIN_ROOT} below is a Claude Code body-substitution token: it is already
+# the delivered plugin's absolute path by the time this command runs (NOT a shell/env var).
+SCHEMA = "${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-input.schema.json"
 try:
     with open(INPUT) as f:
         instance = json.load(f)
