@@ -745,7 +745,7 @@ regardless of whether `CONVENTIONS.md` CI checks include a test command. Lint, f
 and `cargo check` pass even when test logic is broken — a separate test run is required
 before committing.
 
-For each modified file, determine its containing crate from the nearest `Cargo.toml`.
+For each modified file, run `cargo metadata --no-deps --format-version 1` from the workspace root and resolve the package whose manifest or target source contains the file. Use that package's `name` as `<crate-name>`; do not derive it from the nearest `Cargo.toml`, which may be a virtual workspace manifest. Skip modified files that do not belong to any package or crate.
 Run:
 
 ```
