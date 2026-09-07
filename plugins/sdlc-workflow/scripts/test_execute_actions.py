@@ -678,12 +678,12 @@ def test_post_comment_and_report_use_distinct_sticky_markers():
         restore()
     comment_marker = comment_recorder.cmd[comment_recorder.cmd.index("--marker") + 1]
 
-    # And the report path (no existing GitHub comment → lists then posts)
+    # And the report path (native GitHub comment + native Jira comment)
     report_calls = []
 
     def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
         report_calls.append(cmd)
-        return _FakeCompleted(0, "", "[]")
+        return _FakeCompleted(0, "")
 
     saved_run = execute_actions.subprocess.run
     saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
@@ -706,7 +706,9 @@ def test_post_comment_and_report_use_distinct_sticky_markers():
                 os.environ.pop(k, None)
             else:
                 os.environ[k] = v
-    jira_cmd = next(c for c in report_calls if c[:3] == ["fullsend", "issues", "post-comment"])
+    jira_cmd = next(c for c in report_calls
+                    if c[:3] == ["fullsend", "issues", "post-comment"]
+                    and c[c.index("--tracker") + 1] == "jira")
     report_marker = jira_cmd[jira_cmd.index("--marker") + 1]
 
     # Then the two markers differ, and each matches its dedicated constant
@@ -716,13 +718,13 @@ def test_post_comment_and_report_use_distinct_sticky_markers():
 
 
 def test_execute_post_report_posts_github_then_jira():
-    """execute_post_report lists PR comments, creates a marked GitHub comment when none exists, then posts to Jira."""
+    """execute_post_report posts the report to the GitHub PR then to Jira, both via
+    the native `fullsend issues post-comment` sticky CLI (GitHub first)."""
     calls = []
 
     def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
         calls.append({"cmd": cmd, "input": input, "env": env})
-        # No existing report comment on the PR yet.
-        return _FakeCompleted(0, "", "[]")
+        return _FakeCompleted(0, "")
 
     saved_run = execute_actions.subprocess.run
     saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
@@ -746,42 +748,41 @@ def test_execute_post_report_posts_github_then_jira():
             else:
                 os.environ[k] = v
 
-    # SHA canonicalization (git rev-parse) + list + create + native.
-    assert len(calls) == 4, f"Expected rev-parse + list + create + native calls, got {len(calls)}"
-    list_call = next(c for c in calls if c["cmd"][:2] == ["gh", "api"])
-    gh_call = next(c for c in calls if c["cmd"][:3] == ["gh", "pr", "comment"])
-    jira_call = next(c for c in calls if c["cmd"][:3] == ["fullsend", "issues", "post-comment"])
-    # Existing comments are listed to check for a prior report.
-    assert list_call["cmd"][2] == "repos/acme/widget/issues/42/comments"
-    # No existing comment → a new PR comment is created, carrying the commit marker.
-    assert gh_call["cmd"][:3] == ["gh", "pr", "comment"]
-    assert "acme/widget" in gh_call["cmd"]
-    gh_body = gh_call["cmd"][gh_call["cmd"].index("--body") + 1]
-    assert gh_body.startswith("## Verify report\nAll good.")
-    assert "<!-- sdlc-workflow:verify-pr report commit:946556e -->" in gh_body
+    # SHA canonicalization (git rev-parse) + native GitHub + native Jira.
+    assert len(calls) == 3, f"Expected rev-parse + github + jira calls, got {len(calls)}"
+    native = [c for c in calls if c["cmd"][:3] == ["fullsend", "issues", "post-comment"]]
+    gh_call = next(c for c in native if c["cmd"][c["cmd"].index("--tracker") + 1] == "github")
+    jira_call = next(c for c in native if c["cmd"][c["cmd"].index("--tracker") + 1] == "jira")
+    # GitHub side: native sticky CLI targets the PR by number, the marker carries
+    # the commit SHA, and the body (stdin) is report_md with NO embedded marker
+    # (the CLI prepends it).
+    assert gh_call["cmd"][gh_call["cmd"].index("--project") + 1] == "acme/widget"
+    assert gh_call["cmd"][gh_call["cmd"].index("--number") + 1] == "42"
+    assert gh_call["cmd"][gh_call["cmd"].index("--marker") + 1] == \
+        "<!-- sdlc-workflow:verify-pr report commit:946556e -->"
+    assert gh_call["input"] == "## Verify report\nAll good."
+    assert "sdlc-workflow:verify-pr report commit:" not in gh_call["input"], \
+        "marker must not be embedded in the GitHub body; the CLI prepends it"
+    # GitHub is posted before Jira.
+    assert native[0] is gh_call, "GitHub report must be posted before Jira"
     # Jira side: sticky CLI, and the body is rendered from report_adf (the
-    # tracker-native content) via adf_to_markdown — NOT the GitHub-only report_md,
+    # tracker-native content) via adf_to_markdown, NOT the GitHub-only report_md,
     # which carries the commit marker Jira must never receive.
-    assert jira_call["cmd"][:3] == ["fullsend", "issues", "post-comment"]
     assert jira_call["cmd"][jira_call["cmd"].index("--number") + 1] == "777"
     assert jira_call["input"] == _REPORT_ADF_MD
     assert jira_call["input"] != report["report_md"], "Jira must not receive report_md"
     assert "sdlc-workflow:verify-pr report commit:" not in jira_call["input"]
 
 
-def test_execute_post_report_updates_existing_github_comment_on_retry():
-    """A retry for the same commit PATCH-updates the existing GitHub report comment instead of creating a duplicate."""
-    # Given a prior report comment for this commit already exists on the PR.
-    # `gh api --paginate --slurp` wraps each page's comment array in one outer
-    # array, so the listing is a single-page array-of-pages here.
+def test_execute_post_report_strips_embedded_leading_marker_from_github_body():
+    """When the agent's report_md already begins with the commit-scoped marker
+    line, execute_post_report strips it before calling the native CLI (which
+    prepends the marker), so the GitHub comment never opens with two duplicate
+    marker lines."""
     calls = []
-    existing_page = [{"id": 555,
-                      "body": "old report\n\n<!-- sdlc-workflow:verify-pr report commit:946556e -->"}]
 
     def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
-        calls.append({"cmd": cmd, "input": input, "env": env})
-        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
-            return _FakeCompleted(0, "", json.dumps([existing_page]))
+        calls.append({"cmd": cmd, "input": input})
         return _FakeCompleted(0, "")
 
     saved_run = execute_actions.subprocess.run
@@ -789,15 +790,15 @@ def test_execute_post_report_updates_existing_github_comment_on_retry():
     execute_actions.subprocess.run = fake_run
     os.environ.update(_JIRA_ENV)
     try:
+        marker_line = "<!-- sdlc-workflow:verify-pr report commit:946556e -->"
         report = {
             "pr_repo": "acme/widget",
             "pr_number": 42,
             "jira_issue_id": "TC-777",
             "commit_sha": "946556e",
-            "report_md": "## Verify report\nAll good.",
+            "report_md": f"{marker_line}\n## Verify report\nAll good.",
             "report_adf": _REPORT_ADF,
         }
-        # When posting the report again (e.g. after a prior Jira failure)
         execute_actions.execute_post_report({"type": "post_report"}, {}, report)
     finally:
         execute_actions.subprocess.run = saved_run
@@ -807,73 +808,16 @@ def test_execute_post_report_updates_existing_github_comment_on_retry():
             else:
                 os.environ[k] = v
 
-    # Then no new GitHub comment is created; the existing one is PATCH-updated
-    assert not any(c["cmd"][:3] == ["gh", "pr", "comment"] for c in calls), \
-        "retry must not create a new GitHub comment"
-    patch_calls = [c for c in calls if "PATCH" in c["cmd"]]
-    assert len(patch_calls) == 1, f"Expected one PATCH update, got {len(patch_calls)}"
-    assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
-    # And the Jira report is still posted
-    assert any(c["cmd"][:3] == ["fullsend", "issues", "post-comment"] for c in calls), \
-        "Jira report must still be posted on retry"
+    gh_call = next(c for c in calls
+                   if c["cmd"][:3] == ["fullsend", "issues", "post-comment"]
+                   and c["cmd"][c["cmd"].index("--tracker") + 1] == "github")
+    # The leading marker line is stripped; the body starts with the report heading
+    # and carries no embedded marker (the CLI prepends the single marker copy).
+    assert gh_call["input"] == "## Verify report\nAll good.", f"Got: {gh_call['input']!r}"
+    assert "sdlc-workflow:verify-pr report commit:" not in gh_call["input"]
 
 
-def test_execute_post_report_updates_comment_on_later_page():
-    """When the listing spans multiple pages, an existing report comment on a
-    non-first page is still found and PATCH-updated (no duplicate created)."""
-    # Given a slurped, multi-page listing (array-of-pages) where the marked report
-    # comment lives on the SECOND page — the exact case a single json.loads on
-    # concatenated per-page arrays could not parse.
-    calls = []
-    page_one = [
-        {"id": 101, "body": "just a normal review comment"},
-        {"id": 102, "body": "another unrelated comment"},
-    ]
-    page_two = [
-        {"id": 103, "body": "chatter"},
-        {"id": 555,
-         "body": "old report\n\n<!-- sdlc-workflow:verify-pr report commit:946556e -->"},
-    ]
-
-    def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
-        calls.append({"cmd": cmd, "input": input, "env": env})
-        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
-            # --paginate --slurp wraps each page's array in one outer array.
-            return _FakeCompleted(0, "", json.dumps([page_one, page_two]))
-        return _FakeCompleted(0, "")
-
-    saved_run = execute_actions.subprocess.run
-    saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
-    execute_actions.subprocess.run = fake_run
-    os.environ.update(_JIRA_ENV)
-    try:
-        report = {
-            "pr_repo": "acme/widget",
-            "pr_number": 42,
-            "jira_issue_id": "TC-777",
-            "commit_sha": "946556e",
-            "report_md": "## Verify report\nAll good.",
-            "report_adf": _REPORT_ADF,
-        }
-        # When posting the report again for the same commit
-        execute_actions.execute_post_report({"type": "post_report"}, {}, report)
-    finally:
-        execute_actions.subprocess.run = saved_run
-        for k, v in saved_env.items():
-            if v is None:
-                os.environ.pop(k, None)
-            else:
-                os.environ[k] = v
-
-    # Then the comment on the second page is PATCH-updated, not duplicated.
-    assert not any(c["cmd"][:3] == ["gh", "pr", "comment"] for c in calls), \
-        "must not create a new GitHub comment when the report exists on a later page"
-    patch_calls = [c for c in calls if "PATCH" in c["cmd"]]
-    assert len(patch_calls) == 1, f"Expected one PATCH update, got {len(patch_calls)}"
-    assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
-
-
-def _run_post_report_with_sha_resolution(commit_sha, existing_comments, resolve):
+def _run_post_report_with_sha_resolution(commit_sha, resolve):
     """Run execute_post_report with a fake ``git rev-parse`` that maps each input
     ref to a canonical full SHA via ``resolve``. Returns the recorded calls."""
     calls = []
@@ -884,8 +828,6 @@ def _run_post_report_with_sha_resolution(commit_sha, existing_comments, resolve)
             # cmd[-1] is "<ref>^{commit}"; strip the peel suffix to look up.
             ref = cmd[-1].split("^", 1)[0]
             return _FakeCompleted(0, "", resolve.get(ref, ""))
-        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
-            return _FakeCompleted(0, "", json.dumps([existing_comments]))
         return _FakeCompleted(0, "")
 
     saved_run = execute_actions.subprocess.run
@@ -912,59 +854,51 @@ def _run_post_report_with_sha_resolution(commit_sha, existing_comments, resolve)
     return calls
 
 
+def _github_marker_from_calls(calls):
+    """Return the --marker passed to the native GitHub post-comment call."""
+    gh = next(c for c in calls
+              if c["cmd"][:3] == ["fullsend", "issues", "post-comment"]
+              and c["cmd"][c["cmd"].index("--tracker") + 1] == "github")
+    return gh["cmd"][gh["cmd"].index("--marker") + 1]
+
+
 def test_execute_post_report_dedup_marker_invariant_to_sha_length():
-    """A full-length SHA on one run and an abbreviated SHA for the same commit on
-    a retry resolve to the SAME report comment (PATCH-update, not duplicate),
-    because git rev-parse canonicalizes both forms to the same full SHA."""
+    """A full-length SHA and an abbreviated SHA for the SAME commit produce the
+    SAME --marker on the native GitHub call, because git rev-parse canonicalizes
+    both forms to the same full SHA. The native CLI then deduplicates on that
+    shared marker, so a retry edits one comment instead of duplicating it."""
     full_sha = "946556e" + "a" * 33   # 40 hex chars
     short_sha = "946556e"             # 7-char abbreviation of the same commit
     # git rev-parse resolves either form of this one commit to its full SHA.
     resolve = {full_sha: full_sha, short_sha: full_sha}
 
-    # First run with the FULL SHA and no existing comment → a comment is created;
-    # capture the marker it embedded.
-    first_calls = _run_post_report_with_sha_resolution(full_sha, [], resolve)
-    create_call = next(c for c in first_calls if c["cmd"][:3] == ["gh", "pr", "comment"])
-    created_body = create_call["cmd"][create_call["cmd"].index("--body") + 1]
-    assert f"commit:{full_sha} -->" in created_body, \
-        f"marker should carry the canonical full SHA: {created_body!r}"
+    full_marker = _github_marker_from_calls(
+        _run_post_report_with_sha_resolution(full_sha, resolve))
+    short_marker = _github_marker_from_calls(
+        _run_post_report_with_sha_resolution(short_sha, resolve))
 
-    # Retry with the ABBREVIATED SHA; the PR already has the comment created above.
-    retry_calls = _run_post_report_with_sha_resolution(
-        short_sha, [{"id": 555, "body": created_body}], resolve)
-
-    # Then the retry PATCH-updates the existing comment instead of duplicating it.
-    assert not any(c["cmd"][:3] == ["gh", "pr", "comment"] for c in retry_calls), \
-        "abbreviated-SHA retry must not create a duplicate report comment"
-    patch_calls = [c for c in retry_calls if "PATCH" in c["cmd"]]
-    assert len(patch_calls) == 1, f"Expected one PATCH update, got {len(patch_calls)}"
-    assert patch_calls[0]["cmd"][2] == "repos/acme/widget/issues/comments/555"
+    assert full_marker == f"{execute_actions.GITHUB_REPORT_MARKER_PREFIX}{full_sha} -->", \
+        f"marker should carry the canonical full SHA: {full_marker!r}"
+    assert full_marker == short_marker, \
+        "full and abbreviated SHA of one commit must yield the same sticky marker"
 
 
 def test_execute_post_report_distinct_commits_same_prefix_do_not_collide():
-    """Two distinct commits sharing a 7-hex prefix get DISTINCT dedup markers
-    (each resolved up to its full 40-char SHA), so the second commit's report is
-    created as a new comment instead of PATCH-overwriting the first commit's."""
+    """Two distinct commits sharing a 7-hex prefix get DISTINCT --marker values
+    (each resolved up to its full 40-char SHA), so the native CLI keeps them as
+    separate sticky comments instead of one overwriting the other."""
     full_a = "946556e" + "a" * 33   # commit A
-    full_b = "946556e" + "b" * 33   # commit B — same first 7 hex chars, distinct object
+    full_b = "946556e" + "b" * 33   # commit B, same first 7 hex chars, distinct object
     resolve = {full_a: full_a, full_b: full_b}
 
-    # Commit A posts first with no existing comment → a comment carrying A's marker.
-    a_calls = _run_post_report_with_sha_resolution(full_a, [], resolve)
-    a_create = next(c for c in a_calls if c["cmd"][:3] == ["gh", "pr", "comment"])
-    a_body = a_create["cmd"][a_create["cmd"].index("--body") + 1]
-    assert f"commit:{full_a} -->" in a_body
+    marker_a = _github_marker_from_calls(
+        _run_post_report_with_sha_resolution(full_a, resolve))
+    marker_b = _github_marker_from_calls(
+        _run_post_report_with_sha_resolution(full_b, resolve))
 
-    # Commit B posts while A's comment already exists on the PR.
-    b_calls = _run_post_report_with_sha_resolution(
-        full_b, [{"id": 555, "body": a_body}], resolve)
-
-    # Then B does NOT PATCH A's comment (no collision); it creates its own.
-    assert not any("PATCH" in c["cmd"] for c in b_calls), \
-        "distinct commit must not overwrite another commit's report comment"
-    b_create = next(c for c in b_calls if c["cmd"][:3] == ["gh", "pr", "comment"])
-    b_body = b_create["cmd"][b_create["cmd"].index("--body") + 1]
-    assert f"commit:{full_b} -->" in b_body
+    assert marker_a == f"{execute_actions.GITHUB_REPORT_MARKER_PREFIX}{full_a} -->"
+    assert marker_b == f"{execute_actions.GITHUB_REPORT_MARKER_PREFIX}{full_b} -->"
+    assert marker_a != marker_b, "distinct commits must get distinct sticky markers"
 
 
 def test_normalize_commit_sha_falls_back_to_prefix_when_unresolvable():
@@ -1007,8 +941,6 @@ def test_post_report_resolves_ref_created_by_later_action():
 
     def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
         calls.append({"cmd": cmd, "input": input})
-        if cmd[:2] == ["gh", "api"] and cmd[2].endswith("/comments"):
-            return _FakeCompleted(0, "", "[]")  # no existing report comment
         return _FakeCompleted(0, "")
 
     def fake_create_issue(**kwargs):
@@ -1069,35 +1001,16 @@ def test_post_report_resolves_ref_created_by_later_action():
             else:
                 os.environ[k] = v
 
-    # The GitHub report body carries the resolved key, not the raw placeholder.
-    create_call = next(c for c in calls if c["cmd"][:3] == ["gh", "pr", "comment"])
-    gh_body = create_call["cmd"][create_call["cmd"].index("--body") + 1]
-    assert "Filed sub-task TC-999." in gh_body, f"ref not resolved: {gh_body}"
-    assert "{{sub-1.key}}" not in gh_body, "placeholder leaked into report body"
+    # The GitHub report body (native call stdin) carries the resolved key, not the
+    # raw placeholder.
+    native = [c for c in calls if c["cmd"][:3] == ["fullsend", "issues", "post-comment"]]
+    gh_call = next(c for c in native if c["cmd"][c["cmd"].index("--tracker") + 1] == "github")
+    assert "Filed sub-task TC-999." in gh_call["input"], f"ref not resolved: {gh_call['input']}"
+    assert "{{sub-1.key}}" not in gh_call["input"], "placeholder leaked into report body"
     # The Jira body is rendered from report_adf, and its refs resolve too.
-    jira_call = next(c for c in calls if c["cmd"][:3] == ["fullsend", "issues", "post-comment"])
+    jira_call = next(c for c in native if c["cmd"][c["cmd"].index("--tracker") + 1] == "jira")
     assert jira_call["input"] == "Filed sub-task TC-999.", f"ref not resolved in ADF: {jira_call['input']}"
     assert "{{sub-1.key}}" not in jira_call["input"], "placeholder leaked into Jira body"
-
-
-def test_find_report_comment_id_exits_on_unparseable_json():
-    """A JSON parse failure aborts with sys.exit(1) instead of silently returning
-    None (which would let a retry create a duplicate report comment)."""
-    # Given `gh` returns malformed JSON (e.g. concatenated per-page arrays, the
-    # pre-fix --paginate-without-slurp shape that is not valid combined JSON)
-    def fake_run(cmd, input=None, text=None, capture_output=None, env=None):
-        return _FakeCompleted(0, "", "[{\"id\": 1}][{\"id\": 2}]")
-
-    saved_run = execute_actions.subprocess.run
-    execute_actions.subprocess.run = fake_run
-    try:
-        # When the id lookup runs, it must fail loudly rather than swallow the error
-        execute_actions._find_report_comment_id("acme/widget", 42, "marker")
-        assert False, "Should have exited on unparseable JSON"
-    except SystemExit as e:
-        assert e.code == 1
-    finally:
-        execute_actions.subprocess.run = saved_run
 
 
 if __name__ == "__main__":
@@ -1132,11 +1045,9 @@ if __name__ == "__main__":
     test_execute_post_comment_routes_to_native()
     test_post_comment_and_report_use_distinct_sticky_markers()
     test_execute_post_report_posts_github_then_jira()
-    test_execute_post_report_updates_existing_github_comment_on_retry()
-    test_execute_post_report_updates_comment_on_later_page()
+    test_execute_post_report_strips_embedded_leading_marker_from_github_body()
     test_execute_post_report_dedup_marker_invariant_to_sha_length()
     test_execute_post_report_distinct_commits_same_prefix_do_not_collide()
     test_normalize_commit_sha_falls_back_to_prefix_when_unresolvable()
     test_post_report_resolves_ref_created_by_later_action()
-    test_find_report_comment_id_exits_on_unparseable_json()
     print("All tests passed.")
