@@ -1,0 +1,43 @@
+# Local composing child for the verify-pr harness.
+#
+# fullsend v0.37.0 rejects an absolute host_files.src that is inherited from a
+# URL-sourced harness, so the runner-local credential and pre_script-output
+# mounts cannot live in the URL-pinned base (harness/verify-pr.yaml). This local
+# child pins that base by raw URL (so the pinned bytes are byte-identical across
+# local and CI) and adds those absolute mounts directly. host_files are
+# concatenated base+child, deduplicated by dest with the child winning (ADR-0045;
+# harness-fields.md). Absolute host_files declared directly in this local child
+# are NOT URL-sourced, so they are accepted.
+#
+# ONE child serves BOTH environments — the mounts are env-expanded and the OIDC
+# token is optional:
+#   GOOGLE_APPLICATION_CREDENTIALS  local: service-account key JSON
+#                                   CI:    WIF external_account config
+#   GCP_OIDC_TOKEN_FILE             local: unset → optional mount skipped
+#                                   CI:    runner-refreshed OIDC token file
+# Only the runtime environment differs — fullsend's sanctioned "same harness,
+# different runtime env" model (ADR-0055; running-agents-locally.md).
+#
+# PIN: the base cannot be a cross-boundary local path — fullsend rejects a
+# `base:` that escapes the .fullsend workspace root, and a URL base is required
+# anyway so the base's relative children resolve as pinned raw URLs. The base is
+# pinned to a commit SHA (not a branch) plus the base file's sha256; both local
+# and CI resolve these exact bytes. lock.yaml freezes every child SHA256.
+# The base URL host prefix must stay listed in config.yaml allowed_remote_resources
+# (base URLs are validated against that allowlist, not inherited).
+# Re-pin after any base edit: push harness/verify-pr.yaml, set the SHA to the new
+# commit + the sha256 to `shasum -a 256 harness/verify-pr.yaml`, `fullsend lock`.
+base: https://raw.githubusercontent.com/RHEcosystemAppEng/sdlc-plugins/888a1781dd81f68bc6f4daecdcccef5d91b9cef6/harness/verify-pr.yaml#sha256=addc868659a4391b18fe09cb2a0523d134a9242e35d644a6db36bcce8277cb16
+
+host_files:
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/.gcp-credentials.json
+  - src: ${GCP_OIDC_TOKEN_FILE}
+    dest: /sandbox/workspace/.gcp-oidc-token
+    optional: true
+  # pre_script prefetch output — pre-verify-pr.sh writes /tmp/fullsend-pre-output
+  # on the runner; mounted read-only into the sandbox (optional — absent until
+  # the pre_script runs, and skipped on an ADR-0072 skip).
+  - src: /tmp/fullsend-pre-output/verify-pr-input.json
+    dest: /sandbox/workspace/.pre-script/verify-pr-input.json
+    optional: true
