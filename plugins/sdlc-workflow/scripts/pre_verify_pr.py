@@ -51,21 +51,59 @@ def commit_references_task(commit, task_id):
     return re.search(r"\b{}\b".format(re.escape(task_id)), text) is not None
 
 
-def extract_pr_url(issue):
-    """Extract PR URL from Jira custom field (ADF or string).
+_URL_RE = re.compile(r"https?://\S+")
 
-    Returns empty string if the field is missing or has no URL.
+
+def _first_url_in_adf(node):
+    """Return the first URL found in an ADF node, depth-first in document order.
+
+    Covers every shape Jira uses to populate a URL/textarea custom field:
+    an ``inlineCard`` (smart link), a ``text`` node carrying a ``link`` mark,
+    or plain text that merely contains a bare URL. Returns "" when none is found.
+    """
+    if isinstance(node, dict):
+        if node.get("type") == "inlineCard":
+            url = node.get("attrs", {}).get("url", "")
+            if url:
+                return url
+        if node.get("type") == "text":
+            for mark in node.get("marks", []):
+                if mark.get("type") == "link":
+                    href = mark.get("attrs", {}).get("href", "")
+                    if href:
+                        return href
+            match = _URL_RE.search(node.get("text", "") or "")
+            if match:
+                return match.group(0).rstrip(".,);]")
+        for child in node.get("content", []):
+            url = _first_url_in_adf(child)
+            if url:
+                return url
+    elif isinstance(node, list):
+        for child in node:
+            url = _first_url_in_adf(child)
+            if url:
+                return url
+    return ""
+
+
+def extract_pr_url(issue):
+    """Extract the PR URL from the Jira Git Pull Request custom field.
+
+    The field is format-agnostic: it may be a plain string, an ADF
+    ``inlineCard`` smart link, an ADF ``text`` node with a ``link`` mark, or
+    plain ADF text holding a bare URL. All are handled so a linked PR is never
+    missed because of how the field happened to be populated. Returns "" when
+    the field is absent or contains no URL.
     """
     field = issue.get("fields", {}).get("customfield_10875")
     if not field:
         return ""
     if isinstance(field, str):
-        return field
+        match = _URL_RE.search(field)
+        return match.group(0).rstrip(".,);]") if match else field.strip()
     if isinstance(field, dict):
-        for block in field.get("content", []):
-            for inline in block.get("content", []):
-                if inline.get("type") == "inlineCard":
-                    return inline.get("attrs", {}).get("url", "")
+        return _first_url_in_adf(field)
     return ""
 
 

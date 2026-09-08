@@ -55,6 +55,40 @@ def test_extract_pr_url_adf_no_inline_card():
     assert result == "", f"Expected empty string, got: {result}"
 
 
+def test_extract_pr_url_adf_text_link_mark():
+    """ADF text node carrying a link mark (how a manually-typed link is stored)."""
+    issue = {"fields": {"customfield_10875": {
+        "type": "doc", "version": 1,
+        "content": [{"type": "paragraph", "content": [
+            {"type": "text", "text": "PR", "marks": [
+                {"type": "link", "attrs": {
+                    "href": "https://github.com/org/repo/pull/13"}}
+            ]}
+        ]}]
+    }}}
+    result = pre_verify_pr.extract_pr_url(issue)
+    assert result == "https://github.com/org/repo/pull/13", f"Got: {result}"
+
+
+def test_extract_pr_url_adf_plain_text_url():
+    """ADF plain text that merely contains a bare URL (no mark, no card)."""
+    issue = {"fields": {"customfield_10875": {
+        "type": "doc", "version": 1,
+        "content": [{"type": "paragraph", "content": [
+            {"type": "text", "text": "see https://github.com/org/repo/pull/99 for details"}
+        ]}]
+    }}}
+    result = pre_verify_pr.extract_pr_url(issue)
+    assert result == "https://github.com/org/repo/pull/99", f"Got: {result}"
+
+
+def test_extract_pr_url_string_with_surrounding_text():
+    """Plain-string field whose value embeds a URL among other text."""
+    issue = {"fields": {"customfield_10875": "PR: https://github.com/org/repo/pull/5."}}
+    result = pre_verify_pr.extract_pr_url(issue)
+    assert result == "https://github.com/org/repo/pull/5", f"Got: {result}"
+
+
 # --- build_github_bundle ---
 
 def test_build_github_bundle():
