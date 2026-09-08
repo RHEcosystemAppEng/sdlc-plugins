@@ -717,6 +717,18 @@ def test_post_comment_and_report_use_distinct_sticky_markers():
     assert comment_marker != report_marker, "post_comment and post_report must use distinct markers"
 
 
+def test_jira_bound_markers_have_no_forbidden_chars():
+    """Markers posted to Jira must avoid characters Jira's markdown round-trip
+    escapes (\\*_`[]&) — fullsend rejects such a --marker because the escaping
+    would break sticky-comment re-detection on later runs. Guards against a
+    regression like the underscore in the original "post_comment" marker."""
+    forbidden = set("\\*_`[]&")
+    for marker in (execute_actions.STICKY_COMMENT_MARKER,
+                   execute_actions.POST_COMMENT_STICKY_MARKER):
+        offending = forbidden & set(marker)
+        assert not offending, f"{marker!r} contains forbidden char(s) {offending}"
+
+
 def test_execute_post_report_posts_github_then_jira():
     """execute_post_report posts the report to the GitHub PR then to Jira, both via
     the native `fullsend issues post-comment` sticky CLI (GitHub first)."""

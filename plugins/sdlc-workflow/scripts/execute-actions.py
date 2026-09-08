@@ -59,7 +59,10 @@ STICKY_COMMENT_MARKER = "<!-- sdlc-workflow:verify-pr -->"
 # and a post_report targeting the SAME Jira issue in one run must not share one
 # marker — otherwise the second post would overwrite the first. Each path keeps
 # its own stable marker, so per-path re-run idempotency is preserved.
-POST_COMMENT_STICKY_MARKER = "<!-- sdlc-workflow:verify-pr post_comment -->"
+# The suffix is hyphenated (not "post_comment"): fullsend rejects a Jira
+# --marker containing \*_`[]& because Jira's markdown round-trip escapes those
+# characters on read-back, which would break marker re-detection on later runs.
+POST_COMMENT_STICKY_MARKER = "<!-- sdlc-workflow:verify-pr post-comment -->"
 
 # The verify-pr report comment is posted via the native fullsend sticky-comment
 # CLI (`fullsend issues post-comment --tracker github`), which prepends this
