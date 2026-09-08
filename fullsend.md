@@ -62,7 +62,7 @@ never place a credential in the sandbox at all.
 | Service | Tier | Credential in sandbox? | How it is delivered |
 |---|---|---|---|
 | **Jira** | 1 | No | The pre_script prefetches the issue on the runner; the post_script posts comments with `fullsend issues post-comment --tracker jira`. The token stays in runner env only. |
-| **GitHub** | 1 | No | The pre_script prefetches the read bundle (`gh pr diff` / `gh pr view` → diff, diffstat, commits) and checks out the PR head on the runner; the post_script writes via `fullsend issues post-comment --tracker github` and `gh` (PR reviews/replies via `gh api`). The token stays in runner env only. |
+| **GitHub** | 1 | No | The pre_script prefetches the read bundle (`gh pr diff` / `gh pr view` → diff, diffstat, reviews, comments, commits) and records the PR head ref name and head commit SHA in it; the post_script writes via `fullsend issues post-comment --tracker github` and `gh` (PR reviews/replies via `gh api`). The token stays in runner env only. The PR-head working tree is the `--target-repo` clone, checked out at the head SHA before the run (see below) — the pre_script does not check out. |
 | **Vertex AI** | 4 (fullsend-mandated) | **Yes** | The in-sandbox runtime does the model inference and reads `GOOGLE_APPLICATION_CREDENTIALS` from a file (`/tmp/.gcp-credentials.json`). Vertex auth requires local JWT signing, so tier 4 (file on the sandbox filesystem) is unavoidable. This is the one credential set in the sandbox. |
 
 Because Vertex is the only in-sandbox credential, the sandbox's **only network
@@ -104,7 +104,12 @@ fullsend run verify-pr \
 ```
 
 `--target-repo` must be a **disposable clone**, not your working directory —
-fullsend deletes and re-creates it after each run.
+fullsend deletes and re-creates it after each run. It must already be **checked
+out at the PR head** (`github.commit_sha` from the read bundle): neither the
+pre_script nor the harness performs the checkout, so the caller establishes the
+PR-head working tree. Locally, `gh pr checkout <pr-number>` in the clone before
+the run; in CI, the checkout step fetches the PR head. The sandbox then inspects
+that tree directly (there is no `gh` CLI in the sandbox).
 
 A minimal `secrets.env` (never commit it):
 
@@ -222,7 +227,7 @@ All plugin paths are relative to `plugins/sdlc-workflow/`.
 | `providers/vertex-ai.yaml` | Selects the Vertex egress profile (no proxied credential). |
 | `env/gcp-vertex.env` | Vertex env template, expanded from the secrets file (`expand: true`); points `GOOGLE_APPLICATION_CREDENTIALS` at `/tmp/.gcp-credentials.json`. |
 | `schemas/verify-pr-result.schema.json` | JSON Schema for the agent's structured output; enforced by `validation_loop`. |
-| `scripts/pre-verify-pr.sh` | Pre_script — validates inputs, prefetches the Jira issue and the GitHub read bundle, checks out the PR head. Delegates to `pre_verify_pr.py`. |
+| `scripts/pre-verify-pr.sh` | Pre_script — validates inputs, prefetches the Jira issue and the GitHub read bundle, and records the PR head ref name + head commit SHA in the bundle (it does **not** check out — the PR-head working tree comes from `--target-repo`). Delegates to `pre_verify_pr.py`. |
 | `scripts/post-verify-pr.sh` | Post_script — finds `agent-result.json` and delegates to `execute-actions.py`. Runs on the trusted runner after the sandbox is destroyed. |
 | `scripts/execute-actions.py` | Action executor — posts Jira/GitHub sticky comments via `fullsend issues post-comment`, and PR reviews/replies via `gh api`. |
 | `scripts/validate-output-schema.sh` + `strip_extra_properties.py` | Strips benign agent-added metadata, then validates against the schema. |
