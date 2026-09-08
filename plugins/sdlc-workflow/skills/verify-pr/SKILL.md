@@ -1280,12 +1280,17 @@ updates the existing report comment in place, while a **later commit** gets a fr
 comment. This preserves a **per-commit** verification history — one report comment
 per commit, refreshed on re-runs — rather than a new comment on every run.
 
-To make this work, the report body embeds an invisible commit-scoped marker (the
-mechanism GitHub lacks a native sticky-comment for):
+Idempotency uses a commit-scoped marker — an invisible HTML comment (GitHub has
+no native sticky-comment) whose identity is the verified commit:
 
 ```
 <!-- sdlc-workflow:verify-pr report commit:<full-sha> -->
 ```
+
+The marker is supplied to the native sticky CLI via `--marker`, which prepends it
+to the comment. **Do NOT embed this marker in the report body** — the agent writes
+only the report text, and the runner supplies the marker separately. Embedding it
+would leave a duplicate marker line the CLI does not strip.
 
 Update the report header from Step 8 to include the commit SHA — the
 `(commit <short-sha>)` makes which commit each comment verifies legible in the PR
@@ -1305,22 +1310,23 @@ Append a markdown footnote at the end of the report body, separated by a horizon
 Read the plugin version from `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` and
 substitute `{version}` before posting.
 
-Build the comment body as the report (with the commit-scoped header and footnote)
-followed by the commit marker, then post it via a find-then-update-or-create path
-(as implemented by `_find_report_comment_id` + `execute_post_report` in
+The comment body is the report — commit-scoped header + table + summary + footnote,
+with **no** marker line — posted via the native fullsend sticky-comment CLI (as
+implemented by `post_github_comment_native` ← `execute_post_report` in
 `scripts/execute-actions.py`):
 
 ```
-# Find an existing report comment for this commit, matched by the marker above.
-# --slurp is required with --paginate so multi-page (>30) comment output is valid JSON.
-gh api repos/<owner/repo>/issues/<pr-number>/comments --paginate --slurp
-
-# If a comment carrying this commit's marker exists → update it in place:
-gh api repos/<owner/repo>/issues/comments/<comment-id> -X PATCH -f body="<report-with-marker>"
-
-# Otherwise (first report for this commit) → create a new comment:
-gh pr comment <pr-number> --body "<report-with-marker>" -R <owner/repo>
+fullsend issues post-comment --tracker github \
+  --project <owner/repo> --number <pr-number> \
+  --marker "<!-- sdlc-workflow:verify-pr report commit:<full-sha> -->" \
+  --result -   # report body (no marker) on stdin
 ```
+
+The CLI prepends the `--marker` as a hidden HTML comment and, on re-runs, finds the
+comment carrying this commit's marker and edits it in place (collapsing the prior
+body into a `<details>` block) — so a retry on the same commit never duplicates,
+while a later commit gets a fresh comment. GitHub treats a PR as an issue for
+comments, so `--tracker github --number <pr-number>` targets the PR.
 
 ### Post to Jira
 
@@ -1336,10 +1342,12 @@ The report is informational — a human reviewer decides whether to merge.
 ### Sandbox Mode Output
 
 **Sandbox mode only:** Instead of posting to GitHub and Jira directly, populate the
-`report` object and append a single `post_report` action. The runner's `post_script`
-posts the GitHub PR comment (from `report_md`, applying the commit-scoped
-find-then-update-or-create path above) and the Jira comment (from `report_adf`) after
-the sandbox exits.
+`report` object and append a single `post_report` action. After the sandbox exits,
+the runner's `post_script` posts the GitHub PR comment (from `report_md`) and the
+Jira comment (from `report_adf`) via the native `fullsend issues post-comment`
+sticky CLI — supplying the commit-scoped marker with `--marker` (GitHub) so a re-run
+updates the same per-commit comment in place. `report_md` must contain **no** marker
+line; the runner supplies the marker.
 
 Populate `report` (all fields required by
 `${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-result.schema.json`):
@@ -1352,7 +1360,7 @@ Populate `report` (all fields required by
   "commit_sha": "<PR head commit SHA — github.commit_sha; 7–40 hex, canonicalized by the runner>",
   "overall": "PASS|WARN|FAIL",
   "table_md": "<the markdown verification table from Step 8>",
-  "report_md": "<full GitHub PR comment body: commit-scoped header + table + summary + markdown footnote>",
+  "report_md": "<full GitHub PR comment body: commit-scoped header + table + summary + markdown footnote — NO marker line; the runner prepends the commit-scoped marker via --marker>",
   "report_adf": <full Jira comment ADF: report + Comment Footnote>,
   "plugin_version": "<version from ${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json>"
 }
