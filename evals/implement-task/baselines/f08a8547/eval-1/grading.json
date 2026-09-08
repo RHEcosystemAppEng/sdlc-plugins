@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4 'Sibling Analysis' explicitly references all 4 files: 'get.rs (GET /api/v2/advisory/{id}) -- in modules/fundamental/src/advisory/endpoints/', 'advisory.rs (AdvisoryService with fetch, list, search) -- in modules/fundamental/src/advisory/service/', 'summary.rs (AdvisorySummary with severity field) -- in modules/fundamental/src/advisory/model/'. 'Reusable Code Identified' section references 'AppError in common/src/error.rs'."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md lists exactly 3 files to modify (model/mod.rs, service/advisory.rs, endpoints/mod.rs) and 3 files to create (model/severity_summary.rs, endpoints/severity_summary.rs, tests/api/advisory_summary.rs). The only out-of-scope mention is tests/api/mod.rs for test registration, which file-6-description.md explicitly flags: 'This is an out-of-scope file modification that would be flagged during Step 9 scope containment and requires user approval.' No unrelated files are included in the plan's modification set."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md 'Files to Create' table lists: File 4 'modules/fundamental/src/advisory/model/severity_summary.rs' (SeveritySummary response struct), File 5 'modules/fundamental/src/advisory/endpoints/severity_summary.rs' (GET handler), File 6 'tests/api/advisory_summary.rs' (Integration tests). Corresponding file-4-description.md, file-5-description.md, and file-6-description.md all have Action: CREATE."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md 'Files to Modify' table lists: File 1 'modules/fundamental/src/advisory/model/mod.rs' (Add pub mod severity_summary), File 2 'modules/fundamental/src/advisory/service/advisory.rs' (Add severity_summary method), File 3 'modules/fundamental/src/advisory/endpoints/mod.rs' (Register new route). Corresponding file-1-description.md, file-2-description.md, and file-3-description.md all have Action: MODIFY."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10 shows commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' (Conventional Commits format with type 'feat', scope 'advisory', description). Footer contains 'Implements TC-9201'."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md Step 10 explicitly states: 'Commit flag: `--trailer=\"Assisted-by: Claude Code\"`'."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Step 10 'Branch and PR' section: 'Branch name: TC-9201' and 'Base branch: main'. Task Summary also states 'Target Branch: main'. Step 1 Task Parsing confirms 'Target Branch: main'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md 'Error Handling' section: 'All endpoint handlers return Result<T, AppError>.' and 'Error wrapping uses .context(\"descriptive message\") from the anyhow pattern, matching common/src/error.rs.' conventions.md 'Module Structure' section: 'Each domain module follows a strict three-directory pattern: model/ + service/ + endpoints/.' Both patterns are clearly identified with specific details."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md Task Summary: 'Target Branch: main'. Step 1 Task Parsing: 'Target Branch: main'. Step 10 Branch and PR: 'Base branch: main'. The target branch 'main' is referenced in three separate locations in the plan."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": false,
+      "evidence": "plan.md Step 1 Task Parsing mentions: 'Description integrity: would verify via digest protocol (Step 1.5)'. However, the plan does NOT state what happens when no digest is found. It does not mention proceeding with a warning, backward compatibility, or non-blocking behavior. The assertion requires the plan to note that it proceeds with a warning rather than blocking, which is absent from all output files."
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": false,
+      "evidence": "plan.md Step 7 shows 'Run: cargo test -p trustify-fundamental' and Step 9 checklist shows 'Module-level test (Rust): cargo test -p <crate-name> for every crate with modified files'. Neither section mentions using 'cargo metadata' to resolve the crate name. The crate name 'trustify-fundamental' appears to be hardcoded without any described resolution mechanism. No mention of 'cargo metadata' exists in any output file (plan.md, conventions.md, or any file-N-description.md)."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 2,
+    "total": 11,
+    "pass_rate": 0.82
+  }
+}

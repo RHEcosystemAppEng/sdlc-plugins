@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md line 12: '| Ecosystem | RPM (system package) |'. Lines 30-36 show Ecosystem Detection section explicitly stating 'The vulnerable library openssl-libs is a system-level RPM package. Per the Ecosystem Mappings table in the 2.2.x stream's security-matrix.md' and reproducing the RPM row from the Ecosystem Mappings config. No mention of Cargo anywhere in the outputs."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md lines 9-15 contain the 2.2.x stream version impact table with all five versions: 2.2.0 (v0.4.5, 3.0.7-25.el9_3), 2.2.1 (v0.4.8, 3.0.7-27.el9_4), 2.2.2 (v0.4.9, retag), 2.2.3 (v0.4.11, 3.0.7-28.el9_4), 2.2.4 (v0.4.12, 3.0.7-28.el9_4). Line 34 references 'rpms.lock.yaml: present' and line 42 confirms 'The openssl-libs package is present in rpms.lock.yaml at each pinned tag'."
+    },
+    {
+      "text": "Dependency chain context identifies openssl-libs as present in rpms.lock.yaml and uses this to determine the package origin — the lock file presence is the primary classification signal (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md lines 33-39 show dependency chain: 'rpms.lock.yaml: present --> explicit install' and 'Origin: explicit install (openssl-libs is specified in rpms.lock.yaml)'. Lines 41-42 state: 'The openssl-libs package is present in rpms.lock.yaml at each pinned tag, confirming it is an explicitly installed RPM package (not inherited from the base image)... The rpms.lock.yaml classification alone is used to determine the package origin.'"
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 8 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md line 8: 'Since openssl-libs is an RPM system package, 1 remediation task is created for the 2.2.x stream.' Lines 16-23 show a single jira.create_issue call. Line 29-30 show the repository is 'rhtpa-release.0.4.z' (the Konflux release repo). data-extraction.md line 36 also confirms: 'remediation produces 1 task per affected stream (Konflux release repo fix only; no upstream backport step)'. No second task exists for upstream backport."
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 8 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md contains all required sections: '## Repository' (line 29, value: rhtpa-release.0.4.z), '## Target Branch' (line 33, value: main), '## Description' (line 37), '## Implementation Notes' (line 55), '## Acceptance Criteria' (line 69). No '## Files to Modify' section is present anywhere in the task description, consistent with the assertion that it is intentionally omitted for system package remediation."
+    },
+    {
+      "text": "The version impact output addresses SBOM verification in the dependency chain context — either noting that verification was skipped because cosign is not available or because external tools are prohibited, or presenting the SBOM classification result (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md line 35: 'SBOM verification: skipped -- cosign not available in this environment'. Line 42: 'SBOM verification via cosign was not performed because cosign is not available in this environment.' Also reflected in remediation.md line 58: 'SBOM verification was skipped (cosign not available)'."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
