@@ -40,7 +40,9 @@ structure; the Agent-Specific Inputs section varies per agent.
 - `### PR Diff Summary` — file list with per-file line counts (additions/deletions), not full diff content
 - `### Task Specification` — Repository, Files to Modify, Files to Create sections from Jira task description
 - `### Jira Task ID` — the task key for commit traceability checking
-- `### PR Commits` — commit list with hashes and messages
+- `### PR Commits` — commit list; per commit the hash, the **full** headline and
+  body (never truncated or subject-only), and a `references_task_id` boolean
+  (runner-computed against the Jira Task ID over the full message)
 
 ### Security
 

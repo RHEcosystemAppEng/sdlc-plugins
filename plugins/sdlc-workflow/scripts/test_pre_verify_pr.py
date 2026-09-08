@@ -55,6 +55,40 @@ def test_extract_pr_url_adf_no_inline_card():
     assert result == "", f"Expected empty string, got: {result}"
 
 
+def test_extract_pr_url_adf_text_link_mark():
+    """ADF text node carrying a link mark (how a manually-typed link is stored)."""
+    issue = {"fields": {"customfield_10875": {
+        "type": "doc", "version": 1,
+        "content": [{"type": "paragraph", "content": [
+            {"type": "text", "text": "PR", "marks": [
+                {"type": "link", "attrs": {
+                    "href": "https://github.com/org/repo/pull/13"}}
+            ]}
+        ]}]
+    }}}
+    result = pre_verify_pr.extract_pr_url(issue)
+    assert result == "https://github.com/org/repo/pull/13", f"Got: {result}"
+
+
+def test_extract_pr_url_adf_plain_text_url():
+    """ADF plain text that merely contains a bare URL (no mark, no card)."""
+    issue = {"fields": {"customfield_10875": {
+        "type": "doc", "version": 1,
+        "content": [{"type": "paragraph", "content": [
+            {"type": "text", "text": "see https://github.com/org/repo/pull/99 for details"}
+        ]}]
+    }}}
+    result = pre_verify_pr.extract_pr_url(issue)
+    assert result == "https://github.com/org/repo/pull/99", f"Got: {result}"
+
+
+def test_extract_pr_url_string_with_surrounding_text():
+    """Plain-string field whose value embeds a URL among other text."""
+    issue = {"fields": {"customfield_10875": "PR: https://github.com/org/repo/pull/5."}}
+    result = pre_verify_pr.extract_pr_url(issue)
+    assert result == "https://github.com/org/repo/pull/5", f"Got: {result}"
+
+
 # --- build_github_bundle ---
 
 def test_build_github_bundle():
@@ -112,6 +146,56 @@ def test_transform_with_github():
     assert result["github"]["pr_repo"] == "o/r"
     assert result["github"]["pr_number"] == 5
     assert result["github"]["commit_sha"] == "deadbee"
+
+
+# --- commit_references_task (Commit Traceability determinism) ---
+
+def test_commit_references_task_in_body_trailer():
+    # The canonical failure mode: the ID lives only in the body trailer, far
+    # past where a subject-only or truncated read would look.
+    commit = {
+        "messageHeadline": "feat(verify-pr): re-sync sandbox dual-mode onto SKILL.md",
+        "messageBody": "Long body paragraph ...\n\nImplements TC-5812\n\nAssisted-by: x",
+    }
+    assert pre_verify_pr.commit_references_task(commit, "TC-5812") is True
+
+
+def test_commit_references_task_in_headline():
+    commit = {"messageHeadline": "TC-5812: fix scope", "messageBody": ""}
+    assert pre_verify_pr.commit_references_task(commit, "TC-5812") is True
+
+
+def test_commit_references_task_absent():
+    commit = {"messageHeadline": "fix: thing", "messageBody": "no id here"}
+    assert pre_verify_pr.commit_references_task(commit, "TC-5812") is False
+
+
+def test_commit_references_task_word_boundary():
+    # A superstring ID must not match, nor a different task in the same family.
+    assert pre_verify_pr.commit_references_task(
+        {"messageHeadline": "x", "messageBody": "see TC-58120"}, "TC-5812") is False
+    assert pre_verify_pr.commit_references_task(
+        {"messageHeadline": "x", "messageBody": "the TC-5982 fix"}, "TC-5812") is False
+
+
+def test_commit_references_task_missing_body_key():
+    assert pre_verify_pr.commit_references_task(
+        {"messageHeadline": "TC-5812: x"}, "TC-5812") is True
+
+
+def test_transform_annotates_commit_references_task_id():
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    commits = [
+        {"oid": "aaa", "messageHeadline": "feat: x", "messageBody": "Implements TC-5812"},
+        {"oid": "bbb", "messageHeadline": "fix: y", "messageBody": "TC-6033 unrelated"},
+    ]
+    github = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "b", "aaa", "d", "s", [], [], [], commits,
+    )
+    result = pre_verify_pr.transform_to_input(issue, "TC-5812", "", github)
+    annotated = result["github"]["commits"]
+    assert annotated[0]["references_task_id"] is True
+    assert annotated[1]["references_task_id"] is False
 
 
 def test_transform_issue_links():
@@ -268,7 +352,8 @@ def test_cli_transform_github_dir():
     assert gh["reviews"] == [{"id": 1, "state": "APPROVED"}]
     assert gh["review_comments"] == [{"id": 2}]
     assert gh["issue_comments"] == [{"id": 3}]
-    assert gh["commits"] == [{"oid": "abc1234def"}]
+    # transform annotates each commit with the deterministic traceability fact.
+    assert gh["commits"] == [{"oid": "abc1234def", "references_task_id": False}]
 
 
 # --- idempotency prefetch (related_keys, build_idempotency_bundle, transform) ---

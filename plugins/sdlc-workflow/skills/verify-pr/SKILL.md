@@ -9,6 +9,35 @@ argument-hint: "[jira-issue-id]"
 
 You are an AI verification assistant that orchestrates PR verification through parallel domain sub-agents. You verify a pull request against its Jira task's acceptance criteria and deterministic guardrails. You classify PR review feedback, dispatch domain sub-agents for parallel analysis, aggregate their findings, create tracked Jira sub-tasks for required code fixes, and investigate root causes of implementation mistakes across the full workflow chain. You post findings to both GitHub and Jira, but you do **NOT** modify code and do **NOT** auto-merge.
 
+## Resolving this skill's own files
+
+This skill reads several of its own bundled files: sub-skill instruction files,
+dispatch/finding templates, JSON schemas, and the plugin manifest. **Always resolve
+these from `${CLAUDE_PLUGIN_ROOT}`** — the environment variable Claude Code sets to
+this plugin's installation directory — never from a repo-relative path like
+`plugins/sdlc-workflow/...`.
+
+This matters because the current working directory is **not** always the plugin's
+repository. When verify-pr reviews a PR against the `sdlc-plugins` repo itself, the
+CWD is the target checkout (whatever branch is under review), so a repo-relative path
+would read that branch's copy of these files and let the PR under review **shadow**
+the pinned, stable skill actually running. `${CLAUDE_PLUGIN_ROOT}` always points at
+the delivered plugin, so the stable skill reads its own bundled files in every mode —
+interactive (Claude Code) and sandbox (fullsend).
+
+`${CLAUDE_PLUGIN_ROOT}` is a **textual token** that Claude Code substitutes into this
+skill's markdown body (this whole file, including fenced code blocks) before the skill
+runs — it is **not** an OS environment variable. Write the literal token wherever you
+need the path: prose, Read/Glob paths, and inside a `<< 'PYEOF'` heredoc alike. Do
+**not** read it at runtime via `os.environ["CLAUDE_PLUGIN_ROOT"]` or `$CLAUDE_PLUGIN_ROOT`
+in a shell — it is not exported to the shell or to subprocesses, so those resolve to
+empty / `KeyError`. Substitution happens before execution, so a literal token even
+inside a single-quoted heredoc is already the absolute path by the time Python runs.
+
+Note: path patterns used to **filter the PR diff** (e.g., detecting changes under
+`plugins/sdlc-workflow/skills/run-evals/`) stay repo-relative — those describe files
+inside the PR being reviewed, not files this skill reads.
+
 ## Step 0 – Validate Project Configuration
 
 Before proceeding, read the project's CLAUDE.md and verify that the following sections exist under `# Project Configuration`:
@@ -113,7 +142,7 @@ Initialize the accumulator as an in-memory JSON structure:
 ```
 
 The `report` object and every action conform to
-`plugins/sdlc-workflow/schemas/verify-pr-result.schema.json`; the runner's
+`${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-result.schema.json`; the runner's
 `post_script` executes the accumulated actions after the sandbox exits.
 
 ## Step 0.7 – Load Pre-Fetched Data (sandbox mode only)
@@ -123,7 +152,7 @@ The `report` object and every action conform to
 In sandbox mode the `pre_script` fetches all task and PR data on the trusted runner
 (where the tokens live) and mounts it read-only into the sandbox. Read it:
 
-Validate it against `plugins/sdlc-workflow/schemas/verify-pr-input.schema.json`
+Validate it against `${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-input.schema.json`
 before using it — a syntactically valid but structurally wrong or incomplete
 prefetch (e.g., missing the `github` bundle or `task` fields) must be treated as
 invalid rather than passing and failing deep inside a later step:
@@ -134,7 +163,9 @@ import json, sys
 from jsonschema import validate, ValidationError
 
 INPUT = "/sandbox/workspace/.pre-script/verify-pr-input.json"
-SCHEMA = "plugins/sdlc-workflow/schemas/verify-pr-input.schema.json"
+# ${CLAUDE_PLUGIN_ROOT} below is a Claude Code body-substitution token: it is already
+# the delivered plugin's absolute path by the time this command runs (NOT a shell/env var).
+SCHEMA = "${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-input.schema.json"
 try:
     with open(INPUT) as f:
         instance = json.load(f)
@@ -213,7 +244,7 @@ Every comment posted to Jira by this skill MUST end with the following footnote,
 separated from the main content by a horizontal rule.
 
 Before posting any Jira comment, read the plugin version from
-`plugins/sdlc-workflow/.claude-plugin/plugin.json` and extract the `version` field.
+`${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` and extract the `version` field.
 Use this value as `{version}` in the footer below.
 
 Use ADF `contentFormat` to ensure the rule and text render correctly:
@@ -461,13 +492,17 @@ change requests before sub-task creation.
 Dispatch four domain sub-agents in parallel for comprehensive PR analysis. Each
 sub-agent performs focused checks and returns structured findings. The orchestrator
 constructs dispatch envelopes following the structure defined in
-`plugins/sdlc-workflow/skills/verify-pr/dispatch-template.md`.
+`${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/dispatch-template.md`.
 
 ### Step 5a – Gather Dispatch Inputs
 
 **Sandbox mode:** do not run the `gh pr diff`/`gh pr view` commands below — the full
 diff, diffstat, and commits are pre-fetched as `github.diff`, `github.stat`, and
 `github.commits` (Step 0.7). Use those values as the corresponding dispatch inputs.
+The sandbox has no `gh` CLI; do NOT substitute a live repository read (e.g.
+`git log`) for any pre-fetched value — for commit traceability in particular,
+`git log --oneline`/`--format=%s` emit subject lines only and will miss a Jira
+ID in a commit body/trailer, producing a false FAIL.
 
 Collect all inputs needed for sub-agent dispatch envelopes:
 
@@ -482,10 +517,16 @@ Collect all inputs needed for sub-agent dispatch envelopes:
    gh pr diff <pr-number> --stat -R <owner/repo>
    ```
 
-3. **PR commits** — for Intent Alignment sub-agent:
+3. **PR commits** — for Intent Alignment sub-agent. Pass each commit's `oid`, its
+   **full** `messageHeadline` and `messageBody` (do NOT truncate the body — a Jira
+   trailer such as `Implements PROJ-231` typically sits at the very end), and, in
+   sandbox mode, the runner-computed `references_task_id` boolean. In interactive
+   mode fetch with:
    ```
    gh pr view <pr-number> --json commits --jq '.commits[] | {oid: .oid, messageHeadline: .messageHeadline, messageBody: .messageBody}' -R <owner/repo>
    ```
+   In sandbox mode use `github.commits` as-is (each item already carries
+   `references_task_id`); never re-slice or subject-only-summarize the bodies.
 
 4. **Task specification sections** — extracted from the Jira task description
    parsed in Step 1:
@@ -518,13 +559,13 @@ Collect all inputs needed for sub-agent dispatch envelopes:
 
 Read the following files to construct dispatch prompts:
 
-1. **Dispatch template:** `plugins/sdlc-workflow/skills/verify-pr/dispatch-template.md`
-2. **Finding template:** `plugins/sdlc-workflow/skills/verify-pr/finding-template.md`
+1. **Dispatch template:** `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/dispatch-template.md`
+2. **Finding template:** `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/finding-template.md`
 3. **Sub-agent skill files:**
-   - `plugins/sdlc-workflow/skills/verify-pr/intent-alignment.md`
-   - `plugins/sdlc-workflow/skills/verify-pr/security.md`
-   - `plugins/sdlc-workflow/skills/verify-pr/correctness.md`
-   - `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/intent-alignment.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/security.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/correctness.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/style-conventions.md`
 
 ### Step 5c – Construct and Dispatch
 
@@ -566,7 +607,7 @@ execute side effects (sub-task creation, PR comment replies).
 ### Step 6a – Collect Sub-Agent Results
 
 Parse the structured findings returned by each sub-agent using the format defined
-in `plugins/sdlc-workflow/skills/verify-pr/finding-template.md`:
+in `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/finding-template.md`:
 
 1. **Extract verdicts** from each sub-agent's Verdicts table. Map sub-agent check
    names to report rows:
@@ -1239,12 +1280,17 @@ updates the existing report comment in place, while a **later commit** gets a fr
 comment. This preserves a **per-commit** verification history — one report comment
 per commit, refreshed on re-runs — rather than a new comment on every run.
 
-To make this work, the report body embeds an invisible commit-scoped marker (the
-mechanism GitHub lacks a native sticky-comment for):
+Idempotency uses a commit-scoped marker — an invisible HTML comment (GitHub has
+no native sticky-comment) whose identity is the verified commit:
 
 ```
 <!-- sdlc-workflow:verify-pr report commit:<full-sha> -->
 ```
+
+The marker is supplied to the native sticky CLI via `--marker`, which prepends it
+to the comment. **Do NOT embed this marker in the report body** — the agent writes
+only the report text, and the runner supplies the marker separately. Embedding it
+would leave a duplicate marker line the CLI does not strip.
 
 Update the report header from Step 8 to include the commit SHA — the
 `(commit <short-sha>)` makes which commit each comment verifies legible in the PR
@@ -1261,25 +1307,26 @@ Append a markdown footnote at the end of the report body, separated by a horizon
 *This comment was AI-generated by [sdlc-workflow/verify-pr](https://github.com/RHEcosystemAppEng/sdlc-plugins) v{version}.*
 ```
 
-Read the plugin version from `plugins/sdlc-workflow/.claude-plugin/plugin.json` and
+Read the plugin version from `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` and
 substitute `{version}` before posting.
 
-Build the comment body as the report (with the commit-scoped header and footnote)
-followed by the commit marker, then post it via a find-then-update-or-create path
-(as implemented by `_find_report_comment_id` + `execute_post_report` in
+The comment body is the report — commit-scoped header + table + summary + footnote,
+with **no** marker line — posted via the native fullsend sticky-comment CLI (as
+implemented by `post_github_comment_native` ← `execute_post_report` in
 `scripts/execute-actions.py`):
 
 ```
-# Find an existing report comment for this commit, matched by the marker above.
-# --slurp is required with --paginate so multi-page (>30) comment output is valid JSON.
-gh api repos/<owner/repo>/issues/<pr-number>/comments --paginate --slurp
-
-# If a comment carrying this commit's marker exists → update it in place:
-gh api repos/<owner/repo>/issues/comments/<comment-id> -X PATCH -f body="<report-with-marker>"
-
-# Otherwise (first report for this commit) → create a new comment:
-gh pr comment <pr-number> --body "<report-with-marker>" -R <owner/repo>
+fullsend issues post-comment --tracker github \
+  --project <owner/repo> --number <pr-number> \
+  --marker "<!-- sdlc-workflow:verify-pr report commit:<full-sha> -->" \
+  --result -   # report body (no marker) on stdin
 ```
+
+The CLI prepends the `--marker` as a hidden HTML comment and, on re-runs, finds the
+comment carrying this commit's marker and edits it in place (collapsing the prior
+body into a `<details>` block) — so a retry on the same commit never duplicates,
+while a later commit gets a fresh comment. GitHub treats a PR as an issue for
+comments, so `--tracker github --number <pr-number>` targets the PR.
 
 ### Post to Jira
 
@@ -1295,13 +1342,15 @@ The report is informational — a human reviewer decides whether to merge.
 ### Sandbox Mode Output
 
 **Sandbox mode only:** Instead of posting to GitHub and Jira directly, populate the
-`report` object and append a single `post_report` action. The runner's `post_script`
-posts the GitHub PR comment (from `report_md`, applying the commit-scoped
-find-then-update-or-create path above) and the Jira comment (from `report_adf`) after
-the sandbox exits.
+`report` object and append a single `post_report` action. After the sandbox exits,
+the runner's `post_script` posts the GitHub PR comment (from `report_md`) and the
+Jira comment (from `report_adf`) via the native `fullsend issues post-comment`
+sticky CLI — supplying the commit-scoped marker with `--marker` (GitHub) so a re-run
+updates the same per-commit comment in place. `report_md` must contain **no** marker
+line; the runner supplies the marker.
 
 Populate `report` (all fields required by
-`plugins/sdlc-workflow/schemas/verify-pr-result.schema.json`):
+`${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-result.schema.json`):
 
 ```json
 {
@@ -1311,9 +1360,9 @@ Populate `report` (all fields required by
   "commit_sha": "<PR head commit SHA — github.commit_sha; 7–40 hex, canonicalized by the runner>",
   "overall": "PASS|WARN|FAIL",
   "table_md": "<the markdown verification table from Step 8>",
-  "report_md": "<full GitHub PR comment body: commit-scoped header + table + summary + markdown footnote>",
+  "report_md": "<full GitHub PR comment body: commit-scoped header + table + summary + markdown footnote — NO marker line; the runner prepends the commit-scoped marker via --marker>",
   "report_adf": <full Jira comment ADF: report + Comment Footnote>,
-  "plugin_version": "<version from plugins/sdlc-workflow/.claude-plugin/plugin.json>"
+  "plugin_version": "<version from ${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json>"
 }
 ```
 

@@ -4,12 +4,15 @@
 Reads agent-result.json, processes actions sequentially, resolves
 {{ref.key}} and {{ref.url}} placeholders as entities are created.
 
-Jira comments (post_comment / post_report) are posted through the native
-`fullsend issues post-comment` sticky-comment CLI. The irreducible Jira
-writes that have no native primitive yet — sub-tasks, links, and root-cause
-tasks — call jira-client.py functions directly (imported as a module).
-GitHub operations use the gh CLI. Runs on the fullsend runner (trusted
-side), not inside the sandbox.
+Comments — the verify-pr report on both the GitHub PR and the Jira issue, plus
+standalone Jira analysis comments — are posted through the native
+`fullsend issues post-comment` sticky-comment CLI (`--tracker github|jira`).
+The irreducible Jira writes that have no native primitive yet — sub-tasks,
+links, and root-cause tasks — call jira-client.py functions directly (imported
+as a module). The remaining GitHub PR operations that have no native fullsend
+command — replying to a review-comment thread and posting a per-item PR comment
+— still use the gh CLI. Runs on the fullsend runner (trusted side), not inside
+the sandbox.
 
 Not idempotent for entity creation: if an action fails mid-execution,
 previously created Jira sub-tasks are not rolled back. Manual cleanup may be
@@ -56,14 +59,19 @@ STICKY_COMMENT_MARKER = "<!-- sdlc-workflow:verify-pr -->"
 # and a post_report targeting the SAME Jira issue in one run must not share one
 # marker — otherwise the second post would overwrite the first. Each path keeps
 # its own stable marker, so per-path re-run idempotency is preserved.
-POST_COMMENT_STICKY_MARKER = "<!-- sdlc-workflow:verify-pr post_comment -->"
+# The suffix is hyphenated (not "post_comment"): fullsend rejects a Jira
+# --marker containing \*_`[]& because Jira's markdown round-trip escapes those
+# characters on read-back, which would break marker re-detection on later runs.
+POST_COMMENT_STICKY_MARKER = "<!-- sdlc-workflow:verify-pr post-comment -->"
 
-# GitHub has no native sticky-comment mechanism, so the verify-pr report comment
-# embeds this marker (an invisible HTML comment) in its body. A canonical
-# (full-length) commit SHA is appended per post, scoping dedup to a single
-# verification run/commit: a retry for the same commit updates the existing
-# comment instead of duplicating it, while a later commit gets a fresh comment —
-# preserving the per-run verification history that verify-pr SKILL.md Step 9 posts.
+# The verify-pr report comment is posted via the native fullsend sticky-comment
+# CLI (`fullsend issues post-comment --tracker github`), which prepends this
+# marker as a hidden HTML comment and, on re-runs, finds the marked comment and
+# edits it in place. A canonical (full-length) commit SHA is appended per post,
+# scoping the sticky identity to a single verification run/commit: a retry for
+# the same commit updates that comment instead of duplicating it, while a later
+# commit gets a fresh comment — preserving the per-run verification history that
+# verify-pr SKILL.md Step 9 posts.
 GITHUB_REPORT_MARKER_PREFIX = "<!-- sdlc-workflow:verify-pr report commit:"
 
 # Fallback dedup-marker SHA length used only when the commit cannot be resolved to
@@ -507,6 +515,31 @@ def post_jira_comment_native(
         sys.exit(1)
 
 
+def post_github_comment_native(
+    repo: str, number: int, body_md: str, marker: str
+) -> None:
+    """Post/update a GitHub PR comment via the native fullsend sticky CLI.
+
+    GitHub treats PRs as issues for comments, so ``--tracker github`` targets a
+    PR by its number. The CLI prepends ``marker`` (a hidden HTML comment) to the
+    body and, on re-runs, finds the marked comment and edits it in place —
+    collapsing prior content into a ``<details>`` block — so retries never
+    duplicate. The marker is passed verbatim via ``--marker``; it must NOT also
+    be embedded in ``body_md`` (the CLI adds it). Auth uses GH_TOKEN/GITHUB_TOKEN
+    from the environment, mirroring the gh-based paths this replaced.
+    """
+    result = subprocess.run(
+        ["fullsend", "issues", "post-comment", "--tracker", "github",
+         "--project", repo, "--number", str(number),
+         "--marker", marker, "--result", "-"],
+        input=body_md, text=True, capture_output=True,
+    )
+    if result.returncode != 0:
+        print(f"fullsend post-comment failed for {repo}#{number}: {result.stderr}",
+              file=sys.stderr)
+        sys.exit(1)
+
+
 def _create_and_register(action: dict, registry: dict, *,
                         project_key: str, issue_type: str,
                         parent: str | None = None, label: str = "issue") -> None:
@@ -621,55 +654,22 @@ def execute_post_comment(action: dict, registry: dict) -> None:
     print(f"  Posted comment on {issue}")
 
 
-def _find_report_comment_id(repo: str, pr_number: int, marker: str) -> int | None:
-    """Return the id of an existing PR report comment whose body carries ``marker``.
-
-    Lists the PR's issue-level comments and matches on the commit-scoped marker
-    so a retry updates the same commit's report comment instead of duplicating
-    it. Returns ``None`` when no marked comment exists yet.
-
-    ``--slurp`` is required alongside ``--paginate``: without it ``gh`` emits one
-    JSON array per page concatenated (``[...][...]``), which is not valid combined
-    JSON once the PR has more than one page of comments (>30) and would fail to
-    parse. ``--slurp`` wraps the per-page arrays in a single outer array, so the
-    output is valid JSON regardless of page count; the pages are then flattened
-    into one comment list. A parse failure is a real error (surfaced via
-    ``sys.exit``), never silently treated as "no existing comment" — doing so
-    would defeat retry idempotency by creating a duplicate report comment.
-    """
-    result = subprocess.run(
-        ["gh", "api", f"repos/{repo}/issues/{pr_number}/comments",
-         "--paginate", "--slurp"],
-        capture_output=True, text=True,
-    )
-    if result.returncode != 0:
-        print(f"Failed to list PR comments: {result.stderr}", file=sys.stderr)
-        sys.exit(1)
-    try:
-        pages = json.loads(result.stdout or "[]")
-    except json.JSONDecodeError as e:
-        print(f"Failed to parse PR comments JSON: {e}", file=sys.stderr)
-        sys.exit(1)
-    comments = [comment for page in pages for comment in page]
-    for comment in comments:
-        if marker in (comment.get("body") or ""):
-            return comment.get("id")
-    return None
-
-
 def execute_post_report(action: dict, registry: dict, report: dict) -> None:
     """Post the verification report to the GitHub PR and the Jira issue.
 
-    The GitHub comment carries a commit-scoped marker
-    (``GITHUB_REPORT_MARKER_PREFIX`` + the canonical full commit SHA): if a prior
-    report comment for the same commit exists it is updated in place
-    (``gh api ... -X PATCH``)
-    instead of creating a duplicate, so a retry after a partial failure is
-    idempotent while a new commit still gets a fresh comment. The Jira side is
-    already idempotent via its sticky marker; it receives the report rendered
-    from ``report_adf`` (the tracker-native body) via ``adf_to_markdown``, which
-    the native CLI converts back to ADF — the GitHub-only ``report_md`` (and its
-    embedded marker) is never sent to Jira.
+    Both sides use the native ``fullsend issues post-comment`` sticky CLI. The
+    GitHub comment's sticky identity is a commit-scoped marker
+    (``GITHUB_REPORT_MARKER_PREFIX`` + the canonical full commit SHA): a retry
+    for the same commit edits that comment in place while a new commit gets a
+    fresh comment, preserving per-commit verification history. The marker is
+    supplied via ``--marker`` and the CLI prepends it. The agent already embeds
+    an identical commit-scoped marker as ``report_md``'s first line; that leading
+    marker line is stripped below so the CLI-prepended marker is the sole copy
+    (otherwise the comment would open with two duplicate marker lines). The Jira
+    side receives the report rendered from
+    ``report_adf`` (the tracker-native body) via ``adf_to_markdown``, which the
+    native CLI converts back to ADF — the GitHub-only ``report_md`` is never sent
+    to Jira.
     """
     repo = report["pr_repo"]
     pr_number = report["pr_number"]
@@ -680,28 +680,16 @@ def execute_post_report(action: dict, registry: dict, report: dict) -> None:
     jira_body_md = adf_to_markdown(report_adf)
 
     marker = f"{GITHUB_REPORT_MARKER_PREFIX}{_normalize_commit_sha(commit_sha)} -->"
-    github_body = f"{report_md}\n\n{marker}"
 
-    existing_id = _find_report_comment_id(repo, pr_number, marker)
-    if existing_id is not None:
-        result = subprocess.run(
-            ["gh", "api", f"repos/{repo}/issues/comments/{existing_id}",
-             "-X", "PATCH", "-f", f"body={github_body}"],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            print(f"Failed to update GitHub PR comment: {result.stderr}", file=sys.stderr)
-            sys.exit(1)
-        print(f"  Updated existing report comment on PR #{pr_number}")
-    else:
-        result = subprocess.run(
-            ["gh", "pr", "comment", str(pr_number), "--body", github_body, "-R", repo],
-            capture_output=True, text=True,
-        )
-        if result.returncode != 0:
-            print(f"Failed to post GitHub PR comment: {result.stderr}", file=sys.stderr)
-            sys.exit(1)
-        print(f"  Posted report to PR #{pr_number}")
+    # The CLI prepends the marker; drop the agent's embedded leading marker line
+    # (any commit-scoped variant, matched by prefix) so the comment does not open
+    # with two duplicate marker lines.
+    if report_md.startswith(GITHUB_REPORT_MARKER_PREFIX):
+        report_md = report_md.split("\n", 1)[1] if "\n" in report_md else ""
+        report_md = report_md.lstrip("\n")
+
+    post_github_comment_native(repo, pr_number, report_md, marker)
+    print(f"  Posted report to PR #{pr_number}")
 
     post_jira_comment_native(jira_issue_id, jira_body_md)
     print(f"  Posted report to Jira {jira_issue_id}")
