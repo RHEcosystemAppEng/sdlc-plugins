@@ -79,6 +79,12 @@ env:
   # prefetch and post_script writes need them; they are never placed in
   # env.sandbox.
   runner:
+    # Disable Python bytecode writes for every runner-side Python invocation.
+    # The pre/post scripts execute in place inside fullsend's content-addressed
+    # cache tree; a stray __pycache__/*.pyc written there mutates the tree and
+    # trips fullsend's next-run integrity check. Defense in depth alongside
+    # execute-actions.py's own sys.dont_write_bytecode (TC-6112).
+    PYTHONDONTWRITEBYTECODE: "1"
     JIRA_ISSUE_ID: "${JIRA_ISSUE_ID}"
     JIRA_SERVER_URL: "${JIRA_SERVER_URL}"
     JIRA_EMAIL: "${JIRA_EMAIL}"

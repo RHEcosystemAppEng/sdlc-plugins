@@ -45,6 +45,13 @@ _spec = importlib.util.spec_from_file_location(
     "jira_client", os.path.join(_script_dir, "jira-client.py")
 )
 _jira_mod = importlib.util.module_from_spec(_spec)
+# fullsend executes this script in place inside its content-addressed cache tree.
+# SourceFileLoader.exec_module writes __pycache__/*.pyc next to the source, which
+# mutates that tree and breaks fullsend's next-run integrity check ("cache
+# integrity check failed"). Disable bytecode writes before loading the sibling
+# module so nothing is written into the cache tree (TC-6112). The harness also
+# sets PYTHONDONTWRITEBYTECODE for defense in depth.
+sys.dont_write_bytecode = True
 _spec.loader.exec_module(_jira_mod)
 
 REF_PATTERN = re.compile(r"\{\{([a-z0-9-]+)\.(key|url)\}\}")
