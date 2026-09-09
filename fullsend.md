@@ -265,6 +265,54 @@ stock image already carries Claude Code, `git`, the `gh` CLI, Python, and the
 fullsend security tooling, so there is nothing to add — the sandbox *policy*, not
 the image, is the enforcement layer.
 
+## Acceptance run
+
+The pinned agent was proven end-to-end with the exact command CI runs (TC-5815).
+The command is identical locally and in CI (see **Running verify-pr**) — same
+harness, same registration, same pinned content; only the runtime environment
+differs (a local SA key vs. a CI WIF config).
+
+**Run** — `verify-pr` against **TC-6137 / PR #294** at commit `c0bbad9`, off the
+base pin `6572360e`, on 2026-09-09:
+
+```bash
+fullsend run verify-pr --fullsend-dir .fullsend \
+  --target-repo /tmp/verify-pr-clone \
+  --env-file <gcp-vertex.env> --env-file <verify-pr.env> \
+  --keep-sandbox
+```
+
+`--target-repo` was a **disposable clone checked out at the PR head**, never the
+working directory (fullsend deletes it after the run — see **Known issues**).
+
+**Results:**
+
+| Acceptance criterion | Result |
+|---|---|
+| Sandbox-mode run off the pin | ✅ model `claude-opus-4-6`, 1 iteration, 39 turns, 52 tool calls, 4 sub-agents dispatched |
+| Sub-agents dispatched within 30 min | ✅ sandbox wall-clock ≈ 9.5 min |
+| Schema-valid `agent-result.json` | ✅ agent exit 0, `Validation: passed` |
+| Zero `*.atlassian.net` egress from sandbox | ✅ none |
+| Zero `api.github.com` egress from sandbox | ✅ none |
+| Real writes (full run, post-script on runner) | ✅ sticky report **edited in place** on PR #294 (idempotent, no flood) + posted to Jira TC-6137 |
+
+**DENIED endpoints — expected, none added.** The sandbox's only allowed egress is
+`*.googleapis.com` (Vertex). The OCSF sandbox log records the least-privilege
+policy correctly blocking every other attempted endpoint; these DENIED entries are
+the control **working**, not failures, and no endpoint needed to be added to make
+the run pass:
+
+| Blocked endpoint | Process | Why it is correct |
+|---|---|---|
+| `github.com:443` | `git-remote-http`, `tirith` | Split-trust — the sandbox never touches GitHub; the PR-head tree arrives via `--target-repo` and writes happen on the runner. |
+| `raw.githubusercontent.com:443` | `tirith` | Harness/plugin content is delivered pre-resolved from the pin; no in-sandbox fetch. |
+| `downloads.claude.ai:443` | `claude` | Claude CLI self-update/telemetry — irrelevant to the run and correctly denied. |
+
+The run's verdict on PR #294 was `FAIL` (verify-pr's assessment of that PR at
+`c0bbad9`); the **run mechanics** above are what this acceptance proves, and they
+all pass. This is one of several real production runs of the pinned agent during
+Epic D — see the sticky `verify-pr` reports on PRs #292, #293, and #294.
+
 ## Known issues
 
 - **fullsend deletes the target repo directory** after each run — always pass a
