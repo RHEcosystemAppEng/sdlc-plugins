@@ -26,10 +26,10 @@ implementing tasks, and verifying pull requests:
 
 - **implement-task** — Implement a Jira task by reading its structured
   description, modifying code, running tests, committing, opening a PR, and
-  updating Jira.
+  updating Jira. (includes performance optimization support)
 
 - **verify-pr** — Verify a PR against its Jira task's acceptance criteria and
-  deterministic guardrails.
+  deterministic guardrails. (includes performance optimization support)
 
 - **report-bug** — Interactively define a Jira Bug by walking through
   project-configured template sections, or accept structured input
@@ -45,6 +45,20 @@ implementing tasks, and verifying pull requests:
 
 - **run-evals** — Run structured eval suites against skills to measure output
   quality and catch regressions.
+- **performance-setup** — Initialize performance optimization workflow
+  configuration for a target repository (workflow discovery, baseline capture
+  settings, target directories).
+
+- **performance-baseline** — Capture performance baseline metrics for selected
+  workflow scenarios using automated browser testing.
+
+- **performance-analyze-module** — Analyze a workflow module for performance
+  anti-patterns (over-fetching, N+1 queries, waterfall loading, render-blocking
+  resources, etc.) and generate an analysis report.
+
+- **performance-plan-optimization** — Generate structured optimization plan from
+  analysis reports, creating Jira Epic and Tasks for optimization work.
+
 
 ## Installation
 
