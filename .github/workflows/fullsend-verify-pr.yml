@@ -133,11 +133,20 @@ jobs:
       gcp_region: ${{ vars.FULLSEND_GCP_REGION }}
       project_number: ${{ vars.FULLSEND_PROJECT_NUMBER }}
       jira_base_url: ${{ vars.JIRA_BASE_URL }}
+      # Pin the fullsend CLI to a released tag. The vendor default is
+      # `job.workflow_sha` (whatever reusable-dispatch.yml@v0 currently resolves
+      # to — 0.43.0 at time of writing), which floats; this repo's harness is
+      # validated against v0.37.0 (see fullsend local-run setup memory). Tag
+      # format matches the vendor's git tags (v-prefixed).
+      fullsend_version: "v0.37.0"
       runner_image: ubuntu-24.04
+    # The reusable workflow declares Jira credentials under vendor names
+    # (JIRA_TOKEN / JIRA_USER_EMAIL); this repo stores them under the canonical
+    # names (JIRA_API_TOKEN / JIRA_EMAIL). Map repo secret -> vendor input.
     secrets:
       FULLSEND_GCP_WIF_PROVIDER: ${{ secrets.FULLSEND_GCP_WIF_PROVIDER }}
       FULLSEND_GCP_PROJECT_ID: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
       OTEL_EXPORTER_OTLP_TRACES_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_TRACES_HEADERS }}
       OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
-      JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
-      JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}
+      JIRA_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_EMAIL }}
