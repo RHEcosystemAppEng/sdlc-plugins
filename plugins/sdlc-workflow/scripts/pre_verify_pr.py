@@ -378,6 +378,24 @@ def main(argv):
         search_result = json.load(sys.stdin)
         key, reason = resolve_gated_issue(search_result, args.pr_url)
         if reason is not None:
+            # Diagnostic to stderr (runner log only — stdout stays the clean
+            # skip reason). Reveals what the JQL search actually returned so a
+            # gate failure can be told apart from an empty/visibility-limited
+            # search. Only non-secret shape is logged: issue count, keys, and
+            # the PR URL extracted from each candidate's Git Pull Request field.
+            issues = (
+                search_result.get("issues", [])
+                if isinstance(search_result, dict) else []
+            )
+            summary = ", ".join(
+                "{}=>{!r}".format(i.get("key", "?"), extract_pr_url(i))
+                for i in issues
+            ) or "(none)"
+            print(
+                "resolve-gated-issue: search returned {} issue(s): {}".format(
+                    len(issues), summary),
+                file=sys.stderr,
+            )
             print(reason)
             sys.exit(3)
         print(key)
