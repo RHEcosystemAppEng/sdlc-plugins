@@ -110,9 +110,17 @@ jobs:
   # Default `needs` gating means this runs only when the wait job succeeds.
   verify-pr:
     needs: wait-for-checks
+    # GitHub validates a reusable-workflow caller's permissions STATICALLY against
+    # EVERY nested job in the called workflow — including ones gated by `if:` that
+    # never run on this custom-poller (matrix) path. reusable-dispatch.yml's `code`
+    # and `fix` jobs declare `contents: write`, so the caller must grant it too, or
+    # the run fails at startup ("nested job 'code' is requesting 'contents: write',
+    # but is only allowed 'contents: read'"). These permissions are the UNION of
+    # all reusable-dispatch nested jobs; the harness-run job that actually executes
+    # here reads contents only.
     permissions:
       actions: write
-      contents: read
+      contents: write
       id-token: write
       issues: write
       packages: read
