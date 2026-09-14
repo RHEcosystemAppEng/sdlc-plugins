@@ -580,25 +580,36 @@ def search_jql(
     jql: str,
     fields: Optional[str] = None,
     max_results: int = 50,
-    start_at: int = 0
+    next_page_token: Optional[str] = None
 ) -> Dict[str, Any]:
     """Search JIRA issues using JQL.
+
+    Uses the enhanced search endpoint ``GET /rest/api/3/search/jql``. The legacy
+    ``/rest/api/3/search`` endpoint was removed by Atlassian and now returns
+    HTTP 410 Gone. The enhanced endpoint drops the ``total`` field and replaces
+    the ``startAt`` offset with opaque ``nextPageToken`` cursor pagination.
 
     Args:
         jql: JQL query string
         fields: Comma-separated field names (default: summary,status,assignee)
         max_results: Maximum results per page (max 50)
-        start_at: Pagination offset
+        next_page_token: Opaque cursor from a prior response's ``nextPageToken``
+            (omit for the first page)
 
     Returns:
-        Search results with issues array and total count
+        Search results with an ``issues`` array; ``nextPageToken`` is present
+        when more pages remain (``isLast`` is false)
     """
     if fields is None:
         fields = "summary,status,assignee,priority,issuetype,labels"
 
     from urllib.parse import quote
-    jql_encoded = quote(jql)
-    endpoint = f"search?jql={jql_encoded}&fields={fields}&maxResults={max_results}&startAt={start_at}"
+    endpoint = (
+        f"search/jql?jql={quote(jql)}&fields={quote(fields)}"
+        f"&maxResults={max_results}"
+    )
+    if next_page_token:
+        endpoint += f"&nextPageToken={quote(next_page_token)}"
     return make_request('GET', endpoint)
 
 
@@ -749,7 +760,7 @@ def main(argv=None):
     search_parser.add_argument('--jql', required=True, help='JQL query string')
     search_parser.add_argument('--fields', help='Comma-separated fields')
     search_parser.add_argument('--max-results', type=int, default=50, help='Max results (default: 50)')
-    search_parser.add_argument('--start-at', type=int, default=0, help='Pagination offset')
+    search_parser.add_argument('--next-page-token', help='Opaque cursor from a prior response nextPageToken (pagination)')
 
     # create_link
     link_parser = subparsers.add_parser('create_link', help='Create issue link')
@@ -821,7 +832,7 @@ def main(argv=None):
         result = get_transitions(args.issue_key)
 
     elif args.command == 'search_jql':
-        result = search_jql(args.jql, args.fields, args.max_results, args.start_at)
+        result = search_jql(args.jql, args.fields, args.max_results, args.next_page_token)
 
     elif args.command == 'create_link':
         create_link(args.inward, args.outward, args.link_type)
