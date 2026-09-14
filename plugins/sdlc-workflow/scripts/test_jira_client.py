@@ -22,6 +22,7 @@ markdown_to_adf = jira_client.markdown_to_adf
 sanitize_adf = jira_client.sanitize_adf
 get_versions = jira_client.get_versions
 create_issue = jira_client.create_issue
+search_jql = jira_client.search_jql
 
 
 def test_code_block_with_blank_lines():
@@ -410,6 +411,45 @@ def test_get_versions_unreleased_only_filters_correctly():
         jira_client.make_request = original_make_request
 
     print("✓ get_versions unreleased_only filter test passed")
+
+
+def test_search_jql_posts_fields_as_array():
+    """search_jql must POST to search/jql with fields as a JSON array.
+
+    Regression guard: the enhanced endpoint replaced /rest/api/3/search (410
+    Gone). Passing fields as a URL-encoded comma string (GET) made the endpoint
+    return issues without the requested custom fields; POST with a fields array
+    avoids that. Also asserts the legacy startAt offset is gone.
+    """
+    captured = {}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        captured["method"] = method
+        captured["endpoint"] = endpoint
+        captured["data"] = data
+        return {"issues": [], "isLast": True}
+
+    jira_client.make_request = fake_make_request
+    try:
+        search_jql(
+            'cf[10875] ~ "https://example/pull/1"',
+            fields="status,labels,customfield_10875",
+            max_results=50,
+        )
+        assert captured["method"] == "POST", captured["method"]
+        assert captured["endpoint"] == "search/jql", captured["endpoint"]
+        assert captured["data"]["fields"] == [
+            "status", "labels", "customfield_10875",
+        ], captured["data"]["fields"]
+        assert captured["data"]["jql"] == 'cf[10875] ~ "https://example/pull/1"'
+        assert captured["data"]["maxResults"] == 50
+        assert "startAt" not in captured["data"]
+        assert "nextPageToken" not in captured["data"]  # omitted on first page
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ search_jql posts fields as array test passed")
 
 
 def test_create_issue_priority_field_mapping():

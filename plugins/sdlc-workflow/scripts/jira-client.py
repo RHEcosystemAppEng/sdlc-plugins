@@ -584,10 +584,16 @@ def search_jql(
 ) -> Dict[str, Any]:
     """Search JIRA issues using JQL.
 
-    Uses the enhanced search endpoint ``GET /rest/api/3/search/jql``. The legacy
+    Uses the enhanced search endpoint ``POST /rest/api/3/search/jql``. The legacy
     ``/rest/api/3/search`` endpoint was removed by Atlassian and now returns
     HTTP 410 Gone. The enhanced endpoint drops the ``total`` field and replaces
     the ``startAt`` offset with opaque ``nextPageToken`` cursor pagination.
+
+    POST (JSON body) is used rather than GET so ``fields`` is sent as a proper
+    JSON array. The GET variant takes ``fields`` as a comma-separated query
+    value, and URL-encoding the commas (``%2C``) can make the endpoint treat the
+    whole list as one unknown field name — the issues come back without the
+    requested custom fields, which silently breaks callers that read them.
 
     Args:
         jql: JQL query string
@@ -603,14 +609,14 @@ def search_jql(
     if fields is None:
         fields = "summary,status,assignee,priority,issuetype,labels"
 
-    from urllib.parse import quote
-    endpoint = (
-        f"search/jql?jql={quote(jql)}&fields={quote(fields)}"
-        f"&maxResults={max_results}"
-    )
+    body: Dict[str, Any] = {
+        "jql": jql,
+        "fields": [f.strip() for f in fields.split(",") if f.strip()],
+        "maxResults": max_results,
+    }
     if next_page_token:
-        endpoint += f"&nextPageToken={quote(next_page_token)}"
-    return make_request('GET', endpoint)
+        body["nextPageToken"] = next_page_token
+    return make_request('POST', 'search/jql', body)
 
 
 def create_link(
