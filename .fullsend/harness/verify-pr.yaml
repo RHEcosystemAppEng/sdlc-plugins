@@ -27,7 +27,22 @@
 # (base URLs are validated against that allowlist, not inherited).
 # Re-pin after any base edit: push harness/verify-pr.yaml, set the SHA to the new
 # commit + the sha256 to `shasum -a 256 harness/verify-pr.yaml`, `fullsend lock`.
-base: https://raw.githubusercontent.com/RHEcosystemAppEng/sdlc-plugins/6572360e3e6cae77a364ed25324e54f67bb77549/harness/verify-pr.yaml#sha256=d8ebedc8978b1ea2df938110eaef20c669319786c4db2e45faf6c9040e3ebb95
+base: https://raw.githubusercontent.com/RHEcosystemAppEng/sdlc-plugins/296b67110829e4d119561808de2db6ed10bf77fe/harness/verify-pr.yaml#sha256=17945388e12605cfa4651cd48af300221d3791318aa77fbc966c1577f98f2a7c
+
+# CEL trigger (ADR 0061) — MUST be declared here, on the composing child, not
+# only on the base. `fullsend dispatch` registers this child (config.base.yaml
+# source: harness/verify-pr.yaml resolves under .fullsend/) and composes the
+# base, but mergeBaseIntoChild (internal/harness/compose.go) carries `role` and
+# other scalars from base->child while intentionally NOT carrying `trigger`. A
+# trigger set only on the base is therefore inert; ListTriggeredHarnesses reads
+# the composed child's Trigger. Kept byte-identical to the base's trigger (which
+# documents intent and covers direct-base consumption). Fires on a PR
+# change_proposal that is opened / synchronized / reopened — the dispatch-path
+# equivalent of the CI poller's `on: pull_request` types in
+# .github/workflows/fullsend-verify-pr.yml.
+trigger: |
+  event.entity.kind == "change_proposal" &&
+  event.transition.kind in ["synchronized", "opened", "reopened"]
 
 host_files:
   - src: ${GOOGLE_APPLICATION_CREDENTIALS}
