@@ -1,25 +1,34 @@
 #!/usr/bin/env bash
-# pre-verify-pr.sh — Validate inputs and pre-fetch Jira + GitHub data.
+# pre-verify-pr.sh — Derive + gate the Jira task from the triggering PR, then
+# pre-fetch Jira + GitHub data.
 #
 # Runs on the fullsend runner BEFORE the sandbox is created, where the Jira
 # and GitHub tokens live. The sandbox never sees a token — it reads only the
 # JSON this script produces.
 #
-# 1. Validates required env vars and JIRA_ISSUE_ID format
-# 2. Fetches the full Jira issue and extracts the linked PR URL
-# 3. If no PR URL: emits an ADR-0072 skip signal and exits 0 (nothing to verify)
-# 4. If a PR URL: prefetches the GitHub tier-1 read bundle (diff, stat,
-#    reviews, comments, commits, head ref + commit SHA) so the sandbox needs
-#    no api.github.com egress
+# The triggering PR URL is the SOLE entry point — the Jira key is derived, not
+# supplied. fullsend's harness-run exports the PR URL as FULLSEND_WORK_ITEM_URL
+# on the runner (a local run must export the same var). The Jira key is resolved
+# by a JQL search on the Git Pull Request custom field (customfield_10875) and
+# then re-verified to be in status Review AND carry the ai-generated-jira label,
+# so a stale or unqualified PR is never reviewed.
+#
+# 1. Validates required env vars and the PR URL shape
+# 2. Resolves + gates the Jira key by JQL on customfield_10875 == PR URL
+# 3. If the gate fails (no/ambiguous match, status != Review, label absent):
+#    emits an ADR-0072 skip signal and exits 0 (nothing to verify)
+# 4. Fetches the full Jira issue and prefetches the GitHub tier-1 read bundle
+#    (diff, stat, reviews, comments, commits, head ref + commit SHA) so the
+#    sandbox needs no api.github.com egress
 # 5. Writes the tracker-agnostic verify-pr-input.json that host_files mounts
 #    into the sandbox
 #
 # Required env vars:
-#   JIRA_ISSUE_ID     — Jira issue key (e.g., TC-4741)
-#   JIRA_SERVER_URL   — Jira instance URL
-#   JIRA_EMAIL        — Jira user email
-#   JIRA_API_TOKEN    — Jira API token
-#   GH_TOKEN          — GitHub token (only needed once a PR URL is resolved)
+#   FULLSEND_WORK_ITEM_URL — the triggering PR URL (harness-run / local export)
+#   JIRA_SERVER_URL        — Jira instance URL
+#   JIRA_EMAIL             — Jira user email
+#   JIRA_API_TOKEN         — Jira API token
+#   GH_TOKEN               — GitHub token (PR prefetch)
 #
 # Optional env vars:
 #   PRE_DIR                   — output directory (default: /tmp/fullsend-pre-output).
@@ -31,19 +40,12 @@
 set -euo pipefail
 
 # 1. Validate required env vars are set
-: "${JIRA_ISSUE_ID:?JIRA_ISSUE_ID is required}"
+: "${FULLSEND_WORK_ITEM_URL:?FULLSEND_WORK_ITEM_URL (triggering PR URL) is required}"
 : "${JIRA_SERVER_URL:?JIRA_SERVER_URL is required}"
 : "${JIRA_EMAIL:?JIRA_EMAIL is required}"
 : "${JIRA_API_TOKEN:?JIRA_API_TOKEN is required}"
 
-# 2. Validate JIRA_ISSUE_ID format
-# https://confluence.atlassian.com/adminjiraserver/changing-the-project-key-format-938847081.html
-if [[ ! "${JIRA_ISSUE_ID}" =~ ^[A-Z][A-Z0-9_]+-[0-9]+$ ]]; then
-  echo "ERROR: JIRA_ISSUE_ID '${JIRA_ISSUE_ID}' does not match expected format (e.g., TC-4741)"
-  exit 1
-fi
-
-echo "Issue: ${JIRA_ISSUE_ID}"
+PR_URL="${FULLSEND_WORK_ITEM_URL}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PRE_OUTPUT_DIR="${PRE_DIR:-/tmp/fullsend-pre-output}"
@@ -65,7 +67,57 @@ request_skip() {
   exit 0
 }
 
-# 3. Fetch full issue details (validates existence + pre-fetches for sandbox)
+# 2. Parse owner/repo/number from the PR URL. End-anchor the pattern (allowing
+#    only an optional trailing slash) so a malformed value like `.../pull/42abc`
+#    or `.../pull/42/extra` is rejected outright instead of silently truncating
+#    the pull number to 42 and prefetching the wrong PR.
+if [[ ! "${PR_URL}" =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+)/?$ ]]; then
+  echo "ERROR: PR URL '${PR_URL}' is not a github.com pull request URL"
+  exit 1
+fi
+PR_REPO="${BASH_REMATCH[1]}"
+PR_NUM="${BASH_REMATCH[2]}"
+echo "PR: ${PR_REPO}#${PR_NUM} (${PR_URL})"
+
+# 3. Resolve + gate the Jira key by JQL on the Git Pull Request custom field.
+#    The JQL `~` recall is broad; resolve-gated-issue re-confirms the exact PR
+#    URL and enforces status=Review + the ai-generated-jira label in Python.
+PR_JQL=$(python3 "${SCRIPT_DIR}/pre_verify_pr.py" build-pr-jql "${PR_URL}")
+SEARCH_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" search_jql \
+  --jql "${PR_JQL}" --fields "status,labels,customfield_10875" \
+  2>"/tmp/fullsend-pre-jira-stderr.txt") || {
+  JIRA_STDERR=$(cat /tmp/fullsend-pre-jira-stderr.txt 2>/dev/null || echo "")
+  if echo "${JIRA_STDERR}" | grep -qi "401\|unauthorized"; then
+    echo "ERROR: Jira authentication failed — check JIRA_EMAIL and JIRA_API_TOKEN"
+  elif echo "${JIRA_STDERR}" | grep -qi "403\|forbidden"; then
+    echo "ERROR: Jira permission denied — check that the API token can search issues"
+  else
+    echo "ERROR: Failed to search Jira for PR ${PR_URL}"
+    echo "${JIRA_STDERR}"
+  fi
+  rm -f /tmp/fullsend-pre-jira-stderr.txt
+  exit 1
+}
+rm -f /tmp/fullsend-pre-jira-stderr.txt
+
+# resolve-gated-issue exits 3 when a gate fails (→ ADR-0072 skip), 0 with the
+# resolved key on success, and 1 on an unexpected error. Capture without letting
+# set -e abort on the non-zero gate/skip exit.
+set +e
+GATE_OUT=$(printf '%s\n' "${SEARCH_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" resolve-gated-issue "${PR_URL}")
+GATE_RC=$?
+set -e
+if [[ ${GATE_RC} -eq 3 ]]; then
+  request_skip "${GATE_OUT}"
+elif [[ ${GATE_RC} -ne 0 ]]; then
+  echo "ERROR: failed to resolve the Jira issue for PR ${PR_URL}"
+  echo "${GATE_OUT}"
+  exit 1
+fi
+JIRA_ISSUE_ID="${GATE_OUT}"
+echo "Jira issue resolved + gated: ${JIRA_ISSUE_ID} (status=Review, label=ai-generated-jira)"
+
+# 4. Fetch full issue details (pre-fetches the task context for the sandbox)
 ISSUE_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}" --fields "*all" 2>"/tmp/fullsend-pre-jira-stderr.txt") || {
   JIRA_STDERR=$(cat /tmp/fullsend-pre-jira-stderr.txt 2>/dev/null || echo "")
   if echo "${JIRA_STDERR}" | grep -qi "401\|unauthorized"; then
@@ -85,30 +137,7 @@ rm -f /tmp/fullsend-pre-jira-stderr.txt
 
 echo "Jira issue verified: ${JIRA_ISSUE_ID}"
 
-# 4. Extract PR URL from custom field (best-effort)
-PR_URL=$(printf '%s\n' "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" extract-pr-url 2>/dev/null || echo "")
-
-# 5. No PR linked — nothing to verify. Signal a skip (ADR-0072) and stop before
-#    the sandbox is created.
-if [[ -z "${PR_URL}" ]]; then
-  request_skip "no PR URL on the Jira issue"
-fi
-
-echo "PR linked: ${PR_URL}"
-
-# 6. Parse owner/repo/number from the PR URL. End-anchor the pattern (allowing
-#    only an optional trailing slash) so a malformed value like `.../pull/42abc`
-#    or `.../pull/42/extra` is rejected outright instead of silently truncating
-#    the pull number to 42 and prefetching the wrong PR.
-if [[ ! "${PR_URL}" =~ ^https://github\.com/([^/]+/[^/]+)/pull/([0-9]+)/?$ ]]; then
-  echo "ERROR: PR URL '${PR_URL}' is not a github.com pull request URL"
-  exit 1
-fi
-PR_REPO="${BASH_REMATCH[1]}"
-PR_NUM="${BASH_REMATCH[2]}"
-echo "PR: ${PR_REPO}#${PR_NUM}"
-
-# 7. GitHub tier-1 prefetch — runs on the trusted runner where GH_TOKEN lives.
+# 5. GitHub tier-1 prefetch — runs on the trusted runner where GH_TOKEN lives.
 #    Every read the verify-pr skill performs against the PR is captured here so
 #    the sandbox needs no api.github.com egress.
 : "${GH_TOKEN:?GH_TOKEN is required to prefetch PR ${PR_REPO}#${PR_NUM}}"
@@ -148,7 +177,7 @@ gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq .commits > "${PRE_OUT
 
 echo "GitHub read bundle prefetched to ${PRE_OUTPUT_DIR}"
 
-# 7b. Idempotency prefetch — the sandbox has no Jira token, but Steps 6d/6f/7c
+# 6. Idempotency prefetch — the sandbox has no Jira token, but Steps 6d/6f/7c
 #     dedupe against the task's existing sub-tasks and linked (e.g., root-cause)
 #     issues. Fetch each related issue here on the trusted runner (summary,
 #     labels, description, issuetype, and comments) so the sandbox can run those
@@ -165,7 +194,7 @@ for key in ${RELATED_KEYS}; do
 done
 echo "Idempotency read bundle prefetched to ${REL_DIR}"
 
-# 8. Write pre-fetched data for sandbox consumption (tracker-agnostic format,
+# 7. Write pre-fetched data for sandbox consumption (tracker-agnostic format,
 #    with the GitHub bundle embedded under `github` and the idempotency
 #    related-issue metadata under `idempotency`).
 printf '%s\n' "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" transform \

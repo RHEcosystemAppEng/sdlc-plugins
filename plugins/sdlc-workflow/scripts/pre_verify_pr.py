@@ -107,6 +107,69 @@ def extract_pr_url(issue):
     return ""
 
 
+# Gates the verification: the JQL-resolved issue must be in this status AND
+# carry this label, mirroring the interactive verify-pr entry conditions. Kept
+# as module constants so the skip reasons and the tests reference one source.
+GATE_STATUS = "Review"
+GATE_LABEL = "ai-generated-jira"
+
+
+def build_pr_jql(pr_url):
+    """JQL recalling issues whose Git Pull Request field references ``pr_url``.
+
+    Uses the ``~`` (contains) operator on the custom field by id (``cf[10875]``):
+    an exact ``=`` match is unreliable for Jira URL/text fields, which tokenize
+    their stored value. Recall is intentionally broad — ``resolve_gated_issue``
+    re-confirms the *exact* PR URL in Python, so a fuzzy ``~`` hit on a different
+    PR can never be accepted. The value is wrapped in a quoted JQL string literal
+    with backslashes and quotes escaped so a crafted URL cannot break out of it.
+    """
+    escaped = pr_url.replace("\\", "\\\\").replace('"', '\\"')
+    return 'cf[10875] ~ "{}"'.format(escaped)
+
+
+def resolve_gated_issue(search_result, pr_url):
+    """Resolve the single Jira issue that gates verification of ``pr_url``.
+
+    Returns ``(key, None)`` when exactly one issue's Git Pull Request field
+    *exactly* equals ``pr_url`` AND that issue is in status ``Review`` AND
+    carries the ``ai-generated-jira`` label. Returns ``(None, reason)`` when any
+    gate fails, with a human-readable ``reason`` for the ADR-0072 skip signal:
+
+    - no issue references ``pr_url`` (the broad ``~`` recall matched nothing exact)
+    - more than one issue references ``pr_url`` (ambiguous — refuse to guess)
+    - the matched issue is not in status ``Review``
+    - the matched issue lacks the ``ai-generated-jira`` label
+
+    The exact-URL re-match (``extract_pr_url`` per candidate) is the trust
+    anchor: the JQL ``~`` operator over-matches, so acceptance is decided here,
+    never by JQL alone.
+    """
+    issues = search_result.get("issues", []) if isinstance(search_result, dict) else []
+    matches = [issue for issue in issues if extract_pr_url(issue) == pr_url]
+    if not matches:
+        return None, (
+            "no Jira issue links PR {} in its Git Pull Request field".format(pr_url)
+        )
+    if len(matches) > 1:
+        keys = ", ".join(sorted(issue.get("key", "?") for issue in matches))
+        return None, (
+            "multiple Jira issues link PR {} ({}) — refusing to guess".format(
+                pr_url, keys)
+        )
+    issue = matches[0]
+    key = issue.get("key", "")
+    fields = issue.get("fields", {})
+    status = (fields.get("status") or {}).get("name", "")
+    if status != GATE_STATUS:
+        return None, "{} is in status '{}', not '{}'".format(
+            key, status, GATE_STATUS)
+    labels = fields.get("labels", []) or []
+    if GATE_LABEL not in labels:
+        return None, "{} is missing the '{}' label".format(key, GATE_LABEL)
+    return key, None
+
+
 def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
                         diff, stat, reviews, review_comments,
                         issue_comments, commits):
@@ -285,6 +348,12 @@ def main(argv):
     sub.add_parser("extract-pr-url")
     sub.add_parser("related-keys")
 
+    jql = sub.add_parser("build-pr-jql")
+    jql.add_argument("pr_url")
+
+    gate = sub.add_parser("resolve-gated-issue")
+    gate.add_argument("pr_url")
+
     t = sub.add_parser("transform")
     t.add_argument("task_id")
     t.add_argument("pr_url")
@@ -296,6 +365,24 @@ def main(argv):
     t.add_argument("--idempotency-dir")
 
     args = parser.parse_args(argv)
+
+    # build-pr-jql takes only an argument — it reads no stdin, so resolve it
+    # before the stdin-consuming commands.
+    if args.command == "build-pr-jql":
+        print(build_pr_jql(args.pr_url))
+        return
+
+    if args.command == "resolve-gated-issue":
+        # Exit 3 is the gate-failure contract the shell maps to an ADR-0072
+        # skip; exit 1 (argparse/JSON errors) stays a hard failure.
+        search_result = json.load(sys.stdin)
+        key, reason = resolve_gated_issue(search_result, args.pr_url)
+        if reason is not None:
+            print(reason)
+            sys.exit(3)
+        print(key)
+        return
+
     issue = json.load(sys.stdin)
 
     if args.command == "extract-pr-url":

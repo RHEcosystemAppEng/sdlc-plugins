@@ -14,7 +14,8 @@
 #
 # Split-trust I/O: the Jira and GitHub tokens live ONLY on the runner (pre_script
 # prefetch + post_script writes) and are NEVER exposed to the sandbox. The
-# sandbox receives read-only context only (JIRA_ISSUE_ID, JIRA_BASE_URL).
+# sandbox receives read-only context only (JIRA_BASE_URL for display links) and
+# reads the Jira task + PR URL from the pre_script's verify-pr-input.json.
 #
 # Several referenced children are authored by later tasks in this epic and do not
 # exist yet — providers/vertex-ai.yaml (TC-5808), policies/verify-pr.yaml
@@ -96,20 +97,30 @@ env:
     # trips fullsend's next-run integrity check. Defense in depth alongside
     # execute-actions.py's own sys.dont_write_bytecode (TC-6112).
     PYTHONDONTWRITEBYTECODE: "1"
-    JIRA_ISSUE_ID: "${JIRA_ISSUE_ID}"
-    JIRA_SERVER_URL: "${JIRA_SERVER_URL}"
-    JIRA_EMAIL: "${JIRA_EMAIL}"
-    JIRA_API_TOKEN: "${JIRA_API_TOKEN}"
-    JIRA_PROJECT_KEY: "${JIRA_PROJECT_KEY}"
+    # Map fullsend's dispatch-provided Jira host vars (JIRA_BASE_URL /
+    # JIRA_USER_EMAIL / JIRA_TOKEN — set by reusable-dispatch harness-run) onto
+    # the canonical names jira-client.py reads. A local run must export the same
+    # JIRA_BASE_URL / JIRA_USER_EMAIL / JIRA_TOKEN host vars. JIRA_ISSUE_ID is no
+    # longer an input: the pre_script derives the Jira key from the triggering PR
+    # URL (FULLSEND_WORK_ITEM_URL, read ambiently) by JQL on customfield_10875.
+    JIRA_SERVER_URL: "${JIRA_BASE_URL}"
+    JIRA_EMAIL: "${JIRA_USER_EMAIL}"
+    JIRA_API_TOKEN: "${JIRA_TOKEN}"
+    # Project key for post_script root-cause task creation. The CI dispatch path
+    # exports no project-key host var, so pin this repo's constant (CLAUDE.md
+    # Jira Configuration: Project key TC) as a literal rather than a ${ref} that
+    # would fail `fullsend run` env-validation on CI.
+    JIRA_PROJECT_KEY: "TC"
     GH_TOKEN: "${GH_TOKEN}"
     FULLSEND_OUTPUT_SCHEMA: "${FULLSEND_DIR}/plugins/sdlc-workflow/schemas/verify-pr-result.schema.json"
     FULLSEND_OUTPUT_FILE: "agent-result.json"
   # Read-only context only — no tokens, and no atlassian/github egress from the
-  # sandbox (network policy enforced in TC-5809). JIRA_ISSUE_ID is required by
-  # the agent prompt; JIRA_BASE_URL is the base for display links only and is
-  # sourced from the canonical JIRA_SERVER_URL host var (no token).
+  # sandbox (network policy enforced in TC-5809). JIRA_BASE_URL is the base for
+  # display links only (no token), sourced from the dispatch-provided host var.
+  # The Jira key and PR URL reach the sandbox via verify-pr-input.json (the
+  # pre_script writes the JQL-derived key as task_id), so no JIRA_ISSUE_ID env
+  # var is needed here.
   sandbox:
-    JIRA_ISSUE_ID: "${JIRA_ISSUE_ID}"
-    JIRA_BASE_URL: "${JIRA_SERVER_URL}"
+    JIRA_BASE_URL: "${JIRA_BASE_URL}"
 
 timeout_minutes: 30

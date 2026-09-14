@@ -667,6 +667,35 @@ def test_pre_verify_sh_prefetches_related_issues():
     assert "--idempotency-dir" in script, "transform must receive --idempotency-dir"
 
 
+# --- PR-URL-derived Jira gating (pre-verify-pr.sh) ---
+
+def test_pre_verify_sh_derives_and_gates_from_pr_url():
+    """Regression guard (TC-6190): pre-verify-pr.sh takes the PR URL as its entry
+    point, derives the Jira key by JQL on the Git Pull Request field, and maps a
+    gate failure to the ADR-0072 skip signal — it never requires JIRA_ISSUE_ID.
+    """
+    # Given the current pre-verify-pr.sh source
+    with open(pre_verify_sh) as f:
+        script = f.read()
+
+    non_comment = [
+        line for line in script.splitlines() if not line.lstrip().startswith("#")
+    ]
+    body = "\n".join(non_comment)
+
+    # The triggering PR URL is the required input (from fullsend harness-run)
+    assert "FULLSEND_WORK_ITEM_URL" in body, "PR URL entry point must be required"
+    # It never validates or requires a supplied JIRA_ISSUE_ID as an input
+    assert "JIRA_ISSUE_ID:?" not in body, "JIRA_ISSUE_ID must not be a required input"
+    # The key is derived by JQL on the custom field then gated in Python
+    assert "build-pr-jql" in body, "must build the PR JQL"
+    assert "search_jql" in body, "must search Jira by JQL"
+    assert "resolve-gated-issue" in body, "must resolve + gate the issue"
+    # A gate failure (exit 3) is mapped to the ADR-0072 skip signal
+    assert "-eq 3" in body and "request_skip" in body, \
+        "gate failure (exit 3) must trigger request_skip"
+
+
 # --- paginated fetch aggregation (pre-verify-pr.sh) ---
 
 def test_paginated_pages_aggregate_into_flat_array():
@@ -904,6 +933,181 @@ def test_pre_verify_sh_derives_commit_sha_from_head_ref_oid():
         assert "headRefOid" in line, f"COMMIT_SHA not derived from headRefOid: {line!r}"
         assert ".commits[-1]" not in line, \
             f"COMMIT_SHA reintroduced the bounded commits read: {line!r}"
+
+
+# --- build_pr_jql (PR-URL → JQL) ---
+
+PR_URL = "https://github.com/org/repo/pull/42"
+
+
+def test_build_pr_jql_targets_custom_field_and_url():
+    """The JQL queries the Git Pull Request custom field by id for the PR URL."""
+    # Given a PR URL, when the JQL is built
+    jql = pre_verify_pr.build_pr_jql(PR_URL)
+
+    # Then it matches the custom field (by id) against the URL with ~ recall
+    assert jql == 'cf[10875] ~ "https://github.com/org/repo/pull/42"', f"Got: {jql}"
+
+
+def test_build_pr_jql_escapes_quotes():
+    """A URL containing a double quote cannot break out of the JQL string literal."""
+    # Given a hostile URL embedding a quote
+    jql = pre_verify_pr.build_pr_jql('https://x/"; DROP')
+
+    # Then the quote is backslash-escaped inside the quoted literal
+    assert jql == 'cf[10875] ~ "https://x/\\"; DROP"', f"Got: {jql}"
+
+
+# --- resolve_gated_issue (JQL result → gated key / skip reason) ---
+
+def _search_issue(key, pr_url, status="Review", labels=("ai-generated-jira",)):
+    """A single Jira search-result issue with the given gate-relevant fields."""
+    return {
+        "key": key,
+        "fields": {
+            "status": {"name": status},
+            "labels": list(labels),
+            "customfield_10875": pr_url,
+        },
+    }
+
+
+def test_resolve_gated_issue_all_gates_pass():
+    """One issue matching the PR URL, in Review, with the label → resolves the key."""
+    # Given a search result with exactly one qualifying issue
+    result = {"issues": [_search_issue("TC-6190", PR_URL)]}
+
+    # When resolving against the PR URL
+    key, reason = pre_verify_pr.resolve_gated_issue(result, PR_URL)
+
+    # Then the key resolves and there is no skip reason
+    assert key == "TC-6190", f"Got: {key}"
+    assert reason is None, f"Got: {reason}"
+
+
+def test_resolve_gated_issue_no_pr_match_skips():
+    """No issue's custom field exactly equals the PR URL → skip (PR-match gate)."""
+    # Given a search that recalled a different PR (broad ~ over-match)
+    result = {"issues": [_search_issue("TC-1", "https://github.com/org/repo/pull/99")]}
+
+    # When resolving against the target PR URL
+    key, reason = pre_verify_pr.resolve_gated_issue(result, PR_URL)
+
+    # Then no key resolves and the reason names the missing link
+    assert key is None, f"Got: {key}"
+    assert "no Jira issue links" in reason, f"Got: {reason}"
+
+
+def test_resolve_gated_issue_multiple_matches_skips():
+    """More than one issue links the same PR URL → skip (ambiguous, no guess)."""
+    # Given two issues both exactly linking the PR URL
+    result = {"issues": [_search_issue("TC-1", PR_URL), _search_issue("TC-2", PR_URL)]}
+
+    # When resolving
+    key, reason = pre_verify_pr.resolve_gated_issue(result, PR_URL)
+
+    # Then it refuses to guess and names both keys
+    assert key is None, f"Got: {key}"
+    assert "multiple Jira issues" in reason, f"Got: {reason}"
+    assert "TC-1" in reason and "TC-2" in reason, f"Got: {reason}"
+
+
+def test_resolve_gated_issue_wrong_status_skips():
+    """The matched issue is not in Review → skip (status gate)."""
+    # Given the sole match in the wrong status
+    result = {"issues": [_search_issue("TC-6190", PR_URL, status="In Progress")]}
+
+    # When resolving
+    key, reason = pre_verify_pr.resolve_gated_issue(result, PR_URL)
+
+    # Then it skips and the reason names the status gate
+    assert key is None, f"Got: {key}"
+    assert "In Progress" in reason and "Review" in reason, f"Got: {reason}"
+
+
+def test_resolve_gated_issue_missing_label_skips():
+    """The matched issue lacks the ai-generated-jira label → skip (label gate)."""
+    # Given the sole match in Review but without the gating label
+    result = {"issues": [_search_issue("TC-6190", PR_URL, labels=("other",))]}
+
+    # When resolving
+    key, reason = pre_verify_pr.resolve_gated_issue(result, PR_URL)
+
+    # Then it skips and the reason names the missing label
+    assert key is None, f"Got: {key}"
+    assert "ai-generated-jira" in reason, f"Got: {reason}"
+
+
+def test_resolve_gated_issue_matches_adf_custom_field():
+    """The PR-URL match works when the custom field is an ADF smart link, not a
+    plain string — extract_pr_url normalizes both before the equality check."""
+    # Given an issue whose Git Pull Request field is an ADF inlineCard
+    issue = {
+        "key": "TC-6190",
+        "fields": {
+            "status": {"name": "Review"},
+            "labels": ["ai-generated-jira"],
+            "customfield_10875": {
+                "type": "doc", "version": 1,
+                "content": [{"type": "paragraph", "content": [
+                    {"type": "inlineCard", "attrs": {"url": PR_URL}}
+                ]}],
+            },
+        },
+    }
+
+    # When resolving against the plain PR URL
+    key, reason = pre_verify_pr.resolve_gated_issue({"issues": [issue]}, PR_URL)
+
+    # Then the ADF-stored link still matches and the key resolves
+    assert key == "TC-6190", f"Got: {key} (reason: {reason})"
+    assert reason is None
+
+
+# --- CLI: build-pr-jql / resolve-gated-issue exit-code contract ---
+
+def _run_cli(args, stdin=None):
+    return subprocess.run(
+        [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"), *args],
+        input=stdin, capture_output=True, text=True,
+    )
+
+
+def test_cli_build_pr_jql():
+    """build-pr-jql takes the URL as an argument and reads no stdin."""
+    # When invoked with only the PR URL
+    result = _run_cli(["build-pr-jql", PR_URL])
+
+    # Then it prints the JQL and exits 0
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    assert result.stdout.strip() == 'cf[10875] ~ "%s"' % PR_URL
+
+
+def test_cli_resolve_gated_issue_success_exit_0():
+    """On a passing gate the CLI prints the key and exits 0."""
+    # Given a qualifying search result on stdin
+    payload = json.dumps({"issues": [_search_issue("TC-6190", PR_URL)]})
+
+    # When resolving via the CLI
+    result = _run_cli(["resolve-gated-issue", PR_URL], stdin=payload)
+
+    # Then it exits 0 with the resolved key
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    assert result.stdout.strip() == "TC-6190"
+
+
+def test_cli_resolve_gated_issue_gate_fail_exit_3():
+    """On a failing gate the CLI exits 3 (the shell's ADR-0072 skip signal)."""
+    # Given a search result whose sole match is in the wrong status
+    payload = json.dumps(
+        {"issues": [_search_issue("TC-6190", PR_URL, status="Closed")]})
+
+    # When resolving via the CLI
+    result = _run_cli(["resolve-gated-issue", PR_URL], stdin=payload)
+
+    # Then it exits 3 and prints the skip reason
+    assert result.returncode == 3, f"Exit {result.returncode}: {result.stdout}"
+    assert "Closed" in result.stdout and "Review" in result.stdout
 
 
 # --- runner ---
