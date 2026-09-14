@@ -1,14 +1,135 @@
+# fullsend verify-pr — CI-gated PR review dispatch (per-repo installation).
+#
+# Replaces the placeholder. Runs the verify-pr harness agent against a PR after
+# its OTHER CI checks reach a terminal state, so the review can treat CI results
+# as input data — never as a gate. verify-pr runs whether CI passed or failed
+# (TC-6180 Reqs 4, 6, 7).
+#
+# Why a dedicated pull_request workflow (not just the fullsend shim):
+#   fullsend has no CI-completion event (no check_suite / check_run /
+#   workflow_run TransitionKind), and GitHub's recursion guard suppresses
+#   check_suite / check_run for Actions-created suites. An inline `pull_request`
+#   wait is the only reliable "run after CI" trigger (TC-6180 NFRs).
+#
+# Why this coexists with .github/workflows/fullsend.yaml (the vendor shim):
+#   verify-pr is registered in .fullsend/config.base.yaml (the vendor preset
+#   base layer), NOT in .fullsend/config.yaml. The shim's harness-dispatch job
+#   greps ONLY config.yaml for agents, so it never dispatches verify-pr — no
+#   premature or duplicate run on pull_request_target. `fullsend dispatch` /
+#   `fullsend run` still see verify-pr because LoadConfig merges config.yaml
+#   over config.base.yaml (ADR 0069; reusable-dispatch.yml harness-dispatch).
+#
+# How Step 2 runs the agent with mint OIDC:
+#   The vendor reusable-dispatch workflow exposes a pre-computed `matrix` input
+#   for "custom pollers ... to skip the dispatch step and directly invoke
+#   harness agents." This workflow IS such a poller: its `on:` types are the
+#   CI-side equivalent of the harness CEL trigger (change_proposal +
+#   synchronized/opened/reopened; see .fullsend/harness/verify-pr.yaml,
+#   TC-6189). We build the single-entry matrix (agent verify-pr, role review)
+#   from the PR event and hand it to reusable-dispatch, whose harness-run job
+#   mints the review-role GitHub App token via OIDC and runs `fullsend run`.
+#   Step 1's wait uses the default GITHUB_TOKEN only — the two token paths are
+#   distinct.
+#
+# Per CONVENTIONS.md §Code Style: YAML 2-space indentation.
 name: fullsend verify-pr
 
 on:
-  workflow_dispatch:
-    inputs:
-      jira_issue_id:
-        description: 'Jira issue ID (e.g., TC-4792)'
-        required: true
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+# One in-flight verify-pr per PR; a new push cancels the superseded run (both
+# the CI wait and any dispatch already handed off).
+concurrency:
+  group: verify-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
 
 jobs:
-  placeholder:
+  wait-for-checks:
+    name: wait-for-checks
     runs-on: ubuntu-latest
+    # Bounds the total wait: a check that never terminates lets this job hit
+    # timeout-minutes and fail, which skips the dispatch job below (no-checks /
+    # hung-check timeout behavior = SKIP). A normal terminal CI outcome — or a
+    # PR with no other checks at all — lets the wait succeed and Step 2 proceed.
+    timeout-minutes: 45
+    permissions:
+      checks: read
+      statuses: read
+      pull-requests: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
     steps:
-      - run: echo "Use --ref run-in-fullsend to run the real workflow"
+      # Step 1 — wait for every OTHER check on the PR head to reach a terminal
+      # state. Self-excluded via running-workflow-name so it never waits on
+      # itself. allowed-conclusions lists ALL terminal conclusions, so a failing
+      # or cancelled check still releases the wait (CI result is data, not a
+      # gate). fail-on-no-checks:false → a PR with no other checks proceeds.
+      - name: Wait for other PR checks
+        uses: lewagon/wait-on-check-action@369769072fe522a3a8a85c03c96af1e5242a1994 # v1.9.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          running-workflow-name: wait-for-checks
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 30
+          checks-discovery-timeout: 60
+          fail-on-no-checks: false
+          allowed-conclusions: success,failure,neutral,cancelled,skipped,timed_out,action_required,stale,startup_failure
+
+      # Step 2a — build the single-entry harness matrix for the custom-poller
+      # path. Format matches `fullsend dispatch --output-driver gha-matrix`
+      # (internal/harnessdispatch/ref.go ExecutionRef). The full PR event is
+      # embedded as the event_payload string that harness-run consumes.
+      - name: Build verify-pr dispatch matrix
+        id: matrix
+        env:
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          matrix=$(jq -cn \
+            --arg repo "${REPO}" \
+            --arg num "${PR_NUMBER}" \
+            --argjson event "$(cat "${GITHUB_EVENT_PATH}")" \
+            '{include:[{
+               agent: "verify-pr",
+               role: "review",
+               source_repo: $repo,
+               event_type: "pull_request",
+               event_payload: ($event | tojson),
+               status_repo: $repo,
+               status_number: $num
+             }]}')
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+
+  # Step 2b — run verify-pr via the vendor reusable workflow. Passing the
+  # pre-computed matrix skips its route + harness-dispatch jobs; harness-run
+  # mints the review-role GitHub App token (mint OIDC) and runs the agent.
+  # Default `needs` gating means this runs only when the wait job succeeds.
+  verify-pr:
+    needs: wait-for-checks
+    permissions:
+      actions: write
+      contents: read
+      id-token: write
+      issues: write
+      packages: read
+      pull-requests: write
+    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@v0
+    with:
+      matrix: ${{ needs.wait-for-checks.outputs.matrix }}
+      install_mode: per-repo
+      mint_url: ${{ vars.FULLSEND_MINT_URL }}
+      gcp_region: ${{ vars.FULLSEND_GCP_REGION }}
+      project_number: ${{ vars.FULLSEND_PROJECT_NUMBER }}
+      jira_base_url: ${{ vars.JIRA_BASE_URL }}
+      runner_image: ubuntu-24.04
+    secrets:
+      FULLSEND_GCP_WIF_PROVIDER: ${{ secrets.FULLSEND_GCP_WIF_PROVIDER }}
+      FULLSEND_GCP_PROJECT_ID: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
+      OTEL_EXPORTER_OTLP_TRACES_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_TRACES_HEADERS }}
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      JIRA_TOKEN: ${{ secrets.JIRA_TOKEN }}
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_USER_EMAIL }}

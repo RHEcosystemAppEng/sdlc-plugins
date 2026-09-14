@@ -23,7 +23,18 @@
 # task validates the harness syntactically only; full fullsend resolution is
 # deferred to TC-5810/TC-5811.
 
-role: verify-pr
+role: review
+
+# CEL trigger (ADR 0061). Evaluated by `fullsend dispatch` over the normalized
+# event (internal/normevent); root var `event`, must return bool. Fires when a
+# PR change_proposal is opened, updated, or reopened. This is the dispatch-path
+# equivalent of the CI poller's `on: pull_request` types in
+# .github/workflows/fullsend-verify-pr.yml — kept in sync with it. Kinds stay
+# within fullsend's TransitionKind vocabulary (no CI-completion kind exists).
+trigger: |
+  event.entity.kind == "change_proposal" &&
+  event.transition.kind in ["synchronized", "opened", "reopened"]
+
 agent: plugins/sdlc-workflow/agents/verify-pr.md
 model: opus
 # Reasoning effort pinned to the fleet's implicit default: Claude Code runs at
