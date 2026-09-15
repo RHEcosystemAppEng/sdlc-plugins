@@ -321,6 +321,50 @@ The run's verdict on PR #294 was `FAIL` (verify-pr's assessment of that PR at
 all pass. This is one of several real production runs of the pinned agent during
 Epic D — see the sticky `verify-pr` reports on PRs #292, #293, and #294.
 
+### E2E acceptance via CI dispatch (TC-6192)
+
+TC-5815 above proved the *agent*; TC-6192 proves the *CI-gated dispatch path* end
+to end: a qualifying PR triggers `.github/workflows/fullsend-verify-pr.yml`, the
+`wait-for-checks` job waits for the PR's other checks to reach a terminal state,
+and the `verify-pr` reusable-dispatch job then mints the review-role App token via
+OIDC and posts the report — whether CI passed or failed (TC-6180 Reqs 4, 6, 7).
+
+**Vehicle** — a throwaway PR **#300** (`tc-6192-e2e-acceptance` →
+`verify-pr-fullsend`, head branch on the **upstream** repo so `pull_request`
+secrets + OIDC are available — a fork head would get neither), qualified against
+Jira task **TC-6254** (status `Review`, label `ai-generated-jira`, Git PR field =
+PR #300 URL). The interim personal-token fallback is in force, so the Jira report
+comment is authored by **Marco Rizzi** (it would be the Service Account under the
+SA token — TC-6191, on hold).
+
+**Results — all four acceptance criteria proven:**
+
+| Acceptance criterion | Result |
+|---|---|
+| Qualifying PR → CI finishes → verify-pr dispatches | ✅ `wait-for-checks` released after `python-tests` reached terminal, then `verify-pr` ran |
+| Report posts to the PR **and** Jira | ✅ sticky report on PR #300 + comment on Jira TC-6254, every run |
+| Runs with **CI passing** | ✅ `python-tests` **34990552632 = success** → verify-pr **34990553318** posted report for commit `3271577` (CI Status PASS, Overall **WARN**) |
+| Runs with **CI failing** | ✅ `python-tests` **34991800394 = failure** (all 4 matrix jobs, intentional `assert False`) → `wait-for-checks` still released → verify-pr **34991800865** posted report for commit `64b818c` (CI Status **FAIL**, Overall **FAIL**); CI-failure sub-task **TC-6255** auto-created |
+| No duplicate reports on re-run of the same head | ✅ re-ran verify-pr **34991800865** on the **same** head `64b818c` (completed/success): PR #300 stayed at exactly **2** report comments (`3271577`, `64b818c` — the second edited in place, not re-posted), Jira TC-6254 stayed at exactly **1** comment (updated in place, both reports appended) |
+
+The **CI-fail** row is the crux: CI result is *data, not a gate*. The
+`allowed-conclusions` on `wait-for-checks` includes `failure`, so a failing
+`python-tests` still releases the wait and verify-pr runs and reports — it simply
+records `CI Status = FAIL` in the report. Idempotency holds independently on each
+surface: the PR uses one comment per distinct commit SHA (marker
+`<!-- sdlc-workflow:verify-pr report commit:<sha7> -->`); Jira uses a single
+comment updated in place per task.
+
+**DENIED endpoints — expected, none added.** As with TC-5815, the sandbox's
+only egress is Vertex; the OCSF log's DENIED `github.com` / `raw.githubusercontent.com`
+entries are the split-trust policy **working** (prefetch on the runner, writes on
+the runner via the post-script), not failures — no endpoint was added to pass.
+
+The vehicle is disposable: PR #300, branch `tc-6192-e2e-acceptance`, test issues
+TC-6254/TC-6255, and the scaffolding files (`docs/e2e/tc-6192-vehicle.md`,
+`plugins/sdlc-workflow/scripts/test_tc6192_ci_fail.py`) are removed after
+acceptance is recorded.
+
 ## Known issues
 
 - **fullsend deletes the target repo directory** after each run — always pass a
