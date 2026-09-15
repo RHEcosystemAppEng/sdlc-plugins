@@ -133,12 +133,15 @@ jobs:
       gcp_region: ${{ vars.FULLSEND_GCP_REGION }}
       project_number: ${{ vars.FULLSEND_PROJECT_NUMBER }}
       jira_base_url: ${{ vars.JIRA_BASE_URL }}
-      # Pin the fullsend CLI to a released tag. The vendor default is
-      # `job.workflow_sha` (whatever reusable-dispatch.yml@v0 currently resolves
-      # to — 0.43.0 at time of writing), which floats; this repo's harness is
-      # validated against v0.37.0 (see fullsend local-run setup memory). Tag
-      # format matches the vendor's git tags (v-prefixed).
-      fullsend_version: "v0.37.0"
+      # Pin the fullsend CLI to a released tag (vendor default `job.workflow_sha`
+      # floats). Bumped v0.37.0 -> v0.43.0: v0.37.0's bundled OpenShell (0.0.83)
+      # never reached sandbox readiness (`not ready after 2m0s` x3 -> `Failed to
+      # create sandbox`), while fullsend's own dispatch jobs — same composite
+      # action `./.defaults/`, same ubuntu-24.04 runner, differing ONLY in CLI
+      # version (they float to latest) — create the sandbox in ~49s. v0.43.0 is
+      # the current latest release and carries the newer OpenShell. Tag format
+      # matches the vendor's git tags (v-prefixed).
+      fullsend_version: "v0.43.0"
       runner_image: ubuntu-24.04
     # The reusable workflow declares Jira credentials under vendor names
     # (JIRA_TOKEN / JIRA_USER_EMAIL); this repo stores them under the canonical
