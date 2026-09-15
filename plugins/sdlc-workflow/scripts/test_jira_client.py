@@ -23,6 +23,7 @@ sanitize_adf = jira_client.sanitize_adf
 get_versions = jira_client.get_versions
 create_issue = jira_client.create_issue
 search_jql = jira_client.search_jql
+search_jql_all = jira_client.search_jql_all
 
 
 def test_code_block_with_blank_lines():
@@ -450,6 +451,89 @@ def test_search_jql_posts_fields_as_array():
         jira_client.make_request = original_make_request
 
     print("✓ search_jql posts fields as array test passed")
+
+
+def test_search_jql_all_collects_issues_beyond_first_page():
+    """search_jql_all follows nextPageToken so an exact match on a later page is
+    not dropped (the TC-6233 false ADR-0072 skip). Two pages, 60 issues total;
+    the exact PR match sits on page 2 (index 55, beyond the first 50).
+    """
+    page1 = {
+        "issues": [{"key": f"TC-{i}"} for i in range(50)],
+        "nextPageToken": "PAGE2",
+    }
+    # Page 2 carries the exact match beyond the first 50 recall results; the last
+    # page omits nextPageToken, which is the loop's stop condition.
+    page2 = {"issues": [{"key": f"TC-{i}"} for i in range(50, 60)]}
+    pages = [page1, page2]
+    calls = []
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        calls.append({"method": method, "endpoint": endpoint, "data": data})
+        return pages[len(calls) - 1]
+
+    jira_client.make_request = fake_make_request
+    try:
+        result = search_jql_all('cf[10875] ~ "https://example/pull/1"')
+        # All 60 issues aggregated, including the beyond-page-1 exact match
+        assert len(result["issues"]) == 60, len(result["issues"])
+        assert {"key": "TC-55"} in result["issues"]
+        assert result["isLast"] is True
+        assert "nextPageToken" not in result
+        # Exactly two POSTs; page 1 omits the cursor, page 2 sends PAGE2
+        assert len(calls) == 2, calls
+        assert calls[0]["endpoint"] == "search/jql"
+        assert "nextPageToken" not in calls[0]["data"]
+        assert calls[1]["data"]["nextPageToken"] == "PAGE2"
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ search_jql_all collects issues beyond first page test passed")
+
+
+def test_search_jql_all_single_page_stops_without_token():
+    """A response without nextPageToken ends pagination after one request."""
+    calls = []
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        calls.append(endpoint)
+        return {"issues": [{"key": "TC-1"}], "isLast": True}
+
+    jira_client.make_request = fake_make_request
+    try:
+        result = search_jql_all('cf[10875] ~ "x"')
+        assert result["issues"] == [{"key": "TC-1"}]
+        assert len(calls) == 1, calls
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ search_jql_all single page test passed")
+
+
+def test_search_jql_all_fails_loud_on_runaway_pagination():
+    """A server that never stops returning a cursor must fail loud (exit 1), not
+    loop forever or silently truncate (CONVENTIONS.md §Error Handling).
+    """
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        return {"issues": [{"key": "TC-x"}], "nextPageToken": "ALWAYS"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        raised = False
+        try:
+            search_jql_all('cf[10875] ~ "x"', max_pages=3)
+        except SystemExit as e:
+            raised = True
+            assert e.code == 1, e.code
+        assert raised, "expected SystemExit on runaway pagination"
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ search_jql_all runaway-pagination guard test passed")
 
 
 def test_create_issue_priority_field_mapping():

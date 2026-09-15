@@ -82,9 +82,12 @@ echo "PR: ${PR_REPO}#${PR_NUM} (${PR_URL})"
 # 3. Resolve + gate the Jira key by JQL on the Git Pull Request custom field.
 #    The JQL `~` recall is broad; resolve-gated-issue re-confirms the exact PR
 #    URL and enforces status=Review + the ai-generated-jira label in Python.
+#    `--all` follows nextPageToken across every page so an exact match beyond the
+#    first 50 recall results is never dropped (which would emit a false ADR-0072
+#    skip); the Python exact-match verification remains the source of truth.
 PR_JQL=$(python3 "${SCRIPT_DIR}/pre_verify_pr.py" build-pr-jql "${PR_URL}")
 SEARCH_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" search_jql \
-  --jql "${PR_JQL}" --fields "status,labels,customfield_10875" \
+  --jql "${PR_JQL}" --fields "status,labels,customfield_10875" --all \
   2>"/tmp/fullsend-pre-jira-stderr.txt") || {
   JIRA_STDERR=$(cat /tmp/fullsend-pre-jira-stderr.txt 2>/dev/null || echo "")
   if echo "${JIRA_STDERR}" | grep -qi "401\|unauthorized"; then

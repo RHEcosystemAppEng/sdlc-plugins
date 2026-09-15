@@ -1064,6 +1064,49 @@ def test_resolve_gated_issue_matches_adf_custom_field():
     assert reason is None
 
 
+def test_resolve_gated_issue_finds_exact_match_beyond_first_page():
+    """TC-6233: a >50-result broad ~ recall where the exact PR match is not on the
+    first page still resolves — given the full page-aggregated result that
+    jira-client's `search_jql --all` produces (no false ADR-0072 skip).
+    """
+    # Given 60 recalled issues (page 1 = 50, page 2 = 10, as search_jql_all would
+    # aggregate) where only the one at index 55 (beyond the first page) exactly
+    # links the target PR; the rest are broad ~ over-matches on other PRs.
+    # A distinct repo path so no generated recall URL can collide with PR_URL.
+    other = "https://github.com/org/other-repo/pull/{}"
+    issues = [_search_issue(f"TC-{i}", other.format(i)) for i in range(60)]
+    issues[55] = _search_issue("TC-6190", PR_URL)
+    result = {"issues": issues, "isLast": True}
+
+    # When resolving against the target PR URL
+    key, reason = pre_verify_pr.resolve_gated_issue(result, PR_URL)
+
+    # Then the beyond-first-page issue resolves with no skip
+    assert key == "TC-6190", f"Got: {key} (reason: {reason})"
+    assert reason is None
+
+
+def test_pre_verify_sh_paginates_jql_search_with_all():
+    """Regression guard (TC-6233): pre-verify-pr.sh runs the gating JQL search
+    with --all so a match beyond the first 50 recall results is never dropped.
+    """
+    # Given the current pre-verify-pr.sh source
+    with open(pre_verify_sh) as f:
+        script = f.read()
+
+    # Then the search_jql invocation passes --all on a non-comment line
+    search_lines = [
+        line for line in script.splitlines()
+        if "search_jql" in line and not line.lstrip().startswith("#")
+    ]
+    assert search_lines, "no search_jql invocation found"
+    # The flag may sit on a continuation line of the same command; assert it is
+    # present in the search_jql command block (the --fields line carries it).
+    assert any("--all" in line for line in script.splitlines()
+               if "--fields" in line and not line.lstrip().startswith("#")), \
+        "gating JQL search must use --all to paginate"
+
+
 # --- CLI: build-pr-jql / resolve-gated-issue exit-code contract ---
 
 def _run_cli(args, stdin=None):

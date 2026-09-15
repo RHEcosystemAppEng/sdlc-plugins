@@ -619,6 +619,58 @@ def search_jql(
     return make_request('POST', 'search/jql', body)
 
 
+def search_jql_all(
+    jql: str,
+    fields: Optional[str] = None,
+    page_size: int = 50,
+    max_pages: int = 200,
+) -> Dict[str, Any]:
+    """Search JIRA issues using JQL, following ``nextPageToken`` across all pages.
+
+    ``search_jql`` returns a single page (at most 50 issues) and an opaque
+    ``nextPageToken`` when more remain, so a single-page call silently drops any
+    match beyond the first page. A broad ``~`` recall on the Git Pull Request
+    custom field can exceed one page, which would make ``resolve_gated_issue``
+    miss an exact PR match and emit a false ADR-0072 skip. This helper follows
+    the cursor to the last page and returns one response whose ``issues`` array
+    holds every matched issue, so an exact-match verifier sees the full set.
+
+    Args:
+        jql: JQL query string
+        fields: Comma-separated field names (default matches ``search_jql``)
+        page_size: Results per page (the endpoint caps this at 50 server-side)
+        max_pages: Safety bound on pages fetched, to avoid an unbounded loop if
+            the server keeps returning a cursor
+
+    Returns:
+        A search-response-shaped dict with the aggregated ``issues`` array and
+        ``isLast`` true (``nextPageToken`` omitted).
+
+    Raises:
+        SystemExit: propagated from ``make_request`` on any Jira/HTTP error, or
+            raised here (exit 1) if ``max_pages`` is exhausted while the server
+            still offers a cursor — failing loud rather than returning a
+            possibly-truncated result set (CONVENTIONS.md §Error Handling).
+    """
+    all_issues: List[Dict[str, Any]] = []
+    token: Optional[str] = None
+    for _ in range(max_pages):
+        page = search_jql(
+            jql, fields=fields, max_results=page_size, next_page_token=token
+        )
+        all_issues.extend(page.get("issues", []))
+        token = page.get("nextPageToken")
+        if not token:
+            return {"issues": all_issues, "isLast": True}
+
+    print(
+        f"❌ search_jql_all: exceeded max_pages={max_pages} while paginating; "
+        "refusing to return a possibly-truncated result set",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+
 def create_link(
     inward_issue: str,
     outward_issue: str,
@@ -765,8 +817,10 @@ def main(argv=None):
     search_parser = subparsers.add_parser('search_jql', help='Search issues with JQL')
     search_parser.add_argument('--jql', required=True, help='JQL query string')
     search_parser.add_argument('--fields', help='Comma-separated fields')
-    search_parser.add_argument('--max-results', type=int, default=50, help='Max results (default: 50)')
-    search_parser.add_argument('--next-page-token', help='Opaque cursor from a prior response nextPageToken (pagination)')
+    search_parser.add_argument('--max-results', type=int, default=50, help='Max results per page (default: 50, endpoint cap)')
+    search_parser.add_argument('--next-page-token', help='Opaque cursor from a prior response nextPageToken (single-page pagination)')
+    search_parser.add_argument('--all', action='store_true',
+                               help='Follow nextPageToken and return every matching issue (ignores --next-page-token)')
 
     # create_link
     link_parser = subparsers.add_parser('create_link', help='Create issue link')
@@ -838,7 +892,10 @@ def main(argv=None):
         result = get_transitions(args.issue_key)
 
     elif args.command == 'search_jql':
-        result = search_jql(args.jql, args.fields, args.max_results, args.next_page_token)
+        if args.all:
+            result = search_jql_all(args.jql, args.fields, args.max_results)
+        else:
+            result = search_jql(args.jql, args.fields, args.max_results, args.next_page_token)
 
     elif args.command == 'create_link':
         create_link(args.inward, args.outward, args.link_type)
