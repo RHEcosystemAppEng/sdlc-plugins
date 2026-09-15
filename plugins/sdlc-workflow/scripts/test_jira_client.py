@@ -22,6 +22,8 @@ markdown_to_adf = jira_client.markdown_to_adf
 sanitize_adf = jira_client.sanitize_adf
 get_versions = jira_client.get_versions
 create_issue = jira_client.create_issue
+search_jql = jira_client.search_jql
+search_jql_all = jira_client.search_jql_all
 
 
 def test_code_block_with_blank_lines():
@@ -412,6 +414,128 @@ def test_get_versions_unreleased_only_filters_correctly():
     print("✓ get_versions unreleased_only filter test passed")
 
 
+def test_search_jql_posts_fields_as_array():
+    """search_jql must POST to search/jql with fields as a JSON array.
+
+    Regression guard: the enhanced endpoint replaced /rest/api/3/search (410
+    Gone). Passing fields as a URL-encoded comma string (GET) made the endpoint
+    return issues without the requested custom fields; POST with a fields array
+    avoids that. Also asserts the legacy startAt offset is gone.
+    """
+    captured = {}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        captured["method"] = method
+        captured["endpoint"] = endpoint
+        captured["data"] = data
+        return {"issues": [], "isLast": True}
+
+    jira_client.make_request = fake_make_request
+    try:
+        search_jql(
+            'cf[10875] ~ "https://example/pull/1"',
+            fields="status,labels,customfield_10875",
+            max_results=50,
+        )
+        assert captured["method"] == "POST", captured["method"]
+        assert captured["endpoint"] == "search/jql", captured["endpoint"]
+        assert captured["data"]["fields"] == [
+            "status", "labels", "customfield_10875",
+        ], captured["data"]["fields"]
+        assert captured["data"]["jql"] == 'cf[10875] ~ "https://example/pull/1"'
+        assert captured["data"]["maxResults"] == 50
+        assert "startAt" not in captured["data"]
+        assert "nextPageToken" not in captured["data"]  # omitted on first page
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ search_jql posts fields as array test passed")
+
+
+def test_search_jql_all_collects_issues_beyond_first_page():
+    """search_jql_all follows nextPageToken so an exact match on a later page is
+    not dropped (the TC-6233 false ADR-0072 skip). Two pages, 60 issues total;
+    the exact PR match sits on page 2 (index 55, beyond the first 50).
+    """
+    page1 = {
+        "issues": [{"key": f"TC-{i}"} for i in range(50)],
+        "nextPageToken": "PAGE2",
+    }
+    # Page 2 carries the exact match beyond the first 50 recall results; the last
+    # page omits nextPageToken, which is the loop's stop condition.
+    page2 = {"issues": [{"key": f"TC-{i}"} for i in range(50, 60)]}
+    pages = [page1, page2]
+    calls = []
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        calls.append({"method": method, "endpoint": endpoint, "data": data})
+        return pages[len(calls) - 1]
+
+    jira_client.make_request = fake_make_request
+    try:
+        result = search_jql_all('cf[10875] ~ "https://example/pull/1"')
+        # All 60 issues aggregated, including the beyond-page-1 exact match
+        assert len(result["issues"]) == 60, len(result["issues"])
+        assert {"key": "TC-55"} in result["issues"]
+        assert result["isLast"] is True
+        assert "nextPageToken" not in result
+        # Exactly two POSTs; page 1 omits the cursor, page 2 sends PAGE2
+        assert len(calls) == 2, calls
+        assert calls[0]["endpoint"] == "search/jql"
+        assert "nextPageToken" not in calls[0]["data"]
+        assert calls[1]["data"]["nextPageToken"] == "PAGE2"
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ search_jql_all collects issues beyond first page test passed")
+
+
+def test_search_jql_all_single_page_stops_without_token():
+    """A response without nextPageToken ends pagination after one request."""
+    calls = []
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        calls.append(endpoint)
+        return {"issues": [{"key": "TC-1"}], "isLast": True}
+
+    jira_client.make_request = fake_make_request
+    try:
+        result = search_jql_all('cf[10875] ~ "x"')
+        assert result["issues"] == [{"key": "TC-1"}]
+        assert len(calls) == 1, calls
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ search_jql_all single page test passed")
+
+
+def test_search_jql_all_fails_loud_on_runaway_pagination():
+    """A server that never stops returning a cursor must fail loud (exit 1), not
+    loop forever or silently truncate (CONVENTIONS.md §Error Handling).
+    """
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        return {"issues": [{"key": "TC-x"}], "nextPageToken": "ALWAYS"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        raised = False
+        try:
+            search_jql_all('cf[10875] ~ "x"', max_pages=3)
+        except SystemExit as e:
+            raised = True
+            assert e.code == 1, e.code
+        assert raised, "expected SystemExit on runaway pagination"
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ search_jql_all runaway-pagination guard test passed")
+
+
 def test_create_issue_priority_field_mapping():
     """Verifies that create_issue maps priority parameter to correct Jira field structure."""
     captured = {}
@@ -556,6 +680,36 @@ def test_create_issue_fix_versions_filters_empty_names():
     print("✓ create_issue fix_versions filters empty names test passed")
 
 
+def test_create_issue_fails_fast_on_empty_issue_type():
+    """Verifies create_issue with an empty issue_type fails fast without issuing a request."""
+    called = {"made": False}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        called["made"] = True
+        return {"key": "TEST-1", "id": "1"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        # When creating an issue with an empty issue_type
+        exit_code = None
+        try:
+            create_issue("TC", "Test", "desc", "")
+            raised = False
+        except SystemExit as e:
+            raised = True
+            exit_code = e.code
+
+        # Then it fails fast (SystemExit 1) and issues no HTTP request
+        assert raised, "Expected create_issue to fail fast (SystemExit) on empty issue_type"
+        assert exit_code == 1, f"Expected exit code 1, got {exit_code}"
+        assert not called["made"], "Expected no HTTP request to be issued"
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ create_issue fails fast on empty issue_type test passed")
+
+
 def run_all_tests():
     """Run all tests and report results."""
     tests = [
@@ -578,6 +732,7 @@ def run_all_tests():
         test_create_issue_omits_fix_versions_when_none,
         test_create_issue_all_optional_fields_together,
         test_create_issue_fix_versions_filters_empty_names,
+        test_create_issue_fails_fast_on_empty_issue_type,
     ]
 
     failed = []
