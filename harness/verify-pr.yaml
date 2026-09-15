@@ -26,6 +26,28 @@
 
 role: review
 
+# Least-privilege GitHub token levels per run-stage (fullsend ADR-0073). The
+# review role's token is minted at the named level each stage actually needs,
+# instead of a blanket write token for the whole run:
+#   pre_script  read  — GitHub prefetch is read-only (gh pr view/diff; reviews +
+#                       comments via gh api). No writes.
+#   runtime     read  — the sandbox has NO api.github.com egress and no token at
+#                       all (split-trust I/O), so it never needs write. The
+#                       validation_loop inherits this stage's level.
+#   post_script write — the ONLY writer: posts PR review comments, inline
+#                       replies, and the sticky report/summary
+#                       (execute-actions.py), which needs PullRequests: write.
+# `read` downgrades every `*:write` in the role to read; `write` is the role's
+# full current permission set, so post_script's token is unchanged from today.
+# ${GH_TOKEN} in env.runner keeps expanding to the stage-minted token (ADR-0073
+# sets the correct-level token before env expansion). Declaring this applies
+# least-privilege now AND survives fullsend #6516 flipping the mint default from
+# write to read (post_script keeps requesting write explicitly).
+privilege_levels:
+  pre_script: read
+  runtime: read
+  post_script: write
+
 # CEL trigger (ADR 0061). Evaluated by `fullsend dispatch` over the normalized
 # event (internal/normevent); root var `event`, must return bool. Fires when a
 # PR change_proposal is opened, updated, or reopened. This is the dispatch-path
