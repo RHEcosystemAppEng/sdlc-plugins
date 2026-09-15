@@ -337,7 +337,7 @@ PR #300 URL). The interim personal-token fallback is in force, so the Jira repor
 comment is authored by **Marco Rizzi** (it would be the Service Account under the
 SA token — TC-6191, on hold).
 
-**Results — all four acceptance criteria proven:**
+**Results — all five acceptance criteria proven:**
 
 | Acceptance criterion | Result |
 |---|---|
