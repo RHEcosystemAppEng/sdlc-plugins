@@ -197,7 +197,28 @@ for key in ${RELATED_KEYS}; do
 done
 echo "Idempotency read bundle prefetched to ${REL_DIR}"
 
-# 7. Write pre-fetched data for sandbox consumption (tracker-agnostic format,
+# 7. Re-validate the gate on the FULL issue actually used to build the sandbox
+#    input, immediately before the write. Step 3 gated the lightweight JQL search
+#    response; ISSUE_JSON came from a SECOND fetch (Step 4), so the issue may have
+#    left status Review, lost the ai-generated-jira label, or had its Git Pull
+#    Request field changed since — a TOCTOU gap. Re-run the exact PR-URL + status
+#    + label gate here and map a failure to the same ADR-0072 skip, so a stale
+#    successful gate can never launch a verification on a now-unqualified issue.
+#    Same capture pattern as Step 3: exit 3 → skip, exit != 0 → hard error.
+set +e
+REVAL_OUT=$(printf '%s\n' "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" revalidate-gate "${PR_URL}")
+REVAL_RC=$?
+set -e
+if [[ ${REVAL_RC} -eq 3 ]]; then
+  request_skip "${REVAL_OUT}"
+elif [[ ${REVAL_RC} -ne 0 ]]; then
+  echo "ERROR: failed to re-validate the gate for ${JIRA_ISSUE_ID} before writing sandbox input"
+  echo "${REVAL_OUT}"
+  exit 1
+fi
+echo "Jira issue re-gated on full fetch: ${JIRA_ISSUE_ID} (status=Review, label=ai-generated-jira)"
+
+# 8. Write pre-fetched data for sandbox consumption (tracker-agnostic format,
 #    with the GitHub bundle embedded under `github` and the idempotency
 #    related-issue metadata under `idempotency`).
 printf '%s\n' "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" transform \

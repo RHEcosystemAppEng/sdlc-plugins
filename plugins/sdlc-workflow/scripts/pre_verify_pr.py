@@ -170,6 +170,26 @@ def resolve_gated_issue(search_result, pr_url):
     return key, None
 
 
+def revalidate_gate(issue, pr_url):
+    """Re-apply the gate to the FULL issue actually used to build the input.
+
+    ``resolve_gated_issue`` gates the lightweight JQL *search* response
+    (status/labels/customfield_10875 only). The full issue that populates
+    verify-pr-input.json is then fetched in a SECOND request — between the two,
+    the issue can leave status ``Review``, lose the ``ai-generated-jira`` label,
+    or have its Git Pull Request field changed, so a stale-but-successful gate
+    could hand the sandbox an issue that no longer qualifies (a TOCTOU gap).
+
+    Re-run the exact-URL + status + label gate on the full issue here,
+    immediately before the write. Reuses ``resolve_gated_issue`` (wrapping the
+    single issue as a one-element search result) so the acceptance rule and skip
+    reasons stay defined in exactly one place. Returns ``(key, None)`` when the
+    full issue still exactly links ``pr_url`` AND is in status ``Review`` AND
+    carries the label; ``(None, reason)`` on any failure (ADR-0072 skip).
+    """
+    return resolve_gated_issue({"issues": [issue]}, pr_url)
+
+
 def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
                         diff, stat, reviews, review_comments,
                         issue_comments, commits):
@@ -354,6 +374,9 @@ def main(argv):
     gate = sub.add_parser("resolve-gated-issue")
     gate.add_argument("pr_url")
 
+    reval = sub.add_parser("revalidate-gate")
+    reval.add_argument("pr_url")
+
     t = sub.add_parser("transform")
     t.add_argument("task_id")
     t.add_argument("pr_url")
@@ -394,6 +417,23 @@ def main(argv):
             print(
                 "resolve-gated-issue: search returned {} issue(s): {}".format(
                     len(issues), summary),
+                file=sys.stderr,
+            )
+            print(reason)
+            sys.exit(3)
+        print(key)
+        return
+
+    if args.command == "revalidate-gate":
+        # TOCTOU re-check on the full issue (read from stdin), used just before
+        # the sandbox input is written. Same exit contract as resolve-gated-issue:
+        # 3 → gate failed (shell maps to an ADR-0072 skip), 0 → still qualifies.
+        issue = json.load(sys.stdin)
+        key, reason = revalidate_gate(issue, args.pr_url)
+        if reason is not None:
+            print(
+                "revalidate-gate: full issue no longer satisfies the gate "
+                "before writing sandbox input: {}".format(reason),
                 file=sys.stderr,
             )
             print(reason)

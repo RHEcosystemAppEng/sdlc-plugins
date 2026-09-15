@@ -1153,6 +1153,109 @@ def test_cli_resolve_gated_issue_gate_fail_exit_3():
     assert "Closed" in result.stdout and "Review" in result.stdout
 
 
+# --- revalidate_gate (TOCTOU re-check on the full issue before write) ---
+
+def test_revalidate_gate_passes_when_full_issue_still_qualifies():
+    """The full issue still links the PR, in Review, with the label → key, no skip."""
+    # Given the full issue fetched after resolution still satisfies the gate
+    issue = _search_issue("TC-6190", PR_URL)
+
+    # When re-validating immediately before writing the input
+    key, reason = pre_verify_pr.revalidate_gate(issue, PR_URL)
+
+    # Then it resolves the key with no skip reason
+    assert key == "TC-6190", f"Got: {key}"
+    assert reason is None, f"Got: {reason}"
+
+
+def test_revalidate_gate_skips_when_status_changed_after_search():
+    """Issue left Review between the search gate and the full fetch → skip."""
+    # Given the full issue is no longer in Review (the TOCTOU window)
+    issue = _search_issue("TC-6190", PR_URL, status="Closed")
+
+    # When re-validating the full issue
+    key, reason = pre_verify_pr.revalidate_gate(issue, PR_URL)
+
+    # Then no key resolves and the skip names the status change
+    assert key is None, f"Got: {key}"
+    assert "Closed" in reason and "Review" in reason, f"Got: {reason}"
+
+
+def test_revalidate_gate_skips_when_label_removed_after_search():
+    """Issue lost the ai-generated-jira label after the search → skip."""
+    # Given the full issue no longer carries the gate label
+    issue = _search_issue("TC-6190", PR_URL, labels=())
+
+    # When re-validating the full issue
+    key, reason = pre_verify_pr.revalidate_gate(issue, PR_URL)
+
+    # Then no key resolves and the skip names the missing label
+    assert key is None, f"Got: {key}"
+    assert "ai-generated-jira" in reason, f"Got: {reason}"
+
+
+def test_revalidate_gate_skips_when_pr_field_changed_after_search():
+    """The Git Pull Request field was re-pointed after the search → skip."""
+    # Given the full issue now links a different PR
+    issue = _search_issue("TC-6190", "https://github.com/org/repo/pull/99")
+
+    # When re-validating against the originally-resolved PR URL
+    key, reason = pre_verify_pr.revalidate_gate(issue, PR_URL)
+
+    # Then no key resolves and the skip names the broken PR link
+    assert key is None, f"Got: {key}"
+    assert "no Jira issue links" in reason, f"Got: {reason}"
+
+
+def test_cli_revalidate_gate_success_exit_0():
+    """On a still-qualifying full issue the CLI prints the key and exits 0."""
+    # Given a qualifying full issue on stdin
+    payload = json.dumps(_search_issue("TC-6190", PR_URL))
+
+    # When re-validating via the CLI
+    result = _run_cli(["revalidate-gate", PR_URL], stdin=payload)
+
+    # Then it exits 0 with the resolved key
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    assert result.stdout.strip() == "TC-6190"
+
+
+def test_cli_revalidate_gate_gate_fail_exit_3():
+    """A status change detected at re-validation exits 3 (ADR-0072 skip signal)."""
+    # Given a full issue that has left Review since the search
+    payload = json.dumps(_search_issue("TC-6190", PR_URL, status="Closed"))
+
+    # When re-validating via the CLI
+    result = _run_cli(["revalidate-gate", PR_URL], stdin=payload)
+
+    # Then it exits 3 and prints the skip reason
+    assert result.returncode == 3, f"Exit {result.returncode}: {result.stdout}"
+    assert "Closed" in result.stdout and "Review" in result.stdout
+
+
+def test_pre_verify_sh_revalidates_gate_before_writing_input():
+    """The shell re-gates the full issue via revalidate-gate before the transform."""
+    # Given the pre-verify-pr.sh source
+    with open(pre_verify_sh) as f:
+        script = f.read()
+
+    # Then it invokes revalidate-gate, maps a gate failure to request_skip, and
+    # does so BEFORE writing verify-pr-input.json (the transform step).
+    assert "revalidate-gate" in script, "re-validation step missing"
+    reval_idx = script.index("revalidate-gate")
+    transform_idx = script.index("pre_verify_pr.py\" transform")
+    assert reval_idx < transform_idx, \
+        "revalidate-gate must run before the transform that writes the input"
+    # The re-validation feeds the FULL issue (ISSUE_JSON), not the search result.
+    reval_line = next(
+        ln for ln in script.splitlines() if "revalidate-gate" in ln)
+    assert "ISSUE_JSON" in reval_line, \
+        f"revalidate-gate must re-check the full issue: {reval_line!r}"
+    # A gate failure at re-validation emits the ADR-0072 skip, like Step 3.
+    assert "request_skip \"${REVAL_OUT}\"" in script, \
+        "a failed re-validation must map to request_skip"
+
+
 # --- runner ---
 
 if __name__ == "__main__":
