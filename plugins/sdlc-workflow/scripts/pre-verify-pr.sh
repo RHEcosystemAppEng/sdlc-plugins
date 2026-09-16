@@ -18,8 +18,8 @@
 # 3. If the gate fails (no/ambiguous match, status != Review, label absent):
 #    emits an ADR-0072 skip signal and exits 0 (nothing to verify)
 # 4. Fetches the full Jira issue and prefetches the GitHub tier-1 read bundle
-#    (diff, stat, reviews, comments, commits, head ref + commit SHA) so the
-#    sandbox needs no api.github.com egress
+#    (diff, stat, reviews, comments, commits, CI check-runs, head ref + commit
+#    SHA) so the sandbox needs no api.github.com egress
 # 5. Writes the tracker-agnostic verify-pr-input.json that host_files mounts
 #    into the sandbox
 #
@@ -177,6 +177,18 @@ gh api --paginate --slurp "repos/${PR_REPO}/issues/${PR_NUM}/comments" | jq 'add
 # `gh api --paginate .../pulls/${PR_NUM}/commits` (which returns a different,
 # `sha`-shaped object needing reshaping to match the `oid` contract).
 gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq .commits > "${PRE_OUTPUT_DIR}/commits.json"
+# CI check-run outcomes for the head SHA. correctness.md Check 1 (CI Status) reads
+# these in sandbox mode instead of shelling out to `gh pr checks`/`gh run view`
+# (no gh CLI or egress in the sandbox). The check-runs endpoint returns an OBJECT
+# per page ({total_count, check_runs:[...]}), so unlike the array-returning
+# reviews/comments endpoints the merge flattens `.[].check_runs[]` across pages
+# rather than `add`. The authoritative head SHA is COMMIT_SHA (headRefOid, above),
+# and the wait-for-checks job in fullsend-verify-pr.yml guarantees terminal states
+# before dispatch. Reduced to the fields the verdict needs (name/status/conclusion
+# and details_url for the failure-log link) to keep the bundle small. A PR with no
+# checks yields an empty array — consistent with the reviews/comments empties.
+gh api --paginate --slurp "repos/${PR_REPO}/commits/${COMMIT_SHA}/check-runs" \
+  | jq '[.[].check_runs[] | {name, status, conclusion, details_url}]' > "${PRE_OUTPUT_DIR}/check-runs.json"
 
 echo "GitHub read bundle prefetched to ${PRE_OUTPUT_DIR}"
 

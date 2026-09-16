@@ -51,7 +51,7 @@
     "github": {
       "type": "object",
       "description": "GitHub tier-1 read bundle, prefetched on the trusted runner (where GH_TOKEN lives) so the sandbox needs no api.github.com egress. Every read the verify-pr skill performs against the PR is captured here.",
-      "required": ["pr_repo", "pr_number", "headRefName", "commit_sha", "diff", "stat", "reviews", "review_comments", "issue_comments", "commits"],
+      "required": ["pr_repo", "pr_number", "headRefName", "commit_sha", "diff", "stat", "reviews", "review_comments", "issue_comments", "commits", "check_runs"],
       "additionalProperties": false,
       "properties": {
         "pr_repo": {
@@ -92,6 +92,11 @@
         "commits": {
           "type": "array",
           "description": "PR commits (gh pr view --json commits)"
+        },
+        "check_runs": {
+          "type": "array",
+          "description": "Head-SHA CI check-run outcomes (gh api repos/<repo>/commits/<sha>/check-runs), reduced to name/status/conclusion/details_url. Read by correctness.md Check 1 (CI Status) in sandbox mode; empty when the PR head has no checks.",
+          "items": { "type": "object" }
         }
       }
     },

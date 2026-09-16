@@ -97,6 +97,8 @@ def test_build_github_bundle():
         commit_sha="abc1234", diff="diff --git a b", stat=" 1 file changed",
         reviews=[{"id": 1}], review_comments=[{"id": 2}],
         issue_comments=[{"id": 3}], commits=[{"oid": "abc1234"}],
+        check_runs=[{"name": "pytest", "status": "completed",
+                     "conclusion": "success", "details_url": "https://ci/1"}],
     )
     assert bundle["pr_repo"] == "org/repo"
     assert bundle["pr_number"] == 42  # coerced to int
@@ -108,6 +110,25 @@ def test_build_github_bundle():
     assert bundle["review_comments"] == [{"id": 2}]
     assert bundle["issue_comments"] == [{"id": 3}]
     assert bundle["commits"] == [{"oid": "abc1234"}]
+    assert bundle["check_runs"] == [{"name": "pytest", "status": "completed",
+                                     "conclusion": "success",
+                                     "details_url": "https://ci/1"}]
+
+
+def test_build_github_bundle_check_runs_defaults_to_empty_list():
+    """A PR head with no checks yields check_runs=[], never absent.
+
+    The github object is additionalProperties:false with check_runs required, so
+    the key must always be present for the prefetch to validate against
+    verify-pr-input.schema.json.
+    """
+    # Given a bundle built without an explicit check_runs argument
+    bundle = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "b", "deadbee", "d", "s", [], [], [], [],
+    )
+
+    # Then check_runs is present and defaults to an empty list
+    assert bundle["check_runs"] == []
 
 
 # --- transform_to_input ---
@@ -146,6 +167,32 @@ def test_transform_with_github():
     assert result["github"]["pr_repo"] == "o/r"
     assert result["github"]["pr_number"] == 5
     assert result["github"]["commit_sha"] == "deadbee"
+
+
+def test_transform_embeds_check_runs_under_github():
+    """The CI check-run outcomes are embedded under the github bundle.
+
+    Mirrors the reviews/comments bundle tests: correctness.md Check 1 reads
+    github.check_runs in sandbox mode, so the transform must pass them through.
+    """
+    # Given an issue and a github bundle carrying head-SHA CI check-run outcomes
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    check_runs = [
+        {"name": "pytest", "status": "completed", "conclusion": "success",
+         "details_url": "https://ci/pytest"},
+        {"name": "skillsaw", "status": "completed", "conclusion": "failure",
+         "details_url": "https://ci/skillsaw"},
+    ]
+    github = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "b", "deadbee", "d", "s", [], [], [], [], check_runs,
+    )
+
+    # When transforming to the tracker-agnostic input
+    result = pre_verify_pr.transform_to_input(
+        issue, "TC-1", "https://github.com/o/r/pull/5", github)
+
+    # Then the check-run outcomes are embedded verbatim under github.check_runs
+    assert result["github"]["check_runs"] == check_runs
 
 
 # --- commit_references_task (Commit Traceability determinism) ---
@@ -329,6 +376,9 @@ def test_cli_transform_github_dir():
             ("review-comments.json", [{"id": 2}]),
             ("issue-comments.json", [{"id": 3}]),
             ("commits.json", [{"oid": "abc1234def"}]),
+            ("check-runs.json", [{"name": "pytest", "status": "completed",
+                                  "conclusion": "success",
+                                  "details_url": "https://ci/1"}]),
         ]:
             with open(os.path.join(d, name), "w") as f:
                 json.dump(payload, f)
@@ -354,6 +404,9 @@ def test_cli_transform_github_dir():
     assert gh["issue_comments"] == [{"id": 3}]
     # transform annotates each commit with the deterministic traceability fact.
     assert gh["commits"] == [{"oid": "abc1234def", "references_task_id": False}]
+    assert gh["check_runs"] == [{"name": "pytest", "status": "completed",
+                                 "conclusion": "success",
+                                 "details_url": "https://ci/1"}]
 
 
 # --- idempotency prefetch (related_keys, build_idempotency_bundle, transform) ---

@@ -18,8 +18,12 @@ The orchestrator provides these sections in the Agent-Specific Inputs block
 - **Task Specification** — Acceptance Criteria, Test Requirements, Verification
   Commands sections from the Jira task description
 - **Repository Info** — repository path and Serena instance info for code inspection
-- **CI Status** — not pre-fetched; the sub-agent fetches CI status on demand via
-  `gh` CLI (this is a read operation, not a side effect)
+- **CI Status** — in **sandbox mode** the head-SHA CI check-run outcomes are
+  pre-fetched on the trusted runner and provided here (from `github.check_runs`,
+  reduced to name/status/conclusion/details_url); read them directly — there is no
+  `gh` CLI or network egress in the sandbox. In **interactive mode** this input is
+  absent and the sub-agent fetches CI status on demand via `gh` CLI (a read
+  operation, not a side effect)
 
 The dispatch envelope also includes **Context** (Jira Task, PR URL, Branch, Base
 Branch) and **Classified Review Comments** (all classified comments with IDs,
@@ -33,13 +37,23 @@ Check whether all CI checks on the PR pass.
 
 #### 1a — Fetch CI Status
 
-Run:
+**Sandbox mode** (CI Status input provided): do **not** run `gh` — read the
+pre-fetched check-run outcomes from the CI Status input (each entry has `name`,
+`status`, `conclusion`, `details_url`). Map each entry to a status:
+
+- `conclusion` of `success`/`neutral`/`skipped` → pass
+- `conclusion` of `failure`/`timed_out`/`cancelled`/`action_required` → failed
+- `status` not `completed` (i.e. `queued`/`in_progress`) → pending
+- an empty check-runs list → no checks configured (treat as pass; note it in the
+  evidence)
+
+**Interactive mode** (no CI Status input): run
 
 ```
 gh pr checks <pr-number> -R <owner/repo>
 ```
 
-Report the status (pass/fail/pending) for each check.
+Report the status (pass/fail/pending) for each check (from either source).
 
 - If all checks pass, record verdict as PASS and skip to Check 2.
 - If any checks are pending, record verdict as WARN and skip to Check 2.
@@ -47,7 +61,14 @@ Report the status (pass/fail/pending) for each check.
 
 #### 1b — Fetch Failure Logs
 
-For each failed CI check, fetch the failure logs:
+**Sandbox mode:** the failure logs cannot be fetched — there is no `gh` CLI or
+network egress. Skip the `gh run view`/`gh run list` commands below and derive the
+failure analysis in step 1c from the PR diff plus the failed check's `name`,
+`conclusion`, and `details_url` from the pre-fetched CI Status input. Still emit the
+`create-sub-task` action (step 1d); include the `details_url` so a human can open
+the full log.
+
+**Interactive mode:** for each failed CI check, fetch the failure logs:
 
 ```
 gh run view <run-id> --log-failed -R <owner/repo>

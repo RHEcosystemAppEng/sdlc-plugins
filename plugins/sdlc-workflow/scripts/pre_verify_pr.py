@@ -14,7 +14,8 @@ CLI usage (called by pre-verify-pr.sh):
 
 When the --github-* options are supplied, `transform` reads the raw GitHub
 reads from DIR (pr.diff, pr.stat, reviews.json, review-comments.json,
-issue-comments.json, commits.json) and embeds them under a `github` key.
+issue-comments.json, commits.json, check-runs.json) and embeds them under a
+`github` key.
 
 `related-keys` prints the task's sub-task and linked-issue keys (one per line)
 so the shell can prefetch each on the runner. When --idempotency-dir is given,
@@ -192,12 +193,16 @@ def revalidate_gate(issue, pr_url):
 
 def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
                         diff, stat, reviews, review_comments,
-                        issue_comments, commits):
+                        issue_comments, commits, check_runs=None):
     """Assemble the GitHub tier-1 read bundle embedded in the input.
 
-    diff/stat are raw text; the four *_comments/reviews/commits arguments
-    are already-parsed JSON (lists). Keys mirror the reads the verify-pr
-    skill performs so the sandbox needs no api.github.com egress.
+    diff/stat are raw text; the reviews/review_comments/issue_comments/commits/
+    check_runs arguments are already-parsed JSON (lists). ``check_runs`` carries
+    the head-SHA CI check-run outcomes (name/status/conclusion/details_url) so the
+    Correctness sub-agent's CI Status check reads real CI data in the tokenless
+    sandbox instead of shelling out to `gh`; it defaults to an empty list (a PR
+    with no checks) so every bundle carries the key. Keys mirror the reads the
+    verify-pr skill performs so the sandbox needs no api.github.com egress.
     """
     return {
         "pr_repo": pr_repo,
@@ -210,6 +215,7 @@ def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
         "review_comments": review_comments,
         "issue_comments": issue_comments,
         "commits": commits,
+        "check_runs": check_runs if check_runs is not None else [],
     }
 
 
@@ -348,6 +354,7 @@ def _github_from_dir(args):
         review_comments=_read_json(f"{d}/review-comments.json"),
         issue_comments=_read_json(f"{d}/issue-comments.json"),
         commits=_read_json(f"{d}/commits.json"),
+        check_runs=_read_json(f"{d}/check-runs.json"),
     )
 
 
