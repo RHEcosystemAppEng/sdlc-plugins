@@ -113,6 +113,21 @@ def test_build_github_bundle():
     assert bundle["check_runs"] == [{"name": "pytest", "status": "completed",
                                      "conclusion": "success",
                                      "details_url": "https://ci/1"}]
+    # No check_run_logs_path argument → "" (green path, nothing to read)
+    assert bundle["check_run_logs_path"] == ""
+
+
+def test_build_github_bundle_carries_check_run_logs_path():
+    """When a check failed, the bundle carries the mounted log-file path.
+
+    The log text itself is never inlined — only the sandbox path, so Check 1b can
+    Read it on demand on a FAIL.
+    """
+    bundle = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "b", "deadbee", "d", "s", [], [], [], [],
+        check_run_logs_path=pre_verify_pr.SANDBOX_CHECK_RUN_LOGS_PATH,
+    )
+    assert bundle["check_run_logs_path"] == pre_verify_pr.SANDBOX_CHECK_RUN_LOGS_PATH
 
 
 def test_build_github_bundle_check_runs_defaults_to_empty_list():
@@ -407,6 +422,66 @@ def test_cli_transform_github_dir():
     assert gh["check_runs"] == [{"name": "pytest", "status": "completed",
                                  "conclusion": "success",
                                  "details_url": "https://ci/1"}]
+    # No check-run-logs.txt written (green run) → empty path, nothing to read.
+    assert gh["check_run_logs_path"] == ""
+
+
+def test_cli_transform_embeds_check_run_logs_path_when_present():
+    """A non-empty check-run-logs.txt makes transform embed the mounted path.
+
+    The file content is never inlined — only the sandbox path — so Check 1b reads
+    the failure logs on demand on a FAIL.
+    """
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "pr.diff"), "w") as f:
+            f.write("d\n")
+        with open(os.path.join(d, "pr.stat"), "w") as f:
+            f.write("s\n")
+        for name in ["reviews.json", "review-comments.json",
+                     "issue-comments.json", "commits.json", "check-runs.json"]:
+            with open(os.path.join(d, name), "w") as f:
+                json.dump([], f)
+        # A failed check left log text on the runner.
+        with open(os.path.join(d, "check-run-logs.txt"), "w") as f:
+            f.write("===== CI run 42 — failed steps =====\nE   assert False\n")
+
+        result = subprocess.run(
+            [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"),
+             "transform", "TC-9", "https://github.com/o/r/pull/9",
+             "--github-dir", d, "--pr-repo", "o/r", "--pr-number", "9",
+             "--head-ref", "feat/x", "--commit-sha", "abc1234def"],
+            input=json.dumps(issue), capture_output=True, text=True,
+        )
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    gh = json.loads(result.stdout)["github"]
+    assert gh["check_run_logs_path"] == pre_verify_pr.SANDBOX_CHECK_RUN_LOGS_PATH
+
+
+def test_cli_transform_empty_check_run_logs_yields_empty_path():
+    """An empty check-run-logs.txt (no failures) → empty path, no read."""
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "pr.diff"), "w") as f:
+            f.write("d\n")
+        with open(os.path.join(d, "pr.stat"), "w") as f:
+            f.write("s\n")
+        for name in ["reviews.json", "review-comments.json",
+                     "issue-comments.json", "commits.json", "check-runs.json"]:
+            with open(os.path.join(d, name), "w") as f:
+                json.dump([], f)
+        open(os.path.join(d, "check-run-logs.txt"), "w").close()  # empty
+
+        result = subprocess.run(
+            [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"),
+             "transform", "TC-9", "https://github.com/o/r/pull/9",
+             "--github-dir", d, "--pr-repo", "o/r", "--pr-number", "9",
+             "--head-ref", "feat/x", "--commit-sha", "abc1234def"],
+            input=json.dumps(issue), capture_output=True, text=True,
+        )
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    gh = json.loads(result.stdout)["github"]
+    assert gh["check_run_logs_path"] == ""
 
 
 # --- idempotency prefetch (related_keys, build_idempotency_bundle, transform) ---

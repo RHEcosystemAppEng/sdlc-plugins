@@ -18,8 +18,8 @@
 # 3. If the gate fails (no/ambiguous match, status != Review, label absent):
 #    emits an ADR-0072 skip signal and exits 0 (nothing to verify)
 # 4. Fetches the full Jira issue and prefetches the GitHub tier-1 read bundle
-#    (diff, stat, reviews, comments, commits, CI check-runs, head ref + commit
-#    SHA) so the sandbox needs no api.github.com egress
+#    (diff, stat, reviews, comments, commits, CI check-runs, failed-check logs,
+#    head ref + commit SHA) so the sandbox needs no api.github.com egress
 # 5. Writes the tracker-agnostic verify-pr-input.json that host_files mounts
 #    into the sandbox
 #
@@ -189,6 +189,39 @@ gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq .commits > "${PRE_OUT
 # checks yields an empty array — consistent with the reviews/comments empties.
 gh api --paginate --slurp "repos/${PR_REPO}/commits/${COMMIT_SHA}/check-runs" \
   | jq '[.[].check_runs[] | {name, status, conclusion, details_url}]' > "${PRE_OUTPUT_DIR}/check-runs.json"
+
+# Failed-check logs. correctness.md Check 1b needs the failure logs to analyse a
+# red CI check, but the sandbox has no `gh` CLI or egress to run
+# `gh run view --log-failed`. host_files mounts single files only (fullsend has
+# no directory mount), and the set of failed checks is dynamic, so the logs are
+# concatenated into ONE file mounted alongside verify-pr-input.json; the sub-agent
+# reads it only when Check 1 is FAIL, keeping the (large) log text out of the
+# input bundle/schema and off the agent's context on the common green path. The
+# wait-for-checks job (fullsend-verify-pr.yml) guarantees terminal conclusions
+# before dispatch, so a failed check's log is complete and fetchable here. The
+# file is always created (empty when nothing failed) so its host_files mount is
+# never missing. Distinct GitHub Actions run IDs are extracted from each FAILED
+# check-run's details_url (.../actions/runs/<run_id>/...); non-Actions checks have
+# no such URL and are skipped (their logs aren't reachable via `gh run view` — 1b
+# falls back to the diff + details_url for those). A per-run fetch failure is
+# non-fatal: a note is written and the run continues, since 1b can still fall back.
+CHECK_LOGS_FILE="${PRE_OUTPUT_DIR}/check-run-logs.txt"
+: > "${CHECK_LOGS_FILE}"
+FAILED_RUN_IDS=$(jq -r '
+  [ .[]
+    | select(.conclusion // "" | IN("failure", "timed_out", "cancelled", "action_required"))
+    | (.details_url // "")
+    | select(test("actions/runs/[0-9]+"))
+    | capture("actions/runs/(?<id>[0-9]+)").id
+  ] | unique | .[]' "${PRE_OUTPUT_DIR}/check-runs.json")
+for run_id in ${FAILED_RUN_IDS}; do
+  {
+    echo "===== CI run ${run_id} — failed steps ====="
+    gh run view "${run_id}" --log-failed -R "${PR_REPO}" 2>&1 \
+      || echo "(log fetch failed for run ${run_id}; see its details_url in check_runs)"
+    echo
+  } >> "${CHECK_LOGS_FILE}"
+done
 
 echo "GitHub read bundle prefetched to ${PRE_OUTPUT_DIR}"
 

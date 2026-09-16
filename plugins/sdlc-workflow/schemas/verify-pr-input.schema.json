@@ -51,7 +51,7 @@
     "github": {
       "type": "object",
       "description": "GitHub tier-1 read bundle, prefetched on the trusted runner (where GH_TOKEN lives) so the sandbox needs no api.github.com egress. Every read the verify-pr skill performs against the PR is captured here.",
-      "required": ["pr_repo", "pr_number", "headRefName", "commit_sha", "diff", "stat", "reviews", "review_comments", "issue_comments", "commits", "check_runs"],
+      "required": ["pr_repo", "pr_number", "headRefName", "commit_sha", "diff", "stat", "reviews", "review_comments", "issue_comments", "commits", "check_runs", "check_run_logs_path"],
       "additionalProperties": false,
       "properties": {
         "pr_repo": {
@@ -97,6 +97,10 @@
           "type": "array",
           "description": "Head-SHA CI check-run outcomes (gh api repos/<repo>/commits/<sha>/check-runs), reduced to name/status/conclusion/details_url. Read by correctness.md Check 1 (CI Status) in sandbox mode; empty when the PR head has no checks.",
           "items": { "type": "object" }
+        },
+        "check_run_logs_path": {
+          "type": "string",
+          "description": "Mounted sandbox path of the concatenated failed-check logs (gh run view --log-failed for each failed check-run), or \"\" when no check failed. correctness.md Check 1b reads this file only on a FAIL, so the (large) log text stays out of the bundle and off the sub-agent's context on the green path. The log content is deliberately NOT inlined here."
         }
       }
     },
