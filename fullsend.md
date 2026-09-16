@@ -64,7 +64,7 @@ never place a credential in the sandbox at all.
 | Service | Tier | Credential in sandbox? | How it is delivered |
 |---|---|---|---|
 | **Jira** | 1 | No | The pre_script prefetches the issue on the runner; the post_script posts comments with `fullsend issues post-comment --tracker jira`. The token stays in runner env only. |
-| **GitHub** | 1 | No | The pre_script prefetches the read bundle (`gh pr diff` / `gh pr view` → diff, diffstat, reviews, comments, commits) and records the PR head ref name and head commit SHA in it; the post_script writes via `fullsend issues post-comment --tracker github` and `gh` (PR reviews/replies via `gh api`). The token stays in runner env only. The PR-head working tree is the `--target-repo` clone, checked out at the head SHA before the run (see below) — the pre_script does not check out. |
+| **GitHub** | 1 | No | The pre_script prefetches the read bundle (`gh pr diff` / `gh pr view` → diff, diffstat, reviews, comments, commits), the head-SHA **CI check-run outcomes** (`github.check_runs` — name/status/conclusion/details_url), and the **concatenated `--log-failed` output of every failed check-run** (written to `check-run-logs.txt`, mounted separately; only its path rides in the bundle so the large log text stays off the agent's context until Correctness Check 1b reads it on a FAIL), and records the PR head ref name and head commit SHA in it; the post_script writes via `fullsend issues post-comment --tracker github` and `gh` (PR reviews/replies via `gh api`). The token stays in runner env only. The PR-head working tree is the `--target-repo` clone, checked out at the head SHA before the run (see below) — the pre_script does not check out. |
 | **Vertex AI** | 4 (fullsend-mandated) | **Yes** | The in-sandbox runtime does the model inference and reads `GOOGLE_APPLICATION_CREDENTIALS` from a file (`/tmp/.gcp-credentials.json`). Vertex auth requires local JWT signing, so tier 4 (file on the sandbox filesystem) is unavoidable. This is the one credential set in the sandbox. |
 
 Because Vertex is the only in-sandbox credential, the sandbox's **only network
@@ -364,6 +364,50 @@ The vehicle is disposable: PR #300, branch `tc-6192-e2e-acceptance`, test issues
 TC-6254/TC-6255, and the scaffolding files (`docs/e2e/tc-6192-vehicle.md`,
 `plugins/sdlc-workflow/scripts/test_tc6192_ci_fail.py`) are removed after
 acceptance is recorded.
+
+### CI Status sourced from prefetched check-runs (TC-6257)
+
+TC-6192 above recorded a `CI Status` verdict, but the sandbox had **no** way to
+retrieve it: with no `gh` CLI and no egress, the check ran off the diff and warned
+*"CI status could not be retrieved in sandbox mode."* TC-6257 closes that gap — the
+pre_script now prefetches the head-SHA check-run outcomes (`github.check_runs`) on
+the trusted runner, and the concatenated `--log-failed` output of every failed
+check-run into `check-run-logs.txt` (mounted separately; only its path rides in
+the bundle, so the log text stays off the agent's context until Correctness
+Check 1b reads it on a FAIL). This supersedes the TC-6192 "unavailable in sandbox"
+caveat: `CI Status` is now sourced from real CI data.
+
+**Re-pin is load-bearing.** The children delivered to the sandbox are fetched from
+the URL-pinned harness base. Advancing the prefetch code alone is inert until the
+base pin moves to a commit that contains it: the base-file bytes are unchanged
+(sha256 `3c9dc221…`), so only the pinned commit moves (`a9099de0` → `fa3f4b7d`) and
+`fullsend lock` refreezes all 11 children at `fa3f4b7d`. Before the re-pin the
+sandbox kept running the pre-TC-6257 skill, whose bundle carries no `check_runs`,
+and `CI Status` fell back to the old WARN.
+
+**Vehicle** — throwaway PR **#303** (`tc-6257-e2e-vehicle` → `verify-pr-fullsend`,
+**upstream** so `pull_request` gets secrets + OIDC), qualified against Jira task
+**TC-6266** (status `Review`, label `ai-generated-jira`, Git PR field = PR #303).
+
+**Results — both prefetch surfaces proven live:**
+
+| Acceptance criterion | Result |
+|---|---|
+| `CI Status` sourced from prefetched `check_runs` (not the WARN fallback) | ✅ verify-pr **35075966985** (commit `1185ae2`, post-re-pin) named the failed check by run ID + conclusion — data the pre-TC-6257 sandbox could not obtain |
+| **CI failing** → prefetched log read by Check 1b | ✅ vehicle-only red commit `8865e11`: `Script Unit Tests` **35077403829 = failure** (deliberate canary) → `wait-for-checks` released → verify-pr **35077404421** reported `CI Status = FAIL` and Check 1b surfaced the **runtime-computed canary `cc08a78a24bc66f6`** — a value present **only** in the prefetched `--log-failed` output, never as a literal in the diff — proving the log was read, not inferred |
+| CI-failure sub-task auto-created | ✅ **TC-6271** ("Fix failing CI check Script Unit Tests … intentional canary") created, blocks TC-6266, with the `details_url` for the full log |
+
+The canary is the crux: because its value is computed at test runtime and never
+written in the source, the only way the report could quote `cc08a78a24bc66f6` is by
+reading the prefetched `check-run-logs.txt` — end-to-end proof of the failed-CI log
+prefetch path. (The live run also surfaced two real hardening follow-ups on the
+prefetch code — treat `startup_failure`/`stale` as failed conclusions, and only
+expose `check_run_logs_path` when the log fetch actually succeeds.)
+
+The vehicle is disposable: PR #303, branch `tc-6257-e2e-vehicle`, test issue
+TC-6266 (and its sub-tasks), and the scaffolding file
+(`plugins/sdlc-workflow/scripts/test_tc6257_ci_fail.py`, vehicle-only — never on
+the TC-6257 deliverable branch) are removed after acceptance is recorded.
 
 ## Known issues
 

@@ -14,7 +14,10 @@ CLI usage (called by pre-verify-pr.sh):
 
 When the --github-* options are supplied, `transform` reads the raw GitHub
 reads from DIR (pr.diff, pr.stat, reviews.json, review-comments.json,
-issue-comments.json, commits.json) and embeds them under a `github` key.
+issue-comments.json, commits.json, check-runs.json, check-run-logs.txt) and
+embeds them under a `github` key. check-run-logs.txt is not inlined — only its
+mounted sandbox path is embedded (empty when no check failed), so the large log
+text stays off the input bundle and off the sub-agent's context until read.
 
 `related-keys` prints the task's sub-task and linked-issue keys (one per line)
 so the shell can prefetch each on the runner. When --idempotency-dir is given,
@@ -190,14 +193,30 @@ def revalidate_gate(issue, pr_url):
     return resolve_gated_issue({"issues": [issue]}, pr_url)
 
 
+# Sandbox-side path of the concatenated failed-check logs. Mirrors the
+# host_files dest in .fullsend/harness/verify-pr.yaml (the runner writes
+# check-run-logs.txt next to verify-pr-input.json and mounts it here). Embedded
+# in the bundle only when a check failed, so the sub-agent Reads it on demand.
+SANDBOX_CHECK_RUN_LOGS_PATH = "/sandbox/workspace/.pre-script/check-run-logs.txt"
+
+
 def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
                         diff, stat, reviews, review_comments,
-                        issue_comments, commits):
+                        issue_comments, commits, check_runs=None,
+                        check_run_logs_path=""):
     """Assemble the GitHub tier-1 read bundle embedded in the input.
 
-    diff/stat are raw text; the four *_comments/reviews/commits arguments
-    are already-parsed JSON (lists). Keys mirror the reads the verify-pr
-    skill performs so the sandbox needs no api.github.com egress.
+    diff/stat are raw text; the reviews/review_comments/issue_comments/commits/
+    check_runs arguments are already-parsed JSON (lists). ``check_runs`` carries
+    the head-SHA CI check-run outcomes (name/status/conclusion/details_url) so the
+    Correctness sub-agent's CI Status check reads real CI data in the tokenless
+    sandbox instead of shelling out to `gh`; it defaults to an empty list (a PR
+    with no checks) so every bundle carries the key. ``check_run_logs_path`` is
+    the mounted sandbox path of the concatenated failed-check logs (correctness.md
+    Check 1b reads it only on a FAIL); it is "" when no check failed, so the log
+    text never enters the bundle or the sub-agent's context on the green path.
+    Keys mirror the reads the verify-pr skill performs so the sandbox needs no
+    api.github.com egress.
     """
     return {
         "pr_repo": pr_repo,
@@ -210,6 +229,8 @@ def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
         "review_comments": review_comments,
         "issue_comments": issue_comments,
         "commits": commits,
+        "check_runs": check_runs if check_runs is not None else [],
+        "check_run_logs_path": check_run_logs_path,
     }
 
 
@@ -348,7 +369,26 @@ def _github_from_dir(args):
         review_comments=_read_json(f"{d}/review-comments.json"),
         issue_comments=_read_json(f"{d}/issue-comments.json"),
         commits=_read_json(f"{d}/commits.json"),
+        check_runs=_read_json(f"{d}/check-runs.json"),
+        check_run_logs_path=_check_run_logs_path(f"{d}/check-run-logs.txt"),
     )
+
+
+def _check_run_logs_path(path):
+    """Sandbox path for the failed-check logs, or "" when none were captured.
+
+    The shell always creates check-run-logs.txt (empty when nothing failed) so
+    its host_files mount is never missing. A non-empty file means at least one
+    check failed and its log was fetched; return the mounted sandbox path so the
+    sub-agent can Read it. An empty (or absent) file means no failure logs — emit
+    "" so Check 1b skips the read entirely.
+    """
+    try:
+        if os.path.getsize(path) > 0:
+            return SANDBOX_CHECK_RUN_LOGS_PATH
+    except OSError:
+        pass
+    return ""
 
 
 def _idempotency_from_dir(path):

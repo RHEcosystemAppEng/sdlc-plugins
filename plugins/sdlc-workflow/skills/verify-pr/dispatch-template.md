@@ -53,7 +53,8 @@ structure; the Agent-Specific Inputs section varies per agent.
 - `### PR Diff` — full diff content for code inspection
 - `### Task Specification` — Acceptance Criteria, Test Requirements, Verification Commands sections from Jira task description
 - `### Repository Info` — repository path and Serena instance info for code inspection
-- `### CI Status` — note to fetch CI status via `gh` CLI (not pre-fetched; sub-agent fetches on demand)
+- `### CI Status` — in sandbox mode, the pre-fetched head-SHA CI check-run outcomes from `github.check_runs` (Step 0.7), reduced to name/status/conclusion/details_url; the sub-agent reads these instead of calling `gh` (no CLI/egress in the sandbox). In interactive mode this section is omitted and the sub-agent fetches CI status via `gh` on demand.
+- `### CI Failure Logs` — in sandbox mode, the path from `github.check_run_logs_path` (Step 0.7): a single file holding the concatenated `--log-failed` output for every failed check-run, pre-fetched on the runner. The sub-agent Reads it only when Check 1 is FAIL, so the log text stays off context otherwise; empty path means no failure logs. Omitted in interactive mode (the sub-agent fetches logs via `gh run view` on demand).
 
 ### Style/Conventions
 

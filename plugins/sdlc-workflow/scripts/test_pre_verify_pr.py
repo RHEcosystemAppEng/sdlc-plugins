@@ -97,6 +97,8 @@ def test_build_github_bundle():
         commit_sha="abc1234", diff="diff --git a b", stat=" 1 file changed",
         reviews=[{"id": 1}], review_comments=[{"id": 2}],
         issue_comments=[{"id": 3}], commits=[{"oid": "abc1234"}],
+        check_runs=[{"name": "pytest", "status": "completed",
+                     "conclusion": "success", "details_url": "https://ci/1"}],
     )
     assert bundle["pr_repo"] == "org/repo"
     assert bundle["pr_number"] == 42  # coerced to int
@@ -108,6 +110,40 @@ def test_build_github_bundle():
     assert bundle["review_comments"] == [{"id": 2}]
     assert bundle["issue_comments"] == [{"id": 3}]
     assert bundle["commits"] == [{"oid": "abc1234"}]
+    assert bundle["check_runs"] == [{"name": "pytest", "status": "completed",
+                                     "conclusion": "success",
+                                     "details_url": "https://ci/1"}]
+    # No check_run_logs_path argument → "" (green path, nothing to read)
+    assert bundle["check_run_logs_path"] == ""
+
+
+def test_build_github_bundle_carries_check_run_logs_path():
+    """When a check failed, the bundle carries the mounted log-file path.
+
+    The log text itself is never inlined — only the sandbox path, so Check 1b can
+    Read it on demand on a FAIL.
+    """
+    bundle = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "b", "deadbee", "d", "s", [], [], [], [],
+        check_run_logs_path=pre_verify_pr.SANDBOX_CHECK_RUN_LOGS_PATH,
+    )
+    assert bundle["check_run_logs_path"] == pre_verify_pr.SANDBOX_CHECK_RUN_LOGS_PATH
+
+
+def test_build_github_bundle_check_runs_defaults_to_empty_list():
+    """A PR head with no checks yields check_runs=[], never absent.
+
+    The github object is additionalProperties:false with check_runs required, so
+    the key must always be present for the prefetch to validate against
+    verify-pr-input.schema.json.
+    """
+    # Given a bundle built without an explicit check_runs argument
+    bundle = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "b", "deadbee", "d", "s", [], [], [], [],
+    )
+
+    # Then check_runs is present and defaults to an empty list
+    assert bundle["check_runs"] == []
 
 
 # --- transform_to_input ---
@@ -146,6 +182,32 @@ def test_transform_with_github():
     assert result["github"]["pr_repo"] == "o/r"
     assert result["github"]["pr_number"] == 5
     assert result["github"]["commit_sha"] == "deadbee"
+
+
+def test_transform_embeds_check_runs_under_github():
+    """The CI check-run outcomes are embedded under the github bundle.
+
+    Mirrors the reviews/comments bundle tests: correctness.md Check 1 reads
+    github.check_runs in sandbox mode, so the transform must pass them through.
+    """
+    # Given an issue and a github bundle carrying head-SHA CI check-run outcomes
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    check_runs = [
+        {"name": "pytest", "status": "completed", "conclusion": "success",
+         "details_url": "https://ci/pytest"},
+        {"name": "skillsaw", "status": "completed", "conclusion": "failure",
+         "details_url": "https://ci/skillsaw"},
+    ]
+    github = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "b", "deadbee", "d", "s", [], [], [], [], check_runs,
+    )
+
+    # When transforming to the tracker-agnostic input
+    result = pre_verify_pr.transform_to_input(
+        issue, "TC-1", "https://github.com/o/r/pull/5", github)
+
+    # Then the check-run outcomes are embedded verbatim under github.check_runs
+    assert result["github"]["check_runs"] == check_runs
 
 
 # --- commit_references_task (Commit Traceability determinism) ---
@@ -329,6 +391,9 @@ def test_cli_transform_github_dir():
             ("review-comments.json", [{"id": 2}]),
             ("issue-comments.json", [{"id": 3}]),
             ("commits.json", [{"oid": "abc1234def"}]),
+            ("check-runs.json", [{"name": "pytest", "status": "completed",
+                                  "conclusion": "success",
+                                  "details_url": "https://ci/1"}]),
         ]:
             with open(os.path.join(d, name), "w") as f:
                 json.dump(payload, f)
@@ -354,6 +419,69 @@ def test_cli_transform_github_dir():
     assert gh["issue_comments"] == [{"id": 3}]
     # transform annotates each commit with the deterministic traceability fact.
     assert gh["commits"] == [{"oid": "abc1234def", "references_task_id": False}]
+    assert gh["check_runs"] == [{"name": "pytest", "status": "completed",
+                                 "conclusion": "success",
+                                 "details_url": "https://ci/1"}]
+    # No check-run-logs.txt written (green run) → empty path, nothing to read.
+    assert gh["check_run_logs_path"] == ""
+
+
+def test_cli_transform_embeds_check_run_logs_path_when_present():
+    """A non-empty check-run-logs.txt makes transform embed the mounted path.
+
+    The file content is never inlined — only the sandbox path — so Check 1b reads
+    the failure logs on demand on a FAIL.
+    """
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "pr.diff"), "w") as f:
+            f.write("d\n")
+        with open(os.path.join(d, "pr.stat"), "w") as f:
+            f.write("s\n")
+        for name in ["reviews.json", "review-comments.json",
+                     "issue-comments.json", "commits.json", "check-runs.json"]:
+            with open(os.path.join(d, name), "w") as f:
+                json.dump([], f)
+        # A failed check left log text on the runner.
+        with open(os.path.join(d, "check-run-logs.txt"), "w") as f:
+            f.write("===== CI run 42 — failed steps =====\nE   assert False\n")
+
+        result = subprocess.run(
+            [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"),
+             "transform", "TC-9", "https://github.com/o/r/pull/9",
+             "--github-dir", d, "--pr-repo", "o/r", "--pr-number", "9",
+             "--head-ref", "feat/x", "--commit-sha", "abc1234def"],
+            input=json.dumps(issue), capture_output=True, text=True,
+        )
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    gh = json.loads(result.stdout)["github"]
+    assert gh["check_run_logs_path"] == pre_verify_pr.SANDBOX_CHECK_RUN_LOGS_PATH
+
+
+def test_cli_transform_empty_check_run_logs_yields_empty_path():
+    """An empty check-run-logs.txt (no failures) → empty path, no read."""
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [], "issuelinks": []}}
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "pr.diff"), "w") as f:
+            f.write("d\n")
+        with open(os.path.join(d, "pr.stat"), "w") as f:
+            f.write("s\n")
+        for name in ["reviews.json", "review-comments.json",
+                     "issue-comments.json", "commits.json", "check-runs.json"]:
+            with open(os.path.join(d, name), "w") as f:
+                json.dump([], f)
+        open(os.path.join(d, "check-run-logs.txt"), "w").close()  # empty
+
+        result = subprocess.run(
+            [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"),
+             "transform", "TC-9", "https://github.com/o/r/pull/9",
+             "--github-dir", d, "--pr-repo", "o/r", "--pr-number", "9",
+             "--head-ref", "feat/x", "--commit-sha", "abc1234def"],
+            input=json.dumps(issue), capture_output=True, text=True,
+        )
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    gh = json.loads(result.stdout)["github"]
+    assert gh["check_run_logs_path"] == ""
 
 
 # --- idempotency prefetch (related_keys, build_idempotency_bundle, transform) ---

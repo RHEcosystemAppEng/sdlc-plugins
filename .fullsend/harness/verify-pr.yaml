@@ -27,7 +27,7 @@
 # (base URLs are validated against that allowlist, not inherited).
 # Re-pin after any base edit: push harness/verify-pr.yaml, set the SHA to the new
 # commit + the sha256 to `shasum -a 256 harness/verify-pr.yaml`, `fullsend lock`.
-base: https://raw.githubusercontent.com/RHEcosystemAppEng/sdlc-plugins/a9099de0ddf3e010ec5fb18e1d3594075302abcb/harness/verify-pr.yaml#sha256=3c9dc221e2a37e7aa7ff294381b6b5b1580771ba70432c42924fc3a85f078e63
+base: https://raw.githubusercontent.com/RHEcosystemAppEng/sdlc-plugins/fa3f4b7d18158078732bccf64443d873d7c05a68/harness/verify-pr.yaml#sha256=3c9dc221e2a37e7aa7ff294381b6b5b1580771ba70432c42924fc3a85f078e63
 
 # CEL trigger (ADR 0061) — MUST be declared here, on the composing child, not
 # only on the base. `fullsend dispatch` registers this child (config.base.yaml
@@ -55,4 +55,14 @@ host_files:
   # the pre_script runs, and skipped on an ADR-0072 skip).
   - src: /tmp/fullsend-pre-output/verify-pr-input.json
     dest: /sandbox/workspace/.pre-script/verify-pr-input.json
+    optional: true
+  # Concatenated failed-check logs — pre-verify-pr.sh always writes this file
+  # (empty when no check failed) next to verify-pr-input.json. correctness.md
+  # Check 1b reads it on a FAIL via the bundle's github.check_run_logs_path (dest
+  # below); the large log text stays off the input bundle and off the agent's
+  # context until then. host_files mounts single files only, so per-check logs
+  # are concatenated into this one file. optional: absent until the pre_script
+  # runs, and skipped on an ADR-0072 skip.
+  - src: /tmp/fullsend-pre-output/check-run-logs.txt
+    dest: /sandbox/workspace/.pre-script/check-run-logs.txt
     optional: true
