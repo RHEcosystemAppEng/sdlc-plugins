@@ -369,3 +369,8 @@ acceptance is recorded.
 
 - **fullsend deletes the target repo directory** after each run — always pass a
   disposable clone as `--target-repo`, never your working directory.
+- **Markdown tables collapse to one line in Jira comments** posted via
+  `fullsend issues n --tracker jira` — the vendor's markdown→ADF conversion
+  doesn't support GFM tables (parser has no table extension; no table node
+  handler). GitHub renders the same body correctly. Tracked upstream:
+  <https://github.com/fullsend-ai/fullsend/issues/7345>.
