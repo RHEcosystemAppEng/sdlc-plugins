@@ -5,11 +5,27 @@
 # as input data — never as a gate. verify-pr runs whether CI passed or failed
 # (TC-6180 Reqs 4, 6, 7).
 #
-# Why a dedicated pull_request workflow (not just the fullsend shim):
+# Why a dedicated workflow (not just the fullsend shim):
 #   fullsend has no CI-completion event (no check_suite / check_run /
 #   workflow_run TransitionKind), and GitHub's recursion guard suppresses
-#   check_suite / check_run for Actions-created suites. An inline `pull_request`
-#   wait is the only reliable "run after CI" trigger (TC-6180 NFRs).
+#   check_suite / check_run for Actions-created suites. An inline
+#   `pull_request_target` wait is the only reliable "run after CI" trigger
+#   (TC-6180 NFRs).
+#
+# Why pull_request_target (not pull_request) — fork-PR support (TC-6331):
+#   On a `pull_request` run whose head is a FORK, GitHub withholds repo
+#   vars/secrets and OIDC (id-token), so `vars.FULLSEND_MINT_URL` resolves empty
+#   and the mint step fails ("FULLSEND_MINT_URL is not set"). `pull_request_target`
+#   runs the BASE-branch version of this workflow with full access to upstream
+#   vars/secrets/OIDC, so fork PRs can dispatch (fullsend ADR-0009). This is safe
+#   ONLY because the workflow never checks out or executes fork code — it builds
+#   the dispatch matrix from `github.event` alone and hands off to
+#   reusable-dispatch.yml, which does its own checkout/mint in base-repo context
+#   (guards against "pwn request" credential exfiltration). Defense-in-depth: an
+#   `ok-to-test` maintainer-label gate (see the `wait-for-checks` `if:` and the
+#   `remove-ok-to-test` job below) — a fork PR dispatches only after a maintainer
+#   reviews its code and applies the label, which is auto-removed on every new
+#   push to force re-review.
 #
 # Why this coexists with .github/workflows/fullsend.yaml (the vendor shim):
 #   verify-pr is registered in .fullsend/config.base.yaml (the vendor preset
@@ -35,8 +51,12 @@
 name: fullsend verify-pr
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened]
+  # pull_request_target (not pull_request) so fork-origin PRs get upstream
+  # vars/secrets/OIDC for the mint step (TC-6331). `labeled` lets a maintainer
+  # applying `ok-to-test` start a run; the `remove-ok-to-test` job keys on
+  # `synchronize` to strip the label on every new push.
+  pull_request_target:
+    types: [opened, synchronize, reopened, labeled]
 
 # One in-flight verify-pr per PR; a new push cancels the superseded run (both
 # the CI wait and any dispatch already handed off).
@@ -49,6 +69,19 @@ permissions: {}
 jobs:
   wait-for-checks:
     name: wait-for-checks
+    # ok-to-test gate (TC-6331). Gating this job gates the downstream `verify-pr`
+    # job too (it `needs` this one). A same-repo (upstream) PR needs no label —
+    # it already carries secrets/OIDC — and runs on opened/synchronize/reopened
+    # (but not on bare `labeled` events, avoiding a redundant rerun when an
+    # unrelated label is added). ANY PR (fork or upstream) also runs the moment a
+    # maintainer applies `ok-to-test`. A fork PR therefore dispatches ONLY via
+    # that label event; a new push (`synchronize`) removes the label
+    # (`remove-ok-to-test` below) and does not run, forcing re-review + re-label.
+    if: >-
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.event.action != 'labeled') ||
+      (github.event.action == 'labeled' &&
+       github.event.label.name == 'ok-to-test')
     runs-on: ubuntu-latest
     # Bounds the total wait: a check that never terminates lets this job hit
     # timeout-minutes and fail, which skips the dispatch job below (no-checks /
@@ -153,3 +186,35 @@ jobs:
       OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
       JIRA_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
       JIRA_USER_EMAIL: ${{ secrets.JIRA_EMAIL }}
+
+  # ok-to-test auto-removal (TC-6331). When a fork PR that carries `ok-to-test`
+  # is updated with new commits (`synchronize`), strip the label so the next
+  # verify-pr run requires a maintainer to review the new code and re-apply it.
+  # Scoped to fork PRs only — upstream PRs don't gate on the label, so their
+  # maintainer-applied labels are left untouched. Runs base-repo code only (no
+  # fork checkout); the default token needs pull-requests:write to edit labels.
+  remove-ok-to-test:
+    name: remove-ok-to-test
+    if: >-
+      github.event.action == 'synchronize' &&
+      github.event.pull_request.head.repo.full_name != github.repository &&
+      contains(github.event.pull_request.labels.*.name, 'ok-to-test')
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Remove ok-to-test on new fork-PR commits
+        uses: actions/github-script@v9
+        with:
+          script: |
+            try {
+              await github.rest.issues.removeLabel({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                name: 'ok-to-test',
+              });
+            } catch (error) {
+              // 404 = label already absent (e.g. a rapid second push); ignore.
+              if (error.status !== 404) throw error;
+            }
