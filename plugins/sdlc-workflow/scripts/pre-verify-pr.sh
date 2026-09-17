@@ -190,6 +190,40 @@ gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq .commits > "${PRE_OUT
 gh api --paginate --slurp "repos/${PR_REPO}/commits/${COMMIT_SHA}/check-runs" \
   | jq '[.[].check_runs[] | {name, status, conclusion, details_url}]' > "${PRE_OUTPUT_DIR}/check-runs.json"
 
+# Self-exclusion of verify-pr's OWN workflow check-runs (TC-6343). check-runs.json
+# above lists EVERY check on the head SHA — including this workflow's own runs
+# (the in-progress dispatch and any superseded prior attempt), which are
+# non-terminal/failed at evaluation time and would drag correctness.md Check 1a's
+# CI Status to a permanent self-referential WARN/FAIL. This is the CI-Status
+# analogue of Step 1's `running-workflow-name: wait-for-checks` self-exclusion in
+# fullsend-verify-pr.yml. Gather the check-run NAMES this workflow
+# (`fullsend verify-pr`, .github/workflows/fullsend-verify-pr.yml) produced at the
+# head SHA — across ALL of its runs at that SHA, so a superseded attempt with a
+# different run ID is covered too — one per line so job names with spaces survive.
+# The transform's pure Python filter (filter_own_check_runs) drops them before
+# they reach github.check_runs, keeping the exclusion unit-testable. Best-effort:
+# a token lacking actions:read (or an API hiccup) leaves the names file empty,
+# degrading to no self-exclusion (prior behavior) with a warning rather than
+# aborting the whole review — the fetch failure is non-fatal, like the per-run log
+# fetch below.
+OWN_WORKFLOW_FILE="fullsend-verify-pr.yml"
+OWN_CHECK_NAMES_FILE="${PRE_OUTPUT_DIR}/own-check-names.txt"
+: > "${OWN_CHECK_NAMES_FILE}"
+set +e
+OWN_RUN_IDS=$(gh api --paginate \
+  "repos/${PR_REPO}/actions/workflows/${OWN_WORKFLOW_FILE}/runs?head_sha=${COMMIT_SHA}" \
+  --jq '.workflow_runs[].id' 2>/dev/null)
+for own_run_id in ${OWN_RUN_IDS}; do
+  gh api --paginate "repos/${PR_REPO}/actions/runs/${own_run_id}/jobs" \
+    --jq '.jobs[].name' 2>/dev/null
+done | sort -u > "${OWN_CHECK_NAMES_FILE}"
+set -e
+if [[ -s "${OWN_CHECK_NAMES_FILE}" ]]; then
+  echo "Self-exclusion: filtering $(grep -c . "${OWN_CHECK_NAMES_FILE}") own check-run name(s) from CI Status"
+else
+  echo "WARNING: could not enumerate verify-pr's own check-runs for ${COMMIT_SHA}; CI Status self-exclusion is a no-op this run"
+fi
+
 # Failed-check logs. correctness.md Check 1b needs the failure logs to analyse a
 # red CI check, but the sandbox has no `gh` CLI or egress to run
 # `gh run view --log-failed`. host_files mounts single files only (fullsend has
@@ -273,6 +307,7 @@ printf '%s\n' "${ISSUE_JSON}" | python3 "${SCRIPT_DIR}/pre_verify_pr.py" transfo
   --pr-number "${PR_NUM}" \
   --head-ref "${HEAD_REF}" \
   --commit-sha "${COMMIT_SHA}" \
+  --own-check-names-file "${OWN_CHECK_NAMES_FILE}" \
   --idempotency-dir "${REL_DIR}" > "${PRE_OUTPUT_DIR}/verify-pr-input.json"
 
 echo "Pre-fetched data written to ${PRE_OUTPUT_DIR}/verify-pr-input.json"

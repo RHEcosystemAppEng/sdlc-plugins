@@ -146,6 +146,161 @@ def test_build_github_bundle_check_runs_defaults_to_empty_list():
     assert bundle["check_runs"] == []
 
 
+# --- filter_own_check_runs (CI Status self-exclusion, TC-6343) ---
+
+# The head-SHA check-run names verify-pr's own workflow produces (wait-for-checks
+# plus the reusable-dispatch harness job). Reused across the filter tests as the
+# own-workflow name set the trusted runner gathers.
+OWN_CHECK_NAMES = {
+    "wait-for-checks",
+    "verify-pr / harness-run (verify-pr, review)",
+}
+
+# A matrix of substantive checks a real PR carries, all terminal + green.
+SUBSTANTIVE_CHECK_RUNS = [
+    {"name": "pytest", "status": "completed", "conclusion": "success",
+     "details_url": "https://ci/pytest"},
+    {"name": "validate-plugins", "status": "completed", "conclusion": "success",
+     "details_url": "https://ci/validate"},
+    {"name": "skillsaw", "status": "completed", "conclusion": "success",
+     "details_url": "https://ci/skillsaw"},
+    {"name": "Sourcery", "status": "completed", "conclusion": "success",
+     "details_url": "https://ci/sourcery"},
+]
+
+
+def test_filter_own_check_runs_reproduces_and_fixes_ci_status_bug():
+    """Reproducer for TC-6332/TC-6343: own-harness runs are dropped, substantive kept.
+
+    Before the fix the prefetch kept verify-pr's own workflow check-runs, whose
+    non-terminal/failed states dragged CI Status to a permanent self-referential
+    WARN/FAIL. The filter removes exactly those, leaving an all-passing set that
+    maps to CI Status = PASS under correctness.md Check 1a.
+    """
+    # Given all-passing substantive checks mixed with verify-pr's OWN harness
+    # check-runs: one still in_progress (non-terminal) and one from a superseded
+    # prior attempt that failed.
+    own_in_progress = {
+        "name": "verify-pr / harness-run (verify-pr, review)",
+        "status": "in_progress", "conclusion": None,
+        "details_url": "https://ci/actions/runs/2/job/9"}
+    own_failed_superseded = {
+        "name": "wait-for-checks", "status": "completed", "conclusion": "failure",
+        "details_url": "https://ci/actions/runs/1/job/8"}
+    check_runs = SUBSTANTIVE_CHECK_RUNS + [own_in_progress, own_failed_superseded]
+
+    # When filtering with the own-workflow check-run names gathered on the runner
+    filtered = pre_verify_pr.filter_own_check_runs(check_runs, OWN_CHECK_NAMES)
+
+    # Then only the substantive checks remain — none of the own-harness entries —
+    # and every survivor is a terminal success (CI Status can now be PASS).
+    assert filtered == SUBSTANTIVE_CHECK_RUNS
+    assert own_in_progress not in filtered
+    assert own_failed_superseded not in filtered
+    assert all(c["conclusion"] == "success" for c in filtered)
+
+
+def test_filter_own_check_runs_empty_input_yields_empty():
+    """An empty check-run list filters to an empty list."""
+    assert pre_verify_pr.filter_own_check_runs([], OWN_CHECK_NAMES) == []
+
+
+def test_filter_own_check_runs_no_own_runs_returned_unchanged():
+    """A list with no own-workflow runs passes through unchanged."""
+    # Given only substantive checks, none matching an own-workflow name
+    check_runs = list(SUBSTANTIVE_CHECK_RUNS)
+
+    # When filtering, Then the list is returned unchanged (same items, same order)
+    assert pre_verify_pr.filter_own_check_runs(check_runs, OWN_CHECK_NAMES) == \
+        SUBSTANTIVE_CHECK_RUNS
+
+
+def test_filter_own_check_runs_only_own_runs_yields_empty():
+    """A list containing only own-workflow runs filters to empty."""
+    # Given a list made up solely of verify-pr's own harness check-runs
+    check_runs = [
+        {"name": "wait-for-checks", "status": "completed", "conclusion": "success"},
+        {"name": "verify-pr / harness-run (verify-pr, review)",
+         "status": "in_progress", "conclusion": None},
+    ]
+
+    # When filtering with those names, Then nothing survives
+    assert pre_verify_pr.filter_own_check_runs(check_runs, OWN_CHECK_NAMES) == []
+
+
+def test_filter_own_check_runs_empty_names_is_noop():
+    """An empty own-name set (enumeration failed) keeps prior behavior: no removal."""
+    check_runs = list(SUBSTANTIVE_CHECK_RUNS)
+    assert pre_verify_pr.filter_own_check_runs(check_runs, set()) == \
+        SUBSTANTIVE_CHECK_RUNS
+
+
+def test_filter_own_check_runs_preserves_fields_verbatim():
+    """Surviving substantive check-runs keep name/status/conclusion/details_url intact."""
+    # Given a matrix of substantive checks and a disjoint own-name set
+    # When filtering
+    filtered = pre_verify_pr.filter_own_check_runs(
+        SUBSTANTIVE_CHECK_RUNS, OWN_CHECK_NAMES)
+
+    # Then every field of every survivor is preserved verbatim
+    assert filtered == SUBSTANTIVE_CHECK_RUNS
+    for original, kept in zip(SUBSTANTIVE_CHECK_RUNS, filtered):
+        assert kept["name"] == original["name"]
+        assert kept["status"] == original["status"]
+        assert kept["conclusion"] == original["conclusion"]
+        assert kept["details_url"] == original["details_url"]
+
+
+def test_filter_own_check_runs_does_not_mutate_input():
+    """The input list is not mutated; a new list is returned."""
+    # Given an input list carrying an own-workflow run
+    check_runs = SUBSTANTIVE_CHECK_RUNS + [
+        {"name": "wait-for-checks", "status": "completed", "conclusion": "failure"}]
+    before = list(check_runs)
+
+    # When filtering
+    pre_verify_pr.filter_own_check_runs(check_runs, OWN_CHECK_NAMES)
+
+    # Then the original list is untouched
+    assert check_runs == before
+
+
+def test_filter_own_check_runs_keeps_nameless_entries():
+    """A check-run with no name is kept (never treated as an own-workflow run)."""
+    check_runs = [{"status": "completed", "conclusion": "success"}]
+    assert pre_verify_pr.filter_own_check_runs(check_runs, OWN_CHECK_NAMES) == \
+        check_runs
+
+
+# --- _read_own_check_names (own-name file reader) ---
+
+def test_read_own_check_names_reads_names_one_per_line():
+    """Names are read one per line, with surrounding whitespace stripped."""
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        f.write("wait-for-checks\nverify-pr / harness-run (verify-pr, review)\n")
+        path = f.name
+    try:
+        # A job name containing spaces survives intact (line-based, not token-based)
+        assert pre_verify_pr._read_own_check_names(path) == OWN_CHECK_NAMES
+    finally:
+        os.unlink(path)
+
+
+def test_read_own_check_names_none_path_yields_empty_set():
+    """A falsy path (option not supplied) yields an empty set, no error."""
+    assert pre_verify_pr._read_own_check_names(None) == set()
+
+
+def test_read_own_check_names_empty_file_yields_empty_set():
+    """An empty names file (enumeration produced nothing) yields an empty set."""
+    with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as f:
+        path = f.name
+    try:
+        assert pre_verify_pr._read_own_check_names(path) == set()
+    finally:
+        os.unlink(path)
+
+
 # --- transform_to_input ---
 
 def test_transform_basic():
@@ -424,6 +579,87 @@ def test_cli_transform_github_dir():
                                  "details_url": "https://ci/1"}]
     # No check-run-logs.txt written (green run) → empty path, nothing to read.
     assert gh["check_run_logs_path"] == ""
+
+
+def test_cli_transform_own_check_names_file_filters_github_check_runs():
+    """CLI transform with --own-check-names-file drops own-harness check-runs (TC-6343).
+
+    End-to-end through the real transform: the prefetched check-runs.json holds a
+    substantive success plus verify-pr's own harness run; the own-names file lists
+    the own run's name; github.check_runs must contain only the substantive check.
+    """
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [],
+                        "issuelinks": []}}
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "pr.diff"), "w") as f:
+            f.write("d\n")
+        with open(os.path.join(d, "pr.stat"), "w") as f:
+            f.write("s\n")
+        for name in ["reviews.json", "review-comments.json",
+                     "issue-comments.json", "commits.json"]:
+            with open(os.path.join(d, name), "w") as f:
+                json.dump([], f)
+        with open(os.path.join(d, "check-runs.json"), "w") as f:
+            json.dump([
+                {"name": "pytest", "status": "completed", "conclusion": "success",
+                 "details_url": "https://ci/1"},
+                {"name": "verify-pr / harness-run (verify-pr, review)",
+                 "status": "in_progress", "conclusion": None,
+                 "details_url": "https://ci/2"},
+            ], f)
+        own_names_file = os.path.join(d, "own-check-names.txt")
+        with open(own_names_file, "w") as f:
+            f.write("verify-pr / harness-run (verify-pr, review)\n")
+
+        result = subprocess.run(
+            [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"),
+             "transform", "TC-9", "https://github.com/o/r/pull/9",
+             "--github-dir", d, "--pr-repo", "o/r", "--pr-number", "9",
+             "--head-ref", "feat/x", "--commit-sha", "abc1234def",
+             "--own-check-names-file", own_names_file],
+            input=json.dumps(issue), capture_output=True, text=True,
+        )
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    check_runs = json.loads(result.stdout)["github"]["check_runs"]
+    assert check_runs == [{"name": "pytest", "status": "completed",
+                           "conclusion": "success", "details_url": "https://ci/1"}]
+
+
+def test_cli_transform_without_own_check_names_file_keeps_all_check_runs():
+    """Omitting --own-check-names-file is a no-op: all check-runs pass through.
+
+    Guards the default path (older invocation / enumeration unavailable) so the
+    self-exclusion never silently drops a check when no names were gathered.
+    """
+    issue = {"fields": {"summary": "S", "status": {"name": "Open"}, "labels": [],
+                        "issuelinks": []}}
+    with tempfile.TemporaryDirectory() as d:
+        with open(os.path.join(d, "pr.diff"), "w") as f:
+            f.write("d\n")
+        with open(os.path.join(d, "pr.stat"), "w") as f:
+            f.write("s\n")
+        for name in ["reviews.json", "review-comments.json",
+                     "issue-comments.json", "commits.json"]:
+            with open(os.path.join(d, name), "w") as f:
+                json.dump([], f)
+        with open(os.path.join(d, "check-runs.json"), "w") as f:
+            json.dump([
+                {"name": "pytest", "status": "completed", "conclusion": "success",
+                 "details_url": "https://ci/1"},
+                {"name": "wait-for-checks", "status": "completed",
+                 "conclusion": "success", "details_url": "https://ci/2"},
+            ], f)
+
+        result = subprocess.run(
+            [sys.executable, os.path.join(script_dir, "pre_verify_pr.py"),
+             "transform", "TC-9", "https://github.com/o/r/pull/9",
+             "--github-dir", d, "--pr-repo", "o/r", "--pr-number", "9",
+             "--head-ref", "feat/x", "--commit-sha", "abc1234def"],
+            input=json.dumps(issue), capture_output=True, text=True,
+        )
+    assert result.returncode == 0, f"Exit {result.returncode}: {result.stderr}"
+    names = [c["name"] for c in json.loads(result.stdout)["github"]["check_runs"]]
+    assert names == ["pytest", "wait-for-checks"]
 
 
 def test_cli_transform_embeds_check_run_logs_path_when_present():
@@ -793,6 +1029,36 @@ def test_pre_verify_sh_prefetches_related_issues():
         "related-issue fetch must request comment/description/labels"
     # And it wires the prefetched dir into transform
     assert "--idempotency-dir" in script, "transform must receive --idempotency-dir"
+
+
+# --- CI Status self-exclusion (pre-verify-pr.sh) ---
+
+def test_pre_verify_sh_gathers_own_check_names_and_wires_filter():
+    """Regression guard (TC-6343): pre-verify-pr.sh enumerates verify-pr's own
+    workflow check-run names for the head SHA and routes them through the transform
+    filter, so CI Status self-excludes the harness's own runs.
+    """
+    # Given the current pre-verify-pr.sh source
+    with open(pre_verify_sh) as f:
+        script = f.read()
+
+    non_comment = [
+        line for line in script.splitlines() if not line.lstrip().startswith("#")
+    ]
+    body = "\n".join(non_comment)
+
+    # It enumerates this workflow's own runs at the head SHA by workflow name,
+    # covering superseded attempts (all runs at the SHA, not one run ID).
+    assert "fullsend-verify-pr.yml" in body, \
+        "must enumerate own runs by the verify-pr workflow file"
+    assert "head_sha=${COMMIT_SHA}" in body, \
+        "must scope the own-run enumeration to the head SHA"
+    assert "actions/runs/" in body and "/jobs" in body, \
+        "must resolve own check-run names from each run's jobs"
+    # The gathered names are written to a file and passed into transform, where the
+    # pure Python filter drops them before they reach github.check_runs.
+    assert "--own-check-names-file" in body, \
+        "transform must receive the own-check-names file"
 
 
 # --- PR-URL-derived Jira gating (pre-verify-pr.sh) ---

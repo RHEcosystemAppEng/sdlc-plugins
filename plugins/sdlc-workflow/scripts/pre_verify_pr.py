@@ -200,6 +200,28 @@ def revalidate_gate(issue, pr_url):
 SANDBOX_CHECK_RUN_LOGS_PATH = "/sandbox/workspace/.pre-script/check-run-logs.txt"
 
 
+def filter_own_check_runs(check_runs, own_names):
+    """Drop verify-pr's own workflow check-runs from the prefetched list.
+
+    ``own_names`` is the set of check-run names produced by verify-pr's own
+    workflow (``fullsend verify-pr``) at the PR head SHA, gathered on the trusted
+    runner across EVERY run of that workflow at the SHA so both the in-progress
+    dispatch and any superseded prior attempt are covered. Those own runs are
+    non-terminal (or a superseded attempt failed) at evaluation time, so
+    correctness.md Check 1a maps them to pending/failed and drags CI Status to a
+    permanent self-referential WARN/FAIL. Removing them here — the CI-Status
+    analogue of Step 1's ``running-workflow-name: wait-for-checks`` self-exclusion
+    — lets a PR whose substantive checks all pass report CI Status = PASS.
+
+    Matches on the check-run ``name`` (an entry with no ``name`` is kept, since a
+    substantive check is never nameless in practice). Returns a NEW list; the
+    input is not mutated. An empty ``own_names`` returns the input unchanged, so a
+    run that could not enumerate its own check-runs simply keeps prior behavior.
+    """
+    names = set(own_names)
+    return [c for c in check_runs if c.get("name") not in names]
+
+
 def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
                         diff, stat, reviews, review_comments,
                         issue_comments, commits, check_runs=None,
@@ -355,9 +377,33 @@ def _read_json(path):
         return json.load(f)
 
 
+def _read_own_check_names(path):
+    """Read verify-pr's own workflow check-run names (one per line) from PATH.
+
+    The shell gathers these on the trusted runner (via `gh`) and writes them to a
+    file — one name per line, so job names containing spaces survive intact — so
+    the pure ``filter_own_check_runs`` helper stays unit-testable off the file.
+    Returns an empty set when PATH is falsy (the option was not supplied) or the
+    file is empty; an empty set means no self-exclusion, keeping prior behavior.
+    """
+    if not path:
+        return set()
+    with open(path) as f:
+        return {line.strip() for line in f if line.strip()}
+
+
 def _github_from_dir(args):
-    """Assemble the github bundle from raw read files written by the shell."""
+    """Assemble the github bundle from raw read files written by the shell.
+
+    Filters verify-pr's own workflow check-runs (TC-6343) out of the prefetched
+    check-runs before embedding them, using the own-check-name set the shell
+    gathered on the runner. This is done here (not in the shell's jq reduction) so
+    the exclusion logic is a unit-testable pure function.
+    """
     d = args.github_dir.rstrip("/")
+    check_runs = _read_json(f"{d}/check-runs.json")
+    own_names = _read_own_check_names(getattr(args, "own_check_names_file", None))
+    check_runs = filter_own_check_runs(check_runs, own_names)
     return build_github_bundle(
         pr_repo=args.pr_repo,
         pr_number=args.pr_number,
@@ -369,7 +415,7 @@ def _github_from_dir(args):
         review_comments=_read_json(f"{d}/review-comments.json"),
         issue_comments=_read_json(f"{d}/issue-comments.json"),
         commits=_read_json(f"{d}/commits.json"),
-        check_runs=_read_json(f"{d}/check-runs.json"),
+        check_runs=check_runs,
         check_run_logs_path=_check_run_logs_path(f"{d}/check-run-logs.txt"),
     )
 
@@ -425,6 +471,7 @@ def main(argv):
     t.add_argument("--pr-number", type=int)
     t.add_argument("--head-ref")
     t.add_argument("--commit-sha")
+    t.add_argument("--own-check-names-file")
     t.add_argument("--idempotency-dir")
 
     args = parser.parse_args(argv)

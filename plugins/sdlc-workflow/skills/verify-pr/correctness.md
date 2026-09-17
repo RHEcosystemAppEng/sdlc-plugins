@@ -43,7 +43,13 @@ Check whether all CI checks on the PR pass.
 
 **Sandbox mode** (CI Status input provided): do **not** run `gh` — read the
 pre-fetched check-run outcomes from the CI Status input (each entry has `name`,
-`status`, `conclusion`, `details_url`). Map each entry to a status:
+`status`, `conclusion`, `details_url`). These are already **self-excluded** on the
+trusted runner: verify-pr's own workflow (`fullsend verify-pr`) check-runs — the
+in-progress dispatch and any superseded prior attempt — are removed before the
+bundle is written (the CI-Status analogue of Step 1's `running-workflow-name`
+self-exclusion), so the sandbox never evaluates verify-pr's own runs and a PR
+whose substantive checks all pass can reach CI Status = PASS. Map each entry to a
+status:
 
 - `conclusion` of `success`/`neutral`/`skipped` → pass
 - `conclusion` of `failure`/`timed_out`/`cancelled`/`action_required` → failed
