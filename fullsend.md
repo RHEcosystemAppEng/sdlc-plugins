@@ -186,13 +186,15 @@ has no CI-completion event to trigger on, which drives the design:
   fullsend, and GitHub's recursion guard suppresses `check_suite` / `check_run`
   for suites created by Actions. A CI-completion-triggered dispatch is therefore
   not reliably deliverable.
-- The workaround is an **inline `pull_request` wait**: `fullsend-verify-pr.yml`
-  triggers on `pull_request` (`opened`, `synchronize`, `reopened`) and its
-  `wait-for-checks` job blocks on
+- The workaround is an **inline `pull_request_target` wait**:
+  `fullsend-verify-pr.yml` triggers on `pull_request_target` (`opened`,
+  `synchronize`, `reopened`, `labeled`) and its `wait-for-checks` job blocks on
   [`lewagon/wait-on-check-action`](https://github.com/lewagon/wait-on-check-action)
   (pinned by SHA) until every *other* check on the PR head reaches a terminal
   state. Only then does the `verify-pr` job dispatch. This inline wait is the only
-  reliable "run after CI" trigger (TC-6180 NFRs).
+  reliable "run after CI" trigger (TC-6180 NFRs). The trigger is
+  `pull_request_target` (not `pull_request`) so **fork-origin PRs** get the
+  upstream vars/secrets/OIDC the mint step needs — see **Fork PRs** below.
 - **CI result is data, not a gate.** `allowed-conclusions` lists *all* terminal
   conclusions (`success`, `failure`, `neutral`, `cancelled`, `skipped`,
   `timed_out`, `action_required`, `stale`, `startup_failure`), so a failing check
@@ -208,8 +210,8 @@ The dispatch job hands a pre-built single-entry matrix (agent `verify-pr`, role
 `fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@v0`, whose
 `harness-run` job mints the review-role App token via OIDC and runs `fullsend run`.
 
-This `pull_request` trigger is the CI-side equivalent of the harness's own **CEL
-trigger**, which drives the `fullsend dispatch` path. The trigger is declared on
+This `pull_request_target` trigger is the CI-side equivalent of the harness's own
+**CEL trigger**, which drives the `fullsend dispatch` path. The trigger is declared on
 the composing child `.fullsend/harness/verify-pr.yaml`:
 
 ```
@@ -227,6 +229,36 @@ verify-pr**): it resolves the Jira key from the PR URL by a JQL search on the Gi
 Pull Request custom field and proceeds only when the issue is status `Review` with
 the `ai-generated-jira` label (ADR 0072 skip otherwise). This scopes automated
 review to sdlc-workflow-tracked PRs.
+
+#### Fork PRs (`pull_request_target` + `ok-to-test`)
+
+The workflow triggers on **`pull_request_target`**, not `pull_request` (TC-6331).
+A `pull_request` run whose head branch lives on a **fork** gets no repo
+vars/secrets and no OIDC (`id-token`), so `vars.FULLSEND_MINT_URL` resolves empty
+and the mint step fails (`FULLSEND_MINT_URL is not set`). `pull_request_target`
+runs the **base-branch** version of the workflow with full access to upstream
+vars/secrets/OIDC, so a fork PR can dispatch (fullsend **ADR-0009**).
+
+This is only safe because the workflow **never checks out or executes fork code**.
+It builds the dispatch matrix from `github.event` alone (`GITHUB_EVENT_PATH`, via
+`jq --argjson` — no shell interpolation of PR-controlled strings) and hands off to
+`reusable-dispatch.yml`, which does its own checkout/mint in base-repo context.
+That closes the classic `pull_request_target` "pwn request" credential-exfiltration
+hole.
+
+Defense-in-depth is an **`ok-to-test` maintainer-label gate**, modelled on
+fullsend's `docs/guides/dev/e2e-testing.md`:
+
+- **Same-repo (upstream) PRs** need no label — they already carry secrets/OIDC —
+  and run on `opened` / `synchronize` / `reopened`.
+- **Fork PRs** dispatch **only** when a maintainer applies the `ok-to-test` label
+  (the `labeled` trigger). A maintainer reviews the fork's code first, then labels.
+- The `remove-ok-to-test` job strips the label on every new push (`synchronize`)
+  to a fork PR, so new commits force re-review before the label — and thus another
+  verify-pr run — can be re-applied.
+
+There is **no longer an "upstream head branch required" constraint**: fork
+contributors open PRs normally, and a maintainer gates each run with the label.
 
 ### Variables and secrets (day-2 management)
 
@@ -493,7 +525,8 @@ OIDC and posts the report — whether CI passed or failed (TC-6180 Reqs 4, 6, 7)
 
 **Vehicle** — a throwaway PR **#300** (`tc-6192-e2e-acceptance` →
 `verify-pr-fullsend`, head branch on the **upstream** repo so `pull_request`
-secrets + OIDC are available — a fork head would get neither), qualified against
+secrets + OIDC are available — a fork head would get neither; this pre-TC-6331
+constraint is now lifted, see **Fork PRs**), qualified against
 Jira task **TC-6254** (status `Review`, label `ai-generated-jira`, Git PR field =
 PR #300 URL). The Jira report comment is authored by the tier-1 Jira account
 configured for that run (**Marco Rizzi**).
@@ -547,8 +580,9 @@ sandbox kept running the pre-TC-6257 skill, whose bundle carries no `check_runs`
 and `CI Status` fell back to the old WARN.
 
 **Vehicle** — throwaway PR **#303** (`tc-6257-e2e-vehicle` → `verify-pr-fullsend`,
-**upstream** so `pull_request` gets secrets + OIDC), qualified against Jira task
-**TC-6266** (status `Review`, label `ai-generated-jira`, Git PR field = PR #303).
+**upstream** so `pull_request` gets secrets + OIDC — pre-TC-6331, now lifted),
+qualified against Jira task **TC-6266** (status `Review`, label
+`ai-generated-jira`, Git PR field = PR #303).
 
 **Results — both prefetch surfaces proven live:**
 
