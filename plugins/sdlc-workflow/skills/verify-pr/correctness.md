@@ -43,7 +43,20 @@ Check whether all CI checks on the PR pass.
 
 **Sandbox mode** (CI Status input provided): do **not** run `gh` — read the
 pre-fetched check-run outcomes from the CI Status input (each entry has `name`,
-`status`, `conclusion`, `details_url`). Map each entry to a status:
+`status`, `conclusion`, `details_url`). The trusted runner attempts to
+**self-exclude** verify-pr's own workflow (`fullsend verify-pr`) check-runs — the
+in-progress dispatch and any superseded prior attempt — before the bundle is
+written (the CI-Status analogue of Step 1's `running-workflow-name`
+self-exclusion), so a PR whose substantive checks all pass can reach CI Status =
+PASS. This self-exclusion is **best-effort**: enumerating the own runs needs
+`actions:read`, and if that fails (missing scope or an API error) the runner logs
+`WARNING: ... CI Status self-exclusion is a no-op this run` and writes the bundle
+**without** removing its own runs. In that fallback case the CI Status input can
+still contain verify-pr's own `fullsend verify-pr` check-runs — typically an
+`in_progress` dispatch that maps to *pending* — so do not assume they are absent:
+map every entry on its own merits (below), and when the only non-passing entries
+are verify-pr's own runs, say so in the evidence rather than treating the PR as
+genuinely blocked. Map each entry to a status:
 
 - `conclusion` of `success`/`neutral`/`skipped` → pass
 - `conclusion` of `failure`/`timed_out`/`cancelled`/`action_required` → failed
