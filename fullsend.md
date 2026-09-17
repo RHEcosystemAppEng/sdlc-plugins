@@ -6,10 +6,12 @@ isolated container with least-privilege network and filesystem policies, while
 all issue-tracker and GitHub writes happen on the trusted runner — never inside
 the sandbox.
 
-This guide documents the **native v0.37.0 path**: a standalone root-level
+This guide documents the **native CLI path**: a standalone root-level
 harness, the stock digest-pinned `fullsend-code` image, a single pinned-URL
 registration, and the plugin referenced in place with zero duplication. The only
-skill wired up today is `verify-pr`.
+skill wired up today is `verify-pr`, which runs both on demand (`fullsend run`,
+locally or in CI) and automatically on every pull request via a CI-gated
+dispatch (see **CI deployment**).
 
 ## How it works
 
@@ -81,7 +83,9 @@ on the runner.
 
 ## Prerequisites
 
-- [fullsend](https://github.com/fullsend-ai/fullsend) v0.37.0 CLI installed.
+- [fullsend](https://github.com/fullsend-ai/fullsend) CLI installed (CI pins
+  **v0.43.0** — see **Bumping the fullsend version**; a local run needs a
+  compatible release).
 - An OpenShell gateway running — fullsend uses OpenShell as its sandbox runtime.
 - GCP credentials for Vertex AI — a service-account key JSON (local) or a WIF
   external-account config (CI). Referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
@@ -136,6 +140,123 @@ JIRA_PROJECT_KEY=TC
 GH_TOKEN=my-github-token
 ```
 
+## CI deployment (per-repo GitHub App)
+
+The same pinned harness that runs locally is dispatched automatically in CI, once
+per pull request, after the PR's other checks finish. Three one-time provisioning
+steps stand this up (day-0, run by a repo/org admin); the recurring run then needs
+no manual step.
+
+### Installation
+
+1. **`fullsend github setup`** — provisions the per-repo installation. It writes
+   the two-layer config (`.fullsend/config.base.yaml`, the vendor preset base
+   layer, and `.fullsend/config.yaml`, the repo overlay) and installs the vendor
+   shim workflow `.github/workflows/fullsend.yaml`. `install_mode: per-repo`
+   throughout. **verify-pr is registered only in `config.base.yaml`**, never in
+   `config.yaml`: the shim greps `config.yaml` alone for agents, so it never
+   dispatches verify-pr, while `fullsend dispatch` / `fullsend run` still resolve
+   it because `LoadConfig` merges `config.yaml` over `config.base.yaml` (ADR 0069).
+2. **`fullsend inference provision`** — provisions hosted Vertex AI via Workload
+   Identity Federation and records the result as the inference override in
+   `.fullsend/config.yaml`:
+   ```yaml
+   inference:
+     project: it-gcp-tpa
+     wif_provider: projects/442181572212/locations/global/workloadIdentityPools/fullsend-inference/providers/gh-rhecosystemappeng-sdlc-plugin
+   ```
+   In CI the WIF provider mints a short-lived Vertex credential per run — no
+   long-lived key is stored (contrast the local run, which uses an SA key file).
+3. **Org GitHub App install** — install the fullsend GitHub App on the org/repo
+   with the **review** role. The App mints the review-role token via OIDC at
+   dispatch time (the `mint_url` input) for the PR review/report writes. This is an
+   org-admin action in GitHub, not a CLI step.
+
+The recurring dispatch is a dedicated workflow,
+`.github/workflows/fullsend-verify-pr.yml` (not the vendor shim) — see
+**Dispatch design** below.
+
+### Dispatch design
+
+verify-pr must run **after** a PR's other CI finishes, so it can treat CI results
+as input data — never as a gate (it runs whether CI passed or failed). fullsend
+has no CI-completion event to trigger on, which drives the design:
+
+- There is **no `check_suite` / `check_run` / `workflow_run` TransitionKind** in
+  fullsend, and GitHub's recursion guard suppresses `check_suite` / `check_run`
+  for suites created by Actions. A CI-completion-triggered dispatch is therefore
+  not reliably deliverable.
+- The workaround is an **inline `pull_request` wait**: `fullsend-verify-pr.yml`
+  triggers on `pull_request` (`opened`, `synchronize`, `reopened`) and its
+  `wait-for-checks` job blocks on
+  [`lewagon/wait-on-check-action`](https://github.com/lewagon/wait-on-check-action)
+  (pinned by SHA) until every *other* check on the PR head reaches a terminal
+  state. Only then does the `verify-pr` job dispatch. This inline wait is the only
+  reliable "run after CI" trigger (TC-6180 NFRs).
+- **CI result is data, not a gate.** `allowed-conclusions` lists *all* terminal
+  conclusions (`success`, `failure`, `neutral`, `cancelled`, `skipped`,
+  `timed_out`, `action_required`, `stale`, `startup_failure`), so a failing check
+  still releases the wait and verify-pr still runs and reports (recording
+  `CI Status = FAIL`).
+  `fail-on-no-checks: false` lets a PR with no other checks proceed;
+  `timeout-minutes: 45` bounds a hung check (the dispatch is then skipped).
+- One in-flight run per PR: a `concurrency` group keyed on the PR number with
+  `cancel-in-progress: true` supersedes a stale run on a new push.
+
+The dispatch job hands a pre-built single-entry matrix (agent `verify-pr`, role
+`review`) to the vendor reusable workflow
+`fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@v0`, whose
+`harness-run` job mints the review-role App token via OIDC and runs `fullsend run`.
+
+This `pull_request` trigger is the CI-side equivalent of the harness's own **CEL
+trigger**, which drives the `fullsend dispatch` path. The trigger is declared on
+the composing child `.fullsend/harness/verify-pr.yaml`:
+
+```
+event.entity.kind == "change_proposal" &&
+event.transition.kind in ["synchronized", "opened", "reopened"]
+```
+
+It **must** live on the child, not only on the base: `mergeBaseIntoChild`
+(`internal/harness/compose.go`) carries `role` and other scalars from base→child
+but intentionally does **not** carry `trigger`, so a trigger set only on the base
+is inert (ADR 0061).
+
+Before the agent runs, the **pre_script gates on Jira** (see **Running
+verify-pr**): it resolves the Jira key from the PR URL by a JQL search on the Git
+Pull Request custom field and proceeds only when the issue is status `Review` with
+the `ai-generated-jira` label (ADR 0072 skip otherwise). This scopes automated
+review to sdlc-workflow-tracked PRs.
+
+### Variables and secrets (day-2 management)
+
+CI configuration is split between GitHub Actions **variables** (non-secret,
+`vars.*`) and **secrets** (`secrets.*`), all consumed by
+`.github/workflows/fullsend-verify-pr.yml`. To change any value, edit it under the
+repo's **Settings → Secrets and variables → Actions** (or with `gh variable set` /
+`gh secret set`) — no code change is needed, and the next dispatch picks it up.
+
+| Name | Kind | Purpose | Update when |
+|---|---|---|---|
+| `JIRA_EMAIL` | secret | Jira Service Account email for the tier-1 Basic-auth credential (mapped to vendor input `JIRA_USER_EMAIL`); authors the report comment. | Changing the Jira Service Account. |
+| `JIRA_API_TOKEN` | secret | Jira scoped API token for the same account (mapped to `JIRA_TOKEN`). | Rotating the SA token (tokens expire / are revoked). |
+| `JIRA_BASE_URL` | variable | Jira site URL for display links inside the sandbox. | Jira site moves. |
+| `FULLSEND_GCP_WIF_PROVIDER` | secret | Vertex Workload Identity Federation provider resource. | Re-provisioning inference (`fullsend inference provision`). |
+| `FULLSEND_GCP_PROJECT_ID` | secret | GCP project hosting Vertex inference. | GCP project changes. |
+| `FULLSEND_MINT_URL` | variable | OIDC mint endpoint for the review-role App token. | App / mint endpoint changes. |
+| `FULLSEND_GCP_REGION` | variable | Vertex region. | Region changes. |
+| `FULLSEND_PROJECT_NUMBER` | variable | GCP project number for OIDC. | GCP project changes. |
+| `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_TRACES_HEADERS` | secret | OpenTelemetry export auth headers (optional observability). | Rotating the OTLP endpoint credential. |
+
+The Jira credential is a dedicated **Service Account** — email + scoped token,
+Basic auth (fullsend's Jira tracker is Basic-auth only). It is a **tier-1**
+credential: it stays in runner env and never enters the sandbox (see **Credential
+delivery and tiers**). To rotate it, issue a new scoped token for the SA and
+update `JIRA_API_TOKEN` (and `JIRA_EMAIL` if the account itself changes); the next
+dispatch authenticates the post_script Jira comment with the new value. The same
+pattern applies to every row above — update the value in repo settings, no code
+change.
+
 ## Releasing an update (this repo)
 
 The `.fullsend/` registration pins content by commit SHA, so **editing a file is
@@ -165,6 +286,47 @@ not enough** — you must re-pin and re-lock in the same change. The full loop:
 > path — nothing to update"*. `agent update` re-pins **URL** agents only — it is
 > for adopters (below), not for the self-hosted `.fullsend/` model. Here you
 > re-pin by editing the `base:` SHA/hash and re-locking.
+
+### Bumping the fullsend version
+
+The CI dispatch pins the fullsend CLI to a released tag so it does not float
+(the vendor default floats to `job.workflow_sha`). The pin lives in
+`.github/workflows/fullsend-verify-pr.yml`:
+
+```yaml
+      fullsend_version: "v0.43.0"
+```
+
+The current pin is **v0.43.0** — bumped from v0.37.0 because v0.37.0's bundled
+OpenShell never reached sandbox readiness (`not ready after 2m0s` → `Failed to
+create sandbox`). To bump:
+
+1. Set `fullsend_version` to the new released tag (v-prefixed, matching the
+   vendor's git tags).
+2. **Re-validate end to end**: open a throwaway qualifying PR and confirm the
+   dispatch reaches sandbox readiness and posts a report (an OpenShell/runtime
+   regression surfaces as `Failed to create sandbox`). Only merge once a live run
+   passes.
+3. Update the local `## Prerequisites` version note to match if the local CLI
+   must track CI.
+
+The fullsend CLI version is independent of both the harness `base:` re-pin and the
+plugin version below.
+
+### Keeping the two plugin-version files in sync
+
+The plugin/skill version is stored in **two** files that must always match:
+
+- `plugins/sdlc-workflow/.claude-plugin/plugin.json` — the plugin manifest
+  (required by CI validation).
+- `.claude-plugin/marketplace.json` — the marketplace registry (required for
+  relative-path plugins).
+
+When releasing a skill/plugin change, bump **both** files in the same change (both
+are currently `0.13.9`). This version bump is orthogonal to — but released
+alongside — the `base:` re-pin + re-lock loop above: the re-pin/re-lock is what
+makes the edited plugin content take effect at runtime, while the version bump is
+the human-facing marker of that release.
 
 ### Constraints and gotchas
 
@@ -333,9 +495,8 @@ OIDC and posts the report — whether CI passed or failed (TC-6180 Reqs 4, 6, 7)
 `verify-pr-fullsend`, head branch on the **upstream** repo so `pull_request`
 secrets + OIDC are available — a fork head would get neither), qualified against
 Jira task **TC-6254** (status `Review`, label `ai-generated-jira`, Git PR field =
-PR #300 URL). The interim personal-token fallback is in force, so the Jira report
-comment is authored by **Marco Rizzi** (it would be the Service Account under the
-SA token — TC-6191, on hold).
+PR #300 URL). The Jira report comment is authored by the tier-1 Jira account
+configured for that run (**Marco Rizzi**).
 
 **Results — all five acceptance criteria proven:**
 
