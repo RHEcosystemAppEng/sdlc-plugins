@@ -1,7 +1,7 @@
 # Eval PR Fork Dispatch
 
 **Date**: 2026-05-07
-**Scope**: Secure eval execution for fork PRs via `workflow_run` dispatch
+**Scope**: Secure eval execution for fork PRs via `workflow_run` dispatch, including temporary integration-branch support
 **Relates to**: [Eval Skills CI Workflow](2026-04-21-eval-skills-ci-workflow-design.md)
 
 ## Problem
@@ -21,6 +21,20 @@ Split `eval-pr.yml` into two workflows using the `workflow_run` event, which run
 > — [Events that trigger workflows: workflow_run](https://docs.github.com/en/actions/writing-workflows/choosing-when-your-workflow-runs/events-that-trigger-workflows#workflow_run)
 
 A trust check auto-approves eval runs for repository collaborators with write access, while external contributors require manual approval via a GitHub protected environment.
+
+### Temporary integration targets
+
+During TC-6201 integration, the eval path supports pull requests targeting both
+`main` and `verify-pr-fullsend`. The path-filtered `eval-pr.yml` workflow keeps
+the same eval-file filters and workflow handoff for either target. The trusted
+`eval-pr-run.yml` workflow discovers the matching open pull request by head SHA,
+publishes its actual base ref as an output, and uses that ref for the trusted
+checkout. This keeps the integration branch on the same Fullsend review and eval
+path without executing untrusted fork code in the privileged workflow.
+
+This dual-target support is temporary. TC-5816 and TC-6358 own the later
+graduation and cleanup after the integration work has landed in `main`; until
+then, `verify-pr-fullsend` must remain an active supported target.
 
 ## Design Decisions
 
@@ -58,7 +72,8 @@ Fork PR opened
 │  - Discover skills via pulls.listFiles│
 │  - Check collaborator permission     │
 │  - Update status if awaiting approval│
-│  - Output: trusted, skills, PR#      │
+│  - Output: trusted, skills, PR#,     │
+│    actual base ref                   │
 │  (No checkout — pure API discovery)  │
 │                                      │
 │  Job 2: gate                         │
@@ -84,16 +99,16 @@ Fork PR opened
 
 ### Changes from Current
 
-The workflow is reduced to a minimal path-filtered trigger. All logic is removed — no checkout, no discovery, no artifact. Its sole purpose is to act as a gate: GitHub's path filter ensures it only runs when skill or eval files change, and its completion triggers Stage 2 via `workflow_run`.
+The workflow is reduced to a minimal path-filtered trigger. All logic is removed — no checkout, no discovery, no artifact. Its sole purpose is to act as a gate: GitHub's path filter ensures it only runs when skill or eval files change, and its completion triggers Stage 2 via `workflow_run`. During integration, the trigger accepts both `main` and `verify-pr-fullsend` while preserving the existing path filters.
 
 ### Trigger
 
-Unchanged:
+Path filters remain unchanged; branch targets temporarily include both supported integration branches:
 
 ```yaml
 on:
   pull_request:
-    branches: [main]
+    branches: [main, verify-pr-fullsend]
     paths:
       - 'plugins/sdlc-workflow/skills/**/*.md'
       - 'evals/**/evals.json'
@@ -104,7 +119,7 @@ on:
 
 Single no-op step. The workflow just needs to complete successfully to trigger Stage 2.
 
-## Workflow 2: eval-pr-run.yml (new)
+## Workflow 2: eval-pr-run.yml (modified)
 
 ### Trigger
 
@@ -132,9 +147,9 @@ Resolves PR identity from the GitHub API, discovers changed skills via `pulls.li
 **Steps:**
 
 1. **Resolve PR identity and check trust** via `actions/github-script@v9`:
-   - Find PR via `pulls.list` filtered by `base: 'main'`, matched by `head.sha == workflow_run.head_sha`
+   - Find PR via `pulls.list` for open PRs, matched by `head.sha == workflow_run.head_sha`; capture the matching PR's `base.ref`
    - Check collaborator permission level for the PR author
-   - Output `pr_number`, `author`, `trusted`
+   - Output `pr_number`, `base_ref`, `author`, `trusted`
 
 Note: `listPullRequestsAssociatedWithCommit` does not work for fork PRs because the commit lives in the fork's repository, not the base repo's commit graph. `pulls.list` with SHA matching is the reliable alternative.
 
@@ -142,9 +157,10 @@ Note: `listPullRequestsAssociatedWithCommit` does not work for fork PRs because 
 const headSha = context.payload.workflow_run.head_sha;
 const prs = await github.paginate(github.rest.pulls.list, {
   owner: context.repo.owner, repo: context.repo.repo,
-  state: 'open', base: 'main', per_page: 100
+  state: 'open', per_page: 100
 });
 const pr = prs.find(p => p.head.sha === headSha);
+core.setOutput('base_ref', pr.base.ref);
 const { data } = await github.rest.repos.getCollaboratorPermissionLevel({
   owner: context.repo.owner, repo: context.repo.repo, username: pr.user.login
 });
@@ -153,7 +169,7 @@ const trusted = ['admin', 'write'].includes(data.permission);
 
 2. **Discover changed skills** via `actions/github-script@v9` — uses `pulls.listFiles` to get changed filenames, matches against skill/eval path patterns, confirms `evals/<skill>/evals.json` exists via the file list or `repos.getContent`. No checkout needed.
 
-3. **Set outputs**: `skills`, `pr_number`, `author`, `trusted`
+3. **Set outputs**: `skills`, `pr_number`, `base_ref`, `author`, `trusted`
 
 ### Job 2: gate
 
@@ -187,7 +203,7 @@ run-evals:
 
 **Steps:**
 
-1. **Checkout base branch** — `actions/checkout@v7` with no `ref:` (defaults to the base branch). This establishes a trusted workspace root with the repository's CLAUDE.md and `.claude/` configuration.
+1. **Checkout base branch** — `actions/checkout@v7` with `ref: ${{ needs.discover.outputs.base_ref }}`. This establishes a trusted workspace root from the discovered PR base with the repository's CLAUDE.md and `.claude/` configuration.
 
 2. **Checkout PR merge commit into subdirectory** — `actions/checkout@v7` with `ref: refs/pull/<pr_number>/merge`, `path: pr-head`, and `allow-unsafe-pr-checkout: true`. The `allow-unsafe-pr-checkout` flag is required because `actions/checkout@v7` blocks fork PR refs in `workflow_run` workflows regardless of the `path:` parameter ([GitHub Changelog, June 2026](https://github.blog/changelog/2026-06-18-safer-pull_request_target-defaults-for-github-actions-checkout/)).
 
@@ -298,8 +314,8 @@ The sandbox credential isolation requires `bubblewrap` and `socat` on Linux runn
 
 | File | Change |
 |------|--------|
-| `.github/workflows/eval-pr.yml` | Reduce to minimal path-filtered trigger (no discovery, no artifact) |
-| `.github/workflows/eval-pr-run.yml` | New workflow: trust check, gate, eval execution, review posting |
+| `.github/workflows/eval-pr.yml` | Reduce to minimal path-filtered trigger (no discovery, no artifact) and support `main` plus `verify-pr-fullsend` during integration |
+| `.github/workflows/eval-pr-run.yml` | Trust check, gate, eval execution, review posting, and actual-base-ref propagation |
 | `docs/specs/2026-04-21-eval-skills-ci-workflow-design.md` | Add reference to this spec |
 
 ## References

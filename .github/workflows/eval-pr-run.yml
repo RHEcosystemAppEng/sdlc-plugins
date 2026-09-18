@@ -38,6 +38,7 @@ jobs:
     outputs:
       skills: ${{ steps.discover.outputs.skills }}
       pr_number: ${{ steps.pr.outputs.pr_number }}
+      base_ref: ${{ steps.pr.outputs.base_ref }}
       author: ${{ steps.pr.outputs.author }}
       trusted: ${{ steps.pr.outputs.trusted }}
     steps:
@@ -62,22 +63,22 @@ jobs:
           script: |
             // listPullRequestsAssociatedWithCommit returns empty for fork PRs
             // because the commit lives in the fork's repo, not the base repo's
-            // commit graph. Use pulls.list filtered by base branch instead.
+            // commit graph. Use pulls.list and match the open PR by head SHA instead.
             const headSha = context.payload.workflow_run.head_sha;
             const prs = await github.paginate(github.rest.pulls.list, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               state: 'open',
-              base: 'main',
               per_page: 100
             });
 
             const pr = prs.find(p => p.head.sha === headSha);
             if (!pr) {
-              core.setFailed(`No open PR targeting main found for commit ${headSha}`);
+              core.setFailed(`No open PR found for commit ${headSha}`);
               return;
             }
             core.setOutput('pr_number', pr.number.toString());
+            core.setOutput('base_ref', pr.base.ref);
             core.setOutput('author', pr.user.login);
 
             let trusted = false;
@@ -188,6 +189,8 @@ jobs:
     steps:
       - name: Checkout base branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.discover.outputs.base_ref }}
 
       - name: Checkout PR merge commit into subdirectory
         uses: actions/checkout@v7
