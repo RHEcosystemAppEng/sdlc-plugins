@@ -182,6 +182,7 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
+      issues: write
       pull-requests: write
       id-token: write
     steps:
@@ -279,7 +280,35 @@ jobs:
             exit 1
           fi
 
-      - name: Post eval results review
+      - name: Render eval results
+        env:
+          SKILLS_CSV: ${{ needs.discover.outputs.skills }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra SKILLS <<< "$SKILLS_CSV"
+          version=$(jq -r '.version' plugins/sdlc-workflow/.claude-plugin/plugin.json)
+
+          for skill in "${SKILLS[@]}"; do
+            workspace="/tmp/${skill}-eval-pr"
+            python3 plugins/sdlc-workflow/skills/run-evals/scripts/aggregate_benchmark.py \
+              --results "$workspace"
+
+            render_args=(
+              --results "$workspace"
+              --skill "$skill"
+              --version "$version"
+            )
+            baseline="evals/${skill}/baselines/latest"
+            if [[ -d "$baseline" ]]; then
+              render_args+=(--baseline "$baseline")
+            fi
+
+            python3 plugins/sdlc-workflow/skills/run-evals/scripts/render_summary.py \
+              "${render_args[@]}"
+            test -s "$workspace/summary.md"
+          done
+
+      - name: Post eval results comment
         env:
           SKILLS_CSV: ${{ needs.discover.outputs.skills }}
           PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
@@ -290,7 +319,8 @@ jobs:
             const skills = process.env.SKILLS_CSV.split(',').filter(Boolean);
             const prNumber = parseInt(process.env.PR_NUMBER);
 
-            let body = '## Eval Results\n\n';
+            const marker = '<!-- eval-pr-report -->';
+            let body = `${marker}\n## Eval Results\n\n`;
             for (const skill of skills) {
               const summaryPath = `/tmp/${skill}-eval-pr/summary.md`;
               if (fs.existsSync(summaryPath)) {
@@ -300,30 +330,28 @@ jobs:
               }
             }
 
-            const { data: reviews } = await github.rest.pulls.listReviews({
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: prNumber
+              issue_number: prNumber,
+              per_page: 100
             });
-            const marker = '## Eval Results';
-            const existing = reviews.find(r =>
-              r.user?.login === 'github-actions[bot]' && r.body?.startsWith(marker)
+            const existing = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
             );
 
             if (existing) {
-              await github.rest.pulls.updateReview({
+              await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                pull_number: prNumber,
-                review_id: existing.id,
+                comment_id: existing.id,
                 body
               });
             } else {
-              await github.rest.pulls.createReview({
+              await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                pull_number: prNumber,
-                event: 'COMMENT',
+                issue_number: prNumber,
                 body
               });
             }
@@ -349,7 +377,7 @@ jobs:
             let state, description;
             if (evalsResult === 'success') {
               state = 'success';
-              description = 'Eval run completed — results posted as PR review';
+              description = 'Eval run completed — results posted as PR comment';
             } else if (discoverResult !== 'success') {
               state = 'failure';
               description = 'Eval run failed — could not resolve PR context';
