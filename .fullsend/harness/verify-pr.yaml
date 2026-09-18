@@ -1,0 +1,68 @@
+# Local composing child for the verify-pr harness.
+#
+# fullsend v0.37.0 rejects an absolute host_files.src that is inherited from a
+# URL-sourced harness, so the runner-local credential and pre_script-output
+# mounts cannot live in the URL-pinned base (harness/verify-pr.yaml). This local
+# child pins that base by raw URL (so the pinned bytes are byte-identical across
+# local and CI) and adds those absolute mounts directly. host_files are
+# concatenated base+child, deduplicated by dest with the child winning (ADR-0045;
+# harness-fields.md). Absolute host_files declared directly in this local child
+# are NOT URL-sourced, so they are accepted.
+#
+# ONE child serves BOTH environments — the mounts are env-expanded and the OIDC
+# token is optional:
+#   GOOGLE_APPLICATION_CREDENTIALS  local: service-account key JSON
+#                                   CI:    WIF external_account config
+#   GCP_OIDC_TOKEN_FILE             local: unset → optional mount skipped
+#                                   CI:    runner-refreshed OIDC token file
+# Only the runtime environment differs — fullsend's sanctioned "same harness,
+# different runtime env" model (ADR-0055; running-agents-locally.md).
+#
+# PIN: the base cannot be a cross-boundary local path — fullsend rejects a
+# `base:` that escapes the .fullsend workspace root, and a URL base is required
+# anyway so the base's relative children resolve as pinned raw URLs. The base is
+# pinned to a commit SHA (not a branch) plus the base file's sha256; both local
+# and CI resolve these exact bytes. lock.yaml freezes every child SHA256.
+# The base URL host prefix must stay listed in config.yaml allowed_remote_resources
+# (base URLs are validated against that allowlist, not inherited).
+# Re-pin after any base edit: push harness/verify-pr.yaml, set the SHA to the new
+# commit + the sha256 to `shasum -a 256 harness/verify-pr.yaml`, `fullsend lock`.
+base: https://raw.githubusercontent.com/RHEcosystemAppEng/sdlc-plugins/da053ba1649ef9368436d69a639e121138b97801/harness/verify-pr.yaml#sha256=3c9dc221e2a37e7aa7ff294381b6b5b1580771ba70432c42924fc3a85f078e63
+
+# CEL trigger (ADR 0061) — MUST be declared here, on the composing child, not
+# only on the base. `fullsend dispatch` registers this child (config.base.yaml
+# source: harness/verify-pr.yaml resolves under .fullsend/) and composes the
+# base, but mergeBaseIntoChild (internal/harness/compose.go) carries `role` and
+# other scalars from base->child while intentionally NOT carrying `trigger`. A
+# trigger set only on the base is therefore inert; ListTriggeredHarnesses reads
+# the composed child's Trigger. Kept byte-identical to the base's trigger (which
+# documents intent and covers direct-base consumption). Fires on a PR
+# change_proposal that is opened / synchronized / reopened — the dispatch-path
+# equivalent of the CI poller's `on: pull_request` types in
+# .github/workflows/fullsend-verify-pr.yml.
+trigger: |
+  event.entity.kind == "change_proposal" &&
+  event.transition.kind in ["synchronized", "opened", "reopened"]
+
+host_files:
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/.gcp-credentials.json
+  - src: ${GCP_OIDC_TOKEN_FILE}
+    dest: /sandbox/workspace/.gcp-oidc-token
+    optional: true
+  # pre_script prefetch output — pre-verify-pr.sh writes /tmp/fullsend-pre-output
+  # on the runner; mounted read-only into the sandbox (optional — absent until
+  # the pre_script runs, and skipped on an ADR-0072 skip).
+  - src: /tmp/fullsend-pre-output/verify-pr-input.json
+    dest: /sandbox/workspace/.pre-script/verify-pr-input.json
+    optional: true
+  # Concatenated failed-check logs — pre-verify-pr.sh always writes this file
+  # (empty when no check failed) next to verify-pr-input.json. correctness.md
+  # Check 1b reads it on a FAIL via the bundle's github.check_run_logs_path (dest
+  # below); the large log text stays off the input bundle and off the agent's
+  # context until then. host_files mounts single files only, so per-check logs
+  # are concatenated into this one file. optional: absent until the pre_script
+  # runs, and skipped on an ADR-0072 skip.
+  - src: /tmp/fullsend-pre-output/check-run-logs.txt
+    dest: /sandbox/workspace/.pre-script/check-run-logs.txt
+    optional: true
