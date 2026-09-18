@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "The response describes locating the digest comment using the marker string '[sdlc-workflow] Description digest:' from shared/description-digest-protocol.md",
+      "passed": true,
+      "evidence": "digest-match.md line 22: \"Search all returned comments for bodies starting with the marker string `[sdlc-workflow] Description digest:`\". plan.md line 54: \"Locate digest comment matching marker `[sdlc-workflow] Description digest:`\". The exact marker string is explicitly referenced in both output files."
+    },
+    {
+      "text": "The response describes computing a digest of the current description (using scripts/sha256-digest.py or SHA-256) and comparing it with the stored digest",
+      "passed": true,
+      "evidence": "digest-match.md lines 49-55: \"Extract the description field from the issue API response. Write it to a temporary file and compute the digest: python3 scripts/sha256-digest.py /tmp/desc-TC-9201.txt\". Lines 71-76 show explicit comparison of stored hex vs computed hex digests. plan.md line 58: \"Compute current digest: write description to `/tmp/desc-TC-9201.txt`, run `python3 scripts/sha256-digest.py /tmp/desc-TC-9201.txt`\"."
+    },
+    {
+      "text": "The response confirms the digests match and states it will proceed silently without prompting the user -- no additional latency for the happy path",
+      "passed": true,
+      "evidence": "digest-match.md line 76: \"Result: MATCH\". Line 80: \"The digests match. The task description has not been modified since plan-feature created it. Proceed silently to Step 2 -- no additional user prompt, no added latency, no warning messages.\" plan.md line 61: \"Outcome: proceed silently, no user prompt, no added latency\"."
+    },
+    {
+      "text": "The response does not alert the user or pause execution due to the digest check -- it proceeds directly to subsequent steps",
+      "passed": true,
+      "evidence": "digest-match.md line 80 explicitly states \"Proceed silently to Step 2 -- no additional user prompt, no added latency, no warning messages.\" plan.md proceeds directly from Step 1.5 (digest verification) to Step 2 (Verify Dependencies) and onward through Steps 3-11 with no pause or user alert related to the digest check."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

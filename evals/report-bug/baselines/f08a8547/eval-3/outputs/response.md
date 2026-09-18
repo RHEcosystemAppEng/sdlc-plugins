@@ -1,0 +1,1 @@
+**Bug Configuration is missing from CLAUDE.md.** Please run `/setup` first to add the required Bug Configuration section (including Bug issue type ID and Bug template path) before using this skill.

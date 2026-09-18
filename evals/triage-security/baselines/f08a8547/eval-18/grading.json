@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md documents existing Depend links to TC-8100 and TC-8101. idempotency-check.md Artifacts 3 and 4 confirm detection via Depend links with action 'Skip creation... No create_issue or create_link call needed.' triage-outcome.md Mutation Ledger shows both task creation rows as Skipped with reason 'already linked via Depend'. Total new mutations: 0."
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 21 lists 'ai-cve-triaged' in the Labels field. idempotency-check.md Artifact 1 states 'Detected: Yes -- the label ai-cve-triaged is present' with action 'Skip adding the label. No Jira edit_issue call needed for labels.' triage-outcome.md Mutation Ledger confirms 'Add ai-cve-triaged label' was Skipped because 'Label already present'."
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 20 shows status is 'In Progress'. idempotency-check.md Artifact 2 states the status-aware handling 'detects that the issue is already in In Progress and warns: This issue is already in In Progress. It may be actively worked on.' with action 'Skip the Assigned transition (status is already beyond Assigned).' triage-outcome.md Mutation Ledger confirms transition was Skipped."
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 43 documents detection of the existing digest comment with marker '[sdlc-workflow] Description digest: sha256-md:...' idempotency-check.md Artifact 5 confirms 'Detected: Yes' with action 'No new digest comments to post. Existing digest is preserved as-is.' triage-outcome.md Mutation Ledger shows 'Post description digest' was Skipped because 'Digest comment already exists'."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md line 44 documents detection of the existing post-triage summary comment. idempotency-check.md Artifact 6 confirms 'Detected: Yes -- a post-triage summary comment exists' with action 'Skip posting a duplicate summary comment.' triage-outcome.md Mutation Ledger shows 'Post summary comment' was Skipped because 'Summary comment already exists'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

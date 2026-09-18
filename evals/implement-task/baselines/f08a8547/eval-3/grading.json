@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md line 37-39: '`common/src/db/query.rs` -- Contains `apply_filter`, the shared utility for building SQL filter clauses from comma-separated query parameter values.' Lines 147-159 show apply_filter used in the implementation: 'let license_values = apply_filter(license_filter);'. Lines 298-299: 'The `apply_filter` function in `common/src/db/query.rs` already handles comma-separated parsing and IN clause generation. No duplication introduced -- we reuse it directly.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md lines 30-36: '`modules/fundamental/src/advisory/endpoints/list.rs` -- The advisory list endpoint already implements a `severity` query parameter filter. This is the structural template for the license filter.' Line 98-99: 'following the same pattern as the advisory endpoint's `severity` field.' Lines 291-293: 'Sibling parity: Advisory list endpoint’s severity filter follows the same pattern (optional query param -> service param -> apply_filter -> JOIN + WHERE). The license filter mirrors this structure exactly.'"
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md lines 42-43: '`entity/src/package_license.rs` -- The SeaORM entity for the package-license join table. Identify the column names (likely `package_id` and `license`) for the JOIN query.' Lines 152-159 show code using the entity: 'use entity::package_license;' with 'package_license::Relation::Package.def().rev()' for the JOIN and 'package_license::Column::License.is_in(license_values)' for the filter."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md covers all three candidates with dedicated sections: Reuse Candidate 1 (lines 10-56): 'common/src/db/query.rs::apply_filter' with 'How it is reused' subsection and code example. Reuse Candidate 2 (lines 60-118): 'modules/fundamental/src/advisory/endpoints/list.rs' with pattern comparison table. Reuse Candidate 3 (lines 122-172): 'entity/src/package_license.rs' with 'How it is reused' subsection showing JOIN and filter usage. Each includes rationale and verification steps."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "The plan's formal Implementation Changes (Step 6) lists exactly 3 files: File 1 'modules/fundamental/src/package/endpoints/list.rs' (MODIFY), File 2 'modules/fundamental/src/package/service/mod.rs' (MODIFY), File 3 'tests/api/package_license_filter.rs' (CREATE). All three are confirmed in-scope per the Verification section (lines 269-273). The plan mentions 'tests/api/mod.rs' and 'docs/api.md' but explicitly flags both as out-of-scope (lines 255-256: 'This would be flagged as an out-of-scope file'; lines 264-265: 'This would be flagged as out-of-scope since it is not in Files to Modify'), correctly identifying them as scope violations rather than proposing unauthorized modifications."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md lines 298-300: 'The `apply_filter` function in `common/src/db/query.rs` already handles comma-separated parsing and IN clause generation. No duplication introduced -- we reuse it directly. No new utility functions are created that overlap with existing code.' The implementation code in Step 6 shows direct calls to apply_filter (line 156: 'let license_values = apply_filter(license_filter);') with no new parsing or utility functions defined."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

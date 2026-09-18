@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 2.3.5 dependency chain context identifies h2 as a transitive dependency with the chain: backend → reqwest → hyper → h2 (3 levels deep)",
+      "passed": true,
+      "evidence": "version-impact.md Section 2.3.5 states: 'h2 is a **transitive** dependency, not a direct dependency of the backend workspace.' and shows the chain 'backend (workspace) -> reqwest -> hyper -> h2' with 'Type: transitive (3 levels deep)'."
+    },
+    {
+      "text": "The dependency chain output labels h2 as transitive (not direct) and includes the full chain path in the version impact output",
+      "passed": true,
+      "evidence": "version-impact.md Section 2.3.5 explicitly labels h2 as 'transitive' and 'not a direct dependency' and includes the full chain path 'backend (workspace) -> reqwest -> hyper -> h2'. The manifest evidence section reinforces this: '# h2 is NOT a direct dependency -- it comes through reqwest -> hyper -> h2'."
+    },
+    {
+      "text": "Remediation task Implementation Notes include the dependency type as transitive with the dependency chain",
+      "passed": true,
+      "evidence": "remediation.md Task 1 Implementation Notes state: '**Dependency type**: transitive (chain: backend -> reqwest -> hyper -> h2)'. Task 2 also includes: '**Dependency type**: transitive -- carried forward from upstream task'."
+    },
+    {
+      "text": "Remediation task Implementation Notes describe the two-tier remediation approach: preferred is bumping reqwest (the direct dependency), fallback is pinning h2 directly",
+      "passed": true,
+      "evidence": "remediation.md Task 1 Implementation Notes contain section '##### Remediation approach (transitive dependency -- two-tier)' with '**Preferred: bump the direct dependency (reqwest)**' describing bumping reqwest to pull in h2 >= 0.4.5, and '**Fallback: pin h2 directly**' describing adding h2 as a direct dependency to override transitive resolution."
+    },
+    {
+      "text": "The fallback approach specifies the ecosystem-specific pinning mechanism: cargo add h2@0.4.5 for Cargo",
+      "passed": true,
+      "evidence": "remediation.md Task 1 Implementation Notes fallback section states: 'Run `cargo add h2@0.4.5` in the backend workspace to add h2 as a direct dependency, overriding the transitive resolution'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

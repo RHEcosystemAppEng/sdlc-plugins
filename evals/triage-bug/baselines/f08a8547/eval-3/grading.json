@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation identifies two independent root causes: (1) convention reference formatter using wrong case transform, (2) task creation using Feature issue type ID instead of Task (Steps 2-4)",
+      "passed": true,
+      "evidence": "investigation.md Step 2 contains 'Trace 1: Convention Reference Formatting' identifying the kebab-case transformation issue ('The formatter applies a slugify/kebab-case transformation: \"Migration Patterns\" becomes \"migration-patterns\"') and 'Trace 2: Task Creation Issue Type' identifying Feature issue type being used ('the issue type used in the create call reads the Feature issue type ID (10142) from the Jira Configuration section of CLAUDE.md instead of using the Task type ID (10050)'). Step 3 details both as 'Root Cause 1: Convention Reference Formatter' and 'Root Cause 2: Task Creation Issue Type'. Step 4 provides full root cause analysis for both with explicit Independence Assessment stating 'These two root causes are independent'."
+    },
+    {
+      "text": "Decomposition Guard is triggered because the two root causes are in different modules/code paths (Step 6)",
+      "passed": true,
+      "evidence": "investigation.md line 136 states: 'This triggers the Decomposition Guard (Step 6 of the triage-bug skill).' decomposition-guard.md contains a dedicated 'Step 6 -- Decomposition Guard' section. The Rationale for Decomposition section explicitly states: 'They reside in different modules: the convention formatter is in shared/convention-utils.md (a shared utility), while the issue type logic is in skills/plan-feature/SKILL.md Step 6a (skill-specific task creation)' and 'They affect different code paths: convention enrichment (Step 5) vs. Jira issue creation (Step 6a).'"
+    },
+    {
+      "text": "Decomposition Guard presents both issues with their affected files/modules (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md presents both issues with affected files: Issue 1: 'Convention reference formatter uses kebab-case instead of preserving heading text (in shared/convention-utils.md)' and Issue 2: 'Task creation uses Feature issue type ID instead of dynamically discovered Task type (in skills/plan-feature/SKILL.md Step 6a)'. Both entries include descriptions and the specific files/modules affected."
+    },
+    {
+      "text": "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md lines 16-19 present: 'Options: 1. Proceed -- create a single Task covering all fixes 2. Split -- I recommend creating separate Bugs for each independent issue, then triaging each one individually Choose (1/2):'"
+    },
+    {
+      "text": "The skill does NOT silently create a single Task bundling both fixes — it waits for user input (Step 6 stop rule)",
+      "passed": true,
+      "evidence": "decomposition-guard.md ends with 'Choose (1/2):' and does not proceed to create any task. No task creation output exists in either output file. The investigation.md ends at Step 4.5 (Affects Version Resolution) without any task creation. The workflow stops at the Decomposition Guard prompt, waiting for user input."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

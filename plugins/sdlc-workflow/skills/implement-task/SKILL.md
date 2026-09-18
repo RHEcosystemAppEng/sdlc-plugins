@@ -738,6 +738,33 @@ running the project's standard build or lint step (if one exists) and compare th
 warning output against the pre-implementation baseline captured during Step 7. If
 new warnings were introduced, fix them before proceeding.
 
+### Module-level test requirement (Rust)
+
+For Rust repositories, run the test suite for every crate containing modified files,
+regardless of whether `CONVENTIONS.md` CI checks include a test command. Lint, fmt,
+and `cargo check` pass even when test logic is broken — a separate test run is required
+before committing.
+
+For each modified file, run `cargo metadata --no-deps --format-version 1` from the workspace root and resolve the package whose manifest or target source contains the file. Use that package's `name` as `<crate-name>`; do not derive it from the nearest `Cargo.toml`, which may be a virtual workspace manifest. Skip modified files that do not belong to any package or crate.
+Run:
+
+```
+cargo test -p <crate-name>
+```
+
+or, if the project uses nextest:
+
+```
+cargo nextest run -p <crate-name>
+```
+
+Apply the same hard-stop rule: if the test command exits non-zero, stop immediately,
+report the failure, and do not proceed to Step 10.
+
+> **Note:** If the test context requires a database or external service, attempt the
+> run first — many Rust projects bootstrap their own test DB. Only skip if the
+> environment is genuinely unavailable, and report clearly that tests were not run.
+
 ### Data-flow trace
 
 For each new feature, trace data through its complete lifecycle: input (API request,

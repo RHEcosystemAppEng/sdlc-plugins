@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 detects the absence of the Deployment Context column in the Source Repositories table and defaults all repositories to upstream (§1.78)",
+      "passed": true,
+      "evidence": "data-extraction.md contains a 'Deployment Context' section (lines 36-37) that explicitly states: 'The Source Repositories table does NOT have a Deployment Context column. Per backward compatibility rules, deployment context defaults to `upstream` internally but coordination guidance is omitted from remediation task descriptions.' This confirms both detection of the absence and defaulting to upstream."
+    },
+    {
+      "text": "Remediation task descriptions do NOT include a Coordination Guidance subsection — the section is omitted entirely when no Deployment Context column exists",
+      "passed": true,
+      "evidence": "Reviewed all four task descriptions in remediation.md (Task 1: Upstream Backport 2.2.x, Task 2: Downstream Propagation 2.2.x, Task 3: Upstream Backport 2.1.x, Task 4: Downstream Propagation 2.1.x). None of them contain a 'Coordination Guidance' subsection. The subsections present in each task description are: Repository, Target Branch, Description, Implementation Notes, Remediation approach, Acceptance Criteria, Test Requirements, and Dependencies. Additionally, data-extraction.md line 37 confirms the intent: 'coordination guidance is omitted from remediation task descriptions.'"
+    },
+    {
+      "text": "The triage proceeds normally through all steps without errors from the missing Deployment Context column",
+      "passed": true,
+      "evidence": "Both output files are complete and well-structured with no error messages or indications of failure. data-extraction.md covers all expected phases: CVE data parsing, stream scope resolution, ecosystem detection, deployment context handling, version impact analysis, upstream fix status, dependency chain context, affects versions correction, cross-stream impact (Case A), and staleness check. remediation.md produces all expected remediation tasks (4 tasks across 2 streams), Jira linkage summary, cross-stream impact comment, and post-triage actions. The only note about the missing column is the graceful handling documented in the Deployment Context section, not an error."
+    },
+    {
+      "text": "Backward compatibility is maintained — existing eval behavior is unaffected by the absence of the Deployment Context column",
+      "passed": true,
+      "evidence": "The output explicitly references 'backward compatibility rules' (data-extraction.md line 37). All standard triage features function normally: stream scoping to 2.2.x, ecosystem detection (Cargo), version impact analysis across both 2.1.x and 2.2.x streams, cross-stream impact detection (Case A for 2.1.x), preemptive remediation task creation for 2.1.x with security-preemptive labels, proper Jira linkage (Depend vs Related), affects versions correction, and post-triage actions. The system degrades gracefully by omitting only the Coordination Guidance subsection while preserving all other behavior."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}
