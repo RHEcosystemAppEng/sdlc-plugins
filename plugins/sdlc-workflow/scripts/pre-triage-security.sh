@@ -25,10 +25,12 @@ if [[ ! -f "${PROJECT_ROOT}/CLAUDE.md" ]]; then
   exit 1
 fi
 
-PRE_OUTPUT_DIR="${PRE_DIR:-/tmp/fullsend-triage-security}"
+: "${FULLSEND_RUN_DIR:?FULLSEND_RUN_DIR is required}"
+PRE_OUTPUT_DIR="${FULLSEND_RUN_DIR}/pre"
 mkdir -p "${PRE_OUTPUT_DIR}"
 OUTPUT_FILE="${PRE_OUTPUT_DIR}/triage-security-input.json"
-TEMP_FILE="${OUTPUT_FILE}.tmp"
+TEMP_FILE="$(mktemp "${PRE_OUTPUT_DIR}/.${ISSUE_KEY}.XXXXXX")"
+trap 'rm -f "${TEMP_FILE}"' EXIT
 
 python3 "${SCRIPT_DIR}/pre_triage_security.py" collect "${ISSUE_KEY}" "${PROJECT_ROOT}" > "${TEMP_FILE}"
 mv "${TEMP_FILE}" "${OUTPUT_FILE}"

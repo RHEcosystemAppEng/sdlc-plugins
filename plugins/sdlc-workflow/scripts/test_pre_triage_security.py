@@ -5,6 +5,7 @@ import json
 import os
 import subprocess
 import sys
+import time
 
 import pytest
 from jsonschema import validate
@@ -107,6 +108,92 @@ def test_pre_triage_script_rejects_missing_runner_credentials():
     # Then no collection runs without the credential required by jira-client.py
     assert result.returncode != 0
     assert "JIRA_API_TOKEN" in result.stderr
+
+
+def test_pre_triage_script_isolates_bundles_per_fullsend_run(tmp_path, request):
+    """Separate Fullsend runs publish isolated bundles through their own handoff paths."""
+    # Given a harmless collector and two poller-dispatched issues on one runner
+    script = os.path.join(SCRIPT_DIR, "pre-triage-security.sh")
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "CLAUDE.md").write_text("# Project Configuration\n")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    collector = fake_bin / "python3"
+    collector.write_text(
+        "#!/usr/bin/env bash\n"
+        "touch \"${COLLECTOR_READY_DIR}/$3\"\n"
+        "while [[ ! -f \"${COLLECTOR_RELEASE}\" ]]; do sleep 0.01; done\n"
+        "printf '{\"issue\":\"%s\"}\\n' \"$3\"\n"
+    )
+    collector.chmod(0o755)
+    shared_output = tmp_path / "shared"
+    ready_directory = tmp_path / "ready"
+    ready_directory.mkdir()
+    release_file = tmp_path / "release"
+    processes = []
+
+    def release_collectors():
+        release_file.touch()
+        for process in processes:
+            if process.poll() is None:
+                process.terminate()
+                process.communicate(timeout=5)
+
+    request.addfinalizer(release_collectors)
+
+    def environment_for(issue_key, run_directory):
+        return {
+            "PATH": "{}{}{}".format(fake_bin, os.pathsep, os.environ["PATH"]),
+            "FULLSEND_WORK_ITEM_URL": "https://jira.example.com/browse/{}".format(issue_key),
+            "FULLSEND_PROJECT_ROOT": str(project_root),
+            "FULLSEND_RUN_DIR": str(run_directory),
+            "PRE_DIR": str(shared_output),
+            "COLLECTOR_READY_DIR": str(ready_directory),
+            "COLLECTOR_RELEASE": str(release_file),
+            "JIRA_SERVER_URL": "https://jira.example.com",
+            "JIRA_EMAIL": "runner@example.com",
+            "JIRA_API_TOKEN": "token",
+        }
+
+    first_run = tmp_path / "run-one"
+    second_run = tmp_path / "run-two"
+
+    # When two runs collect their dispatched issues concurrently
+    first_process = subprocess.Popen(
+        ["bash", script], env=environment_for("TC-42", first_run), stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, text=True,
+    )
+    processes.append(first_process)
+    second_process = subprocess.Popen(
+        ["bash", script], env=environment_for("TC-43", second_run), stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE, text=True,
+    )
+    processes.append(second_process)
+    first_output = first_run / "pre" / "triage-security-input.json"
+    second_output = second_run / "pre" / "triage-security-input.json"
+    deadline = time.monotonic() + 5
+    while len(list(ready_directory.iterdir())) < 2 and time.monotonic() < deadline:
+        time.sleep(0.01)
+
+    # Then neither blocked collector can expose a partial final bundle
+    assert len(list(ready_directory.iterdir())) == 2
+    assert not first_output.exists()
+    assert not second_output.exists()
+    release_file.touch()
+    first_stdout, first_stderr = first_process.communicate(timeout=5)
+    second_stdout, second_stderr = second_process.communicate(timeout=5)
+
+    # And both bundles are separately and atomically published for their run
+    assert first_process.returncode == 0, first_stderr
+    assert second_process.returncode == 0, second_stderr
+    assert first_output.read_text() == '{"issue":"TC-42"}\n'
+    assert second_output.read_text() == '{"issue":"TC-43"}\n'
+    assert sorted(path.name for path in first_output.parent.iterdir()) == ["triage-security-input.json"]
+    assert sorted(path.name for path in second_output.parent.iterdir()) == ["triage-security-input.json"]
+    assert not shared_output.exists()
+    with open(os.path.join(SCRIPT_DIR, "..", "..", "..", "harness", "triage-security.yaml")) as harness_file:
+        assert "src: ${FULLSEND_RUN_DIR}/pre/triage-security-input.json" in harness_file.read()
 
 
 def test_normalize_issue_rejects_missing_reporter_metadata():
