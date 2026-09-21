@@ -1,0 +1,64 @@
+# triage-security — standalone root-level Fullsend harness.
+#
+# The trusted runner gathers every Jira, CVE, lifecycle, and source-repository
+# input before sandbox creation. The sandbox receives only the mounted evidence
+# bundle and returns a validated action plan; TC-6209 is the only component that
+# may execute that plan against Jira.
+#
+# TC-6208 creates pre-triage-security.sh and its bundle producer. TC-6209 creates
+# post-triage-security.sh and its action executor. This contract task declares
+# their integration points but deliberately does not implement either script.
+
+role: triage
+agent: plugins/sdlc-workflow/agents/triage-security.md
+model: claude-opus-4-8
+effort: high
+image: ghcr.io/fullsend-ai/fullsend-code@sha256:9743bc7b6e451e0bcea25ae4a67e0c040c296f1fee04c08988ae80c53fafcfe6
+readonly_repo: true
+
+plugins:
+  - plugins/sdlc-workflow
+
+policy: plugins/sdlc-workflow/policies/triage-security.yaml
+
+providers:
+  - plugins/sdlc-workflow/providers/vertex-ai.yaml
+
+openshell:
+  profiles:
+    - plugins/sdlc-workflow/profiles/fullsend-vertex-ai.yaml
+
+# The pre-script writes the complete non-secret bundle before Fullsend creates
+# the sandbox. The sandbox receives this one read-only mount and no credentials.
+host_files:
+  - src: plugins/sdlc-workflow/env/gcp-vertex.env
+    dest: /sandbox/workspace/.env.d/gcp-vertex.env
+    expand: true
+  - src: /tmp/fullsend-triage-security/triage-security-input.json
+    dest: /sandbox/workspace/.pre-script/triage-security-input.json
+    optional: true
+
+pre_script: plugins/sdlc-workflow/scripts/pre-triage-security.sh
+post_script: plugins/sdlc-workflow/scripts/post-triage-security.sh
+
+validation_loop:
+  script: plugins/sdlc-workflow/scripts/validate-output-schema.sh
+  schema: plugins/sdlc-workflow/schemas/triage-security-result.schema.json
+  max_iterations: 2
+
+env:
+  runner:
+    PYTHONDONTWRITEBYTECODE: "1"
+    JIRA_SERVER_URL: "${JIRA_BASE_URL}"
+    JIRA_EMAIL: "${JIRA_USER_EMAIL}"
+    JIRA_API_TOKEN: "${JIRA_TOKEN}"
+    JIRA_PROJECT_KEY: "TC"
+    FULLSEND_INPUT_SCHEMA: "${FULLSEND_DIR}/plugins/sdlc-workflow/schemas/triage-security-input.schema.json"
+    FULLSEND_OUTPUT_SCHEMA: "${FULLSEND_DIR}/plugins/sdlc-workflow/schemas/triage-security-result.schema.json"
+    FULLSEND_OUTPUT_FILE: "agent-result.json"
+  sandbox:
+    # Display-only context; the sandbox has no Jira egress or credential.
+    JIRA_BASE_URL: "${JIRA_BASE_URL}"
+
+timeout_minutes: 30
+version: 1
