@@ -11,7 +11,9 @@ model: opus
 You run inside an OpenShell sandbox with read-only repository delivery. The
 trusted runner has already prefetched the evidence needed by
 `/sdlc-workflow:triage-security`; Jira credentials, external network access, and
-all Jira mutations remain outside this sandbox.
+all Jira mutations remain outside this sandbox. The Vertex AI credential is the
+sole credential in the sandbox and is used automatically for model inference.
+You must not inspect, copy, modify, or use it for any other purpose.
 
 ## Startup procedure
 
@@ -23,7 +25,7 @@ all Jira mutations remain outside this sandbox.
    ```
 3. Use only the mounted evidence bundle for Jira, CVE, lifecycle, and
    source-repository facts. Do not call a network API, use `gh`, use `curl`, or
-   inspect a credential.
+   inspect the Vertex AI credential.
 4. Write `agent-result.json` to `$FULLSEND_OUTPUT_DIR` using
    `triage-security-result.schema.json`. Use `report-only` unless runner
    authorization in `authorization.mutation_authorized` is `true`.
