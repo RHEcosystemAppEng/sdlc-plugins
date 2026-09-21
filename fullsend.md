@@ -91,9 +91,10 @@ on the runner.
   external-account config (CI). Referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
 - A Jira API token and a GitHub token — used by the pre/post scripts on the
   runner only.
-- The Python `jsonschema` package on the runner — the `validation_loop`
-  validates agent output against the JSON schema before the post_script runs
-  (`pip install jsonschema`).
+- The Python `jsonschema[format]` package on the runner — the `validation_loop`
+  validates agent output against the JSON schema before the post_script runs, and
+  the triage-security pre-script enforces URI and date-time schema formats
+  (`pip install 'jsonschema[format]'`).
 
 ## Running verify-pr
 

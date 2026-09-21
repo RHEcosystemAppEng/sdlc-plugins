@@ -215,8 +215,8 @@ def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
     ]
 
 
-def test_build_bundle_accepts_complete_source_dependency_evidence():
-    """Complete source-dependency evidence produces schema-valid sandbox input."""
+def _complete_bundle():
+    """Build complete source-dependency evidence for bundle validation tests."""
     # Given a CVE issue and all evidence gathered by the trusted runner
     issue = {
         "key": "TC-42",
@@ -302,3 +302,33 @@ def test_build_bundle_accepts_complete_source_dependency_evidence():
     assert bundle["issue"]["key"] == "TC-42"
     assert bundle["issue"]["versions"] == [{"id": "1", "name": "1.0", "released": False}]
     assert bundle["remote_links"] == [{"url": "https://github.com/org/component/pull/1", "title": "Fix"}]
+    return bundle
+
+
+def test_build_bundle_accepts_complete_source_dependency_evidence():
+    """Complete source-dependency evidence produces schema-valid sandbox input."""
+    assert _complete_bundle()["issue"]["key"] == "TC-42"
+
+
+def test_validate_bundle_rejects_malformed_uri():
+    """A malformed remote-link URL cannot enter the sandbox bundle."""
+    # Given an otherwise valid bundle with an invalid URI-format field
+    bundle = _complete_bundle()
+    bundle["remote_links"][0]["url"] = "not a URL"
+
+    # When the bundle is schema-validated before the sandbox runs
+    # Then format validation rejects the malformed URL
+    with pytest.raises(pre_triage_security.EvidenceError, match="triage-security input validation failed"):
+        pre_triage_security.validate_bundle(bundle)
+
+
+def test_validate_bundle_rejects_malformed_retrieval_timestamp():
+    """A malformed evidence retrieval timestamp cannot enter the sandbox bundle."""
+    # Given an otherwise valid bundle with an invalid date-time-format field
+    bundle = _complete_bundle()
+    bundle["external_evidence"]["mitre"]["retrieved_at"] = "not-a-timestamp"
+
+    # When the bundle is schema-validated before the sandbox runs
+    # Then format validation rejects the malformed timestamp
+    with pytest.raises(pre_triage_security.EvidenceError, match="triage-security input validation failed"):
+        pre_triage_security.validate_bundle(bundle)
