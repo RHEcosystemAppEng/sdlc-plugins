@@ -43,6 +43,10 @@ pre_script: plugins/sdlc-workflow/scripts/pre-triage-security.sh
 post_script: plugins/sdlc-workflow/scripts/post-triage-security.sh
 
 validation_loop:
+  # Fail closed: validate the original, unmutated agent output against this
+  # schema before any post-processing. The validator must not strip or normalize
+  # properties; an unknown or invalid property rejects the iteration before the
+  # trusted post-script can consume an action plan.
   script: plugins/sdlc-workflow/scripts/validate-output-schema.sh
   schema: plugins/sdlc-workflow/schemas/triage-security-result.schema.json
   max_iterations: 2
