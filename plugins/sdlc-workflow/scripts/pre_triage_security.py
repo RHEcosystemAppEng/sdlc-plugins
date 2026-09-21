@@ -12,7 +12,7 @@ from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
-from jsonschema import ValidationError, validate
+from jsonschema import FormatChecker, ValidationError, validate
 
 
 _ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-[0-9]+$")
@@ -358,7 +358,7 @@ def validate_bundle(bundle, schema_path=None):
     try:
         with path.open() as schema_file:
             schema = json.load(schema_file)
-        validate(instance=bundle, schema=schema)
+        validate(instance=bundle, schema=schema, format_checker=FormatChecker())
     except (OSError, json.JSONDecodeError, ValidationError) as error:
         raise EvidenceError("triage-security input validation failed: {}".format(error)) from error
 
