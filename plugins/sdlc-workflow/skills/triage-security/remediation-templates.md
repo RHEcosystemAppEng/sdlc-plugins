@@ -240,6 +240,42 @@ compatibility), omit the coordination guidance entirely — do not add the subse
 
 ## Jira Issue Creation
 
+### Fullsend serialization
+
+The following creation pseudocode is interactive-only and retains its existing
+confirmation behavior. In Fullsend mode, do not call `create_issue`, `add_comment`,
+or `create_link`. Use the validated task description, labels, priority, fix-version,
+and idempotency evidence to serialize schema actions instead.
+
+When `authorization.mutation_authorized` is false, no task, digest, reference, or
+link action is permitted. The evidence-backed top-level report must name each
+withheld remediation task and its intended digest/link work, and `actions` contains
+exactly the single `report-only` action.
+
+When authorization is true, each standard or preemptive task has a stable,
+idempotent `triage-security:` marker and a schema-valid reference name. Always emit
+its `remediation-task` action with that marker and reference, even when trusted
+`idempotency` evidence records the marker or matching existing remediation. This
+lets the binding executor re-register the existing reference, avoid duplicate task
+creation, and repair a missing description digest during a partial retry. Later
+`{{ref.key}}` placeholders then resolve against that rehydrated reference. For each
+task, append actions in this exact order:
+
+1. `remediation-task` with `ref`, project, summary, `description_adf`, labels, and
+   any supported priority or fix versions. The executor registers its reference and
+   posts the description digest exactly once as part of this action.
+2. `link` actions: `Depend` for a task and its own CVE, `Related` for a preemptive
+   task and its originating CVE, and `Blocks` from upstream to downstream.
+3. Only after all of that task's links, append later comments such as task-list,
+   cross-stream, reconciliation, or post-triage summary comments.
+
+Use `{{ref.key}}` in schema fields that accept an issue reference instead of
+inventing the Jira key. Do not add a standalone digest `comment` or a
+post-creation `resolve-reference`: the executor owns reference registration and
+exactly-once digest posting for `remediation-task`. Serialize a preemptive task's
+`security-preemptive` label in its `remediation-task`, and serialize later
+reconciliation label removal as a `field-edit`; never update Jira from the sandbox.
+
 After creating each remediation task, post a description digest comment per
 `shared/description-digest-protocol.md`. The digest comment MUST be posted
 before creating issue links or other comments on the task.

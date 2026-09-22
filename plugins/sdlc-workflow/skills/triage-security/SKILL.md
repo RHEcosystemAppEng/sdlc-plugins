@@ -165,6 +165,50 @@ replace `mode` with `mutation-authorized` and build the ordered schema actions f
 the same trusted evidence; use `issue.key` from the validated bundle, never the
 illustrative issue key above.
 
+### Fullsend action serialization and authorization
+
+This section applies to **every** Jira write described by this skill and its
+companion procedures. It does not change interactive mode: when
+`FULLSEND_OUTPUT_DIR` is absent, retain every existing engineer-confirmation prompt
+and perform the confirmed Jira operation exactly as documented.
+
+In Fullsend mode, do not ask for confirmation and do not call Jira. Determine the
+branch once from `authorization.mutation_authorized` after trusted-input validation:
+
+- When it is `false`, produce an evidence-backed `report-only` result with **exactly
+  one** `report-only` action. Its report must list every otherwise-proposed mutation
+  (assignment, field update, transition, comment, link, remediation task, and
+  reconciliation) with the trusted evidence and the reason it is withheld: trusted
+  runner authorization is required. Do not append a proposed mutation as an action.
+- When it is `true`, append only schema-defined actions. Give each action a stable,
+  unique lowercase `triage-security:` marker derived from the current issue,
+  operation, and target. Consult `idempotency.action_markers`, `idempotency.existing_remediation`,
+  and trusted existing links/comments before appending. Omit an already-recorded
+  ordinary field, transition, comment, or link action, but **always emit each
+  planned `remediation-task` action with its stable marker and `ref`**. On a partial
+  retry the executor uses that action to re-register an existing task reference,
+  avoid duplicate creation, and repair a missing description digest before later
+  placeholder links or comments are resolved.
+
+| Interactive Jira operation | Mutation-authorized Fullsend action |
+|---|---|
+| Assignment, Affects Versions, VEX Justification, labels, resolution fields | `field-edit` |
+| Assigned, In Progress, or Closed workflow change | `status-transition` |
+| Triage, correction, overlap, reconciliation, cross-stream, and summary comments | `comment` with `body_adf`, preserving required ADF mentions and footnotes |
+| Related, Depend, or Blocks relationship | `link` with the matching `link_type` |
+| Remediation Task creation | `remediation-task` with `ref`, `description_adf`, labels, and optional priority/fix versions |
+| Registering a separately trusted, pre-existing reference before dependent work | `resolve-reference` |
+
+Preserve the existing step order. For every newly planned remediation task, append
+the `remediation-task` action before its dependent `link` actions and before later
+comments (task-list, reconciliation, cross-stream, and post-triage summary). The
+binding executor registers the task reference and posts its description digest
+exactly once inside `remediation-task`, including when it reuses an existing task on
+a partial retry. Do not serialize a separate digest `comment` or a
+post-creation `resolve-reference` action. Use `{{ref.key}}` in later link/comment
+actions where the result schema permits it; never invent a Jira key in the sandbox.
+This digest-before-link rule applies to standard and preemptive tasks alike.
+
 ### Trusted-evidence map for Fullsend mode
 
 After validation, the input bundle is authoritative. Do not supplement an absent or
@@ -400,9 +444,13 @@ the issue and enables Step 7 (Concurrent Triage Detection) to reliably identify
 active work.
 
 **Fullsend mode:** obtain the current issue state from `issue` and existing markers
-from `idempotency`; do not retrieve a user, assignment, or transition from Jira. If
-the outcome requires an assignment or transition, append the corresponding ordered
-result action only when authorization permits it.
+from `idempotency`; do not retrieve a user, assignment, or transition from Jira. An
+assignment `field-edit` is allowed only when the validated input contains the
+current triager's account ID in trusted `issue.fields`. Never infer an account ID
+from a name or look one up. If assignment is required but that trusted ID is absent,
+stop before other mutations and produce a blocked, evidence-backed `report-only`
+recommendation naming the missing trusted assignee identity. If it is present and
+authorization permits it, append the assignment and transition actions in order.
 
 1. **Retrieve the current user's Jira account ID:**
 

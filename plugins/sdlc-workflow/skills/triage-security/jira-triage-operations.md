@@ -5,6 +5,37 @@ triage-security skill. These steps handle Affects Versions correction,
 duplicate and sibling detection, cross-CVE overlap detection, preemptive task
 reconciliation, version lifecycle checks, and already-fixed detection.
 
+## Fullsend action mapping
+
+This file's interactive procedures and confirmation prompts are unchanged when
+`FULLSEND_OUTPUT_DIR` is absent. In Fullsend mode, use only validated trusted input
+and `authorization.mutation_authorized`; never call Jira or ask the engineer to
+confirm a sandbox action.
+
+If authorization is false, do not serialize any mutation from Steps 3–7. Return the
+top-level evidence-backed report-only result with exactly its one `report-only`
+action, and name each withheld correction, link, closure, assignment, label update,
+or comment in the report. If authorization is true, map each write one-for-one to
+the existing result-schema types below. Every marker is stable and unique in the
+form `triage-security:<lowercase-issue>:<operation>:<target>` (using only
+schema-valid marker characters), and existing `idempotency.action_markers` or trusted
+existing artifacts mean the action is omitted on retry.
+
+| Procedure write | Fullsend action |
+|---|---|
+| Affects Versions correction, VEX value, assignment, add/remove label, resolution | `field-edit` |
+| Assigned, In Progress, Closed | `status-transition` |
+| Affects Versions, duplicate, overlap, lifecycle, already-fixed, reconciliation, and skip comments | `comment` with `body_adf` |
+| Related, Depend, Blocks links | `link` with the same `link_type` |
+
+Build all comment bodies as ADF documents, retaining required Comment Footnotes and
+ProdSec mentions. Step 4.4 reconciliation is specifically a `link` action for the
+new `Depend` relationship and a `field-edit` action that removes
+`security-preemptive`; it is never a direct Jira update in the sandbox. Keep the
+skill's step order, and defer comments that list newly created tasks until the
+remediation procedure has serialized each task, its digest, reference resolution,
+and links.
+
 ## Step 3 – Affects Versions Correction
 
 ### 3.1 – Discover available Jira versions
