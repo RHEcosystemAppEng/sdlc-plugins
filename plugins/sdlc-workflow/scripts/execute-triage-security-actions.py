@@ -169,13 +169,33 @@ def _resolve_action(action: dict[str, Any], registry: dict[str, dict[str, str]])
         raise ActionError("unresolved action reference: {}".format(error.args[0])) from error
 
 
+def _field_value_matches(field_name: str, snapshot_value: Any, action_value: Any) -> bool:
+    """Compare an action field value with its compact or full Jira snapshot form."""
+    if not isinstance(action_value, dict):
+        return snapshot_value == action_value
+    if not isinstance(snapshot_value, dict):
+        return False
+    if field_name == "assignee" and set(action_value) in ({"id"}, {"accountId"}):
+        assignee_id = action_value.get("id", action_value.get("accountId"))
+        return assignee_id in (snapshot_value.get("accountId"), snapshot_value.get("id"))
+    if field_name == "resolution" and set(action_value) == {"id"}:
+        return action_value["id"] == snapshot_value.get("id")
+    if field_name == "resolution" and set(action_value) == {"name"}:
+        return snapshot_value.get("name") == action_value["name"]
+    return snapshot_value == action_value
+
+
 def _already_applied(action: dict[str, Any], trusted_input: dict[str, Any]) -> bool:
     """Check the trusted Jira snapshot for a mutation already applied on a retry."""
     issue = trusted_input.get("issue", {})
     fields = issue.get("fields", {}) if isinstance(issue, dict) else {}
     action_type = action["type"]
     if action_type == "field-edit":
-        return all(fields.get(name) == value for name, value in action["fields"].items())
+        action_fields = action["fields"]
+        return bool(action_fields) and all(
+            _field_value_matches(name, fields.get(name), value)
+            for name, value in action_fields.items()
+        )
     if action_type == "status-transition":
         return issue.get("status") == action["status"]
     if action_type == "link":
