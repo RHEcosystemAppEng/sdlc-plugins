@@ -33,8 +33,9 @@ ProdSec mentions. Step 4.4 reconciliation is specifically a `link` action for th
 new `Depend` relationship and a `field-edit` action that removes
 `security-preemptive`; it is never a direct Jira update in the sandbox. Keep the
 skill's step order, and defer comments that list newly created tasks until the
-remediation procedure has serialized each task, its digest, reference resolution,
-and links.
+executor-owned `remediation-task` action has registered each task reference and
+posted its description digest exactly once, followed by that task's links. Do not
+serialize a separate digest comment or post-creation `resolve-reference` action.
 
 ## Step 3 – Affects Versions Correction
 
