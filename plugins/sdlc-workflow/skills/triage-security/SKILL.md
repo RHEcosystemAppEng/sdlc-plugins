@@ -448,9 +448,12 @@ from `idempotency`; do not retrieve a user, assignment, or transition from Jira.
 assignment `field-edit` is allowed only when the validated input contains the
 current triager's account ID in trusted `issue.fields`. Never infer an account ID
 from a name or look one up. If assignment is required but that trusted ID is absent,
-stop before other mutations and produce a blocked, evidence-backed `report-only`
-recommendation naming the missing trusted assignee identity. If it is present and
-authorization permits it, append the assignment and transition actions in order.
+withhold **only** the assignment and append a blocked, evidence-backed `report-only`
+recommendation naming the missing trusted assignee identity and required trusted-input
+configuration. Continue the mutation-authorized plan: serialize every other authorized
+field edit, transition, comment, remediation task, and link in the existing step order.
+If the ID is present and authorization permits it, append the assignment and transition
+actions in order.
 
 1. **Retrieve the current user's Jira account ID:**
 
