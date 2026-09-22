@@ -37,7 +37,9 @@ Do **not** use for:
 | 0 | Validate Configuration | CLAUDE.md | Project key, Cloud ID, Security Config |
 | 0.3 | Matrix Staleness Check | security-matrix.md timestamps | Staleness warning or proceed |
 | 0.5 | Jira Access | -- | MCP or REST API connection |
-| 0.7 | Assign and Transition to Assigned | Vulnerability issue key | Issue assigned to current user, status Assigned |
+| 0.6 | Fullsend Mode Detection | `FULLSEND_OUTPUT_DIR` presence | Sandbox or interactive mode |
+| 0.7 | Load Trusted Fullsend Input | Mounted JSON bundle | Validated evidence or hard failure |
+| 0.8 | Assign and Transition to Assigned | Vulnerability issue key | Issue assigned to current user, status Assigned |
 | 1 | Data Extraction | Vulnerability issue key | CVE ID, library, affected range, remote links |
 | 1.5 | External CVE Data Enrichment | CVE ID | Structured version ranges, cross-validated fix thresholds |
 | 1.7 | Embargo Check | Embargo policy URL, CVE severity | Confirmation to proceed (or stop) |
@@ -49,25 +51,198 @@ Do **not** use for:
 | 7 | Concurrent Triage Detection | Upstream component, JQL | Concurrent triage warning or proceed |
 | 8 | Remediation | Impact analysis results | Remediation tasks or close recommendation |
 
+## Fullsend dual-mode contract
+
+Run Steps **0.6** and **0.7** before every other numbered step. They determine the
+execution mode; in interactive mode they leave the existing workflow unchanged, while
+in Fullsend mode they prevent all untrusted and external reads. The literal
+`${CLAUDE_PLUGIN_ROOT}` in this skill is substituted into the delivered skill body
+before it runs; use it for bundled schemas and companion files, not a repo-relative
+path or a shell environment variable.
+
+### Step 0.6 – Fullsend Mode Detection
+
+Detect the Fullsend gate by **presence**, not truthiness. An exported-but-empty gate
+is a configuration error and must fail closed rather than reaching the credentialed
+interactive workflow:
+
+```bash
+if [ "${FULLSEND_OUTPUT_DIR+x}" = x ]; then
+  if [ -z "$FULLSEND_OUTPUT_DIR" ]; then
+    echo "ERROR: FULLSEND_OUTPUT_DIR is set but empty" >&2
+    exit 1
+  fi
+  echo "sandbox mode: $FULLSEND_OUTPUT_DIR"
+else
+  echo "interactive mode"
+fi
+```
+
+If `FULLSEND_OUTPUT_DIR` is genuinely absent, run the established interactive
+workflow, including its configuration reads, confirmation gates, external lookups,
+and permitted local matrix behavior. If it is present and non-empty, run Fullsend
+sandbox mode: there are no Jira, GitHub, WebFetch, CVE, lifecycle, Git, cosign, or
+other external calls; mounted repository evidence is read-only; and the sandbox must
+never write `security-matrix.md`.
+
+### Step 0.7 – Load Trusted Fullsend Input (sandbox mode only)
+
+Skip this step in interactive mode. In Fullsend mode, read **only**
+`/sandbox/workspace/.pre-script/triage-security-input.json` and validate it before
+any analysis against
+`${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-input.schema.json`:
+
+```bash
+if ! python3 - << 'PYEOF'
+import json, sys
+from jsonschema import validate, ValidationError
+
+INPUT = "/sandbox/workspace/.pre-script/triage-security-input.json"
+SCHEMA = "${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-input.schema.json"
+try:
+    with open(INPUT) as f:
+        bundle = json.load(f)
+    with open(SCHEMA) as f:
+        schema = json.load(f)
+    validate(instance=bundle, schema=schema)
+    print("Trusted triage-security input available")
+except FileNotFoundError:
+    print("ERROR: trusted triage-security input missing"); sys.exit(1)
+except json.JSONDecodeError as e:
+    print(f"ERROR: trusted triage-security input is invalid JSON: {e}"); sys.exit(1)
+except ValidationError as e:
+    path = ".".join(str(p) for p in e.path) or "<root>"
+    print(f"ERROR: trusted triage-security input failed schema validation at {path}: {e.message}")
+    sys.exit(1)
+PYEOF
+then
+  cat > "$FULLSEND_OUTPUT_DIR/agent-result.json" << 'RESULT_EOF'
+{ "error": "triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox." }
+RESULT_EOF
+  exit 1
+fi
+```
+
+The error-object write is inside the `if ! …; then` failure branch: it runs only when
+the input is missing, invalid JSON, or schema-invalid, then exits immediately without
+an interactive fallback, external call, or later step. This object intentionally omits
+the required `schema_version`, `mode`, `report`, and `actions` members of
+`triage-security-result.schema.json`; the runner must reject it visibly as the hard
+failure. A successful validation does **not** write this failure object and continues
+to analysis. Initialize the successful result with its required fields:
+`schema_version: "1"`, `mode` from
+`authorization.mutation_authorized` (`report-only` when false, otherwise
+`mutation-authorized`), an evidence-backed `report`, and ordered `actions`. A
+report-only result contains only its `report-only` action. Accumulate every later
+sandbox action in this result; never execute it in the sandbox.
+
+```json
+{
+  "schema_version": "1",
+  "mode": "report-only",
+  "report": {
+    "issue": "PROJ-123",
+    "outcome": "needs-review",
+    "summary_markdown": "Trusted-evidence triage in progress.",
+    "evidence": [
+      {
+        "source": "trusted-input",
+        "detail": "Validated triage-security input bundle."
+      }
+    ]
+  },
+  "actions": [
+    {
+      "type": "report-only",
+      "marker": "triage-security:report-only"
+    }
+  ]
+}
+```
+
+The shown shape is the complete report-only form. For mutation-authorized input,
+replace `mode` with `mutation-authorized` and build the ordered schema actions from
+the same trusted evidence; use `issue.key` from the validated bundle, never the
+illustrative issue key above.
+
+### Trusted-evidence map for Fullsend mode
+
+After validation, the input bundle is authoritative. Do not supplement an absent or
+empty trusted collection by reading the network, Jira, GitHub, local configuration,
+or a repository. Use `configuration` for Step 0 and deployment settings; `issue` and
+`remote_links` for Step 1; `external_evidence.mitre` and `.osv` for Step 1.5;
+`configuration.embargo_policy_url` plus issue/evidence severity for Step 1.7;
+`matrix.streams` and `source_evidence` for Step 2; `jira_metadata` for Steps 3–7;
+`external_evidence.lifecycle` for Step 5; and `idempotency` for every duplicate,
+existing-action, comment, link, and remediation check. `authorization` controls the
+result mode. An empty schema-required collection means "no trusted match"; it never
+permits a fallback read.
+
+### Fullsend final output (successful analysis only)
+
+After all Fullsend analysis has completed, serialize the completed accumulated result
+to **exactly** `$FULLSEND_OUTPUT_DIR/agent-result.json`. This is the only allowed
+sandbox-side write after a successful validation; it must contain the final
+`schema_version`, `mode`, evidence-backed `report`, and ordered `actions`, not the
+initial example or the validation-failure object.
+
+```bash
+cat > "$FULLSEND_OUTPUT_DIR/agent-result.json" << 'RESULT_EOF'
+<the complete valid triage-security result JSON accumulated from trusted evidence>
+RESULT_EOF
+```
+
+Before finishing, validate that exact file both as JSON and against the delivered
+result schema. Schema validation failure is a hard failure: do not attempt an
+interactive or external fallback.
+
+```bash
+python3 - << 'PYEOF'
+import json, os, sys
+from jsonschema import validate, ValidationError
+
+OUTPUT = os.path.join(os.environ["FULLSEND_OUTPUT_DIR"], "agent-result.json")
+SCHEMA = "${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-result.schema.json"
+try:
+    with open(OUTPUT) as f:
+        result = json.load(f)
+    with open(SCHEMA) as f:
+        schema = json.load(f)
+    validate(instance=result, schema=schema)
+    print("Final Fullsend result validated")
+except (OSError, json.JSONDecodeError, ValidationError) as e:
+    print(f"ERROR: final Fullsend result failed JSON/schema validation: {e}")
+    sys.exit(1)
+PYEOF
+```
+
 ## Guardrails
 
-- **This skill is Jira-only for output**, with one exception: it may write to
+- **Interactive mode only:** This skill is Jira-only for output, with one exception: it may write to
   local `security-matrix.md` files in the project working directory to populate
-  or update the supportability matrix (see Step 2.1). All other mutations go
-  through Jira.
+  or update the supportability matrix (see Step 2.1). All other mutations go through
+  Jira. In Fullsend mode, replace Jira mutations with ordered result actions and never
+  write `security-matrix.md`.
 - **Read-only source access.** Source repositories and Konflux release repos are
   accessed only via `git show <commit>:<path>` for lock file inspection and
   fallback matrix reads. No checkouts, no branch switches, no file modifications
-  outside local `security-matrix.md` files.
+  outside interactive local `security-matrix.md` files or the narrow Fullsend output
+  exception below.
 - **Every Jira mutation requires confirmation.** Present the proposed change and rationale
   to the engineer; wait for explicit approval before executing. Never perform bulk or
   silent Jira writes.
 - **Do NOT fabricate data.** Every version, commit hash, dependency version, and version
   impact assessment must come from actual `git show` output or Jira API responses — never
   invented or assumed.
+- **Fullsend output exception:** In Fullsend mode, the only permitted sandbox-side file
+  write is `$FULLSEND_OUTPUT_DIR/agent-result.json`: write either the deliberately
+  schema-invalid validation failure object or the completed valid accumulated result.
+  Do not create, modify, or repair any other local file.
 - **Do NOT use Edit, Write, or Bash tools** to change files — except for
   local `security-matrix.md` files in the project working directory (see Step 2.1).
-  Only use Bash for read-only `git show` commands and JIRA REST API fallback scripts.
+  In Fullsend mode, the narrow output exception above also permits writing
+  `$FULLSEND_OUTPUT_DIR/agent-result.json`; otherwise only use Bash for read-only
+  `git show` commands and JIRA REST API fallback scripts.
 - If any step fails (e.g., Jira MCP unavailable, lock file not found, repo not cloned),
   stop and inform the user rather than attempting alternative actions.
 
@@ -90,6 +265,12 @@ and any other comments the skill creates.
 Follow the format in `shared/comment-footnote.md`, using skill name `triage-security`.
 
 ## Step 0 – Validate Project Configuration
+
+**Fullsend mode:** do not read `CLAUDE.md`. Use the validated bundle's
+`configuration` member as the complete Security Configuration input. Its required
+version streams and source repositories replace the interactive configuration read;
+an optional configuration member that is absent remains absent rather than triggering
+a local or external lookup.
 
 Before proceeding, read the project's CLAUDE.md and verify that the following sections
 exist under `# Project Configuration`:
@@ -147,6 +328,10 @@ Extract the following from the configuration for use in later steps:
 
 ## Step 0.3 – Matrix Staleness Check
 
+**Fullsend mode:** the trusted `matrix.streams` evidence is the supplied matrix state.
+Do not read a local matrix, repopulate it, repair it, or offer a refresh; matrix
+staleness handling and every local matrix write are interactive/trusted-runner-only.
+
 Before proceeding with triage, verify that each version stream's `security-matrix.md`
 has been updated recently enough to reflect the current release landscape. A stale
 matrix can cause triage to miss newly released versions or use outdated source commit
@@ -188,6 +373,10 @@ updated `Last-Updated` timestamp), continue with the refreshed matrix.
 
 ## Step 0.5 – JIRA Access Initialization
 
+**Fullsend mode:** skip JIRA access initialization and every REST fallback. The
+validated `issue`, `remote_links`, `jira_metadata`, and `idempotency` evidence replace
+Jira reads; planned mutations are accumulated in the result rather than called.
+
 Follow the JIRA Access protocol in `shared/jira-access-strategy.md`.
 
 **REST API equivalents for this skill's operations:**
@@ -203,12 +392,17 @@ Follow the JIRA Access protocol in `shared/jira-access-strategy.md`.
 **Exception for Bash tool:** When using REST API fallback, this skill may use
 `bash -c "python3 scripts/jira-client.py <command>"` for JIRA operations only.
 
-## Step 0.7 – Assign and Transition to Assigned
+## Step 0.8 – Assign and Transition to Assigned
 
 Assign the CVE Vulnerability issue to the current user and transition it to
 Assigned status. This provides immediate visibility into who is actively triaging
 the issue and enables Step 7 (Concurrent Triage Detection) to reliably identify
 active work.
+
+**Fullsend mode:** obtain the current issue state from `issue` and existing markers
+from `idempotency`; do not retrieve a user, assignment, or transition from Jira. If
+the outcome requires an assignment or transition, append the corresponding ordered
+result action only when authorization permits it.
 
 1. **Retrieve the current user's Jira account ID:**
 
@@ -244,6 +438,10 @@ active work.
    user is recorded even when re-triaging an issue that was previously assigned.
 
 ## Inputs
+
+**Fullsend mode:** the validated `issue.key` is the invocation target. Do not run
+discovery JQL, prompt for a missing issue key, or query Jira; schema validation has
+already established the input shape. Interactive discovery mode below is unchanged.
 
 The user provides a single Vulnerability issue key.
 
@@ -332,6 +530,12 @@ If no results are found, inform the user: "No untriaged Vulnerability issues fou
 in project <project-key>."
 
 ## Step 1 – Data Extraction
+
+**Fullsend mode:** do not fetch the issue or its remote links. Extract these fields
+from the validated `issue` and `remote_links` bundle members, using `configuration`
+for the component-label and stream mappings. If trusted evidence cannot support a
+critical extraction, record a blocked/needs-review result; never ask Jira, GitHub, or
+the user to fill the gap from an untrusted source.
 
 Fetch the Vulnerability issue from Jira:
 
@@ -458,6 +662,12 @@ If the affected repository is not found in the Source Repositories table, defaul
 
 ## Step 1.5 – External CVE Data Enrichment
 
+**Fullsend mode:** do not query MITRE or OSV. Use the captured
+`external_evidence.mitre` and `external_evidence.osv` records, including their source
+URLs, retrieval status, and bodies, for the same cross-validation and fix-threshold
+precedence rules. A non-success record is the trusted evidence of unavailability; do
+not retry it over the network.
+
 After extracting data from the Jira description, query external CVE databases for
 structured vulnerability data. This is not a fallback — external sources are **always**
 queried to supplement and cross-validate the Jira description data.
@@ -525,6 +735,11 @@ impact comparisons.
 
 ## Step 1.7 – Embargo Check
 
+**Fullsend mode:** derive the configured policy from `configuration` and severity from
+the trusted issue/external evidence. Do not fetch a policy URL or use an interactive
+confirmation. Represent an embargo block or permitted next action in the accumulated
+result according to trusted `authorization`.
+
 This step is an advisory warning gate for high-severity vulnerabilities that may
 be under embargo. It does not enforce embargo procedures — it surfaces a warning
 and links to the organization's embargo policy for the engineer to verify.
@@ -568,6 +783,12 @@ files at pinned commits, builds the version impact table, and checks for upstrea
 
 Read `version-impact-analysis.md` for the detailed procedures (Steps 2.1–2.5).
 
+**Fullsend mode:** that procedure consumes only `matrix.streams`,
+`source_evidence.lock_files`, and `source_evidence.development_streams`. It preserves
+all-supported-version coverage, released pinned-commit evidence, development-head
+evidence, retag propagation, dependency-chain analysis, and enriched fix-threshold
+rules without running Git, cosign, or a matrix fallback.
+
 **Sub-steps:**
 - **2.1** – Load the supportability matrix from local files (with Konflux repo fallback)
 - **2.2** – Detect the development stream via unreleased Jira versions
@@ -586,6 +807,12 @@ based on lock file evidence, detecting duplicate and sibling issues, checking
 version lifecycle status, and detecting already-fixed scenarios.
 
 Read `jira-triage-operations.md` for the detailed procedures.
+
+**Fullsend mode:** use `jira_metadata.versions` for version discovery,
+`jira_metadata.sibling_searches` and `.related_issues` for duplicate/sibling/overlap
+analysis, `external_evidence.lifecycle` for lifecycle status, and `idempotency` for
+already-fixed and existing-artifact checks. Do not issue JQL, fetch Jira records, or
+query lifecycle pages; turn any proposed mutation into an ordered result action.
 
 - **Step 3** – Affects Versions Correction: discover available Jira versions
   dynamically, compare against the version impact table, and correct with
@@ -628,6 +855,12 @@ flowchart TD
 **Important**: This skill never creates Vulnerability issues. PSIRT owns
 Vulnerability issue creation — the skill only creates remediation **Tasks**.
 
+**Fullsend mode:** retain the existing decision tree and evidence thresholds, but
+append remediation, field, status, comment, link, and reference operations to the
+ordered result only. Authorization false produces the report-only action and names
+each withheld mutation; authorization true still does not execute a sandbox-side Jira
+call.
+
 ## Step 7 – Concurrent triage detection
 
 Before proceeding to Case A/B/C branching, check whether another engineer is
@@ -637,6 +870,10 @@ simultaneously.
 
 Follow the concurrent triage detection protocol in
 `jira-triage-operations.md` — Step 7.
+
+**Fullsend mode:** determine concurrent or existing triage solely from the validated
+`jira_metadata` and `idempotency` entries. Do not run JQL; report a missing trusted
+match as no known match, not permission to search externally.
 
 If the Upstream Affected Component custom field is not configured, skip this
 step entirely.

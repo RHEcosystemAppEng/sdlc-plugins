@@ -3,8 +3,8 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md beginning with the Step 0.7 early assignment actions (assigning the CVE issue to the current user and transitioning to Assigned status) followed by the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2, write outputs/affects-versions.md with the Affects Versions correction from Step 3, and write outputs/remediation.md with the remediation task descriptions you would create in Step 8.",
-      "expected_output": "A structured triage analysis demonstrating: Step 0.7 early assignment (assigning the CVE issue and transitioning to Assigned status before data extraction), correct CVE data extraction (CVE-2026-31812, quinn-proto, affected range < 0.11.14), version impact table built from security-matrix.md pinned commits showing which versions ship the vulnerable dependency, Affects Versions correction from PSIRT-assigned values to lock-file-verified values, and remediation task descriptions following task-description-template.md format.",
+      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md beginning with the Step 0.8 early assignment actions (assigning the CVE issue to the current user and transitioning to Assigned status) followed by the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2, write outputs/affects-versions.md with the Affects Versions correction from Step 3, and write outputs/remediation.md with the remediation task descriptions you would create in Step 8.",
+      "expected_output": "A structured triage analysis demonstrating: Step 0.8 early assignment (assigning the CVE issue and transitioning to Assigned status before data extraction), correct CVE data extraction (CVE-2026-31812, quinn-proto, affected range < 0.11.14), version impact table built from security-matrix.md pinned commits showing which versions ship the vulnerable dependency, Affects Versions correction from PSIRT-assigned values to lock-file-verified values, and remediation task descriptions following task-description-template.md format.",
       "files": [
         "files/vuln-issue-standard.md",
         "files/security-matrix-mock.md",
@@ -21,7 +21,7 @@
         "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
         "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
         "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
-        "The data-extraction output describes Step 0.7 actions before the Step 1 data table: assigning the CVE issue to the current user and transitioning it to Assigned status (Step 0.7)"
+        "The data-extraction output describes Step 0.8 actions before the Step 1 data table: assigning the CVE issue to the current user and transitioning it to Assigned status (Step 0.8)"
       ]
     },
     {
@@ -545,6 +545,22 @@
         "Step 2.1.1 auto-repairs by appending the Forward Pointer section with content None — this is a safe fix that does not require user confirmation",
         "Step 2.1.1 logs the auto-repair action including the matrix file path",
         "The validation result is Repaired (not Warning) — the triage proceeds without prompting the user since only auto-fixable issues were found"
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "Run triage-security in a Fullsend sandbox. Detect sandbox mode from the presence of FULLSEND_OUTPUT_DIR, not its truthiness. For this run FULLSEND_OUTPUT_DIR is set and non-empty. The only trusted input is /sandbox/workspace/.pre-script/triage-security-input.json, which must validate against ${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-input.schema.json before any analysis. The bundle contains configuration, issue, remote_links, external_evidence, matrix, source_evidence, jira_metadata, idempotency, and authorization. Do not call Jira, GitHub, WebFetch, git, cosign, or any other external tool; do not read CLAUDE.md or local matrices; and never write security-matrix.md. If the mounted input is missing, invalid JSON, or schema-invalid, write exactly { \"error\": \"triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox.\" } to $FULLSEND_OUTPUT_DIR/agent-result.json and stop. Separately, if FULLSEND_OUTPUT_DIR is exported but empty, fail immediately rather than selecting interactive mode. If it is genuinely absent, preserve the existing interactive workflow.",
+      "expected_output": "A dual-mode triage procedure where a non-empty present Fullsend gate consumes only a schema-validated trusted bundle and accumulates sandbox output; invalid sandbox input emits the deliberately schema-invalid error object and stops; an exported empty gate hard-fails; and an absent gate leaves the existing interactive workflow unchanged.",
+      "files": [],
+      "assertions": [
+        "Sandbox detection checks ${FULLSEND_OUTPUT_DIR+x} so a present non-empty gate selects Fullsend mode while a genuinely absent gate preserves the existing interactive workflow",
+        "An exported but empty FULLSEND_OUTPUT_DIR fails immediately with an error and never falls through to the credentialed interactive path",
+        "Before any analysis, Fullsend validates only /sandbox/workspace/.pre-script/triage-security-input.json against ${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-input.schema.json",
+        "On missing, invalid-JSON, or schema-invalid sandbox input, the skill writes exactly { \"error\": \"triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox.\" } and stops without an interactive fallback",
+        "The exact error object is written only by the validation-failure branch, which exits immediately; a successfully validated bundle continues analysis without writing failure output",
+        "Fullsend analysis reads configuration, issue and remote links, external evidence, matrix rows, source evidence, Jira metadata, and idempotency only from the validated input bundle",
+        "In Fullsend mode the skill makes no Jira, GitHub, WebFetch, git, cosign, lifecycle, or other external calls and never writes security-matrix.md; matrix fallback, repair, population, and local writes remain interactive/trusted-runner-only",
+        "After successful analysis, Fullsend writes the completed accumulated result only to $FULLSEND_OUTPUT_DIR/agent-result.json and validates it against ${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-result.schema.json before finishing"
       ]
     }
   ]
