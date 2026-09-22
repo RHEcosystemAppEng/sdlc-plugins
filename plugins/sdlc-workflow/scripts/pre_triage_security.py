@@ -425,6 +425,13 @@ def build_bundle(issue, remote_links, configuration, external_evidence, matrix,
 def _jira_client(command, *arguments):
     """Run the existing Jira client and decode its JSON response."""
     client = Path(__file__).with_name("jira-client.py")
+    # nosemgrep: python.lang.security.audit.dangerous-subprocess-use-audit
+    # List/argv form with shell=False: arguments reach execve as separate argv
+    # entries, so no shell parses them and shell metacharacters cannot inject a
+    # command. The program is fixed (sys.executable running the repo-local
+    # jira-client.py); command is an internal literal and *arguments are internal
+    # literals plus a validated issue key and _jql_escape'd JQL. Not injectable;
+    # verified false positive (Sourcery agreed on PR #311).
     result = subprocess.run(
         [sys.executable, str(client), command, *arguments],
         check=True,
