@@ -179,10 +179,17 @@ def _already_applied(action: dict[str, Any], trusted_input: dict[str, Any]) -> b
     if action_type == "status-transition":
         return issue.get("status") == action["status"]
     if action_type == "link":
+        snapshot_key = issue.get("key")
+        if snapshot_key == action["inward"]:
+            far_end_key = action["outward"]
+        elif snapshot_key == action["outward"]:
+            far_end_key = action["inward"]
+        else:
+            return False
         for link in fields.get("issuelinks", []) or []:
-            if (link.get("type", {}).get("name") == action["link_type"]
-                    and link.get("inwardIssue", {}).get("key") == action["inward"]
-                    and link.get("outwardIssue", {}).get("key") == action["outward"]):
+            if (link.get("type", {}).get("name") == action["link_type"] and
+                    (link.get("inwardIssue", {}).get("key") == far_end_key or
+                     link.get("outwardIssue", {}).get("key") == far_end_key)):
                 return True
     return False
 

@@ -255,8 +255,8 @@ def test_existing_remediation_without_digest_is_digested_before_follow_up_action
 
 
 def test_existing_issue_state_skips_retried_field_status_and_link_actions(recorder):
-    """The trusted snapshot prevents duplicate writes even when a marker is absent."""
-    # Given a later pre-script snapshot that already contains every requested change
+    """A real-shaped Jira link snapshot prevents duplicate retry mutations."""
+    # Given a later pre-script snapshot with existing state and Jira's single far-end link shape
     result = _plan([
         {"type": "field-edit", "marker": "triage-security:fields", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
         {"type": "status-transition", "marker": "triage-security:status", "issue": "TC-42", "status": "In Progress"},
@@ -264,18 +264,18 @@ def test_existing_issue_state_skips_retried_field_status_and_link_actions(record
     ])
     trusted = _trusted_input()
     trusted["issue"] = {
+        "key": "TC-42",
         "status": "In Progress",
         "fields": {
             "labels": ["ai-cve-triaged"],
             "issuelinks": [{
                 "type": {"name": "Depend"},
-                "inwardIssue": {"key": "TC-42"},
                 "outwardIssue": {"key": "TC-9001"},
             }],
         },
     }
 
-    # When the identical plan is retried without its comment markers
+    # When the identical plan is retried without markers
     executor.execute_plan(result, trusted)
 
     # Then the current Jira state still prevents duplicate mutations
