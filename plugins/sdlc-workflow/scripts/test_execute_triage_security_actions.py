@@ -58,9 +58,9 @@ class _JiraRecorder:
         self.calls.append(("field-edit", issue, fields))
 
     def get_transitions(self, issue):
-        """Provide a stable transition catalog for test plans."""
+        """Provide a catalog whose action name differs from its target status."""
         self.calls.append(("get-transitions", issue))
-        return [{"id": "31", "name": "In Progress"}]
+        return [{"id": "31", "name": "Start Progress", "to": {"name": "In Progress"}}]
 
     def transition_issue(self, issue, transition):
         """Record a Jira transition."""

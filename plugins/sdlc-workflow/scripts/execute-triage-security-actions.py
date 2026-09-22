@@ -197,7 +197,10 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
         return
     if action_type == "status-transition":
         transitions = _jira_mod.get_transitions(action["issue"])
-        transition = next((item for item in transitions if item.get("name") == action["status"]), None)
+        transition = next(
+            (item for item in transitions if item.get("to", {}).get("name") == action["status"]),
+            None,
+        )
         if transition is None or not transition.get("id"):
             raise ActionError("no transition named {} for {}".format(action["status"], action["issue"]))
         _jira_mod.transition_issue(action["issue"], transition["id"])
