@@ -354,8 +354,8 @@ def test_post_script_rejects_an_iteration_result_outside_its_run_directory(tmp_p
     assert "escapes" in result.stderr
 
 
-def test_post_script_executes_a_report_only_result_inside_its_run_directory(tmp_path):
-    """The post-script hands an in-run report-only result to the trusted executor."""
+def test_post_script_selects_an_in_run_result_from_a_different_working_directory(tmp_path):
+    """The post-script resolves validated output from FULLSEND_RUN_DIR, not its CWD."""
     # Given the validated output and matching pre-script authorization in one run
     script = os.path.join(SCRIPT_DIR, "post-triage-security.sh")
     run_directory = tmp_path / "run"
@@ -366,9 +366,9 @@ def test_post_script_executes_a_report_only_result_inside_its_run_directory(tmp_
     (iteration_output / "agent-result.json").write_text(
         json.dumps(_plan([{"type": "report-only", "marker": "triage-security:report"}], "report-only")))
 
-    # When the trusted post-script runs after validation
+    # When the trusted post-script runs outside its Fullsend run directory
     result = subprocess.run(
-        ["bash", script], cwd=run_directory,
+        ["bash", script], cwd=tmp_path,
         env={"PATH": os.environ["PATH"], "FULLSEND_RUN_DIR": str(run_directory)},
         capture_output=True, text=True,
     )
