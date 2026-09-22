@@ -154,18 +154,27 @@ def parse_security_configuration(claude_md):
             raise EvidenceError("Security Configuration is missing {}".format(label))
 
     streams = _markdown_table(security, "Version Streams")
-    sources = _markdown_table(security, "Source Repositories")
+    # Parse Source Repositories with the blank-cell-tolerant reader so an empty
+    # (present but blank) Deployment Context cell can fall back to "upstream"
+    # rather than being rejected as an incomplete row before the default applies.
+    _, sources = _markdown_table_rows(security, "Source Repositories", level=3)
     try:
         version_streams = [{
             "name": row["Stream"],
             "matrix_path": row["Security Matrix Path"],
             "release_repository": row["Konflux Release Repo"],
         } for row in streams]
-        source_repositories = [{
-            "name": row["Repository"],
-            "url": row["URL"],
-            "deployment_context": row.get("Deployment Context", "upstream"),
-        } for row in sources]
+        source_repositories = []
+        for row in sources:
+            name = row["Repository"]
+            url = row["URL"]
+            if not name or not url:
+                raise EvidenceError("Source Repositories row is missing Repository or URL")
+            source_repositories.append({
+                "name": name,
+                "url": url,
+                "deployment_context": row.get("Deployment Context") or "upstream",
+            })
     except KeyError as error:
         raise EvidenceError("Security Configuration table is missing {}".format(error.args[0])) from error
 
@@ -403,8 +412,14 @@ def _jira_client(command, *arguments):
         raise EvidenceError("jira-client returned invalid JSON for {}".format(command)) from error
 
 
-def _fetch_url(url):
-    """Fetch required external evidence and retain its retrieval provenance."""
+def _fetch_url(url, allow_missing=False):
+    """Fetch required external evidence and retain its retrieval provenance.
+
+    When ``allow_missing`` is set, a 404 is treated as legitimate evidence (the
+    CVE is not tracked by this source, e.g. an OSV gap or a reserved/embargoed
+    MITRE record) and recorded with its status and body instead of aborting the
+    whole bundle. Every other non-2xx status still fails loudly.
+    """
     try:
         with urlopen(url, timeout=30) as response:
             body = response.read().decode("utf-8")
@@ -415,7 +430,8 @@ def _fetch_url(url):
     except URLError as error:
         raise EvidenceError("could not retrieve {}: {}".format(url, error.reason)) from error
     if status < 200 or status >= 300:
-        raise EvidenceError("required evidence {} returned HTTP {}".format(url, status))
+        if not (allow_missing and status == 404):
+            raise EvidenceError("required evidence {} returned HTTP {}".format(url, status))
     try:
         body = json.loads(body)
     except json.JSONDecodeError:
@@ -458,7 +474,7 @@ def _related_issue(issue):
         "status": status.get("name", ""),
         "labels": fields.get("labels", []) or [],
         "description": fields.get("description", {}) or {},
-        "comments": fields.get("comment", {}).get("comments", []) or [],
+        "comments": (fields.get("comment") or {}).get("comments", []) or [],
         "links": fields.get("issuelinks", []) or [],
     }
 
@@ -477,7 +493,7 @@ def _related_keys(issue):
 def _action_markers(issue):
     """Extract stable triage action markers from the current issue's comments."""
     markers = []
-    for comment in issue.get("fields", {}).get("comment", {}).get("comments", []) or []:
+    for comment in (issue.get("fields", {}).get("comment") or {}).get("comments", []) or []:
         text = json.dumps(comment.get("body", {}))
         markers.extend(re.findall(r"triage-security:[A-Za-z0-9_-]+", text))
     return sorted(set(markers))
@@ -490,6 +506,11 @@ def _jql_escape(value):
 
 def collect_bundle(issue_key, project_root):
     """Collect all credentialed evidence for one poller-dispatched security issue."""
+    # Validate the key before it is interpolated into any JQL. A conforming key
+    # carries no JQL metacharacters, so this is a self-contained injection defense
+    # that does not rely on the pre-triage-security.sh regex gate upstream of us.
+    if not isinstance(issue_key, str) or not _ISSUE_KEY_RE.fullmatch(issue_key):
+        raise EvidenceError("issue_key must be a Jira issue key")
     root = Path(project_root)
     claude_path = root / "CLAUDE.md"
     if not claude_path.is_file():
@@ -544,8 +565,8 @@ def collect_bundle(issue_key, project_root):
     related = [_related_issue(fetched[key]) for key in sorted(fetched)]
 
     external_evidence = {
-        "mitre": _fetch_url("https://cveawg.mitre.org/api/cve/{}".format(cve_id)),
-        "osv": _fetch_url("https://api.osv.dev/v1/vulns/{}".format(cve_id)),
+        "mitre": _fetch_url("https://cveawg.mitre.org/api/cve/{}".format(cve_id), allow_missing=True),
+        "osv": _fetch_url("https://api.osv.dev/v1/vulns/{}".format(cve_id), allow_missing=True),
         "lifecycle": _fetch_url(lifecycle_url),
     }
 
@@ -553,9 +574,13 @@ def collect_bundle(issue_key, project_root):
     lock_files = []
     development_streams = []
     for stream_row in stream_rows:
-        stream_name = stream_row["Stream"]
-        matrix_path = stream_row["Security Matrix Path"]
-        local_release = Path(stream_row["Local Path"])
+        try:
+            stream_name = stream_row["Stream"]
+            matrix_path = stream_row["Security Matrix Path"]
+            local_release = Path(stream_row["Local Path"])
+        except KeyError as error:
+            raise EvidenceError(
+                "Version Streams table is missing {}".format(error.args[0])) from error
         matrix_file = root / matrix_path
         if matrix_file.is_file():
             matrix_content = matrix_file.read_text()
