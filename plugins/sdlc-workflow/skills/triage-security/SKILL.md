@@ -277,9 +277,11 @@ PYEOF
   executing. Never perform bulk or silent Jira writes. In Fullsend mode, do not ask
   for confirmation: use `authorization.mutation_authorized` deterministically and
   serialize the corresponding ordered actions (or the report-only result) instead.
-- **Do NOT fabricate data.** Every version, commit hash, dependency version, and version
-  impact assessment must come from actual `git show` output or Jira API responses — never
-  invented or assumed.
+- **Do NOT fabricate data.** In interactive mode, every version, commit hash,
+  dependency version, and version-impact assessment must come from actual `git show`
+  output or Jira API responses — never invented or assumed. In Fullsend mode, the
+  validated trusted input bundle is also accepted provenance: derive those values from
+  its `source_evidence` and `jira_metadata`, never infer or invent them.
 - **Fullsend output exception:** In Fullsend mode, the only permitted sandbox-side file
   write is `$FULLSEND_OUTPUT_DIR/agent-result.json`: write either the deliberately
   schema-invalid validation failure object or the completed valid accumulated result.
