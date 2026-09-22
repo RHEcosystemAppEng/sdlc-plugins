@@ -59,6 +59,26 @@
       "type": "string",
       "pattern": "^triage-security:[a-z0-9][a-z0-9._:-]*$"
     },
+    "adf_document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "version", "content"],
+      "properties": {
+        "type": { "const": "doc" },
+        "version": { "const": 1 },
+        "content": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
     "report": {
       "type": "object",
       "additionalProperties": false,
@@ -155,7 +175,7 @@
               "type": {},
               "marker": {},
               "issue": { "$ref": "#/$defs/issue_reference" },
-              "body_adf": { "type": "object", "minProperties": 1 }
+              "body_adf": { "$ref": "#/$defs/adf_document" }
             },
             "additionalProperties": false
           }
@@ -184,7 +204,7 @@
               "ref": { "$ref": "#/$defs/reference_name" },
               "project": { "type": "string", "minLength": 1 },
               "summary": { "type": "string", "minLength": 1, "maxLength": 255 },
-              "description_adf": { "type": "object", "minProperties": 1 },
+              "description_adf": { "$ref": "#/$defs/adf_document" },
               "labels": { "type": "array", "items": { "type": "string" } },
               "priority": { "type": "string", "minLength": 1 },
               "fix_versions": { "type": "array", "items": { "type": "string" } }

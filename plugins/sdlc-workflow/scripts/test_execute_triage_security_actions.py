@@ -121,6 +121,40 @@ def test_report_only_plan_never_mutates_jira(recorder):
     assert recorder.calls == []
 
 
+@pytest.mark.parametrize("action", [
+    {
+        "type": "link",
+        "marker": "triage-security:unsupported-link-type",
+        "link_type": "Unsupported",
+        "inward": "TC-42",
+        "outward": "TC-43",
+    },
+    {
+        "type": "field-edit",
+        "marker": "triage-security:empty-field-edit",
+        "issue": "TC-42",
+        "fields": {},
+    },
+    {
+        "type": "comment",
+        "marker": "triage-security:malformed-adf-content",
+        "issue": "TC-42",
+        "body_adf": {"type": "doc", "version": 1, "content": [{}]},
+    },
+])
+def test_schema_invalid_plan_is_rejected_before_any_jira_operation(action, recorder):
+    """The trusted runner rejects schema-invalid sandbox output before mutation."""
+    # Given a result that passed only the sandbox's untrusted validation path
+    result = _plan([action])
+
+    # When the trusted runner receives the invalid result with authorization
+    with pytest.raises(executor.ActionError, match="result schema validation failed"):
+        executor.execute_plan(result, _trusted_input())
+
+    # Then it makes no Jira request, including read-before-write operations
+    assert recorder.calls == []
+
+
 def test_unauthorized_mutating_plan_fails_without_jira_calls(recorder):
     """A mutating result cannot bypass an absent trusted authorization grant."""
     # Given a plan with a valid-looking mutation but no runner authorization
@@ -162,7 +196,7 @@ def test_remediation_digest_precedes_links_and_resolves_references(recorder):
     """Created remediation tasks are registered and digested before dependent links."""
     # Given a remediation task followed by a link to its generated reference
     result = _plan([
-        {"type": "remediation-task", "marker": "triage-security:create-remediation", "ref": "remediation-1", "project": "TC", "summary": "Fix CVE", "description_adf": {"type": "doc", "version": 1, "content": []}, "labels": ["security-preemptive"], "priority": "Major", "fix_versions": ["1.2"]},
+        {"type": "remediation-task", "marker": "triage-security:create-remediation", "ref": "remediation-1", "project": "TC", "summary": "Fix CVE", "description_adf": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Fix CVE."}]}]}, "labels": ["security-preemptive"], "priority": "Major", "fix_versions": ["1.2"]},
         {"type": "link", "marker": "triage-security:link-remediation", "link_type": "Depend", "inward": "TC-42", "outward": "{{remediation-1.key}}"},
     ])
 
@@ -187,7 +221,7 @@ def test_existing_marker_and_remediation_skip_retry_duplicates(recorder):
     # Given actions already applied by a previous trusted runner attempt
     result = _plan([
         {"type": "field-edit", "marker": "triage-security:fields", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
-        {"type": "remediation-task", "marker": "triage-security:create-remediation", "ref": "remediation-1", "project": "TC", "summary": "Fix CVE", "description_adf": {"type": "doc", "version": 1, "content": []}, "labels": []},
+        {"type": "remediation-task", "marker": "triage-security:create-remediation", "ref": "remediation-1", "project": "TC", "summary": "Fix CVE", "description_adf": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Fix CVE."}]}]}, "labels": []},
     ])
     trusted = _trusted_input(
         markers=["triage-security:fields"],
@@ -206,7 +240,7 @@ def test_marked_remediation_still_populates_references_for_dependent_actions(rec
     """A skipped remediation action still resolves its reference before later links."""
     # Given a retry marker and the prior task recorded in trusted idempotency state
     result = _plan([
-        {"type": "remediation-task", "marker": "triage-security:create-remediation", "ref": "remediation-1", "project": "TC", "summary": "Fix CVE", "description_adf": {"type": "doc", "version": 1, "content": []}, "labels": []},
+        {"type": "remediation-task", "marker": "triage-security:create-remediation", "ref": "remediation-1", "project": "TC", "summary": "Fix CVE", "description_adf": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Fix CVE."}]}]}, "labels": []},
         {"type": "link", "marker": "triage-security:link", "link_type": "Depend", "inward": "TC-42", "outward": "{{remediation-1.key}}"},
     ])
     trusted = _trusted_input(
@@ -242,7 +276,7 @@ def test_existing_remediation_without_digest_is_digested_before_follow_up_action
     """A retry repairs a partial creation by posting its missing digest before linking."""
     # Given a prior remediation task that was created before its digest could post
     result = _plan([
-        {"type": "remediation-task", "marker": "triage-security:create-remediation", "ref": "remediation-1", "project": "TC", "summary": "Fix CVE", "description_adf": {"type": "doc", "version": 1, "content": []}, "labels": []},
+        {"type": "remediation-task", "marker": "triage-security:create-remediation", "ref": "remediation-1", "project": "TC", "summary": "Fix CVE", "description_adf": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Fix CVE."}]}]}, "labels": []},
         {"type": "link", "marker": "triage-security:link", "link_type": "Depend", "inward": "TC-42", "outward": "{{remediation-1.key}}"},
     ])
     trusted = _trusted_input(remediation=[{"key": "TC-777", "summary": "Fix CVE", "labels": ["ai-generated-jira"], "description": {"type": "doc", "version": 1, "content": []}, "comments": []}])
