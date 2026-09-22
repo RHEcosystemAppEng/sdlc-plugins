@@ -916,8 +916,11 @@ def main(argv=None):
     elif args.command == 'get_versions':
         result = get_versions(args.project_key, args.unreleased_only)
 
-    # Print result as JSON
-    if result:
+    # Print result as JSON. Guard on ``is not None`` (not truthiness) so an empty
+    # collection — e.g. get_versions/get_remote_links/search_jql with no matches —
+    # is still emitted as valid JSON ([] or {}). Printing nothing would make JSON
+    # callers raise a misleading "invalid JSON" error on empty stdout.
+    if result is not None:
         print(json.dumps(result, indent=2))
 
 

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Tests for the trusted triage-security evidence transformer."""
 
+import io
 import json
 import os
 import subprocess
 import sys
 import time
+from urllib.error import HTTPError
 
 import pytest
 from jsonschema import validate
@@ -115,7 +117,7 @@ def test_collect_bundle_escapes_configured_values_in_jql_literals(tmp_path, monk
     )
     monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
     monkeypatch.setattr(pre_triage_security, "extract_cve_id", lambda _issue: cve_id)
-    monkeypatch.setattr(pre_triage_security, "_fetch_url", lambda _url: {})
+    monkeypatch.setattr(pre_triage_security, "_fetch_url", lambda _url, **_kwargs: {})
     monkeypatch.setattr(pre_triage_security, "build_bundle", lambda **bundle: bundle)
 
     # When the trusted runner builds its JQL searches
@@ -481,3 +483,180 @@ def test_validate_bundle_rejects_malformed_retrieval_timestamp():
     # Then format validation rejects the malformed timestamp
     with pytest.raises(pre_triage_security.EvidenceError, match="triage-security input validation failed"):
         pre_triage_security.validate_bundle(bundle)
+
+
+def _http_error_opener(status, body=b'{"message": "gone"}'):
+    """Return a urlopen replacement that raises an HTTPError with the given status."""
+    def opener(url, timeout=30):
+        raise HTTPError(url, status, "error", {}, io.BytesIO(body))
+    return opener
+
+
+def test_fetch_url_records_missing_external_evidence(monkeypatch):
+    """A 404 from an incomplete evidence source is recorded, not fatal, when allowed."""
+    # Given an OSV/MITRE source that does not track this CVE (a routine 404)
+    monkeypatch.setattr(pre_triage_security, "urlopen", _http_error_opener(404))
+
+    # When the runner fetches it as tolerable-missing evidence
+    evidence = pre_triage_security._fetch_url(
+        "https://api.osv.dev/v1/vulns/CVE-2026-12345", allow_missing=True)
+
+    # Then the 404 is preserved as evidence rather than aborting the whole bundle
+    assert evidence["status"] == 404
+    assert evidence["body"] == {"message": "gone"}
+
+    # And a 404 on required (non-missing-tolerant) evidence still fails loudly
+    with pytest.raises(pre_triage_security.EvidenceError, match="HTTP 404"):
+        pre_triage_security._fetch_url("https://api.osv.dev/v1/vulns/CVE-2026-12345")
+
+    # And any non-404 failure stays fatal even when misses are tolerated
+    monkeypatch.setattr(pre_triage_security, "urlopen", _http_error_opener(500))
+    with pytest.raises(pre_triage_security.EvidenceError, match="HTTP 500"):
+        pre_triage_security._fetch_url(
+            "https://api.osv.dev/v1/vulns/CVE-2026-12345", allow_missing=True)
+
+
+def test_jira_client_decodes_empty_collection(monkeypatch):
+    """An empty Jira collection is decoded as [] rather than a misleading JSON error."""
+    # Given jira-client.py that now prints an empty collection as valid JSON
+    class _Result:
+        stdout = "[]\n"
+
+    monkeypatch.setattr(pre_triage_security.subprocess, "run", lambda *a, **k: _Result())
+
+    # When the runner reads a command with no results (e.g. get_versions)
+    # Then it returns the empty list, not an "invalid JSON" evidence error
+    assert pre_triage_security._jira_client("get_versions", "TC") == []
+
+
+def test_parse_security_configuration_defaults_blank_deployment_context():
+    """A present-but-blank Deployment Context cell falls back to 'upstream'."""
+    # Given a Source Repositories table whose Deployment Context cell is left blank
+    claude_md = """# Project Configuration
+
+## Jira Configuration
+
+- Project key: TC
+
+## Security Configuration
+
+### Product Lifecycle
+
+- Product pages URL: https://example.com/lifecycle
+- Jira version prefix: PRODUCT
+- Vulnerability issue type ID: 10016
+- Component label pattern: pscomponent:
+
+### Version Streams
+
+| Stream | Konflux Release Repo | Local Path | Security Matrix Path |
+|---|---|---|---|
+| 1.0.x | release-repo | /repos/release | docs/matrix.md |
+
+### Source Repositories
+
+| Repository | URL | Deployment Context |
+|---|---|---|
+| component | https://github.com/org/component |  |
+"""
+
+    # When the runner parses the configuration
+    configuration = pre_triage_security.parse_security_configuration(claude_md)
+
+    # Then the blank cell defaults instead of being rejected as an incomplete row
+    assert configuration["source_repositories"] == [{
+        "name": "component",
+        "url": "https://github.com/org/component",
+        "deployment_context": "upstream",
+    }]
+
+
+def test_parse_security_configuration_rejects_blank_repository():
+    """A blank required Source Repositories cell still fails loudly."""
+    # Given a Source Repositories table missing the Repository value
+    claude_md = """# Project Configuration
+
+## Jira Configuration
+
+- Project key: TC
+
+## Security Configuration
+
+### Product Lifecycle
+
+- Product pages URL: https://example.com/lifecycle
+- Jira version prefix: PRODUCT
+- Vulnerability issue type ID: 10016
+- Component label pattern: pscomponent:
+
+### Version Streams
+
+| Stream | Konflux Release Repo | Local Path | Security Matrix Path |
+|---|---|---|---|
+| 1.0.x | release-repo | /repos/release | docs/matrix.md |
+
+### Source Repositories
+
+| Repository | URL | Deployment Context |
+|---|---|---|
+|  | https://github.com/org/component | upstream |
+"""
+
+    # When the runner parses the configuration
+    # Then it rejects the row rather than emit a nameless source repository
+    with pytest.raises(pre_triage_security.EvidenceError, match="Repository or URL"):
+        pre_triage_security.parse_security_configuration(claude_md)
+
+
+def _minimal_jira_client():
+    """Return a _jira_client stub sufficient to reach collect_bundle's stream loop."""
+    def jira_client(command, *arguments):
+        if command == "get_issue":
+            return {"key": "TC-42", "fields": {}}
+        if command in ("get_remote_links", "get_versions"):
+            return []
+        if command == "search_jql":
+            return {"issues": []}
+        raise AssertionError("unexpected Jira command: {}".format(command))
+    return jira_client
+
+
+def test_collect_bundle_reports_missing_version_streams_column(tmp_path, monkeypatch):
+    """A Version Streams table missing a column raises a clear error, not a traceback."""
+    # Given a runner configuration whose stream row lacks the Local Path column
+    (tmp_path / "CLAUDE.md").write_text("# Project Configuration\n")
+    configuration = {"project_key": "TC", "vulnerability_issue_type_id": "10016"}
+    stream_rows = [{"Stream": "1.0.x", "Security Matrix Path": "docs/matrix.md"}]
+    monkeypatch.setattr(
+        pre_triage_security, "_runner_configuration",
+        lambda _content, _root: (configuration, "https://example.com/lifecycle", stream_rows, {}))
+    monkeypatch.setattr(pre_triage_security, "_jira_client", _minimal_jira_client())
+    monkeypatch.setattr(pre_triage_security, "extract_cve_id", lambda _issue: "CVE-2026-12345")
+    monkeypatch.setattr(pre_triage_security, "_fetch_url", lambda *a, **k: {})
+
+    # When the runner reaches the stream loop
+    # Then the missing column surfaces as an EvidenceError naming it
+    with pytest.raises(pre_triage_security.EvidenceError, match="Local Path"):
+        pre_triage_security.collect_bundle("TC-42", tmp_path)
+
+
+def test_related_issue_handles_null_comment_field():
+    """A related issue whose comment field is JSON null yields no comments, not a crash."""
+    # Given a related issue with restricted comment visibility (comment field is null)
+    issue = {"key": "TC-9", "fields": {"status": {"name": "New"}, "comment": None}}
+
+    # When the runner normalizes it for audit and idempotency
+    # Then the null comment field degrades to an empty list rather than raising
+    assert pre_triage_security._related_issue(issue)["comments"] == []
+    assert pre_triage_security._action_markers(issue) == []
+
+
+def test_collect_bundle_rejects_malformed_issue_key(tmp_path):
+    """A non-conforming issue key is rejected before any JQL is constructed."""
+    # Given a poller-supplied value that is not a valid Jira issue key
+    (tmp_path / "CLAUDE.md").write_text("# Project Configuration\n")
+
+    # When the runner begins collection
+    # Then it fails on the key before interpolating it into any JQL
+    with pytest.raises(pre_triage_security.EvidenceError, match="issue_key"):
+        pre_triage_security.collect_bundle("not-a-key", tmp_path)
