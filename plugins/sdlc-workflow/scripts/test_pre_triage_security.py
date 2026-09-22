@@ -10,13 +10,24 @@ import time
 from urllib.error import HTTPError
 
 import pytest
-from jsonschema import validate
+from jsonschema import FormatChecker, validate
 
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, SCRIPT_DIR)
 
 import pre_triage_security
+
+
+# jsonschema only enforces uri/date-time formats when the jsonschema[format]
+# extra is installed (rfc3987 / rfc3339-validator). validate_bundle now fails
+# closed without it, so format-dependent tests are skipped rather than failed on
+# an environment lacking the extra; CI installs it and exercises them fully.
+_HAS_FORMAT_EXTRA = all(
+    fmt in FormatChecker().checkers for fmt in pre_triage_security._REQUIRED_FORMATS)
+requires_format_extra = pytest.mark.skipif(
+    not _HAS_FORMAT_EXTRA,
+    reason="requires jsonschema[format] for uri/date-time format enforcement")
 
 
 def test_parse_security_configuration_extracts_required_runner_values():
@@ -456,11 +467,13 @@ def _complete_bundle():
     return bundle
 
 
+@requires_format_extra
 def test_build_bundle_accepts_complete_source_dependency_evidence():
     """Complete source-dependency evidence produces schema-valid sandbox input."""
     assert _complete_bundle()["issue"]["key"] == "TC-42"
 
 
+@requires_format_extra
 def test_validate_bundle_rejects_malformed_uri():
     """A malformed remote-link URL cannot enter the sandbox bundle."""
     # Given an otherwise valid bundle with an invalid URI-format field
@@ -473,6 +486,7 @@ def test_validate_bundle_rejects_malformed_uri():
         pre_triage_security.validate_bundle(bundle)
 
 
+@requires_format_extra
 def test_validate_bundle_rejects_malformed_retrieval_timestamp():
     """A malformed evidence retrieval timestamp cannot enter the sandbox bundle."""
     # Given an otherwise valid bundle with an invalid date-time-format field
@@ -483,6 +497,20 @@ def test_validate_bundle_rejects_malformed_retrieval_timestamp():
     # Then format validation rejects the malformed timestamp
     with pytest.raises(pre_triage_security.EvidenceError, match="triage-security input validation failed"):
         pre_triage_security.validate_bundle(bundle)
+
+
+def test_validate_bundle_fails_closed_without_format_extra(monkeypatch):
+    """A runner missing jsonschema[format] aborts instead of skipping format checks."""
+    # Given a FormatChecker with no uri/date-time checkers (jsonschema[format] absent)
+    class _NoFormatChecker:
+        checkers = {"regex": None}
+
+    monkeypatch.setattr(pre_triage_security, "FormatChecker", _NoFormatChecker)
+
+    # When a bundle is validated on that misprovisioned runner
+    # Then it fails closed, naming the missing extra, rather than validating silently
+    with pytest.raises(pre_triage_security.EvidenceError, match=r"jsonschema\[format\]"):
+        pre_triage_security.validate_bundle({"any": "bundle"})
 
 
 def _http_error_opener(status, body=b'{"message": "gone"}'):
