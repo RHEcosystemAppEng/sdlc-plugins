@@ -361,13 +361,38 @@ def _validate_source_evidence(source_evidence):
     return source_evidence
 
 
+# Schema formats whose constraints must be enforced on every bundle. jsonschema
+# only checks a "format" when its backing validation library is installed (the
+# jsonschema[format] extra: rfc3987 for uri, rfc3339-validator for date-time).
+# Without the extra, FormatChecker silently treats every value as conforming, so
+# these constraints would be skipped and malformed URLs/timestamps could enter a
+# supposedly schema-validated bundle.
+_REQUIRED_FORMATS = ("uri", "date-time")
+
+
+def _format_checker():
+    """Return a FormatChecker, failing closed if required formats are inactive.
+
+    A trusted runner missing the jsonschema[format] extra must abort rather than
+    emit a bundle whose uri/date-time constraints went unenforced.
+    """
+    checker = FormatChecker()
+    missing = [fmt for fmt in _REQUIRED_FORMATS if fmt not in checker.checkers]
+    if missing:
+        raise EvidenceError(
+            "jsonschema format validation is unavailable for {}; "
+            "install jsonschema[format] on the runner".format(", ".join(missing)))
+    return checker
+
+
 def validate_bundle(bundle, schema_path=None):
     """Validate a completed bundle against the sandbox's exact JSON schema."""
     path = Path(schema_path or os.environ.get("FULLSEND_INPUT_SCHEMA", _SCHEMA_PATH))
+    format_checker = _format_checker()
     try:
         with path.open() as schema_file:
             schema = json.load(schema_file)
-        validate(instance=bundle, schema=schema, format_checker=FormatChecker())
+        validate(instance=bundle, schema=schema, format_checker=format_checker)
     except (OSError, json.JSONDecodeError, ValidationError) as error:
         raise EvidenceError("triage-security input validation failed: {}".format(error)) from error
 
