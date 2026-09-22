@@ -498,12 +498,14 @@ def collect_bundle(issue_key, project_root):
         claude_path.read_text(), root)
     issue = _jira_client("get_issue", issue_key, "--fields", "*all")
     cve_id = extract_cve_id(issue)
+    escaped_project_key = _jql_escape(configuration["project_key"])
+    escaped_cve_id = _jql_escape(cve_id)
     remote_links = _jira_client("get_remote_links", issue_key)
     versions = _jira_client("get_versions", configuration["project_key"])
 
     sibling_jql = (
         'project = "{}" AND labels = "{}" AND issuetype = {} AND key != "{}"'
-        .format(configuration["project_key"], cve_id, configuration["vulnerability_issue_type_id"], issue_key)
+        .format(escaped_project_key, escaped_cve_id, configuration["vulnerability_issue_type_id"], issue_key)
     )
     searches = [("same-cve-siblings", sibling_jql)]
     component_field = configuration.get("upstream_affected_component_field")
@@ -513,7 +515,7 @@ def collect_bundle(issue_key, project_root):
         overlap_jql = (
             'project = "{}" AND issuetype = {} AND cf[{}] ~ "{}" AND key != "{}"'
             .format(
-                configuration["project_key"],
+                escaped_project_key,
                 configuration["vulnerability_issue_type_id"],
                 component_field_number.group(1),
                 _jql_escape(component),
@@ -524,7 +526,7 @@ def collect_bundle(issue_key, project_root):
     preemptive_jql = (
         'project = "{}" AND issuetype = Task AND labels = "security-preemptive" '
         'AND labels = "{}" ORDER BY created DESC'
-        .format(configuration["project_key"], cve_id)
+        .format(escaped_project_key, escaped_cve_id)
     )
     searches.append(("preemptive-remediation", preemptive_jql))
 
