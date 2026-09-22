@@ -272,9 +272,11 @@ PYEOF
   fallback matrix reads. No checkouts, no branch switches, no file modifications
   outside interactive local `security-matrix.md` files or the narrow Fullsend output
   exception below.
-- **Every Jira mutation requires confirmation.** Present the proposed change and rationale
-  to the engineer; wait for explicit approval before executing. Never perform bulk or
-  silent Jira writes.
+- **Interactive mode only: every Jira mutation requires confirmation.** Present the
+  proposed change and rationale to the engineer; wait for explicit approval before
+  executing. Never perform bulk or silent Jira writes. In Fullsend mode, do not ask
+  for confirmation: use `authorization.mutation_authorized` deterministically and
+  serialize the corresponding ordered actions (or the report-only result) instead.
 - **Do NOT fabricate data.** Every version, commit hash, dependency version, and version
   impact assessment must come from actual `git show` output or Jira API responses — never
   invented or assumed.
