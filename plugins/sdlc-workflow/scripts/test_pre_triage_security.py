@@ -72,6 +72,68 @@ def test_parse_security_configuration_extracts_required_runner_values():
     }
 
 
+def test_collect_bundle_escapes_configured_values_in_jql_literals(tmp_path, monkeypatch):
+    """JQL searches preserve quote and backslash-containing configured values."""
+    # Given configured project and CVE values containing JQL metacharacters
+    project_key = 'TC"\\OPS'
+    cve_id = 'CVE-2026-"\\12345'
+    issue = {
+        "key": "TC-42",
+        "fields": {
+            "summary": "security issue",
+            "labels": [],
+            "comment": {"comments": []},
+            "issuelinks": [],
+            "customfield_12345": "component",
+        },
+    }
+    configuration = {
+        "project_key": project_key,
+        "vulnerability_issue_type_id": "10016",
+        "upstream_affected_component_field": "customfield_12345",
+    }
+    searched_jql = []
+    (tmp_path / "CLAUDE.md").write_text("# Project Configuration\n")
+
+    def jira_client(command, *arguments):
+        """Return minimal runner evidence while retaining each JQL search."""
+        if command == "get_issue":
+            return issue
+        if command == "get_remote_links":
+            return []
+        if command == "get_versions":
+            return []
+        if command == "search_jql":
+            searched_jql.append(arguments[arguments.index("--jql") + 1])
+            return {"issues": []}
+        raise AssertionError("unexpected Jira command: {}".format(command))
+
+    monkeypatch.setattr(
+        pre_triage_security,
+        "_runner_configuration",
+        lambda _content, _root: (configuration, "https://example.com/lifecycle", [], {}),
+    )
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+    monkeypatch.setattr(pre_triage_security, "extract_cve_id", lambda _issue: cve_id)
+    monkeypatch.setattr(pre_triage_security, "_fetch_url", lambda _url: {})
+    monkeypatch.setattr(pre_triage_security, "build_bundle", lambda **bundle: bundle)
+
+    # When the trusted runner builds its JQL searches
+    pre_triage_security.collect_bundle("TC-42", tmp_path)
+
+    # Then every quoted configured value is escaped before interpolation
+    escaped_project_key = 'TC\\"\\\\OPS'
+    escaped_cve_id = 'CVE-2026-\\"\\\\12345'
+    assert searched_jql == [
+        'project = "{}" AND labels = "{}" AND issuetype = 10016 AND key != "TC-42"'.format(
+            escaped_project_key, escaped_cve_id),
+        'project = "{}" AND issuetype = 10016 AND cf[12345] ~ "component" AND key != "TC-42"'.format(
+            escaped_project_key),
+        'project = "{}" AND issuetype = Task AND labels = "security-preemptive" '
+        'AND labels = "{}" ORDER BY created DESC'.format(escaped_project_key, escaped_cve_id),
+    ]
+
+
 def test_pre_triage_script_rejects_missing_poller_work_item_url():
     """The runner fails before collection when the poller supplied no work item."""
     # Given runner credentials but no work item dispatched by the poller
