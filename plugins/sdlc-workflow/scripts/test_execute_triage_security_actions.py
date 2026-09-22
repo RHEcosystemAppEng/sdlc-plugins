@@ -282,6 +282,55 @@ def test_existing_issue_state_skips_retried_field_status_and_link_actions(record
     assert recorder.calls == []
 
 
+def test_existing_object_fields_skip_retried_field_edits(recorder):
+    """Full Jira field objects match compact assignee and resolution retry values."""
+    # Given a retry action and its full Jira snapshot field representations
+    result = _plan([{
+        "type": "field-edit", "marker": "triage-security:fields", "issue": "TC-42",
+        "fields": {"assignee": {"id": "owner"}, "resolution": {"name": "Done"}},
+    }])
+    trusted = _trusted_input()
+    trusted["issue"] = {"fields": {
+        "assignee": {"accountId": "owner", "displayName": "Owner"},
+        "resolution": {"id": "10000", "name": "Done"},
+    }}
+
+    # When the same object-valued field edit is retried
+    executor.execute_plan(result, trusted)
+
+    # Then the executor avoids clobbering the current Jira field values
+    assert recorder.calls == []
+
+
+def test_empty_field_edit_is_not_treated_as_already_applied():
+    """An empty field map never becomes idempotent through all([])."""
+    # Given an otherwise valid field-edit action with no values to compare
+    action = {"type": "field-edit", "marker": "triage-security:empty", "issue": "TC-42", "fields": {}}
+
+    # When idempotency evaluates the empty map
+    already_applied = executor._already_applied(action, _trusted_input())
+
+    # Then it remains eligible for validation rather than appearing applied
+    assert already_applied is False
+
+
+def test_other_object_fields_require_an_exact_snapshot_match():
+    """Compact matching does not hide changed values in unrelated object fields."""
+    # Given an object-valued custom field whose value differs from the snapshot
+    action = {
+        "type": "field-edit", "marker": "triage-security:custom", "issue": "TC-42",
+        "fields": {"customfield_12345": {"name": "Risk", "value": "new"}},
+    }
+    trusted = _trusted_input()
+    trusted["issue"] = {"fields": {"customfield_12345": {"name": "Risk", "value": "old"}}}
+
+    # When idempotency compares the custom object field
+    already_applied = executor._already_applied(action, trusted)
+
+    # Then the changed value remains eligible for an update
+    assert already_applied is False
+
+
 def test_unresolved_or_malformed_actions_fail_before_writes(recorder):
     """Unknown references and malformed actions cannot reach Jira as mutations."""
     # Given independently invalid plans
