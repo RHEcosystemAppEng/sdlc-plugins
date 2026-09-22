@@ -155,7 +155,7 @@ def test_authorized_actions_execute_in_order_with_footnoted_comments(recorder):
     assert comment[3] == "<!-- triage-security:summary -->"
     assert "---" in comment[2]
     assert "sdlc-workflow/triage-security" in comment[2]
-    assert "v0.13.9" in comment[2]
+    assert "v{}".format(executor._plugin_version()) in comment[2]
 
 
 def test_remediation_digest_precedes_links_and_resolves_references(recorder):
