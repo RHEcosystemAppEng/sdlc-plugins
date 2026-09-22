@@ -18,10 +18,10 @@ fi
 
 RESULT_FILE=""
 while IFS= read -r iteration_dir; do
-  [[ -d "${iteration_dir}" ]] || continue
-  if [[ -f "${iteration_dir}/agent-result.json" ]]; then
+  [[ -d "${RUN_DIR}/${iteration_dir}" ]] || continue
+  if [[ -f "${RUN_DIR}/${iteration_dir}/agent-result.json" ]]; then
     RESULT_FILE="${iteration_dir}/agent-result.json"
-  elif [[ -f "${iteration_dir}/result.json" ]]; then
+  elif [[ -f "${RUN_DIR}/${iteration_dir}/result.json" ]]; then
     RESULT_FILE="${iteration_dir}/result.json"
   fi
 done < <(cd "${RUN_DIR}" && printf '%s\n' iteration-*/output | sort -V)
