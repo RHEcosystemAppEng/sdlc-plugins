@@ -14,8 +14,11 @@ import os
 import sys
 from typing import Any
 
+from jsonschema import SchemaError, ValidationError, validate
+
 
 _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+_RESULT_SCHEMA_PATH = os.path.join(_SCRIPT_DIR, "..", "schemas", "triage-security-result.schema.json")
 
 
 def _load_module(name: str, filename: str):
@@ -74,6 +77,16 @@ def _validate_action(action: Any) -> None:
         raise ActionError("{} action is missing {}".format(action_type, ", ".join(missing)))
     if not isinstance(action["marker"], str) or not action["marker"].startswith("triage-security:"):
         raise ActionError("action marker must use the triage-security namespace")
+
+
+def _validate_result(result: Any) -> None:
+    """Fail closed unless sandbox output satisfies the trusted result schema."""
+    try:
+        with open(_RESULT_SCHEMA_PATH, encoding="utf-8") as schema_file:
+            schema = json.load(schema_file)
+        validate(instance=result, schema=schema)
+    except (OSError, json.JSONDecodeError, SchemaError, ValidationError) as error:
+        raise ActionError("result schema validation failed: {}".format(error)) from error
 
 
 def _append_footer(document: dict[str, Any]) -> dict[str, Any]:
@@ -274,6 +287,7 @@ def execute_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> dict[
     """Execute a validated result only when the trusted input grants mutations."""
     if not isinstance(result, dict) or not isinstance(trusted_input, dict):
         raise ActionError("result and trusted input must be objects")
+    _validate_result(result)
     mode = result.get("mode")
     actions = result.get("actions")
     if mode not in {"report-only", "mutation-authorized"} or not isinstance(actions, list):
