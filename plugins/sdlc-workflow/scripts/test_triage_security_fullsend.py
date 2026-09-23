@@ -36,6 +36,17 @@ def _trusted_input(name):
     return json.loads((FIXTURE_DIR / name).read_text())
 
 
+def _load_fullsend_input(document, output_dir):
+    """Load trusted sandbox input or write the documented fail-closed result."""
+    try:
+        return json.loads(document)
+    except json.JSONDecodeError:
+        (output_dir / "agent-result.json").write_text(
+            '{ "error": "triage-security aborted: trusted input is missing, invalid JSON, '
+            'or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox." }')
+        return None
+
+
 class _JiraRecorder:
     """Record boundary writes that a trusted runner would send to Jira."""
 
@@ -141,15 +152,19 @@ def test_trusted_input_fixtures_validate_against_the_sandbox_schema():
                for name in fixture_names[1:])
 
 
-def test_invalid_trusted_input_fixture_cannot_be_parsed_before_analysis():
+def test_invalid_trusted_input_fixture_fails_closed_before_analysis(tmp_path):
     """Malformed mounted input fails before it can enter Fullsend analysis."""
     # Given the deliberately incomplete mounted JSON fixture
     document = (FIXTURE_DIR / "fullsend-invalid-trusted-input.md").read_text()
     malformed = document.split("```json\n", 1)[1].split("\n```", 1)[0]
 
-    # When the sandbox attempts to load the trusted input
-    with pytest.raises(json.JSONDecodeError):
-        json.loads(malformed)
+    # When the Fullsend entrypoint loads the trusted input
+    result = _load_fullsend_input(malformed, tmp_path)
+
+    # Then it writes only the prescribed failure result
+    assert result is None
+    assert json.loads((tmp_path / "agent-result.json").read_text()) == {"error": "triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox."}
+    assert sorted(path.name for path in tmp_path.iterdir()) == ["agent-result.json"]
 
 
 def test_authorized_action_plan_executes_each_mutation_category_in_order(recorder):
