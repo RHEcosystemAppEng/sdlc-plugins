@@ -216,3 +216,18 @@ def test_idempotent_retry_fixture_skips_duplicate_mutations(recorder):
     # Then no duplicate Jira mutation occurs and the existing task remains resolvable
     assert recorder.calls == []
     assert registry["remediation"]["key"] == "TC-9001"
+
+
+def test_retry_snapshot_suppresses_existing_field_and_link_actions():
+    """Trusted Jira state suppresses replayed field and resolved-link actions."""
+    # Given a retry fixture with both markers and a populated Jira snapshot
+    contract = _fixture("fullsend-idempotent-retry.md")
+    field_action, _, _, _, link_action = contract["result"]["actions"]
+    resolved_link = {**link_action, "outward": "TC-9001"}
+
+    # When marker suppression is bypassed for actions represented in the snapshot
+    field_snapshot = {**contract["trusted_input"], "idempotency": {"action_markers": [], "existing_remediation": []}}
+
+    # Then _already_applied independently detects both existing operations
+    assert executor._already_applied(field_action, field_snapshot)
+    assert executor._already_applied(resolved_link, field_snapshot)
