@@ -115,7 +115,15 @@ must cause no duplicate Jira mutation.
     },
     "issue": {
       "status": "In Progress",
-      "fields": {}
+      "fields": {
+        "labels": ["ai-cve-triaged"],
+        "comment": {"comments": [{"body": "Synthetic summary already posted."}]},
+        "remediation": {"key": "TC-9001", "summary": "Fix synthetic CVE"},
+        "issuelinks": [{
+          "type": {"name": "Depend"},
+          "outwardIssue": {"key": "TC-9001"}
+        }]
+      }
     }
   }
 }
