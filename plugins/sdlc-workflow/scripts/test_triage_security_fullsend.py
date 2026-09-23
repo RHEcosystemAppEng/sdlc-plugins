@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 
 import pytest
+from jsonschema import FormatChecker
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -23,6 +24,9 @@ def _load_module(name, filename):
 
 executor = _load_module("triage_security_fullsend_executor", "execute-triage-security-actions.py")
 pre_triage = _load_module("triage_security_fullsend_pre_triage", "pre_triage_security.py")
+requires_format_extra = pytest.mark.skipif(
+    not all(fmt in FormatChecker().checkers for fmt in pre_triage._REQUIRED_FORMATS),
+    reason="requires jsonschema[format] for uri/date-time format enforcement")
 
 
 def _fixture(name):
@@ -133,6 +137,7 @@ def test_invalid_bundle_fixture_is_rejected_before_jira_writes(recorder):
     assert recorder.calls == []
 
 
+@requires_format_extra
 def test_trusted_input_fixtures_validate_against_the_sandbox_schema():
     """Authorized, report-only, and RPM inputs are executable trusted bundles."""
     # Given the three JSON fixtures mounted for successful Fullsend paths
