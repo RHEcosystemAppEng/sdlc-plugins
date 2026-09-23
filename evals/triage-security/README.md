@@ -47,6 +47,32 @@ Mock CLAUDE.md with Repository Registry, Jira Configuration, Code
 Intelligence, and Security Configuration sections — the full
 configuration that `triage-security` validates in Step 0.
 
+### Fullsend contract fixtures
+
+These synthetic fixtures document the trusted-runner boundary exercised by
+`test_triage_security_fullsend.py`:
+
+- **fullsend-report-only.md** — a valid report-only result that must not call
+  Jira mutation operations
+- **fullsend-invalid-bundle.md** — malformed, contradictory output that the
+  trusted executor must reject before any Jira operation
+- **fullsend-idempotent-retry.md** — a rerun with existing labels, comments,
+  remediation task, and link state that must not duplicate mutations
+- **fullsend-invalid-trusted-input.md** — malformed mounted input used to
+  exercise the fail-closed validation branch (eval 33)
+- **fullsend-authorized-trusted-bundle.md** — schema-valid trusted evidence for
+  a mutation-authorized action plan (eval 34)
+- **fullsend-authorized-trusted-input.json** — executable schema-valid input
+  mounted for the authorized Fullsend contract (eval 34)
+- **fullsend-report-only-trusted-bundle.md** — schema-valid trusted evidence
+  for an authorization-withheld report (eval 35)
+- **fullsend-report-only-trusted-input.json** — executable schema-valid input
+  mounted for the authorization-withheld contract (eval 35)
+- **fullsend-rpm-trusted-bundle.md** — schema-valid trusted RPM lock and SBOM
+  evidence for a report-only impact assessment (eval 36)
+- **fullsend-rpm-trusted-input.json** — executable schema-valid RPM input
+  mounted for the report-only impact contract (eval 36)
+
 ## Key constraints tested
 
 | Constraint | Eval IDs |
@@ -62,6 +88,10 @@ configuration that `triage-security` validates in Step 0.
 | §1.47 — retag handling | 1, 4 |
 | §1.48 — ecosystem detection | 1 |
 | §1.49 — step order | 1, 2, 3, 4 |
+| Fullsend invalid trusted input | 33 |
+| Fullsend authorized actions | 34 |
+| Fullsend authorization withheld | 35 |
+| Fullsend RPM trusted evidence | 36 |
 
 ## Running
 

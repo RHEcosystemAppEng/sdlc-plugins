@@ -559,34 +559,58 @@
     },
     {
       "id": 33,
-      "prompt": "Run triage-security in a Fullsend sandbox. Detect sandbox mode from the presence of FULLSEND_OUTPUT_DIR, not its truthiness. For this run FULLSEND_OUTPUT_DIR is set and non-empty. The only trusted input is /sandbox/workspace/.pre-script/triage-security-input.json, which must validate against ${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-input.schema.json before any analysis. The bundle contains configuration, issue, remote_links, external_evidence, matrix, source_evidence, jira_metadata, idempotency, and authorization. Do not call Jira, GitHub, WebFetch, git, cosign, or any other external tool; do not read CLAUDE.md or local matrices; and never write security-matrix.md. If the mounted input is missing, invalid JSON, or schema-invalid, write exactly { \"error\": \"triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox.\" } to $FULLSEND_OUTPUT_DIR/agent-result.json and stop. Separately, if FULLSEND_OUTPUT_DIR is exported but empty, fail immediately rather than selecting interactive mode. If it is genuinely absent, preserve the existing interactive workflow.",
-      "expected_output": "A dual-mode triage procedure where a non-empty present Fullsend gate consumes only a schema-validated trusted bundle and accumulates sandbox output; invalid sandbox input emits the deliberately schema-invalid error object and stops; an exported empty gate hard-fails; and an absent gate leaves the existing interactive workflow unchanged.",
-      "files": [],
+      "prompt": "Run triage-security in a Fullsend sandbox. FULLSEND_OUTPUT_DIR is present and non-empty. The only mounted trusted input is /sandbox/workspace/.pre-script/triage-security-input.json; its deliberately malformed contents are provided in fullsend-invalid-trusted-input.md. Do not call Jira, GitHub, WebFetch, git, cosign, or any external tool; do not read CLAUDE.md or a local matrix; and never write security-matrix.md. Write exactly { \"error\": \"triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox.\" } to $FULLSEND_OUTPUT_DIR/agent-result.json and stop.",
+      "expected_output": "The validation-failure branch writes the specified error object and stops before any triage analysis, interactive fallback, or external operation.",
+      "files": [
+        "files/fullsend-invalid-trusted-input.md"
+      ],
       "assertions": [
-        "Sandbox detection checks ${FULLSEND_OUTPUT_DIR+x} so a present non-empty gate selects Fullsend mode while a genuinely absent gate preserves the existing interactive workflow",
-        "An exported but empty FULLSEND_OUTPUT_DIR fails immediately with an error and never falls through to the credentialed interactive path",
-        "Before any analysis, Fullsend validates only /sandbox/workspace/.pre-script/triage-security-input.json against ${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-input.schema.json",
-        "On missing, invalid-JSON, or schema-invalid sandbox input, the skill writes exactly { \"error\": \"triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox.\" } and stops without an interactive fallback",
-        "The exact error object is written only by the validation-failure branch, which exits immediately; a successfully validated bundle continues analysis without writing failure output",
-        "Fullsend analysis reads configuration, issue and remote links, external evidence, matrix rows, source evidence, Jira metadata, and idempotency only from the validated input bundle",
-        "In Fullsend mode the skill makes no Jira, GitHub, WebFetch, git, cosign, lifecycle, or other external calls and never writes security-matrix.md; matrix fallback, repair, population, and local writes remain interactive/trusted-runner-only",
-        "After successful analysis, Fullsend writes the completed accumulated result only to $FULLSEND_OUTPUT_DIR/agent-result.json and validates it against ${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-result.schema.json before finishing"
+        "The result is exactly { \"error\": \"triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox.\" }",
+        "The output directory contains only agent-result.json, showing the validation-failure branch stopped without producing triage artifacts"
       ]
     },
     {
       "id": 34,
-      "prompt": "Run triage-security in a Fullsend sandbox using the already schema-validated trusted input bundle. Preserve the existing interactive confirmation workflow when FULLSEND_OUTPUT_DIR is absent. In Fullsend mode, use authorization.mutation_authorized deterministically instead of asking for confirmation, never call Jira, and serialize only actions defined by triage-security-result.schema.json. Exercise assignment, Affects Versions correction, VEX updates, labels, Assigned/In Progress/Closed transitions, triage/reconciliation/summary comments including ADF mentions, Related/Depend/Blocks links, remediation task creation, preemptive reconciliation, and post-triage summaries. Use idempotency.action_markers and existing_remediation to avoid duplicate ordinary actions. For a partial retry where a remediation task already exists with its action marker but lacks its description digest, emit the same remediation-task action and stable ref so the executor reuses and registers it, repairs the digest, and resolves later placeholder links without duplicate creation. For each task, serialize remediation-task before its links and later comments; do not add a standalone digest comment or post-creation resolve-reference action.",
-      "expected_output": "A schema-valid, evidence-backed Fullsend action plan. With mutation_authorized false it is report-only and contains exactly one report-only action while the report identifies every withheld mutation. With authorization true it has stable, idempotent markers and maps each interactive Jira write to the corresponding structured action. A partial retry preserves the remediation-task/ref so the executor rehydrates the reference, posts a missing digest exactly once, and permits later placeholder links without creating a duplicate task.",
-      "files": [],
+      "prompt": "Run triage-security in a Fullsend sandbox. FULLSEND_OUTPUT_DIR is present and non-empty. The only trusted evidence is the already schema-validated bundle in fullsend-authorized-trusted-bundle.md; do not read CLAUDE.md, local matrices, or any other file. Do not call Jira, GitHub, WebFetch, git, cosign, or any external tool. Write a schema-valid mutation-authorized action plan to $FULLSEND_OUTPUT_DIR/agent-result.json. Use the trusted account ID for assignment; serialize the supplied Affects Versions, VEX, labels, transitions, comment, remediation task, and Depend link with stable triage-security markers. The existing action marker suppresses the duplicate label edit. The existing remediation task lacks only its digest, so emit the remediation-task with its stable ref before the Depend link; do not add resolve-reference or a standalone digest comment.",
+      "expected_output": "A schema-valid authorized plan composed only from the supplied trusted bundle, with idempotent action markers and remediation ordering suitable for executor digest repair.",
+      "files": [
+        "files/fullsend-authorized-trusted-input.json",
+        "files/fullsend-authorized-trusted-bundle.md"
+      ],
       "assertions": [
-        "When authorization.mutation_authorized is false, the result mode is report-only, its evidence-backed report names every withheld assignment, field edit, transition, comment, link, remediation task, and reconciliation mutation, and actions contains exactly one report-only action",
-        "When authorization.mutation_authorized is true, assignment using only a trusted account ID from validated input, Affects Versions, VEX Justification, and label changes are serialized as field-edit actions with stable triage-security markers; a missing trusted assignee ID withholds only the assignment as a blocked report-only recommendation naming the missing identity/configuration, while every other authorized field edit, transition, comment, remediation task, and link still serializes without a lookup or invented identity",
-        "Assigned, In Progress, and Closed changes are serialized as status-transition actions; triage, Affects Versions, reconciliation, cross-stream, and post-triage summary comments (including ADF mentions) are serialized as comment actions",
-        "Related, Depend, and Blocks relationships are serialized as link actions, and idempotency evidence prevents duplicate link, comment, and remediation actions on retry",
-        "Across the Fullsend skill and Jira/remediation companion procedures, each remediation task is serialized as remediation-task with a stable marker and reference before its Depend/Related/Blocks links and later task-list, reconciliation, cross-stream, or summary comments; the executor registers the reference and posts the description digest exactly once within remediation-task, so no standalone digest comment or post-creation resolve-reference is serialized",
-        "Preemptive reconciliation serializes the Depend link and removal of the security-preemptive label as link and field-edit actions, respectively, rather than performing Jira mutations",
-        "All Fullsend action markers are stable, unique triage-security markers derived from the issue, operation, and target. Existing idempotency.action_markers omit duplicate ordinary actions, but a partial retry with an existing remediation task and missing digest still emits its remediation-task/ref so the executor reuses the task, rehydrates the placeholder reference, repairs the digest, and creates no duplicate",
-        "Interactive mode remains unchanged: every Jira mutation still waits for explicit engineer confirmation rather than using Fullsend authorization"
+        "The result has mode mutation-authorized and contains only action types defined by triage-security-result.schema.json",
+        "The trusted account ID, Affects Versions, VEX Justification, and new label are serialized as field-edit actions with stable triage-security markers, without an identity lookup",
+        "The supplied transition and ADF comment are serialized as status-transition and comment actions, and the existing label marker suppresses a duplicate label action",
+        "The remediation-task action retains its stable ref and appears before its Depend link; there is no standalone digest comment or resolve-reference action",
+        "The plan uses only the supplied trusted bundle and makes no Jira, GitHub, WebFetch, git, cosign, local-matrix, or other external operation"
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "Run triage-security in a Fullsend sandbox. FULLSEND_OUTPUT_DIR is present and non-empty. The only trusted evidence is the already schema-validated bundle in fullsend-report-only-trusted-bundle.md; do not read CLAUDE.md, local matrices, or any other file. Do not call Jira, GitHub, WebFetch, git, cosign, or any external tool. Because authorization.mutation_authorized is false, write a schema-valid report-only result to $FULLSEND_OUTPUT_DIR/agent-result.json with exactly one report-only action and an evidence-backed report naming the assignment, field edits, transition, comment, link, and remediation task that were withheld.",
+      "expected_output": "A schema-valid report-only result that names every withheld mutation without attempting or serializing a Jira mutation.",
+      "files": [
+        "files/fullsend-report-only-trusted-input.json",
+        "files/fullsend-report-only-trusted-bundle.md"
+      ],
+      "assertions": [
+        "The result mode is report-only and actions contains exactly one report-only action",
+        "The evidence-backed report identifies the withheld assignment, field edits, transition, comment, link, and remediation task",
+        "The serialized result contains no field-edit, status-transition, comment, link, remediation-task, or resolve-reference action"
+      ]
+    },
+    {
+      "id": 36,
+      "prompt": "Run triage-security in a Fullsend sandbox. FULLSEND_OUTPUT_DIR is present and non-empty. The only trusted evidence is the already schema-validated RPM bundle in fullsend-rpm-trusted-bundle.md; do not read CLAUDE.md, local matrices, or any other file. Do not call Jira, GitHub, WebFetch, git, cosign, or any external tool. The trusted authorization is false, so write a schema-valid report-only result to $FULLSEND_OUTPUT_DIR/agent-result.json that reports the RPM lock and supplied SBOM evidence used for the 2.2.x impact assessment.",
+      "expected_output": "A schema-valid report-only RPM assessment sourced solely from the supplied trusted lock and SBOM evidence.",
+      "files": [
+        "files/fullsend-rpm-trusted-input.json",
+        "files/fullsend-rpm-trusted-bundle.md"
+      ],
+      "assertions": [
+        "The report identifies openssl-libs as RPM evidence from the supplied rpms.lock.yaml record and distinguishes the vulnerable 2.2.0 through 2.2.2 releases from patched 2.2.3 and 2.2.4 releases",
+        "The report uses the supplied SBOM evidence and explicitly does not invoke cosign, git, Jira, a network lookup, local evidence, or security-matrix.md",
+        "The result is report-only with exactly one report-only action because trusted authorization is false"
       ]
     }
   ]
