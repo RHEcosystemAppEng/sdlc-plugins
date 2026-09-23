@@ -13,7 +13,7 @@ only the following evidence needed for this case:
 - A remediation task for `TC-8100` with stable ref `remediation-8100`; its
   existing Jira task has no description digest yet.
 - A Depend link from `TC-8100` to `{{remediation-8100.key}}`.
-- Existing idempotency marker `triage-security:tc-8100:field-edit:label:legacy`.
+- Existing idempotency marker `triage-security:tc-8100:field-edit:label:security-triaged`.
 
 No other files, credentials, or external evidence are available. All supplied
 values must be used as-is; no account, version, or reference lookup is needed.
