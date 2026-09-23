@@ -114,6 +114,7 @@ must cause no duplicate Jira mutation.
       ]
     },
     "issue": {
+      "key": "TC-42",
       "status": "In Progress",
       "fields": {
         "labels": ["ai-cve-triaged"],
