@@ -150,10 +150,11 @@ prefetched evidence, and only the trusted runner can execute Jira mutations.
 | `scripts/post-triage-security.sh` | Locates a sandbox result under `FULLSEND_RUN_DIR`, verifies its path and JSON, and invokes the executor. |
 | `scripts/execute-triage-security-actions.py` | Independently validates authorization, resolves references, deduplicates retry actions, and performs trusted Jira writes. |
 
-The sandbox consumes only the mounted `triage-security-input.json`; it must not call
-Jira, GitHub, web, or credentialed source services, and it cannot write a matrix. It
-returns a schema-valid `agent-result.json` after successful validated analysis, with one
-of these modes:
+The sandbox uses the mounted `triage-security-input.json` plus the delivered
+`triage-security` skill and schema artifacts. It must not call Jira, GitHub, web, Git,
+or other credentialed evidence sources, and it cannot write a matrix. It returns a
+schema-valid `agent-result.json` after successful validated analysis, with one of these
+modes:
 
 - `report-only` — exactly `report-only` actions; it reports withheld or blocked work
   without mutation.
