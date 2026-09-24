@@ -340,7 +340,7 @@ Triages a Jira Vulnerability issue (CVE-based, auto-created by PSIRT) with full 
 #### Fullsend non-interactive mode (TC-6201)
 
 `triage-security` also supports non-interactive execution through the
-`harness/triage-security.yaml` Fullsend harness. This mode is selected by the
+`.fullsend/harness/triage-security.yaml` Fullsend harness. This mode is selected by the
 presence of `FULLSEND_OUTPUT_DIR`; an unset variable preserves the interactive
 Jira/web/Git workflow above, while an exported-but-empty value is a fail-closed
 configuration error. A sandbox run never falls back to the interactive workflow.
