@@ -3,8 +3,8 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md beginning with the Step 0.7 early assignment actions (assigning the CVE issue to the current user and transitioning to Assigned status) followed by the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2, write outputs/affects-versions.md with the Affects Versions correction from Step 3, and write outputs/remediation.md with the remediation task descriptions you would create in Step 8.",
-      "expected_output": "A structured triage analysis demonstrating: Step 0.7 early assignment (assigning the CVE issue and transitioning to Assigned status before data extraction), correct CVE data extraction (CVE-2026-31812, quinn-proto, affected range < 0.11.14), version impact table built from security-matrix.md pinned commits showing which versions ship the vulnerable dependency, Affects Versions correction from PSIRT-assigned values to lock-file-verified values, and remediation task descriptions following task-description-template.md format.",
+      "prompt": "Triage Vulnerability issue TC-8001. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md beginning with the Step 0.8 early assignment actions (assigning the CVE issue to the current user and transitioning to Assigned status) followed by the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2, write outputs/affects-versions.md with the Affects Versions correction from Step 3, and write outputs/remediation.md with the remediation task descriptions you would create in Step 8.",
+      "expected_output": "A structured triage analysis demonstrating: Step 0.8 early assignment (assigning the CVE issue and transitioning to Assigned status before data extraction), correct CVE data extraction (CVE-2026-31812, quinn-proto, affected range < 0.11.14), version impact table built from security-matrix.md pinned commits showing which versions ship the vulnerable dependency, Affects Versions correction from PSIRT-assigned values to lock-file-verified values, and remediation task descriptions following task-description-template.md format.",
       "files": [
         "files/vuln-issue-standard.md",
         "files/security-matrix-mock.md",
@@ -21,7 +21,8 @@
         "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
         "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
         "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
-        "The data-extraction output describes Step 0.7 actions before the Step 1 data table: assigning the CVE issue to the current user and transitioning it to Assigned status (Step 0.7)"
+        "The data-extraction output describes Step 0.8 actions before the Step 1 data table: assigning the CVE issue to the current user and transitioning it to Assigned status (Step 0.8)",
+        "With a schema-valid Fullsend input bundle and authorization.mutation_authorized true, the standard triage serializes its assignment, Affects Versions correction, labels, transitions, comments, two remediation tasks, and Blocks/Depend links as ordered schema actions with stable triage-security markers rather than performing the Jira writes"
       ]
     },
     {
@@ -38,7 +39,8 @@
         "Triage outcome recommends closing as Not a Bug with resolution, not creating remediation tasks (Step 8 Case C)",
         "The close recommendation includes a comment documenting the version impact evidence — listing each version and its dependency version as proof of non-impact",
         "VEX Justification is set to 'Component not Present' or appropriate value when the VEX field is configured (Step 8 VEX Justification)",
-        "The analysis does NOT create any remediation tasks — no upstream backport, no downstream propagation (Step 8 Case C closes the issue)"
+        "The analysis does NOT create any remediation tasks — no upstream backport, no downstream propagation (Step 8 Case C closes the issue)",
+        "In a valid Fullsend bundle with authorization.mutation_authorized false, the already-fixed closure, VEX update, labels, transition, and evidence comment are named as withheld in exactly one evidence-backed report-only action and no mutation action is serialized"
       ]
     },
     {
@@ -55,7 +57,8 @@
         "Duplicate check correctly classifies TC-7999 as a same-stream sibling (both have stream suffix [rhtpa-2.2]) and identifies it as a duplicate (Step 4.1)",
         "Triage outcome recommends closing TC-8003 as Duplicate with resolution 'Duplicate', referencing TC-7999 as the original (Step 4.1)",
         "The close recommendation includes a comment documenting why it is a duplicate — same CVE tracked for the same stream (Step 4.1)",
-        "The analysis does NOT proceed to remediation task creation — duplicate detection short-circuits the triage flow"
+        "The analysis does NOT proceed to remediation task creation — duplicate detection short-circuits the triage flow",
+        "With Fullsend authorization, the duplicate resolution and its evidence comment are serialized as status-transition and comment actions using trusted sibling evidence; no Jira search, Jira write, or remediation-task action is performed in the sandbox"
       ]
     },
     {
@@ -72,7 +75,8 @@
         "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
         "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 8 Case A scoping)",
         "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
-        "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 8 Case B applies only to scoped issues)"
+        "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 8 Case B applies only to scoped issues)",
+        "In Fullsend mode the mixed-stream analysis consumes only validated matrix and source-evidence records, does not call git or Jira or write a matrix, and serializes the 2.1.x correction and remediation actions only when authorization permits them"
       ]
     },
     {
@@ -90,7 +94,8 @@
         "Dependency chain context identifies openssl-libs as present in rpms.lock.yaml and uses this to determine the package origin — the lock file presence is the primary classification signal (Step 2.3.5)",
         "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 8 Remediation Task Creation — system package path)",
         "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 8 Remediation Task Creation)",
-        "The version impact output addresses SBOM verification in the dependency chain context — either noting that verification was skipped because cosign is not available or because external tools are prohibited, or presenting the SBOM classification result (Step 2.3.5 Optional SBOM verification)"
+        "The version impact output addresses SBOM verification in the dependency chain context — either noting that verification was skipped because cosign is not available or because external tools are prohibited, or presenting the SBOM classification result (Step 2.3.5 Optional SBOM verification)",
+        "For Fullsend RPM triage, lock and any supplied SBOM evidence are parsed only from the valid trusted bundle: the sandbox does not invoke cosign, git, Jira, or a network lookup and does not write local evidence or security-matrix.md"
       ]
     },
     {
@@ -144,7 +149,8 @@
         "Triage outcome recommends closing the issue because existing remediation task TC-8009 already bumps axios past the fix threshold — no new remediation task is created",
         "Step 4.3 creates a Related link between the current CVE (TC-8010) and the related CVE (TC-8008) with an idempotency check on existing issuelinks before creating",
         "Step 4.3 creates a Depend link from the covering remediation task (TC-8009) to the current CVE (TC-8010) with an idempotency check on existing issuelinks before creating",
-        "A comment is posted on the current CVE documenting the cross-CVE overlap finding — including the related CVE key (TC-8008), covering task key (TC-8009), library (axios), bump version (1.9.0), and fix threshold (1.8.2)"
+        "A comment is posted on the current CVE documenting the cross-CVE overlap finding — including the related CVE key (TC-8008), covering task key (TC-8009), library (axios), bump version (1.9.0), and fix threshold (1.8.2)",
+        "With authorized Fullsend input, the covered-overlap outcome serializes idempotent Related and Depend link actions, the overlap comment action, and the close transition from trusted evidence; it does not call Jira and omits actions whose markers or trusted existing links already exist"
       ]
     },
     {
@@ -161,7 +167,8 @@
         "Step 4.3 filters search results by matching PS Component (customfield_10669 = pscomponent:org/rhtpa-ui) and Stream (customfield_10832 = rhtpa-2.2)",
         "Step 4.3 traverses issuelinks on TC-8012 to find remediation task TC-8013 via the 'Depend' link type",
         "Step 4.3 compares the remediation task's bump version (5.96.1) against the current CVE's fix threshold (5.98.0) and determines the fix does NOT cover this CVE",
-        "The overlap table is presented to the engineer showing TC-8012 and TC-8013 with 'Covers This CVE? = No' — the triage proceeds to create new remediation tasks rather than recommending closure"
+        "The overlap table is presented to the engineer showing TC-8012 and TC-8013 with 'Covers This CVE? = No' — the triage proceeds to create new remediation tasks rather than recommending closure",
+        "With authorized Fullsend input, the insufficient-overlap path serializes each new remediation-task with a stable marker and reference before its dependent links and later comments, without external calls or invented Jira keys"
       ]
     },
     {
@@ -195,7 +202,8 @@
         "Step 4.4 filters results to match the current stream (rhtpa-2.1) by checking the task summary for the stream name",
         "Step 4.4 links the new CVE Jira TC-8021 to the preemptive task TC-8022 with 'Depend' link type (standard remediation linkage)",
         "Step 4.4 removes the 'security-preemptive' label from TC-8022 — the task is now a standard remediation task linked to a proper CVE Jira",
-        "Step 8 skips remediation task creation for this stream because Step 4.4 reconciliation already linked an existing task"
+        "Step 8 skips remediation task creation for this stream because Step 4.4 reconciliation already linked an existing task",
+        "In authorized Fullsend reconciliation, the trusted preemptive task produces a Depend link action and security-preemptive label-removal field-edit action with stable markers; it never mutates Jira directly and omits marker-recorded ordinary actions on retry"
       ]
     },
     {
@@ -212,7 +220,8 @@
         "Step 1.5 queries MITRE CVE API and extracts lessThan 0.4.8 as the fix threshold from the affected[].versions[] field (§1.62)",
         "Step 1.5 queries OSV.dev API and extracts fixed version 0.4.8 from the affected[].ranges[].events field (§1.62)",
         "Step 1.5 cross-validation shows agreement between MITRE and OSV.dev — the enriched fix threshold (0.4.8) is used as the authoritative value for Step 2.3",
-        "Step 2.3 version impact comparison uses the enriched fix threshold (0.4.8) from Step 1.5, not the imprecise Jira description data"
+        "Step 2.3 version impact comparison uses the enriched fix threshold (0.4.8) from Step 1.5, not the imprecise Jira description data",
+        "In Fullsend mode enrichment reads MITRE and OSV responses only from valid external_evidence in the trusted input bundle; it makes no API or network request and reports a missing required enrichment record as an evidence limitation"
       ]
     },
     {
@@ -315,7 +324,8 @@
         "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
         "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
         "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
-        "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)"
+        "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+        "On an authorized Fullsend rerun, existing idempotency.action_markers suppress duplicate ordinary field, transition, comment, and link actions, while an existing remediation task with a missing description digest is still emitted with the same remediation-task marker and ref so the executor reuses it, repairs the digest once, and resolves later placeholders without duplicate creation"
       ]
     },
     {
@@ -545,6 +555,65 @@
         "Step 2.1.1 auto-repairs by appending the Forward Pointer section with content None — this is a safe fix that does not require user confirmation",
         "Step 2.1.1 logs the auto-repair action including the matrix file path",
         "The validation result is Repaired (not Warning) — the triage proceeds without prompting the user since only auto-fixable issues were found"
+      ]
+    },
+    {
+      "id": 33,
+      "prompt": "Run triage-security in a Fullsend sandbox. FULLSEND_OUTPUT_DIR is present and non-empty. The only mounted trusted input is /sandbox/workspace/.pre-script/triage-security-input.json; its deliberately malformed contents are provided in fullsend-invalid-trusted-input.md. Do not call Jira, GitHub, WebFetch, git, cosign, or any external tool; do not read CLAUDE.md or a local matrix; and never write security-matrix.md. Write exactly { \"error\": \"triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox.\" } to $FULLSEND_OUTPUT_DIR/agent-result.json and stop.",
+      "expected_output": "The validation-failure branch writes the specified error object and stops before any triage analysis, interactive fallback, or external operation.",
+      "files": [
+        "files/fullsend-invalid-trusted-input.md"
+      ],
+      "assertions": [
+        "An exported but empty FULLSEND_OUTPUT_DIR fails immediately and never falls through to the credentialed interactive path",
+        "A genuinely absent FULLSEND_OUTPUT_DIR preserves the existing interactive workflow",
+        "The result is exactly { \"error\": \"triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox.\" }",
+        "The output directory contains only agent-result.json, showing the validation-failure branch stopped without producing triage artifacts",
+        "After successful Fullsend analysis, the accumulated agent-result.json validates against ${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-result.schema.json before finishing"
+      ]
+    },
+    {
+      "id": 34,
+      "prompt": "Run triage-security in a Fullsend sandbox. FULLSEND_OUTPUT_DIR is present and non-empty. The only trusted evidence is the already schema-validated bundle in fullsend-authorized-trusted-bundle.md; do not read CLAUDE.md, local matrices, or any other file. Do not call Jira, GitHub, WebFetch, git, cosign, or any external tool. Write a schema-valid mutation-authorized action plan to $FULLSEND_OUTPUT_DIR/agent-result.json. Use the trusted account ID for assignment; serialize the supplied Affects Versions, VEX, transitions, comment, remediation task, and Depend link with stable triage-security markers. The existing security-triaged label marker suppresses that duplicate label edit. The existing remediation task lacks only its digest, so emit the remediation-task with its stable ref before the Depend link; do not add resolve-reference or a standalone digest comment.",
+      "expected_output": "A schema-valid authorized plan composed only from the supplied trusted bundle, with idempotent action markers and remediation ordering suitable for executor digest repair.",
+      "files": [
+        "files/fullsend-authorized-trusted-input.json",
+        "files/fullsend-authorized-trusted-bundle.md"
+      ],
+      "assertions": [
+        "The result has mode mutation-authorized and contains only action types defined by triage-security-result.schema.json",
+        "The trusted account ID, Affects Versions, VEX Justification, and new label are serialized as field-edit actions with stable triage-security markers, without an identity lookup",
+        "The supplied transition and ADF comment are serialized as status-transition and comment actions, and the existing label marker suppresses a duplicate label action",
+        "The remediation-task action retains its stable ref and appears before its Depend link; there is no standalone digest comment or resolve-reference action",
+        "The plan uses only the supplied trusted bundle and makes no Jira, GitHub, WebFetch, git, cosign, local-matrix, or other external operation"
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "Run triage-security in a Fullsend sandbox. FULLSEND_OUTPUT_DIR is present and non-empty. The only trusted evidence is the already schema-validated bundle in fullsend-report-only-trusted-bundle.md; do not read CLAUDE.md, local matrices, or any other file. Do not call Jira, GitHub, WebFetch, git, cosign, or any external tool. Because authorization.mutation_authorized is false, write a schema-valid report-only result to $FULLSEND_OUTPUT_DIR/agent-result.json with exactly one report-only action and an evidence-backed report naming the assignment, field edits, transition, comment, link, and remediation task that were withheld.",
+      "expected_output": "A schema-valid report-only result that names every withheld mutation without attempting or serializing a Jira mutation.",
+      "files": [
+        "files/fullsend-report-only-trusted-input.json",
+        "files/fullsend-report-only-trusted-bundle.md"
+      ],
+      "assertions": [
+        "The result mode is report-only and actions contains exactly one report-only action",
+        "The evidence-backed report identifies the withheld assignment, field edits, transition, comment, link, and remediation task",
+        "The serialized result contains no field-edit, status-transition, comment, link, remediation-task, or resolve-reference action"
+      ]
+    },
+    {
+      "id": 36,
+      "prompt": "Run triage-security in a Fullsend sandbox. FULLSEND_OUTPUT_DIR is present and non-empty. The only trusted evidence is the already schema-validated RPM bundle in fullsend-rpm-trusted-bundle.md; do not read CLAUDE.md, local matrices, or any other file. Do not call Jira, GitHub, WebFetch, git, cosign, or any external tool. The trusted authorization is false, so write a schema-valid report-only result to $FULLSEND_OUTPUT_DIR/agent-result.json that reports the RPM lock and supplied SBOM evidence used for the 2.2.x impact assessment.",
+      "expected_output": "A schema-valid report-only RPM assessment sourced solely from the supplied trusted lock and SBOM evidence.",
+      "files": [
+        "files/fullsend-rpm-trusted-input.json",
+        "files/fullsend-rpm-trusted-bundle.md"
+      ],
+      "assertions": [
+        "The report identifies openssl-libs as RPM evidence from the supplied rpms.lock.yaml record and distinguishes the vulnerable 2.2.0 through 2.2.2 releases from patched 2.2.3 and 2.2.4 releases",
+        "The report uses the supplied SBOM evidence and explicitly does not invoke cosign, git, Jira, a network lookup, local evidence, or security-matrix.md",
+        "The result is report-only with exactly one report-only action because trusted authorization is false"
       ]
     }
   ]
