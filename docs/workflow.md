@@ -337,6 +337,62 @@ Triages a Jira Vulnerability issue (CVE-based, auto-created by PSIRT) with full 
 - Every Jira mutation requires explicit engineer confirmation
 - No fabricated data — all evidence from actual lock file output or Jira API responses
 
+#### Fullsend non-interactive mode (TC-6201)
+
+`triage-security` also supports non-interactive execution through the
+`harness/triage-security.yaml` Fullsend harness. This mode is selected by the
+presence of `FULLSEND_OUTPUT_DIR`; an unset variable preserves the interactive
+Jira/web/Git workflow above, while an exported-but-empty value is a fail-closed
+configuration error. A sandbox run never falls back to the interactive workflow.
+
+The branch-independent execution flow is split across trust boundaries:
+
+1. The trusted pre-script (`scripts/pre-triage-security.sh` and
+   `scripts/pre_triage_security.py`) gathers Jira, remote-link, configuration,
+   external, matrix, source, metadata, idempotency, and authorization evidence.
+   It validates and mounts `triage-security-input.json` for the sandbox. The shipped
+   collector sets `authorization.mutation_authorized` to `false`, so its default
+   harness output is report-only.
+2. The sandbox reads only that bundle and the delivered skill/schema artifacts. It
+   has no Jira, GitHub, web, credentialed source, or direct mutation access; it
+   writes `agent-result.json` to `FULLSEND_OUTPUT_DIR`.
+3. The trusted post-script (`scripts/post-triage-security.sh`) selects the result,
+   validates its JSON/path, and passes it with the trusted input to
+   `scripts/execute-triage-security-actions.py`. Only this trusted executor can
+   perform authorized Jira actions.
+
+The input bundle must satisfy `schemas/triage-security-input.schema.json`. Missing,
+malformed, or contradictory required evidence fails before mutation. The result must
+satisfy `schemas/triage-security-result.schema.json` and use either `report-only` or
+`mutation-authorized` mode. A report-only result contains only a `report-only`
+action. Mutation-authorized output additionally requires trusted
+`authorization.mutation_authorized: true` before the executor can act. Enabling
+mutation-authorized execution requires a trusted prefetch implementation that supplies
+that authorization; the shipped collector does not do so.
+
+Supported result actions are `report-only`, `field-edit`, `status-transition`,
+`comment`, `link`, `resolve-reference`, and `remediation-task`. The executor resolves
+generated references before dependent Jira calls; an unresolved placeholder fails
+execution. Stable `triage-security:` markers and the prefetched Jira snapshot prevent
+duplicate comments, labels, links, transitions, and remediation tasks on retries. A
+remediation task receives its description digest before its dependent links or
+follow-up comments are executed.
+
+Fullsend does not refresh, repair, or write a security matrix in the sandbox. The
+trusted runner must supply matrix and lock-file evidence; absent or malformed required
+evidence fails closed, and incomplete or inconsistent supplied evidence is reported as
+a blocked report-only outcome. The existing interactive path retains its matrix-refresh
+and engineer-confirmation behavior.
+
+**Fullsend troubleshooting:**
+
+| Symptom | Operator response |
+|---|---|
+| Invalid or incomplete `triage-security-input.json` | Fix the trusted prefetch evidence and rerun; do not attempt an interactive fallback from the sandbox. |
+| Stale matrix or missing lock-file evidence | Refresh or correct evidence on the trusted runner, then rerun. The sandbox neither repairs nor writes matrix data. |
+| Mutation plan is withheld | Inspect the report-only result and trusted authorization; `mutation-authorized` output requires `authorization.mutation_authorized: true`. |
+| Post-execution failure | Correct the trusted-runner failure and retry. Stable markers and the prefetched snapshot suppress duplicate writes and re-register existing remediation references safely. |
+
 ---
 
 ### Report Phase
