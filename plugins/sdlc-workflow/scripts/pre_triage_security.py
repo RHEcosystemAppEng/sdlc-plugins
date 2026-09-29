@@ -33,7 +33,9 @@ def _ref_token(cell):
     cell after removing a leading prose annotation.
     """
     original = cell
-    cell = (cell or "").strip()
+    cell = (cell or "").strip().strip("`").strip()
+    if not cell:
+        return ""
     prefix = re.match(r"(?:\([^)]*\)\s*|N/A\s*-\s*see\s+)", cell, re.IGNORECASE)
     if prefix:
         cell = cell[prefix.end():]
