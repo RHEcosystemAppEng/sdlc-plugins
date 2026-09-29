@@ -7,7 +7,9 @@ import os
 import subprocess
 import sys
 import time
+from unittest.mock import MagicMock
 from urllib.error import HTTPError
+from urllib.request import Request
 
 import pytest
 from jsonschema import FormatChecker, validate
@@ -341,7 +343,7 @@ def test_action_markers_collect_prior_trusted_runner_actions():
 
 
 def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
-    """A matrix retains pinned commits, retags, and lock-file inspection metadata."""
+    """A matrix retains commits and commands while stripping branch annotations."""
     # Given a configured stream matrix with a source-dependency and RPM mapping
     matrix_markdown = """## Supportability Matrix
 
@@ -354,7 +356,7 @@ def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
 
 | Ecosystem | Repository | Lock File | Check Command | Upstream Branch |
 |---|---|---|---|---|
-| Cargo | component | `Cargo.lock` | grep library | main |
+| Cargo | component | `Cargo.lock` | grep library | `release/0.6.z` (pending re-point to 0.7.z) |
 | RPM | component | `rpms.lock.yaml` | grep library | main |
 """
 
@@ -372,9 +374,19 @@ def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
         ],
     }
     assert mappings == [
-        {"ecosystem": "Cargo", "repository": "component", "lock_file": "Cargo.lock", "check_command": "grep library", "upstream_branch": "main"},
+        {"ecosystem": "Cargo", "repository": "component", "lock_file": "Cargo.lock", "check_command": "grep library", "upstream_branch": "release/0.6.z"},
         {"ecosystem": "RPM", "repository": "component", "lock_file": "rpms.lock.yaml", "check_command": "grep library", "upstream_branch": "main"},
     ]
+
+
+@pytest.mark.parametrize("cell, expected", [
+    ("`release/0.6.z` (pending re-point to 0.7.z)", "release/0.6.z"),
+    ("release/0.5.z", "release/0.5.z"),
+    ("`main` — current stable branch", "main"),
+])
+def test_ref_token_extracts_branch_from_annotated_matrix_cells(cell, expected):
+    """A matrix branch cell yields its first ref token without trailing prose."""
+    assert pre_triage_security._ref_token(cell) == expected
 
 
 def _complete_bundle():
@@ -542,6 +554,114 @@ def test_fetch_url_records_missing_external_evidence(monkeypatch):
     with pytest.raises(pre_triage_security.EvidenceError, match="HTTP 500"):
         pre_triage_security._fetch_url(
             "https://api.osv.dev/v1/vulns/CVE-2026-12345", allow_missing=True)
+
+
+def test_fetch_url_sends_custom_user_agent(monkeypatch):
+    """Evidence fetches send the configured User-Agent on a urllib Request."""
+    # Given a successful HTTP response and an opener that records its request
+    response = MagicMock()
+    response.__enter__.return_value = response
+    response.status = 200
+    response.read.return_value = b'{"evidence": "ok"}'
+    calls = []
+
+    def open_url(request, timeout):
+        calls.append((request, timeout))
+        return response
+
+    monkeypatch.setattr(pre_triage_security, "urlopen", open_url)
+
+    # When evidence is fetched
+    evidence = pre_triage_security._fetch_url("https://access.redhat.com/advisory")
+
+    # Then urllib receives the custom User-Agent and the response is decoded
+    request, timeout = calls[0]
+    assert isinstance(request, Request)
+    assert request.full_url == "https://access.redhat.com/advisory"
+    assert request.get_header("User-agent") == pre_triage_security._EVIDENCE_USER_AGENT
+    assert timeout == 30
+    assert evidence["body"] == {"evidence": "ok"}
+
+
+def _init_source_repository(path):
+    """Create a clean source repository for read-only git evidence tests."""
+    subprocess.run(
+        ["git", "-C", str(path), "init", "--quiet", "--initial-branch=main"],
+        check=True,
+    )
+    for key, value in (("user.name", "Test User"), ("user.email", "test@example.com")):
+        subprocess.run(["git", "-C", str(path), "config", key, value], check=True)
+    (path / "README.md").write_text("source evidence\n")
+    subprocess.run(["git", "-C", str(path), "add", "README.md"], check=True)
+    subprocess.run(["git", "-C", str(path), "commit", "--quiet", "-m", "fixture"], check=True)
+    return subprocess.check_output(
+        ["git", "-C", str(path), "rev-parse", "HEAD"], text=True).strip()
+
+
+def test_resolve_ref_prefers_remotes_and_returns_none_when_missing(tmp_path):
+    """Bare branches resolve to remote refs in precedence order, or None."""
+    # Given a source repository with the same branch on several remotes
+    repository = tmp_path / "source"
+    repository.mkdir()
+    commit = _init_source_repository(repository)
+    branch = "release/0.5.z"
+    for remote in ("backup-z", "backup-a", "origin", "upstream"):
+        subprocess.run([
+            "git", "-C", str(repository), "update-ref",
+            "refs/remotes/{}/{}".format(remote, branch), commit,
+        ], check=True)
+
+    # When the bare branch is resolved with every remote available
+    assert pre_triage_security._resolve_ref(repository, "main") == "main"
+    assert pre_triage_security._resolve_ref(repository, branch) == (
+        "refs/remotes/upstream/{}".format(branch))
+
+    # Then origin wins after upstream is removed, followed by the first other remote
+    subprocess.run([
+        "git", "-C", str(repository), "update-ref", "-d",
+        "refs/remotes/upstream/{}".format(branch),
+    ], check=True)
+    assert pre_triage_security._resolve_ref(repository, branch) == (
+        "refs/remotes/origin/{}".format(branch))
+    subprocess.run([
+        "git", "-C", str(repository), "update-ref", "-d",
+        "refs/remotes/origin/{}".format(branch),
+    ], check=True)
+    assert pre_triage_security._resolve_ref(repository, branch) == (
+        "refs/remotes/backup-a/{}".format(branch))
+    assert pre_triage_security._resolve_ref(repository, "missing-branch") is None
+
+
+def test_git_show_records_resolved_ref_without_mutating_source_repository(tmp_path):
+    """Remote-tracking evidence keeps the matrix ref and leaves the checkout intact."""
+    # Given a clean source checkout with a remote-tracking development branch
+    repository = tmp_path / "source"
+    repository.mkdir()
+    commit = _init_source_repository(repository)
+    branch = "release/0.5.z"
+    subprocess.run([
+        "git", "-C", str(repository), "update-ref",
+        "refs/remotes/upstream/{}".format(branch), commit,
+    ], check=True)
+    before_head = subprocess.check_output(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip()
+    before_status = subprocess.check_output(
+        ["git", "-C", str(repository), "status", "--porcelain"], text=True)
+
+    # When evidence is read from the bare matrix branch
+    evidence = pre_triage_security._git_show(repository, branch, "README.md")
+
+    # Then provenance records both refs and the source worktree remains unchanged
+    assert evidence == {
+        "ref": branch,
+        "path": "README.md",
+        "command": "git show refs/remotes/upstream/{}:README.md".format(branch),
+        "content": "source evidence\n",
+    }
+    assert subprocess.check_output(
+        ["git", "-C", str(repository), "rev-parse", "HEAD"], text=True).strip() == before_head
+    assert subprocess.check_output(
+        ["git", "-C", str(repository), "status", "--porcelain"], text=True) == before_status
 
 
 def test_jira_client_decodes_empty_collection(monkeypatch):
