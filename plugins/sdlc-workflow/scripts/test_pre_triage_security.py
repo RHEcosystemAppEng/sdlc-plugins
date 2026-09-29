@@ -383,9 +383,11 @@ def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
     ("`release/0.6.z` (pending re-point to 0.7.z)", "release/0.6.z"),
     ("release/0.5.z", "release/0.5.z"),
     ("`main` — current stable branch", "main"),
+    ("(pending re-point) release/0.6.z", "release/0.6.z"),
+    ("N/A - see release/0.6.z", "release/0.6.z"),
 ])
 def test_ref_token_extracts_branch_from_annotated_matrix_cells(cell, expected):
-    """A matrix branch cell yields its first ref token without trailing prose."""
+    """A matrix branch cell yields its ref token despite surrounding prose."""
     assert pre_triage_security._ref_token(cell) == expected
 
 
