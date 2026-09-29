@@ -343,8 +343,8 @@ def test_action_markers_collect_prior_trusted_runner_actions():
 
 
 def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
-    """A matrix retains commits and commands while stripping branch annotations."""
-    # Given a configured stream matrix with a source-dependency and RPM mapping
+    """A matrix keeps rows, strips annotations, and accepts an empty branch."""
+    # Given a configured stream matrix with populated and empty upstream branches
     matrix_markdown = """## Supportability Matrix
 
 | PRODUCT Version | Build | component | Notes |
@@ -358,6 +358,7 @@ def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
 |---|---|---|---|---|
 | Cargo | component | `Cargo.lock` | grep library | `release/0.6.z` (pending re-point to 0.7.z) |
 | RPM | component | `rpms.lock.yaml` | grep library | main |
+| Go | component | go.sum | grep library | |
 """
 
     # When parsing the matrix on the trusted runner
@@ -376,6 +377,7 @@ def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
     assert mappings == [
         {"ecosystem": "Cargo", "repository": "component", "lock_file": "Cargo.lock", "check_command": "grep library", "upstream_branch": "release/0.6.z"},
         {"ecosystem": "RPM", "repository": "component", "lock_file": "rpms.lock.yaml", "check_command": "grep library", "upstream_branch": "main"},
+        {"ecosystem": "Go", "repository": "component", "lock_file": "go.sum", "check_command": "grep library", "upstream_branch": ""},
     ]
 
 
@@ -389,6 +391,12 @@ def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
 def test_ref_token_extracts_branch_from_annotated_matrix_cells(cell, expected):
     """A matrix branch cell yields its ref token despite surrounding prose."""
     assert pre_triage_security._ref_token(cell) == expected
+
+
+@pytest.mark.parametrize("cell", ["", None, "   ", "``"])
+def test_ref_token_returns_empty_for_blank_cells(cell):
+    """A blank upstream-branch cell normalizes to an empty ref."""
+    assert pre_triage_security._ref_token(cell) == ""
 
 
 def _complete_bundle():
