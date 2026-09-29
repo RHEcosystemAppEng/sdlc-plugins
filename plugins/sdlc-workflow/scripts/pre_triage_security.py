@@ -118,7 +118,7 @@ def parse_security_matrix(stream_name, matrix_path, content):
     for row in rows:
         version = row[version_header]
         source_commits = {
-            header: row[header].strip("`")
+            header: _ref_token(row[header])
             for header in source_headers
             if row[header].strip("`")
         }
