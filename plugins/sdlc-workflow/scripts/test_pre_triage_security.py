@@ -343,13 +343,13 @@ def test_action_markers_collect_prior_trusted_runner_actions():
 
 
 def test_parse_security_matrix_preserves_rows_retags_and_ecosystem_commands():
-    """A matrix keeps rows, strips annotations, and accepts an empty branch."""
+    """Matrix parsing normalizes source refs and accepts empty branch cells."""
     # Given a configured stream matrix with populated and empty upstream branches
     matrix_markdown = """## Supportability Matrix
 
 | PRODUCT Version | Build | component | Notes |
 |---|---|---|---|
-| 1.0.0 | build-1 | `abc1234` | |
+| 1.0.0 | build-1 | `abc1234` (retag) | |
 | 1.0.1 | build-2 | `abc1234` | retag of 1.0.0 |
 
 ## Ecosystem Mappings
