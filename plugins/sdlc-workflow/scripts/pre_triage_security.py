@@ -10,17 +10,32 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.error import HTTPError, URLError
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 from jsonschema import FormatChecker, ValidationError, validate
 
 
 _ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-[0-9]+$")
 _SCHEMA_PATH = Path(__file__).parent.parent / "schemas" / "triage-security-input.schema.json"
+_EVIDENCE_USER_AGENT = "Mozilla/5.0 (compatible; sdlc-triage-security/1.0)"
 
 
 class EvidenceError(ValueError):
     """Raised when runner evidence is incomplete or inconsistent."""
+
+
+def _ref_token(cell):
+    """Extract a git ref/branch token from a matrix cell.
+
+    Matrix cells may wrap the ref in backticks and append a human annotation
+    (e.g. ``release/0.6.z (pending re-point to 0.7.z)``). A git ref never
+    contains whitespace or parentheses, so take the first ref-like token and
+    ignore any trailing prose.
+    """
+    match = re.search(r"[A-Za-z0-9._/\-]+", cell or "")
+    if not match:
+        raise EvidenceError("matrix cell has no ref token: {!r}".format(cell))
+    return match.group(0)
 
 
 def _markdown_section(document, heading, level):
@@ -116,7 +131,7 @@ def parse_security_matrix(stream_name, matrix_path, content):
                 "repository": row["Repository"],
                 "lock_file": row["Lock File"].strip("`"),
                 "check_command": row["Check Command"].strip("`"),
-                "upstream_branch": row["Upstream Branch"].strip("`"),
+                "upstream_branch": _ref_token(row["Upstream Branch"]),
             })
         except KeyError as error:
             raise EvidenceError("Ecosystem Mappings is missing {}".format(error.args[0])) from error
@@ -451,8 +466,12 @@ def _fetch_url(url, allow_missing=False):
     MITRE record) and recorded with its status and body instead of aborting the
     whole bundle. Every other non-2xx status still fails loudly.
     """
+    # access.redhat.com (and some other evidence hosts) sit behind bot
+    # protection that rejects the default "Python-urllib/x.y" User-Agent with
+    # HTTP 403. Send a browser-style UA so required evidence is retrievable.
+    request = Request(url, headers={"User-Agent": _EVIDENCE_USER_AGENT})
     try:
-        with urlopen(url, timeout=30) as response:
+        with urlopen(request, timeout=30) as response:
             body = response.read().decode("utf-8")
             status = response.status
     except HTTPError as error:
@@ -475,11 +494,55 @@ def _fetch_url(url, allow_missing=False):
     }
 
 
+def _resolve_ref(repository_path, ref):
+    """Resolve a matrix ref to a committish git can read, read-only.
+
+    Development-branch refs (e.g. ``release/0.5.z``) resolve by bare name only
+    when a local branch or tag of that exact name exists. After a plain
+    ``git fetch`` a clone usually has just the remote-tracking copy
+    (``refs/remotes/<remote>/release/0.5.z``), which the bare name will not
+    match. Fall back to that copy without mutating the repository, preferring a
+    canonical remote (upstream, then origin) so the same branch name carried by
+    two remotes never resolves ambiguously. Returns the committish to read, or
+    ``None`` when nothing matches (e.g. a genuinely missing commit SHA).
+    """
+    verifies = subprocess.run(
+        ["git", "-C", str(repository_path), "rev-parse", "--verify", "--quiet",
+         "{}^{{commit}}".format(ref)],
+        capture_output=True, text=True,
+    )
+    if verifies.returncode == 0:
+        return ref
+
+    listing = subprocess.run(
+        ["git", "-C", str(repository_path), "for-each-ref", "--format=%(refname)",
+         "refs/remotes/"],
+        capture_output=True, text=True,
+    )
+    matches = []
+    for refname in listing.stdout.split():
+        rest = refname[len("refs/remotes/"):]
+        remote, _, tail = rest.partition("/")
+        if tail == ref:  # exact single-remote match, not a slashed branch suffix
+            matches.append((remote, refname))
+    if not matches:
+        return None
+    preferred = {"upstream": 0, "origin": 1}
+    matches.sort(key=lambda m: (preferred.get(m[0], 2), m[0]))
+    return matches[0][1]
+
+
 def _git_show(repository_path, ref, path):
     """Read source evidence with the permitted read-only git show command."""
+    resolved = _resolve_ref(repository_path, ref)
+    if resolved is None:
+        raise EvidenceError(
+            "git show failed for {}:{}: no local or remote-tracking ref resolves "
+            "{!r} in {}".format(ref, path, ref, repository_path)
+        )
     try:
         result = subprocess.run(
-            ["git", "-C", str(repository_path), "show", "{}:{}".format(ref, path)],
+            ["git", "-C", str(repository_path), "show", "{}:{}".format(resolved, path)],
             check=True,
             capture_output=True,
             text=True,
@@ -490,7 +553,7 @@ def _git_show(repository_path, ref, path):
     return {
         "ref": ref,
         "path": path,
-        "command": "git show {}:{}".format(ref, path),
+        "command": "git show {}:{}".format(resolved, path),
         "content": result.stdout,
     }
 
