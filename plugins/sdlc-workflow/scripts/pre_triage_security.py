@@ -29,12 +29,17 @@ def _ref_token(cell):
 
     Matrix cells may wrap the ref in backticks and append a human annotation
     (e.g. ``release/0.6.z (pending re-point to 0.7.z)``). A git ref never
-    contains whitespace or parentheses, so take the first ref-like token and
-    ignore any trailing prose.
+    contains whitespace or parentheses, so take the ref at the start of the
+    cell after removing a leading prose annotation.
     """
-    match = re.search(r"[A-Za-z0-9._/\-]+", cell or "")
+    original = cell
+    cell = (cell or "").strip()
+    prefix = re.match(r"(?:\([^)]*\)\s*|N/A\s*-\s*see\s+)", cell, re.IGNORECASE)
+    if prefix:
+        cell = cell[prefix.end():]
+    match = re.match(r"[A-Za-z0-9._/\-]+", cell.lstrip(" `"))
     if not match:
-        raise EvidenceError("matrix cell has no ref token: {!r}".format(cell))
+        raise EvidenceError("matrix cell has no ref token: {!r}".format(original))
     return match.group(0)
 
 
