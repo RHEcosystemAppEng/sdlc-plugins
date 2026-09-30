@@ -337,6 +337,75 @@ def test_prefetched_triage_relationships_authorize_related_targets(context, reco
     assert recorder.calls[4] == ("link", "TC-43", "TC-42", "Related")
 
 
+def test_related_status_transition_retry_skips_completed_transition_and_continues(recorder, monkeypatch):
+    """Replaying a completed related transition does not block later actions."""
+    # Given an authorized related target whose transition disappears after success
+    result = _plan([
+        {"type": "status-transition", "marker": "triage-security:related-status", "issue": "TC-43", "status": "In Progress"},
+        {"type": "field-edit", "marker": "triage-security:labels", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
+    ])
+    trusted = _trusted_input(related=[{"key": "TC-43"}])
+    executor.execute_plan(result, trusted)
+    assert recorder.calls == [
+        ("get-transitions", "TC-43"), ("transition", "TC-43", "31"),
+        ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]}),
+    ]
+    recorder.calls.clear()
+
+    def get_transitions(issue):
+        """Return no transition once the related target has reached its status."""
+        recorder.calls.append(("get-transitions", issue))
+        return []
+
+    def get_issue(issue, fields="*all"):
+        """Return the related issue's current Jira status on replay."""
+        recorder.calls.append(("get-issue", issue, fields))
+        return {"fields": {"status": {"name": "In Progress"}}}
+
+    monkeypatch.setattr(executor._jira_mod, "get_transitions", get_transitions)
+    monkeypatch.setattr(executor._jira_mod, "get_issue", get_issue)
+
+    # When the identical unmarked plan is replayed
+    executor.execute_plan(result, trusted)
+
+    # Then Jira confirms the target state, no transition is written, and execution continues
+    assert recorder.calls == [
+        ("get-transitions", "TC-43"), ("get-issue", "TC-43", "status"),
+        ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]}),
+    ]
+
+
+def test_related_unavailable_transition_in_different_status_still_fails(recorder, monkeypatch):
+    """A missing transition is not a no-op unless its target status is reached."""
+    # Given an authorized target with no transition and a different current status
+    result = _plan([
+        {"type": "status-transition", "marker": "triage-security:related-status", "issue": "TC-43", "status": "In Progress"},
+        {"type": "field-edit", "marker": "triage-security:labels", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
+    ])
+
+    def get_transitions(issue):
+        """Record the unavailable transition lookup."""
+        recorder.calls.append(("get-transitions", issue))
+        return []
+
+    def get_issue(issue, fields="*all"):
+        """Return a related issue still awaiting the requested transition."""
+        recorder.calls.append(("get-issue", issue, fields))
+        return {"fields": {"status": {"name": "New"}}}
+
+    monkeypatch.setattr(executor._jira_mod, "get_transitions", get_transitions)
+    monkeypatch.setattr(executor._jira_mod, "get_issue", get_issue)
+
+    # When the missing transition cannot be justified by the current Jira state
+    with pytest.raises(executor.ActionError, match="no transition named In Progress for TC-43"):
+        executor.execute_plan(result, _trusted_input(related=[{"key": "TC-43"}]))
+
+    # Then execution fails before any mutation or later action
+    assert recorder.calls == [
+        ("get-transitions", "TC-43"), ("get-issue", "TC-43", "status"),
+    ]
+
+
 def test_unrelated_search_purpose_cannot_expand_trusted_scope(recorder):
     """An arbitrary prefetched search is not a documented triage relationship."""
     # Given a target present only in a search unrelated to triage

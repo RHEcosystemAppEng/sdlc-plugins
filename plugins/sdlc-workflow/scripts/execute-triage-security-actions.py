@@ -309,6 +309,10 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
             (item for item in transitions if item.get("to", {}).get("name") == action["status"]),
             None,
         )
+        if transition is None and action["issue"] != trusted_input["issue"]["key"]:
+            issue = _jira_mod.get_issue(action["issue"], fields="status")
+            if issue.get("fields", {}).get("status", {}).get("name") == action["status"]:
+                return
         if transition is None or not transition.get("id"):
             raise ActionError("no transition named {} for {}".format(action["status"], action["issue"]))
         _jira_mod.transition_issue(action["issue"], transition["id"])
