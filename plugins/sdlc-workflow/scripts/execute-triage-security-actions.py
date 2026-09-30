@@ -11,6 +11,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import sys
 from typing import Any
 
@@ -182,6 +183,67 @@ def _resolve_action(action: dict[str, Any], registry: dict[str, dict[str, str]])
         raise ActionError("unresolved action reference: {}".format(error.args[0])) from error
 
 
+def _trusted_targets(trusted_input: dict[str, Any]) -> set[str]:
+    """Collect existing targets from the runner's documented triage relationships."""
+    issue = trusted_input.get("issue")
+    primary = issue.get("key") if isinstance(issue, dict) else None
+    if not isinstance(primary, str) or not re.fullmatch(r"[A-Z][A-Z0-9]+-[0-9]+", primary):
+        raise ActionError("mutation-authorized execution requires a valid trusted issue key")
+    metadata = trusted_input.get("jira_metadata") or {}
+    targets = {primary}
+    related = list(metadata.get("related_issues") or [])
+    related.extend((trusted_input.get("idempotency") or {}).get("existing_remediation") or [])
+    for search in metadata.get("sibling_searches") or []:
+        if search.get("purpose") in {"same-cve-siblings", "cross-cve-overlap", "preemptive-remediation"}:
+            related.extend(search.get("issues") or [])
+    for item in related:
+        key = item.get("key") if isinstance(item, dict) else None
+        if not isinstance(key, str) or not re.fullmatch(r"[A-Z][A-Z0-9]+-[0-9]+", key):
+            raise ActionError("trusted triage relationship requires a valid issue key")
+        targets.add(key)
+    return targets
+
+
+def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> None:
+    """Authorize every target and reference before Jira reads, writes, or retry repair."""
+    targets = _trusted_targets(trusted_input)
+    if result["report"]["issue"] != trusted_input["issue"]["key"]:
+        raise ActionError("report issue does not match the trusted issue")
+    registry: dict[str, dict[str, str]] = {}
+    markers = set((trusted_input.get("idempotency") or {}).get("action_markers") or [])
+    for raw_action in result["actions"]:
+        _validate_action(raw_action)
+        action = _resolve_action(raw_action, registry)
+        action_type = action["type"]
+        target_fields = ()
+        if action_type in {"field-edit", "status-transition", "comment", "resolve-reference"}:
+            target_fields = ("issue",)
+        elif action_type == "link":
+            target_fields = ("inward", "outward")
+        for field in target_fields:
+            if action[field] not in targets:
+                raise ActionError("unauthorized action target: {}".format(action[field]))
+        if action_type not in {"resolve-reference", "remediation-task"}:
+            continue
+        ref = action["ref"]
+        if ref in registry:
+            raise ActionError("action reference cannot be rebound: {}".format(ref))
+        if action_type == "resolve-reference":
+            key = action["issue"]
+        else:
+            project = (trusted_input.get("configuration") or {}).get("project_key")
+            if not isinstance(project, str) or not project or action["project"] != project:
+                raise ActionError("remediation project does not match the trusted project")
+            # Keep generated identities symbolic until the existing executor creates them.
+            existing = _existing_remediation(
+                raw_action if raw_action["marker"] in markers else action, trusted_input)
+            if raw_action["marker"] in markers and existing is None:
+                raise ActionError("marked remediation task is absent from trusted retry state")
+            key = existing["key"] if existing else "{{" + ref + ".key}}"
+            targets.add(key)
+        registry[ref] = {"key": key, "url": _browse_url(key)}
+
+
 def _field_value_matches(field_name: str, snapshot_value: Any, action_value: Any) -> bool:
     """Compare an action field value with its compact or full Jira snapshot form."""
     if not isinstance(action_value, dict):
@@ -203,6 +265,8 @@ def _already_applied(action: dict[str, Any], trusted_input: dict[str, Any]) -> b
     issue = trusted_input.get("issue", {})
     fields = issue.get("fields", {}) if isinstance(issue, dict) else {}
     action_type = action["type"]
+    if action_type in {"field-edit", "status-transition"} and action["issue"] != issue.get("key"):
+        return False
     if action_type == "field-edit":
         action_fields = action["fields"]
         return bool(action_fields) and all(
@@ -305,6 +369,7 @@ def execute_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> dict[
                 raise ActionError("report-only mode cannot contain mutating actions")
         return {}
 
+    _preflight_plan(result, trusted_input)
     markers = set(trusted_input.get("idempotency", {}).get("action_markers", []))
     registry: dict[str, dict[str, str]] = {}
     for raw_action in actions:

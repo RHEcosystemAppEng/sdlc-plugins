@@ -172,10 +172,9 @@ def test_invalid_trusted_input_fixture_fails_closed_before_analysis(tmp_path):
     assert sorted(path.name for path in tmp_path.iterdir()) == ["agent-result.json"]
 
 
-def test_authorized_action_plan_executes_each_mutation_category_in_order(recorder):
-    """Authorized plans perform field, status, comment, task, digest, and link actions."""
-    # Given a complete authorized action plan from the sandbox
-    result = {
+def _authorized_action_plan():
+    """Build a synthetic plan covering all Jira mutation categories."""
+    return {
         "schema_version": "1",
         "mode": "mutation-authorized",
         "report": {
@@ -192,7 +191,17 @@ def test_authorized_action_plan_executes_each_mutation_category_in_order(recorde
             {"type": "link", "marker": "triage-security:link", "link_type": "Depend", "inward": "TC-42", "outward": "{{remediation.key}}"},
         ],
     }
-    trusted_input = {"authorization": {"mutation_authorized": True}, "idempotency": {}}
+
+
+def test_authorized_action_plan_executes_each_mutation_category_in_order(recorder):
+    """Authorized plans perform field, status, comment, task, digest, and link actions."""
+    # Given a complete authorized action plan and explicit trusted identity
+    result = _authorized_action_plan()
+    trusted_input = {
+        "issue": {"key": "TC-42"},
+        "configuration": {"project_key": "TC"},
+        "authorization": {"mutation_authorized": True}, "idempotency": {},
+    }
 
     # When the trusted runner executes the plan
     executor.execute_plan(result, trusted_input)
@@ -205,10 +214,29 @@ def test_authorized_action_plan_executes_each_mutation_category_in_order(recorde
     assert recorder.calls[-1] == ("link", "TC-42", "TC-9001", "Depend")
 
 
+def test_authorized_contract_rejects_mismatched_runner_identity(recorder):
+    """A schema-valid Fullsend plan cannot redirect another issue's runner grant."""
+    # Given the complete TC-42 plan under a trusted TC-8100 authorization grant
+    result = _authorized_action_plan()
+    trusted_input = {
+        "issue": {"key": "TC-8100"},
+        "configuration": {"project_key": "TC"},
+        "authorization": {"mutation_authorized": True}, "idempotency": {},
+    }
+
+    # When trusted identity differs from the sandbox report and its targets
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(result, trusted_input)
+
+    # Then no mutation category or read reaches Jira
+    assert recorder.calls == []
+
+
 def test_idempotent_retry_fixture_skips_duplicate_mutations(recorder):
     """A rerun with existing state must not recreate Fullsend Jira artifacts."""
     # Given a synthetic retry with existing markers, state, and remediation task
     contract = _fixture("fullsend-idempotent-retry.md")
+    contract["trusted_input"]["configuration"] = {"project_key": "TC"}
 
     # When the trusted executor replays the same action plan
     registry = executor.execute_plan(contract["result"], contract["trusted_input"])
