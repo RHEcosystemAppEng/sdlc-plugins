@@ -1,0 +1,106 @@
+{
+  "skill_name": "performance-plan-optimization",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Run /sdlc-workflow:performance-plan-optimization. Bootstrap: copy files/mock-repo/ to outputs/mock-repo/ and files/mock-backend/ to outputs/mock-backend/. Copy files/config-fullstack.json to outputs/mock-repo/performance-config.json, files/analysis-report-mixed.md to outputs/mock-repo/performance/analysis/workflow-analysis-report.md, files/findings-validation-mixed.json to outputs/mock-repo/performance/analysis/findings-validation.json, and files/conventions-rust.md to outputs/mock-repo/CONVENTIONS.md. Ensure repositories.backend.path is '../mock-backend' (relative from outputs/mock-repo/). Treat outputs/mock-repo/ as the target repository. Write the optimization plan to outputs/mock-repo/performance/plans/optimization-plan.md. Mock Jira: write Epic to outputs/jira-epic.json and tasks to outputs/jira-tasks.json (JSON array with summary, description, labels fields). Do NOT call Jira MCP, Serena, or any external services. Do NOT modify files outside outputs/.",
+      "expected_output": "An optimization plan with 3–6 tasks covering RECOMMEND/CAUTION findings, db-migration labels for F3, deferred/rejected documentation for F4/F5, and mock Jira output.",
+      "files": [
+        "files/config-fullstack.json",
+        "files/analysis-report-mixed.md",
+        "files/findings-validation-mixed.json",
+        "files/conventions-rust.md",
+        "files/mock-repo/package.json",
+        "files/mock-repo/src/pages/PackageList.tsx",
+        "files/mock-repo/src/components/PackageCard.tsx",
+        "files/mock-backend/Cargo.toml",
+        "files/mock-backend/src/handlers/packages.rs",
+        "files/mock-backend/src/handlers/advisories.rs",
+        "files/mock-backend/migration/src/m20260101_000001_create_advisories.rs"
+      ],
+      "assertions": [
+        "outputs/mock-repo/performance-config.json exists",
+        "outputs/mock-repo/performance/plans/optimization-plan.md exists",
+        "outputs/jira-tasks.json exists and contains between 3 and 6 task entries",
+        "At least one task in outputs/jira-tasks.json has labels containing both 'performance-optimization' and 'db-migration'",
+        "The CAUTION task (for F3 Missing Index) includes text about safeguards such as feature flag, rollback, or staging validation",
+        "outputs/mock-repo/performance/plans/optimization-plan.md documents at least one deferred or rejected finding with reconsideration conditions",
+        "Impact estimates in outputs/mock-repo/performance/plans/optimization-plan.md use language like 'estimated' or 'up to' rather than stating exact improvement percentages as certain",
+        "outputs/jira-epic.json exists and contains labels including 'performance-optimization'",
+        "outputs/jira-epic.json contains label 'ai-generated-jira'",
+        "Every task in outputs/jira-tasks.json has label 'ai-generated-jira'",
+        "At least one task in outputs/jira-tasks.json has a layer label 'backend' and at least one has 'frontend'",
+        "outputs/mock-repo/performance/plans/optimization-plan.md references at least 4 of the finding IDs F1, F2, F3, F4, F5, and F6 in disposition or task mapping",
+        "At least one task description in outputs/jira-tasks.json includes migration-related content (index DDL, SeaORM migration, or idx_advisories_package_id)"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Run /sdlc-workflow:performance-plan-optimization. Bootstrap: copy files/config-fullstack.json to outputs/mock-repo/performance-config.json, files/analysis-report-zero.md to outputs/mock-repo/performance/analysis/workflow-analysis-report.md, and files/findings-validation-zero.json to outputs/mock-repo/performance/analysis/findings-validation.json. Treat outputs/mock-repo/ as the target repository. Write the halt message to outputs/response.md and do NOT create plan or Jira artifacts. Do NOT call Jira MCP, Serena, or any external services. Do NOT modify files outside outputs/.",
+      "expected_output": "Skill halts with message about all findings discarded, no plan or Jira artifacts created.",
+      "files": [
+        "files/config-fullstack.json",
+        "files/analysis-report-zero.md",
+        "files/findings-validation-zero.json"
+      ],
+      "assertions": [
+        "outputs/response.md exists and mentions discarded findings or zero actionable findings",
+        "outputs/response.md references finding IDs or the validation artifact",
+        "outputs/mock-repo/performance/plans/optimization-plan.md does NOT exist",
+        "outputs/jira-epic.json does NOT exist",
+        "outputs/jira-tasks.json does NOT exist"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Run /sdlc-workflow:performance-plan-optimization. Bootstrap: copy files/config-fullstack.json to outputs/mock-repo/performance-config.json, files/analysis-report-mixed.md to outputs/mock-repo/performance/analysis/workflow-analysis-report.md, and files/findings-validation-unvalidated.json to outputs/mock-repo/performance/analysis/findings-validation.json (note: validation_run is false). Treat outputs/mock-repo/ as the target repository. Write the halt message to outputs/response.md and do NOT create plan or Jira artifacts. Do NOT call Jira MCP, Serena, or any external services. Do NOT modify files outside outputs/.",
+      "expected_output": "Skill halts at validation check because validation_run is false.",
+      "files": [
+        "files/config-fullstack.json",
+        "files/analysis-report-mixed.md",
+        "files/findings-validation-unvalidated.json"
+      ],
+      "assertions": [
+        "outputs/response.md exists",
+        "outputs/response.md mentions validation_run is false, validation not completed, or re-run analyze-module",
+        "outputs/mock-repo/performance/plans/optimization-plan.md does NOT exist",
+        "outputs/jira-epic.json does NOT exist",
+        "outputs/jira-tasks.json does NOT exist"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Run /sdlc-workflow:performance-plan-optimization. Bootstrap: copy files/mock-backend-scale/ to outputs/mock-backend-scale/. Copy files/config-backend-query.json to outputs/mock-backend-scale/performance-config.json, files/analysis-report-query.md to outputs/mock-backend-scale/performance/analysis/workflow-analysis-report.md, files/findings-validation-query.json to outputs/mock-backend-scale/performance/analysis/findings-validation.json, and files/conventions-rust.md to outputs/mock-backend-scale/CONVENTIONS.md. Treat outputs/mock-backend-scale/ as the target repository. Write the optimization plan to outputs/mock-backend-scale/performance/plans/optimization-plan.md. Mock Jira: write Epic to outputs/jira-epic.json and tasks to outputs/jira-tasks.json (JSON array with summary, description, labels fields). Do NOT call Jira MCP, Serena, or any external services. Do NOT modify files outside outputs/. This is a backend-only analysis with query restructuring findings (Cross-Table OR, Late Pagination, Unbounded Iteration, Redundant Indexes, Recursive CTE).",
+      "expected_output": "An optimization plan with 3-5 tasks. The Cross-Table OR task (F1) must follow the Query Restructuring Mandate: Implementation Notes must specify the decomposed pattern (per-entity branches), equivalence constraint, and edge case handling. The task's Test Requirements must include equivalence tests and edge case tests per the template rules. The Redundant Index task (F4) must have db-migration label. The Recursive CTE finding (F5) should be CAUTION or DEFER since it was downgraded.",
+      "files": [
+        "files/config-backend-query.json",
+        "files/analysis-report-query.md",
+        "files/findings-validation-query.json",
+        "files/conventions-rust.md",
+        "files/mock-backend-scale/Cargo.toml",
+        "files/mock-backend-scale/src/lib.rs",
+        "files/mock-backend-scale/src/handlers/mod.rs",
+        "files/mock-backend-scale/src/handlers/search.rs",
+        "files/mock-backend-scale/src/handlers/components.rs",
+        "files/mock-backend-scale/src/handlers/ancestor_walker.rs",
+        "files/mock-backend-scale/src/handlers/deep_service.rs",
+        "files/mock-backend-scale/src/handlers/data_loader.rs",
+        "files/mock-backend-scale/src/models/mod.rs",
+        "files/mock-backend-scale/migration/m001_create_tables.rs",
+        "files/mock-backend-scale/migration/m002_add_indexes.rs"
+      ],
+      "assertions": [
+        "outputs/mock-backend-scale/performance/plans/optimization-plan.md exists",
+        "outputs/jira-tasks.json exists and contains between 3 and 5 task entries",
+        "At least one task in outputs/jira-tasks.json has description mentioning 'decomposed' or 'per-entity' or 'per-branch' (Query Restructuring Mandate point 2)",
+        "At least one task in outputs/jira-tasks.json has description mentioning 'equivalence' or 'same result set' (Query Restructuring Mandate point 4)",
+        "At least one task in outputs/jira-tasks.json has description mentioning 'edge case' or 'all branches fail' or 'single branch' (Query Restructuring Mandate point 5)",
+        "At least one task in outputs/jira-tasks.json has Test Requirements or Acceptance Criteria mentioning 'equivalence' (template rule for query decomposition tasks)",
+        "At least one task in outputs/jira-tasks.json has labels containing both 'performance-optimization' and 'db-migration'",
+        "outputs/jira-epic.json exists and contains labels including 'ai-generated-jira'",
+        "Every task in outputs/jira-tasks.json has label 'ai-generated-jira'",
+        "Every task in outputs/jira-tasks.json has a layer label 'backend'"
+      ]
+    }
+  ]
+}

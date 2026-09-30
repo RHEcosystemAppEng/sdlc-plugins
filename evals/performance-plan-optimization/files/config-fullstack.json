@@ -1,0 +1,117 @@
+{
+  "_comment": "SYNTHETIC TEST DATA — DO NOT USE IN PRODUCTION",
+  "metadata": {
+    "version": "1.0",
+    "created": "2026-06-08T14:00:00Z",
+    "last_updated": "2026-06-08T14:00:00Z",
+    "workflow_selected": true,
+    "baseline_captured": true,
+    "baseline_mode": "hybrid",
+    "baseline_timestamp": "2026-06-08T14:00:00Z",
+    "baseline_commit_sha": "f7a2e3c",
+    "capture_target": "localhost",
+    "capture_base_url": null,
+    "backend_available": true,
+    "analysis_scope": "full-stack",
+    "backend_endpoint_discovery_method": "frontend-trace",
+    "serena_status": "not-configured",
+    "metric_type": "hybrid"
+  },
+  "repositories": {
+    "frontend": {
+      "name": "package-listing-ui",
+      "path": ".",
+      "framework": "React",
+      "bundler": "vite"
+    },
+    "backend": {
+      "name": "package-listing-api",
+      "path": "../mock-backend",
+      "framework": "actix-web",
+      "orm": "SeaORM",
+      "serena_instance": null,
+      "api_base_path": "/api/v1",
+      "available": true,
+      "last_validated": "2026-06-08T14:00:00Z"
+    }
+  },
+  "workflow": {
+    "name": "package-listing",
+    "entry_point": "/packages",
+    "key_screens": ["/packages", "/packages/:id"],
+    "complexity": "Moderate",
+    "selected_on": "2026-06-08T14:00:00Z",
+    "traced_api_endpoints": [
+      {
+        "path": "/api/v1/packages",
+        "method": "GET",
+        "frontend_source": "src/hooks/usePackages.ts:18",
+        "backend_handler": "src/handlers/packages.rs:list_packages",
+        "verified": true
+      },
+      {
+        "path": "/api/v1/packages/:id",
+        "method": "GET",
+        "frontend_source": "src/pages/PackageList.tsx:21",
+        "backend_handler": "src/handlers/packages.rs:get_package_with_advisories",
+        "verified": true
+      },
+      {
+        "path": "/api/v1/packages/:id/advisories",
+        "method": "GET",
+        "frontend_source": "src/pages/PackageList.tsx:22",
+        "backend_handler": "src/handlers/advisories.rs:get_advisories",
+        "verified": true
+      }
+    ]
+  },
+  "scenarios": [
+    {"name": "package-listing", "url": "/packages", "description": "Package listing page", "type": "frontend"},
+    {"name": "api-list-packages", "url": "/api/v1/packages", "description": "List packages API", "type": "backend"},
+    {"name": "api-get-package", "url": "/api/v1/packages/:id", "description": "Get package detail API", "type": "backend"},
+    {"name": "api-get-advisories", "url": "/api/v1/packages/:id/advisories", "description": "Get advisories API", "type": "backend"}
+  ],
+  "modules": [
+    {"name": "PackageList", "entry_point": "src/pages/PackageList.tsx"},
+    {"name": "PackageDetail", "entry_point": "src/pages/PackageDetail.tsx"}
+  ],
+  "baseline_settings": {
+    "iterations": 20,
+    "warmup_runs": 2
+  },
+  "optimization_targets": {
+    "frontend": {
+      "lcp": {"baseline": 3.4, "latest": 3.4, "target": 2.5, "unit": "seconds"},
+      "fcp": {"baseline": 2.2, "latest": 2.2, "target": 1.8, "unit": "seconds"},
+      "dom_interactive": {"baseline": 4.8, "latest": 4.8, "target": 3.5, "unit": "seconds"},
+      "total_load_time": {"baseline": 6.1, "latest": 6.1, "target": 4.0, "unit": "seconds"}
+    },
+    "backend": {
+      "response_time_p95": {"baseline": 210, "latest": 210, "target": 200, "unit": "ms"},
+      "response_time_p99": {"baseline": 480, "latest": 480, "target": 500, "unit": "ms"},
+      "throughput": {"baseline": 95, "latest": 95, "target": 100, "unit": "req/sec"},
+      "error_rate": {"baseline": 0.03, "latest": 0.03, "target": 0.1, "unit": "%"},
+      "db_query_time_p95": {"baseline": 42, "latest": 42, "target": 50, "unit": "ms"}
+    }
+  },
+  "analysis_assumptions": {
+    "bandwidth_mbps": 5,
+    "api_latency_ms": 100,
+    "reflow_cost_ms": 5,
+    "cache_hit_rate": 0.8,
+    "chain_depth": 3,
+    "db_latency_ms": 10
+  },
+  "dev_environment": {
+    "frontend": {"command": "npm run dev", "source": "package.json", "port": 3000, "command_approved": true, "last_validated": null},
+    "backend": {"command": "cargo run", "source": "Cargo.toml", "port": 8080, "command_approved": true, "last_validated": null}
+  },
+  "directories": {
+    "baselines": "performance/baselines/",
+    "analysis": "performance/analysis/",
+    "plans": "performance/plans/",
+    "optimization_results": "performance/optimization-results/",
+    "verification": "performance/verification/",
+    "test_data": "performance/test-data/"
+  }
+}
