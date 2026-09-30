@@ -35,9 +35,12 @@ def _plan(actions, mode="mutation-authorized"):
     }
 
 
-def _trusted_input(authorized=True, markers=None, remediation=None):
+def _trusted_input(authorized=True, markers=None, remediation=None, issue="TC-42", related=None, searches=None):
     """Build the trusted runner fields consumed by the executor."""
     return {
+        "issue": {"key": issue},
+        "configuration": {"project_key": "TC"},
+        "jira_metadata": {"related_issues": related or [], "sibling_searches": searches or []},
         "authorization": {"mutation_authorized": authorized},
         "idempotency": {
             "action_markers": markers or [],
@@ -109,15 +112,215 @@ def recorder(monkeypatch):
     return value
 
 
+def test_untrusted_field_target_is_rejected_before_any_jira_call(recorder):
+    """A runner grant for TC-8100 cannot authorize a field edit on TC-42."""
+    # Given a schema-valid result whose target differs from its trusted identity
+    result = _plan([{
+        "type": "field-edit", "marker": "triage-security:labels", "issue": "TC-42",
+        "fields": {"labels": ["ai-cve-triaged"]},
+    }])
+    result["report"]["issue"] = "TC-8100"
+
+    # When the executor checks the trusted runner grant
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(result, _trusted_input(issue="TC-8100"))
+
+    # Then even read-before-write Jira calls are absent
+    assert recorder.calls == []
+
+
 def test_report_only_plan_never_mutates_jira(recorder):
     """A report-only result is preserved without invoking any Jira operation."""
     # Given a sandbox result that contains only the report-only sentinel
     result = _plan([{"type": "report-only", "marker": "triage-security:report"}], "report-only")
+    trusted = _trusted_input(authorized=False)
+    del trusted["issue"]
 
     # When the trusted runner executes it without mutation authorization
-    executor.execute_plan(result, _trusted_input(authorized=False))
+    executor.execute_plan(result, trusted)
 
     # Then no Jira operation was requested
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("issue", [None, {}, {"key": None}, {"key": 42}, {"key": "invalid"}, {"key": "TC-43"}])
+def test_missing_malformed_or_mismatched_trusted_identity_is_rejected(issue, recorder):
+    """Mutation grants require a valid trusted identity matching the report."""
+    # Given a valid action but absent, malformed, or contradictory trusted identity
+    result = _plan([{"type": "field-edit", "marker": "triage-security:labels",
+                     "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}}])
+    trusted = _trusted_input()
+    trusted["issue"] = issue
+
+    # When validating the grant against the complete plan
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(result, trusted)
+
+    # Then no Jira call occurs
+    assert recorder.calls == []
+
+
+def _remediation_action():
+    """Build a synthetic remediation action for authorization regressions."""
+    return {
+        "type": "remediation-task", "marker": "triage-security:remediation",
+        "ref": "remediation", "project": "TC", "summary": "Fix CVE",
+        "description_adf": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Synthetic triage."}]}]}, "labels": [],
+    }
+
+
+@pytest.mark.parametrize("action", [
+    {"type": "field-edit", "marker": "triage-security:untrusted", "issue": "TC-43", "fields": {"labels": ["ai-cve-triaged"]}},
+    {"type": "status-transition", "marker": "triage-security:untrusted", "issue": "TC-43", "status": "In Progress"},
+    {"type": "comment", "marker": "triage-security:untrusted", "issue": "TC-43", "body_adf": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Synthetic triage."}]}]}},
+    {"type": "resolve-reference", "marker": "triage-security:untrusted", "ref": "alias", "issue": "TC-43"},
+    {"type": "link", "marker": "triage-security:untrusted", "link_type": "Related", "inward": "TC-43", "outward": "TC-42"},
+    {"type": "link", "marker": "triage-security:untrusted", "link_type": "Related", "inward": "TC-42", "outward": "TC-43"},
+    {**_remediation_action(), "marker": "triage-security:untrusted", "project": "OTHER"},
+])
+@pytest.mark.parametrize("marked", [False, True])
+def test_late_untrusted_actions_reject_the_entire_plan_before_retry_suppression(action, marked, recorder):
+    """Neither a valid first action nor a retry marker permits unrelated targets."""
+    # Given a valid first mutation and a late action outside the trusted scope
+    result = _plan([
+        {"type": "field-edit", "marker": "triage-security:first", "issue": "TC-42", "fields": {"labels": ["first-action"]}},
+        action,
+    ])
+    if action["type"] == "resolve-reference":
+        result["actions"].append({"type": "link", "marker": "triage-security:alias-link",
+                                  "link_type": "Related", "inward": "TC-42", "outward": "{{alias.key}}"})
+    trusted = _trusted_input(markers=["triage-security:untrusted"] if marked else [])
+    trusted["issue"]["fields"] = {"labels": ["ai-cve-triaged"]}
+    trusted["issue"]["status"] = "In Progress"
+
+    # When the executor preflights all actions before markers or state suppress them
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(result, trusted)
+
+    # Then no mutation or read occurred for the otherwise valid prefix
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("marked", [False, True])
+def test_invalid_follow_up_rejects_before_existing_remediation_digest_repair(marked, recorder):
+    """An invalid late link prevents digest repair on an earlier retry action."""
+    # Given existing remediation missing its digest and a link to an unknown ref
+    result = _plan([_remediation_action(), {
+        "type": "link", "marker": "triage-security:link", "link_type": "Depend",
+        "inward": "TC-42", "outward": "{{unknown.key}}",
+    }])
+    trusted = _trusted_input(
+        markers=["triage-security:remediation", "triage-security:link"] if marked else [],
+        remediation=[{"key": "TC-777", "summary": "Fix CVE", "labels": ["ai-generated-jira"], "comments": []}],
+    )
+
+    # When complete preflight discovers the unresolved reference
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(result, trusted)
+
+    # Then even digest reads and repair writes are absent
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("binding", [
+    {"type": "resolve-reference", "marker": "triage-security:rebind", "ref": "remediation", "issue": "TC-43"},
+    {**_remediation_action(), "marker": "triage-security:rebind"},
+])
+def test_reference_rebinding_cannot_redirect_generated_remediation(binding, recorder):
+    """Generated reference names cannot be rebound by a later sandbox action."""
+    # Given a valid creation followed by a conflicting reference definition
+    result = _plan([_remediation_action(), binding, {
+        "type": "link", "marker": "triage-security:link", "link_type": "Depend",
+        "inward": "TC-42", "outward": "{{remediation.key}}",
+    }])
+
+    # When preflight tracks reference definitions in order
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(result, _trusted_input(related=[{"key": "TC-43"}]))
+
+    # Then the invalid plan cannot create or digest its first task
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("context", [
+    {"related": [{"key": "TC-43"}]},
+    {"searches": [{"purpose": "same-cve-siblings", "issues": [{"key": "TC-43"}]}]},
+    {"searches": [{"purpose": "cross-cve-overlap", "issues": [{"key": "TC-43"}]}]},
+    {"searches": [{"purpose": "preemptive-remediation", "issues": [{"key": "TC-43"}]}]},
+    {"remediation": [{"key": "TC-43", "labels": ["ai-generated-jira"]}]},
+])
+def test_prefetched_triage_relationships_authorize_related_targets(context, recorder):
+    """Trusted related targets support reconciliation, comments, and both link ends."""
+    # Given a prefetched companion or remediation and actions targeting it
+    result = _plan([
+        {"type": "resolve-reference", "marker": "triage-security:related-ref", "ref": "related", "issue": "TC-43"},
+        {"type": "field-edit", "marker": "triage-security:related-labels", "issue": "TC-43", "fields": {"labels": ["ai-cve-triaged"]}},
+        {"type": "status-transition", "marker": "triage-security:related-status", "issue": "{{related.key}}", "status": "In Progress"},
+        {"type": "comment", "marker": "triage-security:related-comment", "issue": "{{related.key}}", "body_adf": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Synthetic triage."}]}]}},
+        {"type": "link", "marker": "triage-security:related-link", "link_type": "Related", "inward": "{{related.key}}", "outward": "TC-42"},
+    ])
+    trusted = _trusted_input(**context)
+    trusted["issue"]["fields"] = {"labels": ["ai-cve-triaged"]}
+    trusted["issue"]["status"] = "In Progress"
+
+    # When trusted relationships establish membership independently of the plan
+    executor.execute_plan(result, trusted)
+
+    # Then reconciliation and cross-stream operations retain their targets and order
+    assert recorder.calls[0] == ("field-edit", "TC-43", {"labels": ["ai-cve-triaged"]})
+    assert recorder.calls[1:3] == [("get-transitions", "TC-43"), ("transition", "TC-43", "31")]
+    assert recorder.calls[3][0:2] == ("comment", "TC-43")
+    assert recorder.calls[4] == ("link", "TC-43", "TC-42", "Related")
+
+
+def test_unrelated_search_purpose_cannot_expand_trusted_scope(recorder):
+    """An arbitrary prefetched search is not a documented triage relationship."""
+    # Given a target present only in a search unrelated to triage
+    result = _plan([{"type": "field-edit", "marker": "triage-security:labels",
+                     "issue": "TC-43", "fields": {"labels": ["ai-cve-triaged"]}}])
+    trusted = _trusted_input(searches=[{"purpose": "all-project-issues", "issues": [{"key": "TC-43"}]}])
+
+    # When validating documented relationships
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(result, trusted)
+
+    # Then the search does not authorize a mutation
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("configuration", [None, {}, {"project_key": ""}, {"project_key": "OTHER"}])
+def test_remediation_creation_requires_the_trusted_project(configuration, recorder):
+    """Missing or contradictory project context cannot authorize task creation."""
+    # Given a schema-valid creation with no matching trusted project
+    result = _plan([_remediation_action()])
+    trusted = _trusted_input()
+    trusted["configuration"] = configuration
+
+    # When the runner authorizes the proposed creation
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(result, trusted)
+
+    # Then neither creation nor digest reads reach Jira
+    assert recorder.calls == []
+
+
+def test_cli_rejects_untrusted_targets_with_nonzero_status(tmp_path, recorder, capsys):
+    """Real CLI validation exits non-zero without Jira calls for invalid targets."""
+    # Given readable runner files with an unauthorized mutation target
+    result = _plan([{"type": "field-edit", "marker": "triage-security:labels",
+                     "issue": "TC-43", "fields": {"labels": ["ai-cve-triaged"]}}])
+    result_path, input_path = tmp_path / "result.json", tmp_path / "input.json"
+    result_path.write_text(json.dumps(result))
+    input_path.write_text(json.dumps(_trusted_input()))
+
+    # When the CLI executes its real authorization path
+    status = executor.main([str(result_path), str(input_path)])
+
+    # Then it fails loudly without reporting success or making Jira calls
+    assert status == 1
+    output = capsys.readouterr()
+    assert "unauthorized action target" in output.err
+    assert "successfully" not in output.out
     assert recorder.calls == []
 
 
@@ -265,7 +468,7 @@ def test_marked_reference_binding_still_resolves_dependent_actions(recorder):
     ])
 
     # When the retry skips persisted mutations
-    registry = executor.execute_plan(result, _trusted_input(markers=["triage-security:known-task"]))
+    registry = executor.execute_plan(result, _trusted_input(markers=["triage-security:known-task"], related=[{"key": "TC-777"}]))
 
     # Then the binding survives and the dependent link uses the Jira key
     assert registry["known-task"]["key"] == "TC-777"
@@ -296,7 +499,7 @@ def test_existing_issue_state_skips_retried_field_status_and_link_actions(record
         {"type": "status-transition", "marker": "triage-security:status", "issue": "TC-42", "status": "In Progress"},
         {"type": "link", "marker": "triage-security:link", "link_type": "Depend", "inward": "TC-42", "outward": "TC-9001"},
     ])
-    trusted = _trusted_input()
+    trusted = _trusted_input(related=[{"key": "TC-9001"}])
     trusted["issue"] = {
         "key": "TC-42",
         "status": "In Progress",
@@ -324,10 +527,10 @@ def test_existing_object_fields_skip_retried_field_edits(recorder):
         "fields": {"assignee": {"id": "owner"}, "resolution": {"name": "Done"}},
     }])
     trusted = _trusted_input()
-    trusted["issue"] = {"fields": {
+    trusted["issue"]["fields"] = {
         "assignee": {"accountId": "owner", "displayName": "Owner"},
         "resolution": {"id": "10000", "name": "Done"},
-    }}
+    }
 
     # When the same object-valued field edit is retried
     executor.execute_plan(result, trusted)
