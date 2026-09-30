@@ -259,3 +259,127 @@ def test_retry_snapshot_suppresses_existing_field_and_link_actions():
     # Then _already_applied independently detects both existing operations
     assert executor._already_applied(field_action, field_snapshot)
     assert executor._already_applied(resolved_link, field_snapshot)
+
+
+@pytest.mark.parametrize("source_id", [1, 2, 3, 4, 5, 8, 9, 11, 12, 18])
+@requires_format_extra
+def test_conditional_fullsend_evals_have_matching_executable_inputs(source_id):
+    """Every conditional contract gets an independent gated, subject-bound JSON input."""
+    # Given the executable eval cases, rather than grader-only assertions
+    evals = json.loads((FIXTURE_DIR.parent / "evals.json").read_text())["evals"]
+    fixture = "files/fullsend-eval-{}-trusted-input.json".format(source_id)
+    matches = [case for case in evals if fixture in case.get("files", [])]
+
+    # When the executor receives its prompt and mounted input
+    assert len(matches) == 1, "conditional contract lacks a matching Fullsend invocation"
+    case = matches[0]
+    assert case["id"] > 36
+    assert "FULLSEND_OUTPUT_DIR" in case["prompt"]
+    assert ".pre-script/triage-security-input.json" in case["prompt"]
+    assert "invocation.json" in case["prompt"]
+    bundle = _trusted_input(Path(fixture).name)
+    pre_triage.validate_bundle(bundle)
+
+    # Then identity and authorization belong to this scenario, not a generic sample
+    subjects = {1: "TC-8001", 2: "TC-8002", 3: "TC-8003", 4: "TC-8004",
+                5: "TC-8005", 8: "TC-8010", 9: "TC-8011", 11: "TC-8021",
+                12: "TC-8030", 18: "TC-8001"}
+    assert bundle["issue"]["key"] == subjects[source_id]
+    assert subjects[source_id] in case["prompt"]
+    assert bundle["authorization"]["mutation_authorized"] is (source_id not in [2, 5, 12])
+    assert "SYNTHETIC TEST DATA" in bundle["issue"]["fields"]["fixture_purpose"]
+
+
+def test_conditional_retry_input_has_an_existing_task_without_a_digest():
+    """The new partial retry is distinct from the retained fully triaged interactive case."""
+    # Given a trusted snapshot of an interrupted remediation creation
+    bundle = _trusted_input("fullsend-eval-18-trusted-input.json")
+    existing = bundle["idempotency"]["existing_remediation"]
+
+    # When existing remediation identity and ordinary markers are inspected
+    assert [item["key"] for item in existing] == ["TC-8100", "TC-8101"]
+    assert existing[0]["comments"] == []
+    assert executor._has_description_digest(existing[0]) is False
+    assert executor._has_description_digest(existing[1]) is True
+
+    # Then the digest repair path retains its stable task reference and retry markers
+    assert "triage-security:tc-8001:remediation:upstream" in bundle["idempotency"]["action_markers"]
+    assert bundle["issue"]["status"] == "In Progress"
+    assert "ai-cve-triaged" in bundle["issue"]["labels"]
+
+
+def test_conditional_inputs_supply_each_scenarios_distinct_evidence():
+    """Scenario inputs retain actual impact, duplicate, overlap, RPM and enrichment facts."""
+    # Given independent JSON inputs rather than a shared generic evidence sample
+    bundles = {source_id: _trusted_input("fullsend-eval-{}-trusted-input.json".format(source_id))
+               for source_id in [1, 2, 3, 4, 5, 8, 9, 11, 12, 18]}
+
+    # When trusted pins are joined with their actual lock evidence
+    for bundle in bundles.values():
+        reads = {(read["repository"], read["ref"]): read
+                 for read in bundle["source_evidence"]["lock_files"]}
+        for stream in bundle["matrix"]["streams"]:
+            for row in stream["rows"]:
+                assert all((repo, ref) in reads for repo, ref in row["source_commits"].items())
+
+    # Then each scenario's decision is supported by its own supplied facts
+    assert bundles[1]["issue"]["fields"]["affected_package"] == "quinn-proto"
+    assert bundles[1]["issue"]["fields"]["current_user"]["accountId"] == "synthetic-engineer"
+    assert all('version = "1.0.13' in read["content"]
+               for read in bundles[2]["source_evidence"]["lock_files"])
+    assert bundles[3]["jira_metadata"]["sibling_searches"][0]["issues"][0]["key"] == "TC-7999"
+    split_reads = bundles[4]["source_evidence"]["lock_files"]
+    assert [read["content"].split('version = "')[1].split('"')[0] for read in split_reads] == [
+        "0.4.5", "0.4.5", "0.4.8", "0.4.8", "0.4.9", "0.4.9"]
+    assert bundles[5]["issue"]["fields"]["sbom_evidence"]["packages"] == [
+        {"name": "openssl-libs", "version": version, "release": release}
+        for release, version in [("2.2.0", "3.0.7-25.el9_3"), ("2.2.1", "3.0.7-27.el9_4"),
+                                 ("2.2.2", "3.0.7-27.el9_4"), ("2.2.3", "3.0.7-28.el9_4"),
+                                 ("2.2.4", "3.0.7-28.el9_4")]]
+    assert "1.9.0" in bundles[8]["jira_metadata"]["related_issues"][1]["summary"]
+    assert bundles[8]["issue"]["fields"]["fixed_version"] == "1.8.2"
+    assert bundles[8]["idempotency"]["action_markers"] == ["triage-security:tc-8010:link:related:tc-8008"]
+    assert "5.96.1" in bundles[9]["jira_metadata"]["related_issues"][1]["summary"]
+    assert bundles[9]["issue"]["fields"]["fixed_version"] == "5.98.0"
+    preemptive = bundles[11]["jira_metadata"]["sibling_searches"][0]["issues"][0]
+    assert preemptive["key"] == "TC-8022"
+    assert "security-preemptive" in preemptive["labels"]
+    mitre = bundles[12]["external_evidence"]["mitre"]["body"]
+    assert mitre["containers"]["cna"]["affected"][0]["versions"][0]["lessThan"] == "0.4.8"
+    assert bundles[12]["external_evidence"]["osv"]["status"] == 503
+    assert bundles[12]["external_evidence"]["osv"]["body"] == {}
+
+
+def test_conditional_retry_fixture_repairs_digest_before_resolving_new_link(recorder):
+    """The real partial-retry input repairs one digest and resolves its unapplied link."""
+    # Given the mounted partial-retry scenario and its existing task identities
+    bundle = _trusted_input("fullsend-eval-18-trusted-input.json")
+    tasks = bundle["idempotency"]["existing_remediation"]
+    actions = [
+        {"type": "remediation-task", "marker": "triage-security:tc-8001:remediation:" + ref,
+         "ref": ref, "project": "TC", "summary": task["summary"],
+         "description_adf": task["description"], "labels": task["labels"]}
+        for ref, task in zip(["upstream", "downstream"], tasks)
+    ]
+    actions.append({"type": "link", "marker": "triage-security:tc-8001:link:depend:downstream",
+                    "link_type": "Depend", "inward": "TC-8001", "outward": "{{downstream.key}}"})
+    result = {"schema_version": "1", "mode": "mutation-authorized",
+              "report": {"issue": "TC-8001", "outcome": "affected", "summary_markdown": "Partial retry.",
+                         "evidence": [{"source": "trusted-input", "detail": "Existing tasks, one missing digest."}]},
+              "actions": actions}
+
+    # When the trusted executor processes the repair against a recorded Jira boundary
+    registry = executor.execute_plan(result, bundle)
+
+    # Then task creation is skipped, one digest precedes the resolved downstream link
+    assert [call[0] for call in recorder.calls] == ["get-issue", "digest", "link"]
+    assert recorder.calls[0] == ("get-issue", "TC-8100")
+    assert recorder.calls[-1] == ("link", "TC-8001", "TC-8101", "Depend")
+    assert {ref: value["key"] for ref, value in registry.items()} == {"upstream": "TC-8100", "downstream": "TC-8101"}
+
+    # Given a refreshed snapshot after the repair, the next retry performs no writes
+    tasks[0]["comments"] = [{"body": recorder.calls[1][3]}]
+    bundle["idempotency"]["action_markers"].append(actions[-1]["marker"])
+    recorder.calls.clear()
+    assert executor.execute_plan(result, bundle) == registry
+    assert recorder.calls == []
