@@ -169,6 +169,70 @@ def _remediation_action():
     }
 
 
+@pytest.mark.parametrize("marked", [False, True])
+@pytest.mark.parametrize("definition", [None, {"targets": ()}, {}])
+def test_new_action_without_target_declaration_fails_before_any_jira_call(definition, marked, recorder, monkeypatch):
+    """A newly supported action cannot silently bypass target authorization."""
+    # Given a future action recognized by validation but lacking target metadata
+    monkeypatch.setitem(executor._REQUIRED_ACTION_FIELDS, "future-mutation", {"type", "marker", "issue"})
+    if definition is not None:
+        monkeypatch.setitem(executor._ACTION_DEFINITIONS, "future-mutation", definition)
+    result = _plan([
+        {"type": "status-transition", "marker": "triage-security:first", "issue": "TC-42", "status": "In Progress"},
+        {"type": "future-mutation", "marker": "triage-security:future", "issue": "TC-43"},
+    ])
+    trusted = _trusted_input(markers=["triage-security:future"] if marked else [])
+
+    # When the complete plan is preflighted before executing its valid prefix
+    with pytest.raises(executor.ActionError, match="target fields"):
+        executor._preflight_plan(result, trusted)
+
+    # Then even read-before-write Jira calls are absent
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("target_fields", [None, ()])
+def test_mutation_with_missing_or_empty_targets_rejects_before_valid_prefix(target_fields, recorder, monkeypatch):
+    """Even a schema-valid mutation must have an authorization target declaration."""
+    # Given a known action whose target declaration was omitted or left empty
+    definition = copy.deepcopy(executor._ACTION_DEFINITIONS["field-edit"])
+    if target_fields is None:
+        del definition["targets"]
+    else:
+        definition["targets"] = target_fields
+    monkeypatch.setitem(executor._ACTION_DEFINITIONS, "field-edit", definition)
+    result = _plan([
+        {"type": "status-transition", "marker": "triage-security:first", "issue": "TC-42", "status": "In Progress"},
+        {"type": "field-edit", "marker": "triage-security:labels", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
+    ])
+
+    # When execution preflights the complete schema-valid plan
+    with pytest.raises(executor.ActionError, match="target fields"):
+        executor.execute_plan(result, _trusted_input())
+
+    # Then the valid prefix did not read transitions or write Jira state
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("issue", ["TC-42", "TC-43"])
+def test_new_action_uses_its_declared_target_fields(issue, recorder, monkeypatch):
+    """New action declarations authorize trusted targets and reject unrelated ones."""
+    # Given a future action whose definition declares its mutation target
+    monkeypatch.setitem(executor._REQUIRED_ACTION_FIELDS, "future-mutation", {"type", "marker", "issue"})
+    monkeypatch.setitem(executor._ACTION_DEFINITIONS, "future-mutation", {"targets": ("issue",)})
+    result = _plan([{"type": "future-mutation", "marker": "triage-security:future", "issue": issue}])
+
+    # When preflight checks the new target declaration
+    if issue == "TC-42":
+        executor._preflight_plan(result, _trusted_input())
+    else:
+        with pytest.raises(executor.ActionError, match="unauthorized action target: TC-43"):
+            executor._preflight_plan(result, _trusted_input())
+
+    # Then preflight performs no Jira operation in either case
+    assert recorder.calls == []
+
+
 @pytest.mark.parametrize("action", [
     {"type": "field-edit", "marker": "triage-security:untrusted", "issue": "TC-43", "fields": {"labels": ["ai-cve-triaged"]}},
     {"type": "status-transition", "marker": "triage-security:untrusted", "issue": "TC-43", "status": "In Progress"},
