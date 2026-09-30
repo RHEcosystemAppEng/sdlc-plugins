@@ -41,14 +41,19 @@ class ActionError(ValueError):
     """Raised when a sandbox plan is unsafe or incompatible with trusted input."""
 
 
+# Required fields and authorization targets share one action definition.
+_ACTION_DEFINITIONS = {
+    "report-only": {"required": {"type", "marker"}, "targets": ()},
+    "field-edit": {"required": {"type", "marker", "issue", "fields"}, "targets": ("issue",)},
+    "status-transition": {"required": {"type", "marker", "issue", "status"}, "targets": ("issue",)},
+    "comment": {"required": {"type", "marker", "issue", "body_adf"}, "targets": ("issue",)},
+    "link": {"required": {"type", "marker", "link_type", "inward", "outward"}, "targets": ("inward", "outward")},
+    "remediation-task": {"required": {"type", "marker", "ref", "project", "summary", "description_adf", "labels"}, "targets": ("project",)},
+    "resolve-reference": {"required": {"type", "marker", "ref", "issue"}, "targets": ("issue",)},
+}
 _REQUIRED_ACTION_FIELDS = {
-    "report-only": {"type", "marker"},
-    "field-edit": {"type", "marker", "issue", "fields"},
-    "status-transition": {"type", "marker", "issue", "status"},
-    "comment": {"type", "marker", "issue", "body_adf"},
-    "link": {"type", "marker", "link_type", "inward", "outward"},
-    "remediation-task": {"type", "marker", "ref", "project", "summary", "description_adf", "labels"},
-    "resolve-reference": {"type", "marker", "ref", "issue"},
+    action_type: definition["required"]
+    for action_type, definition in _ACTION_DEFINITIONS.items()
 }
 
 
@@ -215,13 +220,15 @@ def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> No
         _validate_action(raw_action)
         action = _resolve_action(raw_action, registry)
         action_type = action["type"]
-        target_fields = ()
-        if action_type in {"field-edit", "status-transition", "comment", "resolve-reference"}:
-            target_fields = ("issue",)
-        elif action_type == "link":
-            target_fields = ("inward", "outward")
+        target_fields = _ACTION_DEFINITIONS.get(action_type, {}).get("targets")
+        if not target_fields and action_type != "report-only":
+            raise ActionError("{} action has no declared target fields".format(action_type))
         for field in target_fields:
-            if action[field] not in targets:
+            if field == "project":
+                project = (trusted_input.get("configuration") or {}).get("project_key")
+                if not isinstance(project, str) or not project or action[field] != project:
+                    raise ActionError("remediation project does not match the trusted project")
+            elif action[field] not in targets:
                 raise ActionError("unauthorized action target: {}".format(action[field]))
         if action_type not in {"resolve-reference", "remediation-task"}:
             continue
@@ -231,9 +238,6 @@ def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> No
         if action_type == "resolve-reference":
             key = action["issue"]
         else:
-            project = (trusted_input.get("configuration") or {}).get("project_key")
-            if not isinstance(project, str) or not project or action["project"] != project:
-                raise ActionError("remediation project does not match the trusted project")
             # Keep generated identities symbolic until the existing executor creates them.
             existing = _existing_remediation(
                 raw_action if raw_action["marker"] in markers else action, trusted_input)
