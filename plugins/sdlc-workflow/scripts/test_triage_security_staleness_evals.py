@@ -23,6 +23,23 @@ def _timestamp(value):
     return datetime.fromisoformat(value.replace("Z", "+00:00"))
 
 
+@pytest.mark.parametrize("evidence", [
+    r"Last-Updated HTML comment",
+    r"parsed ISO 8601 (?:value|timestamp)",
+    r"(?:comparison|evaluation) clock",
+])
+def test_stale_prompt_requests_extraction_evidence_in_output(evidence):
+    """Require extraction evidence in output instructions, not just supplied inputs."""
+    # Given the actual stale case prompt, including its supplied timestamp
+    prompt = _case(19)["prompt"]
+
+    # When isolating requests to record evidence in the grader-visible output
+    requests = re.findall(r"Record (.+?) in outputs/staleness-check\.md", prompt)
+
+    # Then each asserted mechanism fact must be requested as output evidence
+    assert any(re.search(evidence, request) for request in requests), evidence
+
+
 @pytest.mark.parametrize("case_id, days_old", [(19, 72), (20, 14)])
 def test_prompt_and_declared_clock_agree_with_matrix_state(case_id, days_old):
     """Check executor input and declarations; graders receive output evidence only."""
