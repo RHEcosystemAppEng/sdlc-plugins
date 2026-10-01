@@ -7,6 +7,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 import pytest
 from jsonschema import FormatChecker
@@ -413,6 +414,73 @@ def test_conditional_inputs_supply_each_scenarios_distinct_evidence():
     assert bundles[12]["external_evidence"]["osv"]["status"] == 503
     assert bundles[12]["external_evidence"]["osv"]["body"] == {}
 
+
+def _gate_driver():
+    """Load the eval-only driver without running Claude, Fullsend or a skill eval."""
+    driver_path = FIXTURE_DIR / "fullsend-gate-driver.py"
+    assert driver_path.is_file(), "Independent gate execution driver is missing"
+    spec = importlib.util.spec_from_file_location("fullsend_gate_driver", driver_path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.mark.parametrize("scenario, expected_gate, input_name", [
+    ("absent", None, None),
+    ("empty", "", None),
+    ("malformed", "/sandbox/output", "fullsend-invalid-trusted-input.md"),
+    ("valid", "/sandbox/output", "fullsend-report-only-trusted-input.json"),
+])
+def test_gate_driver_scenario_mount_and_environment_contract(tmp_path, scenario, expected_gate, input_name):
+    """Missing/empty gate exports and shared fixed input mounts must not conflate cases."""
+    # Given a contaminated parent gate and a distinct per-case workspace
+    driver = _gate_driver()
+    workspace = tmp_path / scenario
+    output = tmp_path / "outputs"
+    output.mkdir()
+    parent_env = {"PATH": "/usr/bin", "FULLSEND_OUTPUT_DIR": "/parent",
+                  "CLAUDECODE": "parent-session", "JIRA_TOKEN": "synthetic-not-a-credential"}
+
+    # When preparing only deterministic fixture mounts and command arguments
+    driver.prepare_workspace(workspace, scenario)
+    environment = driver.child_environment(parent_env, scenario)
+    command = driver.command(workspace, output, ROOT / "plugins/sdlc-workflow")
+
+    # Then the child receives exactly this scenario, never the parent's gate/token
+    assert environment.get("FULLSEND_OUTPUT_DIR") == expected_gate
+    assert ("FULLSEND_OUTPUT_DIR" in environment) is (expected_gate is not None)
+    assert "CLAUDECODE" not in environment
+    assert "JIRA_TOKEN" not in environment
+    mounted = workspace / ".pre-script/triage-security-input.json"
+    if input_name:
+        expected = (FIXTURE_DIR / input_name).read_text()
+        if input_name.endswith(".md"):
+            expected = expected.split("```json\n", 1)[1].split("\n```", 1)[0]
+        assert mounted.read_text() == expected
+    else:
+        assert not mounted.exists()
+    assert command[:4] == ["bwrap", "--die-with-parent", "--tmpfs", "/"]
+    assert ["--ro-bind", str(workspace), "/sandbox/workspace"] == command[command.index(str(workspace)) - 1:command.index(str(workspace)) + 2]
+    assert ["--bind", str(output), "/sandbox/output"] == command[command.index(str(output)) - 1:command.index(str(output)) + 2]
+    assert command[command.index("--plugin-dir") + 1] == str(ROOT / "plugins/sdlc-workflow")
+    assert command[command.index("--output-format") + 1] == "stream-json"
+    assert command[command.index("--settings") + 1] == "/tmp/eval-sandbox-settings.json"
+
+
+def test_gate_driver_captures_raw_process_status_without_grading(tmp_path):
+    """Preserve a process's raw output and exit without inventing execution verdicts."""
+    # Given an explicitly synthetic subprocess, not an agent/model invocation
+    driver = _gate_driver()
+    command = [sys.executable, "-c", "import sys; print('SYNTHETIC TEST DATA'); sys.stderr.write('synthetic stderr'); sys.exit(7)"]
+
+    # When the eval-side recorder captures that subprocess
+    receipt = driver.record_process(command, {}, tmp_path, timeout=10)
+
+    # Then it stores raw observations and never grades or normalizes them
+    assert receipt == {"process_exit_code": 7, "timed_out": False}
+    assert (tmp_path / "execution.jsonl").read_text() == "SYNTHETIC TEST DATA\n"
+    assert (tmp_path / "execution.stderr").read_text() == "synthetic stderr"
+    assert not (tmp_path / "agent-result.json").exists()
 
 def test_conditional_retry_fixture_repairs_digest_before_resolving_new_link(recorder):
     """The real partial-retry input repairs one digest and resolves its unapplied link."""
