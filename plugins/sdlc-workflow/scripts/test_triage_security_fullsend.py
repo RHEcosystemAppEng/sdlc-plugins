@@ -290,6 +290,37 @@ def test_conditional_fullsend_evals_have_matching_executable_inputs(source_id):
     assert "SYNTHETIC TEST DATA" in bundle["issue"]["fields"]["fixture_purpose"]
 
 
+@pytest.mark.parametrize("source_id", [1, 2, 3, 4, 5, 8, 9, 11, 12, 18])
+def test_conditional_runner_handoff_exports_evidence_without_sandbox_writes(source_id, tmp_path, monkeypatch):
+    """Runner handoff exposes exact audit/result bytes to the grader without extra sandbox files."""
+    # Given distinct runner, grader and sandbox directories and an actual output gate
+    evals = json.loads((FIXTURE_DIR.parent / "evals.json").read_text())["evals"]
+    fixture = "files/fullsend-eval-{}-trusted-input.json".format(source_id)
+    case = next(case for case in evals if fixture in case.get("files", []))
+    sandbox = tmp_path / "sandbox-outputs"
+    outputs = tmp_path / "outputs"
+    sandbox.mkdir()
+    outputs.mkdir()
+    monkeypatch.setenv("FULLSEND_OUTPUT_DIR", str(sandbox))
+    result_bytes = b'{"test_handoff_only": true}\n'
+    invocation_bytes = (FIXTURE_DIR / Path(fixture).name).read_bytes()
+    (sandbox / "agent-result.json").write_bytes(result_bytes)
+    invocation = tmp_path / "invocation.json"
+    invocation.write_bytes(invocation_bytes)
+
+    # When the runner executes the handoff supplied by the eval prompt (not the skill)
+    assert "```python\n" in case["prompt"], "missing executable grader evidence handoff"
+    handoff = case["prompt"].split("```python\n", 1)[1].split("\n```", 1)[0]
+    exec(handoff, {"GRADER_OUTPUTS_DIR": str(outputs), "INVOCATION_PATH": str(invocation)})
+
+    # Then the grader receives both artifacts byte-for-byte and the sandbox stays isolated
+    assert (outputs / "agent-result.json").read_bytes() == result_bytes
+    assert (outputs / "invocation.json").read_bytes() == invocation_bytes
+    assert sorted(path.name for path in outputs.iterdir()) == ["agent-result.json", "invocation.json"]
+    assert [path.name for path in sandbox.iterdir()] == ["agent-result.json"]
+    assert (sandbox / "agent-result.json").read_bytes() == result_bytes
+
+
 def test_conditional_retry_input_has_an_existing_task_without_a_digest():
     """The new partial retry is distinct from the retained fully triaged interactive case."""
     # Given a trusted snapshot of an interrupted remediation creation
