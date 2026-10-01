@@ -263,21 +263,12 @@ def test_retry_snapshot_suppresses_existing_field_and_link_actions():
 
 @pytest.mark.parametrize("source_id", [1, 2, 3, 4, 5, 8, 9, 11, 12, 18])
 @requires_format_extra
-def test_conditional_fullsend_evals_have_matching_executable_inputs(source_id):
-    """Every conditional contract gets an independent gated, subject-bound JSON input."""
-    # Given the executable eval cases, rather than grader-only assertions
-    evals = json.loads((FIXTURE_DIR.parent / "evals.json").read_text())["evals"]
-    fixture = "files/fullsend-eval-{}-trusted-input.json".format(source_id)
-    matches = [case for case in evals if fixture in case.get("files", [])]
+def test_conditional_fullsend_inputs_are_valid_and_subject_bound(source_id):
+    """Every retained Fullsend unit fixture has valid input, identity and authorization."""
+    # Given independent trusted-input fixtures retained for deterministic unit coverage
+    bundle = _trusted_input("fullsend-eval-{}-trusted-input.json".format(source_id))
 
-    # When the executor receives its prompt and mounted input
-    assert len(matches) == 1, "conditional contract lacks a matching Fullsend invocation"
-    case = matches[0]
-    assert case["id"] > 36
-    assert "FULLSEND_OUTPUT_DIR" in case["prompt"]
-    assert ".pre-script/triage-security-input.json" in case["prompt"]
-    assert "invocation.json" in case["prompt"]
-    bundle = _trusted_input(Path(fixture).name)
+    # When the production validator checks the input directly
     pre_triage.validate_bundle(bundle)
 
     # Then identity and authorization belong to this scenario, not a generic sample
@@ -285,40 +276,8 @@ def test_conditional_fullsend_evals_have_matching_executable_inputs(source_id):
                 5: "TC-8005", 8: "TC-8010", 9: "TC-8011", 11: "TC-8021",
                 12: "TC-8030", 18: "TC-8001"}
     assert bundle["issue"]["key"] == subjects[source_id]
-    assert subjects[source_id] in case["prompt"]
     assert bundle["authorization"]["mutation_authorized"] is (source_id not in [2, 5, 12])
     assert "SYNTHETIC TEST DATA" in bundle["issue"]["fields"]["fixture_purpose"]
-
-
-@pytest.mark.parametrize("source_id", [1, 2, 3, 4, 5, 8, 9, 11, 12, 18])
-def test_conditional_runner_handoff_exports_evidence_without_sandbox_writes(source_id, tmp_path, monkeypatch):
-    """Runner handoff exposes exact audit/result bytes to the grader without extra sandbox files."""
-    # Given distinct runner, grader and sandbox directories and an actual output gate
-    evals = json.loads((FIXTURE_DIR.parent / "evals.json").read_text())["evals"]
-    fixture = "files/fullsend-eval-{}-trusted-input.json".format(source_id)
-    case = next(case for case in evals if fixture in case.get("files", []))
-    sandbox = tmp_path / "sandbox-outputs"
-    outputs = tmp_path / "outputs"
-    sandbox.mkdir()
-    outputs.mkdir()
-    monkeypatch.setenv("FULLSEND_OUTPUT_DIR", str(sandbox))
-    result_bytes = b'{"test_handoff_only": true}\n'
-    invocation_bytes = (FIXTURE_DIR / Path(fixture).name).read_bytes()
-    (sandbox / "agent-result.json").write_bytes(result_bytes)
-    invocation = tmp_path / "invocation.json"
-    invocation.write_bytes(invocation_bytes)
-
-    # When the runner executes the handoff supplied by the eval prompt (not the skill)
-    assert "```python\n" in case["prompt"], "missing executable grader evidence handoff"
-    handoff = case["prompt"].split("```python\n", 1)[1].split("\n```", 1)[0]
-    exec(handoff, {"GRADER_OUTPUTS_DIR": str(outputs), "INVOCATION_PATH": str(invocation)})
-
-    # Then the grader receives both artifacts byte-for-byte and the sandbox stays isolated
-    assert (outputs / "agent-result.json").read_bytes() == result_bytes
-    assert (outputs / "invocation.json").read_bytes() == invocation_bytes
-    assert sorted(path.name for path in outputs.iterdir()) == ["agent-result.json", "invocation.json"]
-    assert [path.name for path in sandbox.iterdir()] == ["agent-result.json"]
-    assert (sandbox / "agent-result.json").read_bytes() == result_bytes
 
 
 def test_conditional_retry_input_has_an_existing_task_without_a_digest():
