@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""Contract tests for the triage-security Fullsend boundary."""
+"""Deterministic boundary contracts; hosted evals prove actual skill execution."""
 
 import importlib.util
 import json
+import os
 from pathlib import Path
+import re
+import subprocess
 
 import pytest
 from jsonschema import FormatChecker
@@ -40,15 +43,22 @@ def _trusted_input(name):
     return json.loads((FIXTURE_DIR / name).read_text())
 
 
-def _load_fullsend_input(document, output_dir):
-    """Load trusted sandbox input or write the documented fail-closed result."""
-    try:
-        return json.loads(document)
-    except json.JSONDecodeError:
-        (output_dir / "agent-result.json").write_text(
-            '{ "error": "triage-security aborted: trusted input is missing, invalid JSON, '
-            'or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox." }')
-        return None
+def _skill_bash(heading, index=0):
+    """Read a literal delivered instruction block without duplicating its logic."""
+    skill = (ROOT / "plugins/sdlc-workflow/skills/triage-security/SKILL.md").read_text()
+    section = skill.split(heading, 1)[1].split("\n##", 1)[0]
+    return re.findall(r"```bash\n(.*?)\n```", section, re.DOTALL)[index].replace(
+        "${CLAUDE_PLUGIN_ROOT}", str(ROOT / "plugins/sdlc-workflow"))
+
+
+def _run_instruction(source, gate):
+    """Execute source contracts only, never an agent or a local skill eval."""
+    environment = {key: value for key, value in os.environ.items()
+                   if key != "FULLSEND_OUTPUT_DIR"}
+    if gate is not None:
+        environment["FULLSEND_OUTPUT_DIR"] = gate
+    return subprocess.run(["bash", "-c", source], env=environment,
+                          capture_output=True, text=True, check=False)
 
 
 class _JiraRecorder:
@@ -158,17 +168,81 @@ def test_trusted_input_fixtures_validate_against_the_sandbox_schema():
 
 
 def test_invalid_trusted_input_fixture_fails_closed_before_analysis(tmp_path):
-    """Malformed mounted input fails before it can enter Fullsend analysis."""
+    """The literal input-validation contract emits only the exact abort result."""
     # Given the deliberately incomplete mounted JSON fixture
     document = (FIXTURE_DIR / "fullsend-invalid-trusted-input.md").read_text()
     malformed = document.split("```json\n", 1)[1].split("\n```", 1)[0]
 
-    # When the Fullsend entrypoint loads the trusted input
-    result = _load_fullsend_input(malformed, tmp_path)
+    input_path = tmp_path / "trusted-input.json"
+    input_path.write_text(malformed)
+    output_path = tmp_path / "output"
+    output_path.mkdir()
+    source = _skill_bash("### Step 0.7 – Load Trusted Fullsend Input").replace(
+        "/sandbox/workspace/.pre-script/triage-security-input.json", str(input_path))
+
+    # When executing the literal instruction, not an agent execution
+    result = _run_instruction(source, str(output_path))
 
     # Then it writes only the prescribed failure result
-    assert result is None
-    assert json.loads((tmp_path / "agent-result.json").read_text()) == {"error": "triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox."}
+    assert result.returncode == 1
+    assert "ERROR: trusted triage-security input is invalid JSON:" in result.stdout
+    assert json.loads((output_path / "agent-result.json").read_text()) == {"error": "triage-security aborted: trusted input is missing, invalid JSON, or fails triage-security-input.schema.json; no interactive fallback is available in the sandbox."}
+    assert sorted(path.name for path in output_path.iterdir()) == ["agent-result.json"]
+
+
+@pytest.mark.parametrize("gate, exit_code, stdout, stderr", [
+    (None, 0, "interactive mode\n", ""),
+    ("", 1, "", "ERROR: FULLSEND_OUTPUT_DIR is set but empty\n"),
+    ("/synthetic-output", 0, "sandbox mode: /synthetic-output\n", ""),
+])
+def test_literal_gate_instruction_distinguishes_presence(gate, exit_code, stdout, stderr):
+    """Catch truthiness regressions in source; this is not proof the agent routed."""
+    # Given the production instruction and separately supplied environment state
+    source = _skill_bash("### Step 0.6 – Fullsend Mode Detection")
+
+    # When a credential-free shell executes that exact gate instruction
+    result = _run_instruction(source, gate)
+
+    # Then presence, empty export and nonempty export have distinct outcomes
+    assert (result.returncode, result.stdout, result.stderr) == (exit_code, stdout, stderr)
+
+
+def test_literal_valid_input_instruction_continues_without_abort(tmp_path):
+    """Valid input must not write the failure object; analysis remains untested here."""
+    # Given the same retained trusted bundle used by the hosted success scenario
+    source = _skill_bash("### Step 0.7 – Load Trusted Fullsend Input").replace(
+        "/sandbox/workspace/.pre-script/triage-security-input.json",
+        str(FIXTURE_DIR / "fullsend-report-only-trusted-input.json"))
+
+    # When the literal input-validation instruction executes
+    result = _run_instruction(source, str(tmp_path))
+
+    # Then it continues without writing any failure or fabricated analysis result
+    assert result.returncode == 0
+    assert result.stdout == "Trusted triage-security input available\n"
+    assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("result_mode", ["valid", "invalid-json", "error-only"])
+def test_literal_final_validator_contract(tmp_path, result_mode):
+    """Check the inline validator's exits, independently of actual agent execution."""
+    # Given deliberately synthetic output, not an agent-produced analysis
+    documents = {
+        "valid": json.dumps(_fixture("fullsend-report-only.md")["result"]),
+        "invalid-json": '{"schema_version":',
+        "error-only": '{"error":"synthetic abort"}',
+    }
+    (tmp_path / "agent-result.json").write_text(documents[result_mode])
+    source = _skill_bash("### Fullsend final output (successful analysis only)", 1)
+
+    # When the real inline instruction validates these contract inputs
+    result = _run_instruction(source, str(tmp_path))
+
+    # Then malformed/error outputs fail rather than falling back interactively
+    assert result.returncode == (0 if result_mode == "valid" else 1)
+    expected = ("Final Fullsend result validated" if result_mode == "valid" else
+                "ERROR: final Fullsend result failed JSON/schema validation:")
+    assert expected in result.stdout
     assert sorted(path.name for path in tmp_path.iterdir()) == ["agent-result.json"]
 
 
