@@ -130,3 +130,45 @@ If no Serena instance is available for a repository, skills fall back to Read, G
 ### Limitations
 
 Check the **Code Intelligence** > **Limitations** section in your project's CLAUDE.md for per-instance limitations (e.g., language server features that are not supported).
+
+---
+
+## Fullsend triage-security runner artifacts
+
+`triage-security` has a file-based Fullsend contract for non-interactive execution.
+The trusted runner and sandbox are deliberately separate: the sandbox plans work from
+prefetched evidence, and only the trusted runner can execute Jira mutations.
+
+| Artifact | Responsibility |
+|---|---|
+| `.fullsend/harness/triage-security.yaml` (repo root) | Defines the branch-independent Fullsend harness and its trusted pre/post phases. |
+| `scripts/pre-triage-security.sh` / `scripts/pre_triage_security.py` | Fetch, normalize, and validate trusted Jira, remote-link, configuration, external, matrix/source, metadata, and idempotency evidence into `triage-security-input.json`; the shipped collector sets `authorization.mutation_authorized` to `false`. |
+| `schemas/triage-security-input.schema.json` | Requires issue data, remote links, configuration, external evidence, matrix/source evidence, Jira metadata, idempotency context, and authorization. |
+| `agents/triage-security.md` | Constrains the sandbox to mounted evidence and directs it to write `agent-result.json` to `FULLSEND_OUTPUT_DIR`. |
+| `schemas/triage-security-result.schema.json` | Defines `report-only` and `mutation-authorized` results and the supported action schema. |
+| `policies/triage-security.yaml` | Supplies the runner policy used by the harness. |
+| `scripts/post-triage-security.sh` | Locates a sandbox result under `FULLSEND_RUN_DIR`, verifies its path and JSON, and invokes the executor. |
+| `scripts/execute-triage-security-actions.py` | Independently validates authorization, resolves references, deduplicates retry actions, and performs trusted Jira writes. |
+
+The sandbox uses the mounted `triage-security-input.json` plus the delivered
+`triage-security` skill and schema artifacts. It must not call Jira, GitHub, web, Git,
+or other credentialed evidence sources, and it cannot write a matrix. It returns a
+schema-valid `agent-result.json` after successful validated analysis, with one of these
+modes:
+
+- `report-only` — exactly `report-only` actions; it reports withheld or blocked work
+  without mutation.
+- `mutation-authorized` — permits only schema-defined actions when a trusted prefetch
+  implementation sets `authorization.mutation_authorized` to `true`. The shipped
+  collector does not provision this authorization.
+
+The result schema supports these action types: `report-only`, `field-edit`,
+`status-transition`, `comment`, `link`, `resolve-reference`, and `remediation-task`.
+`resolve-reference` and remediation-task references are resolved by the trusted
+executor before dependent Jira calls; unresolved placeholders are execution errors.
+The executor uses `triage-security:` markers and the prefetched Jira snapshot to make
+comments, labels, links, transitions, and remediation tasks idempotent across retries.
+
+When evidence is missing, malformed, or contradictory, the prefetch/validation path
+fails closed before mutation. Operators should repair the trusted bundle or its matrix
+and lock-file evidence, not grant the sandbox new access or use an interactive fallback.

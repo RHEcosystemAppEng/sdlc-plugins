@@ -1,0 +1,72 @@
+version: 1
+
+# Sandbox policy for the verify-pr fullsend harness (read-only agent).
+#
+# The agent checks a PR against its Jira task's acceptance criteria. It needs
+# ONLY inference egress: Anthropic hosts + Vertex AI (`*.googleapis.com`).
+# Format confirmed against fullsend v0.37.0 upstream policies
+# (/Users/mrizzi/git/cloned/agents/policies/*): per-entry `name:` is still
+# required, hosts support `*` wildcards, and binaries use `**/…` globs.
+#
+# Split-trust I/O — deliberately NO tier-1 egress from the sandbox:
+#   * NO `*.atlassian.net` (Jira): the Jira token lives only on the runner;
+#     issue context is prefetched host-side (pre_script, TC-5810) and mounted
+#     read-only, and all Jira writes run host-side (post_script, TC-5811).
+#   * NO `api.github.com`/`github.com` (GitHub): the GitHub token lives only on
+#     the runner; PR context is prefetched host-side and writes run host-side.
+#     A `gh` read reaching api.github.com from the sandbox is a leak to fix in
+#     the skill/prefetch — NOT a reason to add a github egress rule here.
+#
+# curl and gh are excluded from the binary allowlist to prevent raw HTTP
+# egress with any injected token; only the fullsend runtimes (claude/pi/node)
+# may open the network. `**/pi` is the runtime that brokers Vertex AI
+# (`*.googleapis.com`) inference, so it must be present alongside claude/node.
+#
+# include_workdir: false — the fullsend dir is not mounted into the sandbox;
+# the target repo is delivered read-only under /sandbox (readonly_repo: true).
+
+filesystem_policy:
+  include_workdir: false
+  read_only: [/var/log, /usr, /lib, /lib64, /proc, /dev/urandom, /etc, /opt]
+  read_write: [/sandbox, /tmp, /dev/null]
+landlock:
+  compatibility: best_effort
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+
+network_policies:
+  claude_code:
+    name: claude-code
+    endpoints:
+      # Anthropic inference + Vertex AI (googleapis) — the only egress allowed.
+      - host: "api.anthropic.com"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-write
+      - host: "*.googleapis.com"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-write
+      - host: "platform.claude.com"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-write
+      # Telemetry / error reporting (POST) — kept minimal.
+      - host: "statsig.anthropic.com"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-write
+      - host: "sentry.io"
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: read-write
+    binaries:
+      - path: "**/claude"
+      - path: "**/pi"
+      - path: "**/node"

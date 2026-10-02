@@ -18,7 +18,9 @@ The orchestrator provides these sections in the Agent-Specific Inputs block
 - **Task Specification** — Repository, Files to Modify, Files to Create sections
   from the Jira task description
 - **Jira Task ID** — the task key (e.g., `PROJ-231`) for commit traceability checking
-- **PR Commits** — commit list with hashes and messages
+- **PR Commits** — commit list with, per commit, the hash, the **full**
+  headline and body (never subject-only), and a `references_task_id` boolean
+  that the runner computed against the Jira Task ID over the full message
 
 The dispatch envelope also includes **Context** (Jira Task, PR URL, Branch, Base
 Branch) and **Classified Review Comments** (all classified comments with IDs,
@@ -83,20 +85,29 @@ Assess whether the total change size is proportionate to the task scope.
 
 Verify that commit messages reference the Jira task ID.
 
-1. From the PR Commits input, extract all commit messages (headline + body).
+1. Use ONLY the **PR Commits** input from the dispatch envelope. It is the
+   authoritative source: each commit carries the full headline + body and a
+   runner-computed `references_task_id` boolean. **Do NOT re-derive traceability
+   from the repository.** In particular, never run `git log --oneline`,
+   `git log --format=%s`, or any subject-only command — those emit only the
+   subject line and will miss a Jira ID that lives in the body or a trailer
+   (e.g. `Implements PROJ-231`), producing a false FAIL. The reference may
+   appear in the headline, body, or trailer (`Implements PROJ-231`,
+   `PROJ-231: fix scope`, `--trailer="Implements: PROJ-231"`).
 
-2. For each commit, check whether the message contains the Jira Task ID
-   (from the Jira Task ID input). The reference may appear in the headline,
-   body, or trailer (e.g., `Implements PROJ-231`, `PROJ-231: fix scope`,
-   `--trailer="Implements: PROJ-231"`).
+2. For each commit, take its `references_task_id` value. (If — and only if —
+   that field is absent for a commit, fall back to scanning that commit's full
+   headline AND body from the PR Commits input for the Jira Task ID; never fall
+   back to a subject-only git command.)
 
 3. Determine verdict:
-   - **PASS** — every commit message references the Jira task ID
+   - **PASS** — every commit references the Jira task ID
    - **WARN** — some commits reference the task ID but others do not
    - **FAIL** — no commit references the Jira task ID
 
 4. Evidence: list each commit hash and headline, marking which ones reference
-   the task ID and which do not.
+   the task ID (per `references_task_id`) and which do not. Do not assert a
+   commit's body lacks the ID unless the full body was inspected.
 
 ## Output Format
 

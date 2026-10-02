@@ -5,6 +5,13 @@ All notable changes to the sdlc-workflow plugin are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Fullsend dual-mode execution for `triage-security`, with validated trusted input,
+  tokenless sandbox analysis, and structured authorized or report-only Jira output
+
 ## [0.13.9] - 2026-08-24
 
 ### Added
@@ -141,7 +148,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Epic creation and grouping strategies with configurable hierarchy preferences in `plan-feature` (TC-4869)
 - Parent issue linking step in `plan-feature` (TC-4870)
-- Early assignment and Assigned transition at Step 0.7 in `triage-security` (TC-5008)
+- Early assignment and Assigned transition at Step 0.8 in `triage-security` (TC-5008)
 - Cross-CVE traceability links and comments at Step 4.3 in `triage-security` (TC-5009)
 
 ### Fixed
