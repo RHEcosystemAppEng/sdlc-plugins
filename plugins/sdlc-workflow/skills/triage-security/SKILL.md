@@ -47,6 +47,7 @@ Do **not** use for:
 | 5 | Version Lifecycle Check | Product pages URL | EOL status per version |
 | 6 | Already Fixed Check | Resolved sibling issues | Already-fixed detection |
 | 7 | Concurrent Triage Detection | Upstream component, JQL | Concurrent triage warning or proceed |
+| 7.5 | Release Jira Orchestration | Stream name, supportability matrix | Release Epic + Task, cross-CVE dedup |
 | 8 | Remediation | Impact analysis results | Remediation tasks or close recommendation |
 
 ## Guardrails
@@ -310,6 +311,39 @@ Present all three lists to the engineer, clearly separated:
 
   For each Ready for QA issue, suggest: "Consider transitioning to ON_QA."
 
+**4. Release Jira summary** (remediation progress by release):
+
+Search for release Tasks matching the naming pattern:
+
+```
+jira.search_jql(
+  "project = <project-key> AND issuetype = Task AND summary ~ 'RHTPA' AND summary ~ 'CVE triage' ORDER BY created DESC",
+  fields: ["summary", "status", "issuelinks", "parent"],
+  maxResults: 10
+)
+```
+
+For each release Task, inspect its `issuelinks` to count remediation progress:
+
+- **Blocks links** (remediation Tasks that block this release Task):
+  count done vs. pending.
+- **Related links** (CVE Vulnerability issues linked to this release Task):
+  count total CVEs tracked.
+
+Present the release Jira summary:
+
+```
+Release Jira Summary:
+
+| Release Epic | Release Task | CVEs Tracked | Remediation Done | Remediation Pending |
+|-------------|-------------|-------------|-----------------|-------------------|
+| TC-6286 (RHTPA 3.1.1 Release Tasks) | TC-5708 (RHTPA 3.1.1 CVE triage) | 5 | 3 | 2 |
+| TC-XXXX (RHTPA 3.0.3 Release Tasks) | TC-YYYY (RHTPA 3.0.3 CVE triage) | 2 | 0 | 2 |
+```
+
+This view helps the engineer assess release readiness — a release Task with all
+remediation Tasks done is a candidate for release sign-off.
+
 #### Status-aware handling
 
 When the user selects an issue (or when a specific issue key is provided in
@@ -417,6 +451,7 @@ The ecosystem classification determines remediation task structure:
 | Category | Ecosystems | Remediation tasks per stream |
 |---|---|---|
 | Source dependency | Cargo, npm | 2 — upstream backport + downstream propagation |
+| Source dependency (fix available) | Cargo, npm | 2 — dependency bump + downstream propagation (when Step 2.5 confirms upstream already ships the fix) |
 | System package | RPM | 1 — Konflux release repo fix only |
 
 When a new ecosystem is added to a stream's Ecosystem Mappings table, update this
@@ -608,8 +643,11 @@ Steps 4–6 filtering), determine the appropriate action.
 ```mermaid
 flowchart TD
     A["Version impact table\n(after Steps 4-6)"] --> Z{"Step 7:\nConcurrent triage\non same component?"}
-    Z -->|No or user proceeds| B{"Any supported versions\naffected?"}
+    Z -->|No or user proceeds| R{"Step 7.5:\nRelease Jira\nOrchestration"}
     Z -->|User waits/skips| STOP["Stop or skip\ntask creation"]
+    R --> DEDUP{"Step 7.5.3:\nCross-CVE dedup?"}
+    DEDUP -->|"Existing task covers\nsame component"| SKIP["Skip task creation\nLink CVE to existing task"]
+    DEDUP -->|No existing coverage| B{"Any supported versions\naffected?"}
     B -->|Yes| SCOPE{"Issue scoped to\na single stream?"}
     B -->|No| D["Case C: Close as\nNot a Bug"]
     SCOPE -->|"Yes (scoped)"| C{"Other streams\nalso affected?"}
@@ -618,8 +656,12 @@ flowchart TD
     C -->|No| F
     E --> F
     F --> G{"Source dependency\necosystem?\n(see classification table)"}
-    G -->|Yes| H["2 tasks: upstream\nbackport + downstream\npropagation"]
+    G -->|"Yes (fix available)"| BUMP["2 tasks: dependency\nbump + downstream\npropagation"]
+    G -->|"Yes (fix not available)"| H["2 tasks: upstream\nbackport + downstream\npropagation"]
     G -->|No| I["1 task: Konflux\nrepo fix"]
+    BUMP --> LINK["Link tasks to\nrelease Task"]
+    H --> LINK
+    I --> LINK
     D --> J{"VEX Justification\nconfigured?"}
     J -->|Yes| K["Set VEX field"]
     J -->|No| L["Close with\nresolution only"]
@@ -644,6 +686,35 @@ step entirely.
 If concurrent triages are detected, the protocol offers three options: wait,
 skip, or proceed with a `concurrent-triage-overlap` label. Only continue to
 Case A/B/C after the user chooses.
+
+## Step 7.5 – Release Jira Orchestration
+
+After concurrent triage detection (Step 7) and before remediation task creation
+(Step 8), find or create the release Jira structure for each affected stream.
+This provides a release-scoped container that groups all CVE triages and
+remediation tasks for a given product version.
+
+Follow the release Jira orchestration protocol in
+`jira-triage-operations.md` — Step 7.5.
+
+The protocol covers three sub-steps:
+
+- **7.5.1** – Resolve stream-to-version mapping and find or create the release Epic
+  (`"RHTPA <version> Release Tasks"` pattern). Individual confirmation required
+  for Epic creation (version decision is high-stakes).
+- **7.5.2** – Find or create the release Task (`"RHTPA <version> CVE triage"`)
+  as a child of the release Epic. Individual confirmation required for Task creation.
+- **7.5.3** – Cross-CVE dedup check: when the Upstream Affected Component matches
+  an existing remediation Task linked to the release Task, skip task creation and
+  link the new CVE to the existing remediation Task instead.
+
+**Scope**: per release family (not per stream). All non-preemptive remediation types
+are linked to release Jira. The same release Jira is used regardless of ecosystem
+(Cargo vs npm).
+
+If the engineer skips release Jira creation for a stream, proceed to Step 8 without
+release Jira for that stream — remediation tasks are still created but not linked
+to a release Task.
 
 ### Case A: Cross-stream impact — proactive remediation
 
@@ -701,15 +772,22 @@ If the issue's stream-scoped versions (or all versions for unscoped issues)
 are affected:
 - Keep the current Vulnerability issue as-is (with corrected Affects Versions
   from Step 3).
-- Create remediation tasks for each affected stream within the issue's scope.
-  The number of tasks depends on the ecosystem — see the **ecosystem
-  classification table** in the Ecosystem detection section above. Source
-  dependency ecosystems produce two tasks per stream (upstream backport +
-  downstream propagation, with the downstream subtask blocked by the upstream
-  task). System package ecosystems produce one task per stream (Konflux release
-  repo fix).
+- **Check dedup status** from Step 7.5.3. If the stream was marked as dedup'd
+  (existing remediation Task already covers the Upstream Affected Component),
+  skip task creation for that stream.
+- Create remediation tasks for each non-dedup'd affected stream within the
+  issue's scope. The number of tasks depends on the ecosystem — see the
+  **ecosystem classification table** in the Ecosystem detection section above.
+  Source dependency ecosystems produce two tasks per stream: upstream backport +
+  downstream propagation when the upstream fix is not yet available, or
+  dependency bump + downstream propagation when Step 2.5 confirms the fix is
+  already on the upstream branch. System package ecosystems produce one task
+  per stream (Konflux release repo fix).
   See Remediation Task Creation below for full templates and API calls.
 - Link each Task to the Vulnerability issue.
+- **Post-creation release linking** (when release Jira is active from Step 7.5):
+  link each remediation Task to the release Task (Blocks) and each CVE to the
+  release Task (Related). See `remediation-templates.md` Jira Linkage section.
 
 ### Case C: No supported versions affected
 
@@ -759,6 +837,11 @@ rationale) to the engineer for confirmation before executing any Jira mutations.
   `security-preemptive` label.
 - [ ] **Coordination guidance**: each task's Implementation Notes includes the
   appropriate guidance based on the repository's deployment context.
+- [ ] **Release Jira linking**: if Step 7.5 produced a release Task, all
+  non-preemptive remediation Tasks are linked to it (Blocks) and all CVEs
+  are linked to it (Related).
+- [ ] **Dedup consistency**: any stream marked as dedup'd in Step 7.5.3 has no
+  new remediation task created — only linking to the existing task.
 
 ## Remediation Task Creation
 
@@ -780,9 +863,18 @@ Read `remediation-templates.md` for the full task description templates, Jira
 issue creation API calls, digest comment procedures, and linkage procedures.
 The key distinction:
 
-- **Source dependency ecosystems**: create **two** tasks per the ecosystem
-  classification table — upstream backport + downstream propagation (blocked).
+- **Source dependency ecosystems (fix not available upstream)**: create **two**
+  tasks — upstream backport + downstream propagation (blocked).
+- **Source dependency ecosystems (fix available upstream)**: create **two**
+  tasks — dependency bump (`cargo update`/`npm update`) + downstream propagation
+  (blocked). Use when Step 2.5 confirms the upstream branch already ships the
+  fixed version.
 - **System package ecosystems**: create **one** task — Konflux release repo fix.
+
+After creating remediation tasks, link them to the release Task from Step 7.5
+(if active). See `remediation-templates.md` Jira Linkage section for the
+link topology: remediation Tasks → release Task (Blocks), CVE → release Task
+(Related).
 
 ## Post-Triage Summary
 
@@ -801,9 +893,14 @@ Add a summary comment to the original Vulnerability issue documenting:
 1. The version impact table
 2. The Affects Versions correction (if any)
 3. The triage outcome (closed or remediation created)
-4. Links to all remediation tasks created (upstream + downstream for source
-   dependency ecosystems, or single task for system packages)
-5. An @mention of the vulnerability issue's reporter (the PSIRT analyst who
+4. Links to all remediation tasks created (upstream backport or dependency bump
+   + downstream for source dependency ecosystems, or single task for system
+   packages)
+5. Release Jira references (release Epic and release Task keys, if created in
+   Step 7.5)
+6. Dedup results (if any CVEs were linked to existing remediation tasks instead
+   of creating new ones)
+7. An @mention of the vulnerability issue's reporter (the PSIRT analyst who
    created it). Use the reporter's account ID from the Jira issue data extracted
    in Step 1. Include an ADF mention node:
    ```json
@@ -817,8 +914,9 @@ MUST include the Comment Footnote (see above).
 
 ## Important Rules
 
-1. **Follow the step order.** Execute steps 1 through 8 in sequence. Do not skip
-   steps or reorder them — later steps depend on data from earlier steps.
+1. **Follow the step order.** Execute steps 1 through 8 (including 7.5) in
+   sequence. Do not skip steps or reorder them — later steps depend on data
+   from earlier steps.
 2. **Do not guess dependency versions.** Every version claim must come from actual
    `git show` output. If a lock file cannot be read (repo not cloned, commit not
    found), report the error and ask the user — do not assume a version.
@@ -839,8 +937,10 @@ MUST include the Comment Footnote (see above).
    comment on the current issue.
 8. **Task count per stream depends on the ecosystem** — see the ecosystem
    classification table in the Ecosystem detection section. Source dependency
-   ecosystems produce two tasks, system packages produce one. A single Task
-   spanning multiple streams would be unimplementable
+   ecosystems produce two tasks (upstream backport or dependency bump, plus
+   downstream propagation), system packages produce one. Use the dependency
+   bump variant when Step 2.5 confirms the upstream branch already ships the
+   fix. A single Task spanning multiple streams would be unimplementable
    by `/implement-task`. For dev-only or build-only dependencies (identified
    in Step 2.3.5), add the `dev-dependency` label and override priority to
    Normal — see the dependency scope decision tree in
