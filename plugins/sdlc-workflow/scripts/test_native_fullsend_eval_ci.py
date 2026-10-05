@@ -3,14 +3,52 @@
 import importlib.util
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def test_host_validator_dependency_is_in_isolated_lock():
+    """Fresh CI must install the jsonschema module used by trusted host validation."""
+    requirements = (ROOT / "evals/fullsend/requirements.in").read_text()
+    lock = (ROOT / "evals/fullsend/requirements.lock").read_text()
+    assert "jsonschema" in re.findall(r"^([a-zA-Z0-9_-]+)", requirements, re.MULTILINE)
+    assert re.search(r"^jsonschema==[^\n]+", lock, re.MULTILINE)
+
+
+@pytest.mark.parametrize("linked_part", ["plugin", "plugins"])
+def test_native_cli_rejects_root_and_ancestor_plugin_symlinks(tmp_path, linked_part):
+    """The CLI must reject PR path links before they redirect reads to the trusted host."""
+    # Given a PR path pointing outside its checkout through either directory level
+    checkout = tmp_path / "pr-head"
+    checkout.mkdir()
+    trusted_plugin = ROOT / "plugins/sdlc-workflow"
+    if linked_part == "plugin":
+        (checkout / "plugins").mkdir()
+        (checkout / "plugins/sdlc-workflow").symlink_to(trusted_plugin, target_is_directory=True)
+    else:
+        (checkout / "plugins").symlink_to(trusted_plugin.parent, target_is_directory=True)
+    environment = dict(os.environ, TC6677_FULLSEND_BIN="/not-launched", TC6677_SANDBOX_FULLSEND_BIN="/not-launched")
+    environment.pop("FULLSEND_MINT_URL", None)
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    # When invoking the actual CLI with the lexical selected plugin path
+    result = subprocess.run([sys.executable, str(ROOT / "evals/fullsend/triage-security/run-fullsend.py"),
+                             "--agent", "triage-security-gate", "--workspace", str(workspace),
+                             "--output-dir", str(workspace / "output"), "--scenario", "valid",
+                             "--model", "unused", "--effort", "high", "--plugin-root",
+                             str(checkout / "plugins/sdlc-workflow")], env=environment, capture_output=True, text=True)
+    # Then rejection precedes staging and any native launch
+    assert result.returncode == 1
+    assert "symlink" in result.stderr
+    assert not (workspace / "native-config").exists()
 
 
 def workflow():
