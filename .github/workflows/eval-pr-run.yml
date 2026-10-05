@@ -30,6 +30,10 @@ permissions:
   actions: read
   statuses: write
 
+env:
+  # Reviewed PR299 suite; normal activation switches this to trusted github.sha.
+  NATIVE_EVAL_SOURCE_SHA: b46b2bf647be8451b6aedda58dc8e51448f0eab6
+
 jobs:
   discover:
     name: Discover PR Context
@@ -413,6 +417,14 @@ jobs:
           persist-credentials: false
           allow-unsafe-pr-checkout: true
 
+      - name: Checkout reviewed native eval source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ env.NATIVE_EVAL_SOURCE_SHA }}
+          path: native-eval-source
+          persist-credentials: false
+
       - name: Checkout pinned Fullsend infrastructure
         uses: actions/checkout@v7
         with:
@@ -473,6 +485,7 @@ jobs:
           TC6726_MERGE_SHA: ${{ needs.discover.outputs.merge_sha }}
           TC6726_BASE_SHA: ${{ needs.discover.outputs.base_sha }}
           TC6726_TRUSTED_SHA: ${{ github.sha }}
+          TC6726_EVAL_SOURCE_SHA: ${{ env.NATIVE_EVAL_SOURCE_SHA }}
         run: bash .github/scripts/run-native-fullsend-evals.sh run
 
       - name: Upload only allowlisted source-bound native result
@@ -506,14 +519,15 @@ jobs:
           MERGE_SHA: ${{ needs.discover.outputs.merge_sha }}
           BASE_SHA: ${{ needs.discover.outputs.base_sha }}
           TRUSTED_SHA: ${{ github.sha }}
+          EVAL_SOURCE_SHA: ${{ env.NATIVE_EVAL_SOURCE_SHA }}
           NATIVE_RESULT: ${{ needs.run-native-evals.result }}
         uses: actions/github-script@v9
         with:
           script: |
             const fs = require('fs');
             const expected = {pr_number: Number(process.env.PR_NUMBER), head_sha: process.env.HEAD_SHA,
-              merge_sha: process.env.MERGE_SHA, base_sha: process.env.BASE_SHA, trusted_sha: process.env.TRUSTED_SHA};
-            let body = `## Native Fullsend Eval Results\n\nHead: ${expected.head_sha}\nMerge: ${expected.merge_sha}\nTrusted infrastructure: ${expected.trusted_sha}\n\n`;
+              merge_sha: process.env.MERGE_SHA, base_sha: process.env.BASE_SHA, trusted_sha: process.env.TRUSTED_SHA, eval_source_sha: process.env.EVAL_SOURCE_SHA};
+            let body = `## Native Fullsend Eval Results\n\nHead: ${expected.head_sha}\nMerge: ${expected.merge_sha}\nTrusted workflow: ${expected.trusted_sha}\nReviewed eval source: ${expected.eval_source_sha}\n\n`;
             let valid = false;
             if (fs.existsSync('native-report/native-result.json')) {
               const report = JSON.parse(fs.readFileSync('native-report/native-result.json', 'utf8'));
