@@ -1,0 +1,231 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "triage-security-result.schema.json",
+  "title": "Triage Security Agent Result",
+  "description": "Fail-closed sandbox output. Before any Jira mutation, TC-6209 independently reads trusted input authorization, rejects every mutating action when it is false, and resolves every action reference.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "mode", "report", "actions"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "mode": {
+      "type": "string",
+      "enum": ["report-only", "mutation-authorized"]
+    },
+    "report": {
+      "$ref": "#/$defs/report"
+    },
+    "actions": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "$ref": "#/$defs/action" }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "mode": { "const": "report-only" } }
+      },
+      "then": {
+        "properties": {
+          "actions": {
+            "items": {
+              "type": "object",
+              "properties": { "type": { "const": "report-only" } }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "issue_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]+-[0-9]+$"
+    },
+    "reference_name": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "issue_reference": {
+      "type": "string",
+      "pattern": "^(?:[A-Z][A-Z0-9]+-[0-9]+|\\{\\{[a-z][a-z0-9-]*\\.key\\}\\})$",
+      "description": "TC-6209 resolves placeholders against the action registry and rejects unknown or unresolved references before any Jira call."
+    },
+    "stable_marker": {
+      "type": "string",
+      "pattern": "^triage-security:[a-z0-9][a-z0-9._:-]*$"
+    },
+    "adf_document": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "version", "content"],
+      "properties": {
+        "type": { "const": "doc" },
+        "version": { "const": 1 },
+        "content": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string", "minLength": 1 }
+            }
+          }
+        }
+      }
+    },
+    "report": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue", "outcome", "summary_markdown", "evidence"],
+      "properties": {
+        "issue": { "$ref": "#/$defs/issue_key" },
+        "outcome": {
+          "type": "string",
+          "enum": ["affected", "not-affected", "duplicate", "needs-review", "blocked"]
+        },
+        "summary_markdown": { "type": "string", "minLength": 1 },
+        "evidence": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/evidence" }
+        }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source", "detail"],
+      "properties": {
+        "source": { "type": "string", "minLength": 1 },
+        "detail": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" }
+      }
+    },
+    "action": {
+      "type": "object",
+      "required": ["type", "marker"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": [
+            "report-only",
+            "field-edit",
+            "status-transition",
+            "comment",
+            "link",
+            "remediation-task",
+            "resolve-reference"
+          ]
+        },
+        "marker": { "$ref": "#/$defs/stable_marker" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "type": { "const": "report-only" } } },
+          "then": {
+            "required": ["type", "marker"],
+            "properties": {
+              "type": {},
+              "marker": {}
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "field-edit" } } },
+          "then": {
+            "required": ["type", "marker", "issue", "fields"],
+            "properties": {
+              "type": {},
+              "marker": {},
+              "issue": { "$ref": "#/$defs/issue_reference" },
+              "fields": {
+                "type": "object",
+                "minProperties": 1,
+                "additionalProperties": true
+              }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "status-transition" } } },
+          "then": {
+            "required": ["type", "marker", "issue", "status"],
+            "properties": {
+              "type": {},
+              "marker": {},
+              "issue": { "$ref": "#/$defs/issue_reference" },
+              "status": { "type": "string", "minLength": 1 }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "comment" } } },
+          "then": {
+            "required": ["type", "marker", "issue", "body_adf"],
+            "properties": {
+              "type": {},
+              "marker": {},
+              "issue": { "$ref": "#/$defs/issue_reference" },
+              "body_adf": { "$ref": "#/$defs/adf_document" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "link" } } },
+          "then": {
+            "required": ["type", "marker", "link_type", "inward", "outward"],
+            "properties": {
+              "type": {},
+              "marker": {},
+              "link_type": { "type": "string", "enum": ["Blocks", "Depend", "Related"] },
+              "inward": { "$ref": "#/$defs/issue_reference" },
+              "outward": { "$ref": "#/$defs/issue_reference" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "remediation-task" } } },
+          "then": {
+            "required": ["type", "marker", "ref", "project", "summary", "description_adf", "labels"],
+            "properties": {
+              "type": {},
+              "marker": {},
+              "ref": { "$ref": "#/$defs/reference_name" },
+              "project": { "type": "string", "minLength": 1 },
+              "summary": { "type": "string", "minLength": 1, "maxLength": 255 },
+              "description_adf": { "$ref": "#/$defs/adf_document" },
+              "labels": { "type": "array", "items": { "type": "string" } },
+              "priority": { "type": "string", "minLength": 1 },
+              "fix_versions": { "type": "array", "items": { "type": "string" } }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "resolve-reference" } } },
+          "then": {
+            "required": ["type", "marker", "ref", "issue"],
+            "properties": {
+              "type": {},
+              "marker": {},
+              "ref": { "$ref": "#/$defs/reference_name" },
+              "issue": { "$ref": "#/$defs/issue_key" }
+            },
+            "additionalProperties": false
+          }
+        }
+      ]
+    }
+  }
+}
