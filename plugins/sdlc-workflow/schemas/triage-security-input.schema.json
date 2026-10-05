@@ -1,0 +1,349 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "triage-security-input.schema.json",
+  "title": "Triage Security Trusted Prefetch Input",
+  "description": "Complete trusted-runner evidence bundle for the tokenless triage-security sandbox.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "issue",
+    "remote_links",
+    "configuration",
+    "external_evidence",
+    "matrix",
+    "source_evidence",
+    "jira_metadata",
+    "idempotency",
+    "authorization"
+  ],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "const": "1"
+    },
+    "issue": {
+      "$ref": "#/$defs/issue"
+    },
+    "remote_links": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "$ref": "#/$defs/remote_link"
+      }
+    },
+    "configuration": {
+      "$ref": "#/$defs/configuration"
+    },
+    "external_evidence": {
+      "$ref": "#/$defs/external_evidence"
+    },
+    "matrix": {
+      "$ref": "#/$defs/matrix"
+    },
+    "source_evidence": {
+      "$ref": "#/$defs/source_evidence"
+    },
+    "jira_metadata": {
+      "$ref": "#/$defs/jira_metadata"
+    },
+    "idempotency": {
+      "$ref": "#/$defs/idempotency"
+    },
+    "authorization": {
+      "$ref": "#/$defs/authorization"
+    }
+  },
+  "$defs": {
+    "issue_key": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9]+-[0-9]+$"
+    },
+    "url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "summary",
+        "description",
+        "status",
+        "labels",
+        "versions",
+        "reporter",
+        "comments",
+        "fields"
+      ],
+      "properties": {
+        "key": { "$ref": "#/$defs/issue_key" },
+        "summary": { "type": "string", "minLength": 1 },
+        "description": { "type": "object" },
+        "status": { "type": "string", "minLength": 1 },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "versions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jira_version" }
+        },
+        "reporter": { "$ref": "#/$defs/person" },
+        "comments": {
+          "type": "array",
+          "items": { "type": "object" }
+        },
+        "fields": {
+          "type": "object",
+          "description": "Raw issue fields needed to audit extracted triage values."
+        }
+      }
+    },
+    "person": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["account_id", "display_name"],
+      "properties": {
+        "account_id": { "type": "string", "minLength": 1 },
+        "display_name": { "type": "string", "minLength": 1 }
+      }
+    },
+    "jira_version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "released"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "released": { "type": "boolean" },
+        "archived": { "type": "boolean" }
+      }
+    },
+    "remote_link": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["url", "title"],
+      "properties": {
+        "url": { "$ref": "#/$defs/url" },
+        "title": { "type": "string", "minLength": 1 }
+      }
+    },
+    "configuration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "project_key",
+        "jira_version_prefix",
+        "vulnerability_issue_type_id",
+        "component_label_pattern",
+        "version_streams",
+        "source_repositories"
+      ],
+      "properties": {
+        "project_key": { "type": "string", "minLength": 1 },
+        "jira_version_prefix": { "type": "string", "minLength": 1 },
+        "vulnerability_issue_type_id": { "type": "string", "minLength": 1 },
+        "component_label_pattern": { "type": "string", "minLength": 1 },
+        "vex_justification_field": { "type": "string" },
+        "upstream_affected_component_field": { "type": "string" },
+        "ps_component_field": { "type": "string" },
+        "stream_field": { "type": "string" },
+        "prodsec_account_id": { "type": "string" },
+        "embargo_policy_url": { "$ref": "#/$defs/url" },
+        "version_streams": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/stream_config" }
+        },
+        "source_repositories": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/source_repository" }
+        }
+      }
+    },
+    "stream_config": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "matrix_path", "release_repository"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "matrix_path": { "type": "string", "minLength": 1 },
+        "release_repository": { "type": "string", "minLength": 1 }
+      }
+    },
+    "source_repository": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "url", "deployment_context"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "$ref": "#/$defs/url" },
+        "deployment_context": {
+          "type": "string",
+          "enum": ["internal", "upstream", "customer-shipped"]
+        }
+      }
+    },
+    "external_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mitre", "osv", "lifecycle"],
+      "properties": {
+        "mitre": { "$ref": "#/$defs/retrieved_evidence" },
+        "osv": { "$ref": "#/$defs/retrieved_evidence" },
+        "lifecycle": { "$ref": "#/$defs/retrieved_evidence" }
+      }
+    },
+    "retrieved_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["source_url", "retrieved_at", "status", "body"],
+      "properties": {
+        "source_url": { "$ref": "#/$defs/url" },
+        "retrieved_at": { "type": "string", "format": "date-time" },
+        "status": { "type": "integer", "minimum": 100, "maximum": 599 },
+        "body": { "type": ["object", "array", "string"] }
+      }
+    },
+    "matrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["streams"],
+      "properties": {
+        "streams": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/matrix_stream" }
+        }
+      }
+    },
+    "matrix_stream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "matrix_source", "rows"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "matrix_source": { "type": "string", "minLength": 1 },
+        "rows": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/matrix_row" }
+        }
+      }
+    },
+    "matrix_row": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["version", "source_commits", "retag_of"],
+      "properties": {
+        "version": { "type": "string", "minLength": 1 },
+        "source_commits": {
+          "type": "object",
+          "additionalProperties": { "type": "string", "minLength": 7 }
+        },
+        "retag_of": { "type": ["string", "null"] }
+      }
+    },
+    "source_evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["lock_files", "development_streams"],
+      "properties": {
+        "lock_files": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/source_read" }
+        },
+        "development_streams": {
+          "type": "array",
+          "minItems": 1,
+          "items": { "$ref": "#/$defs/source_read" }
+        }
+      }
+    },
+    "source_read": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "ref", "path", "command", "content"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "ref": { "type": "string", "minLength": 1 },
+        "path": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "pattern": "^git show " },
+        "content": { "type": "string" }
+      }
+    },
+    "jira_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["versions", "sibling_searches", "related_issues"],
+      "properties": {
+        "versions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jira_version" }
+        },
+        "sibling_searches": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/jira_search" }
+        },
+        "related_issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/related_issue" }
+        }
+      }
+    },
+    "jira_search": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["purpose", "jql", "issues"],
+      "properties": {
+        "purpose": { "type": "string", "minLength": 1 },
+        "jql": { "type": "string", "minLength": 1 },
+        "issues": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/related_issue" }
+        }
+      }
+    },
+    "related_issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["key", "summary", "status", "labels", "description", "comments", "links"],
+      "properties": {
+        "key": { "$ref": "#/$defs/issue_key" },
+        "summary": { "type": "string" },
+        "status": { "type": "string" },
+        "labels": { "type": "array", "items": { "type": "string" } },
+        "description": { "type": "object" },
+        "comments": { "type": "array", "items": { "type": "object" } },
+        "links": { "type": "array", "items": { "type": "object" } }
+      }
+    },
+    "idempotency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["action_markers", "existing_remediation"],
+      "properties": {
+        "action_markers": { "type": "array", "items": { "type": "string" } },
+        "existing_remediation": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/related_issue" }
+        }
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mutation_authorized"],
+      "properties": {
+        "mutation_authorized": {
+          "type": "boolean",
+          "description": "Trusted runner authorization. False requires report-only sandbox output."
+        }
+      }
+    }
+  }
+}
