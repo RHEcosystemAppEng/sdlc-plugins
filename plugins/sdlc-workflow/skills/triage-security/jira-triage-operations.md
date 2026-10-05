@@ -608,24 +608,34 @@ configured. If not configured, skip dedup and proceed to Step 8.
    ```
 
    For each linked issue where `type.name` is `"Blocks"` (remediation Tasks that
-   block the release Task), fetch the linked Task:
+   block the release Task), fetch the linked Task with its own issue links:
 
    ```
-   jira.get_issue(<linked-task-key>, fields=["summary", "labels", "description"])
+   jira.get_issue(<linked-task-key>, fields=["summary", "labels", "issuelinks"])
    ```
 
-3. **Match by Upstream Affected Component.** For each linked remediation Task,
-   check if its summary or description references the same upstream component
-   as the current CVE. Two matching strategies:
+3. **Resolve each remediation Task's parent CVE.** For each linked remediation
+   Task, traverse its `issuelinks` to find Depend links pointing to CVE
+   Vulnerability issues. The standard linkage (see `remediation-templates.md`)
+   creates a Depend link from each remediation Task to its originating CVE.
 
-   a. **Component field match** (primary): if the linked Task's labels include the
-      same component label (matching the Component label pattern from Security
-      Configuration, e.g., `pscomponent:org/repo`), it covers the same component.
-   b. **Summary fallback**: if the linked Task's summary contains the same library
-      name as the current CVE's vulnerable library (from Step 1), it covers the
-      same component.
+   For each Depend-linked CVE, fetch the Upstream Affected Component:
 
-4. **If a covering remediation Task is found:**
+   ```
+   jira.get_issue(<linked-cve-key>, fields=["<upstream-affected-component-field>"])
+   ```
+
+4. **Match by Upstream Affected Component.** Compare the Upstream Affected
+   Component value on each resolved CVE against the current CVE's Upstream
+   Affected Component (extracted in Step 1). If the values match, the existing
+   remediation Task already covers the same upstream component.
+
+   **Fallback** (when the Depend link or Upstream Affected Component field is
+   missing on the resolved CVE): fall back to summary matching — if the
+   remediation Task's summary contains the same library name as the current
+   CVE's vulnerable library (from Step 1), treat it as a match.
+
+5. **If a covering remediation Task is found:**
 
    a. **Skip remediation task creation** for this CVE/stream combination.
    b. **Link the current CVE to the existing remediation Task** (Depend):
@@ -665,6 +675,6 @@ configured. If not configured, skip dedup and proceed to Step 8.
    f. **Record the dedup** — mark that remediation already exists for this
       stream so Step 8 skips task creation for it.
 
-5. **If no covering Task is found**, proceed to Step 8 for standard remediation
+6. **If no covering Task is found**, proceed to Step 8 for standard remediation
    task creation. After task creation, link the new tasks to the release Task
    (see `remediation-templates.md` Jira Linkage section).
