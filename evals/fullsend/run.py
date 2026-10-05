@@ -120,6 +120,7 @@ def verify_locked_dependencies(lock):
 def preflight(cache, model, judge_model, effort):
     """Validate dependencies/config/CLI contracts only; no sandbox or model launch."""
     import importlib.metadata
+    import jsonschema  # Required by the trusted host output validator.
     import yaml
     from agent_eval.config import EvalConfig
     dependency = pins()
@@ -286,7 +287,7 @@ def main():
         run_dir.mkdir(parents=True)
         config = run_dir / "eval.yaml"
         config.write_text(yaml.safe_dump(resolved_config(python, args.model, args.judge_model, args.effort,
-                                                       args.plugin_root.resolve() if args.plugin_root else None), sort_keys=False))
+                                                       args.plugin_root.absolute() if args.plugin_root else None), sort_keys=False))
         host, sandbox = binaries(cache)
         environment = dict(os.environ, TC6677_FULLSEND_BIN=str(host), TC6677_SANDBOX_FULLSEND_BIN=str(sandbox),
                            AGENT_EVAL_RUNS_DIR=str(args.output.resolve()))

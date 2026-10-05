@@ -28,7 +28,9 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
     # PR content is only uploaded as a sandbox plugin. Trusted host executables,
     # policy, providers and schema remain independent even if the PR replaces them.
     plugin_root = plugin_root or root / "plugins/sdlc-workflow"
-    if plugin_root.is_symlink() or any(p.is_symlink() for p in plugin_root.rglob("*")):
+    plugin_root = plugin_root.absolute()
+    if (any(p.is_symlink() for p in [plugin_root, *plugin_root.parents])
+            or any(p.is_symlink() for p in plugin_root.rglob("*"))):
         raise ValueError("Tested plugin must contain regular files, not symlinks")
     plugin_destination = setup / ("tested-plugin" if plugin_root != root / "plugins/sdlc-workflow" else "plugins/sdlc-workflow")
     shutil.copytree(plugin_root, plugin_destination,
@@ -117,7 +119,7 @@ def main():
                         args.output_dir.resolve(), args.scenario, args.model, args.effort,
                         Path(os.environ["TC6677_FULLSEND_BIN"]),
                         Path(os.environ["TC6677_SANDBOX_FULLSEND_BIN"]),
-                        args.plugin_root.resolve() if args.plugin_root else None)
+                        args.plugin_root.absolute() if args.plugin_root else None)
     except (KeyError, OSError, ValueError) as exc:
         print(f"Native gate eval fixture/CLI failure: {exc}", file=sys.stderr)
         return 1
