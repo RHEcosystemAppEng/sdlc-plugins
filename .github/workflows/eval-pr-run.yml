@@ -30,6 +30,10 @@ permissions:
   actions: read
   statuses: write
 
+env:
+  # After integration merge, suite execution always comes from trusted main.
+  NATIVE_EVAL_SOURCE_SHA: ${{ github.sha }}
+
 jobs:
   discover:
     name: Discover PR Context
@@ -40,6 +44,12 @@ jobs:
       pr_number: ${{ steps.pr.outputs.pr_number }}
       author: ${{ steps.pr.outputs.author }}
       trusted: ${{ steps.pr.outputs.trusted }}
+      native: ${{ steps.discover.outputs.native }}
+      head_sha: ${{ steps.pr.outputs.head_sha }}
+      merge_sha: ${{ steps.pr.outputs.merge_sha }}
+      base_sha: ${{ steps.pr.outputs.base_sha }}
+      source_repo: ${{ steps.pr.outputs.source_repo }}
+      source_branch: ${{ steps.pr.outputs.source_branch }}
     steps:
       - name: Set pending commit status
         uses: actions/github-script@v9
@@ -77,6 +87,32 @@ jobs:
               core.setFailed(`No open PR targeting main found for commit ${headSha}`);
               return;
             }
+            const { data: current } = await github.rest.pulls.get({
+              ...context.repo, pull_number: pr.number
+            });
+            const shaPattern = /^[0-9a-f]{40}$/;
+            if (current.state !== 'open' || current.base?.ref !== 'main' ||
+                current.head?.sha !== headSha ||
+                current.head?.repo?.full_name !== context.payload.workflow_run.head_repository?.full_name ||
+                !shaPattern.test(current.base?.sha || '') || !shaPattern.test(current.merge_commit_sha || '')) {
+              core.setFailed('PR identity/revision changed or merge source unavailable');
+              return;
+            }
+            // Verify the exact merge commit is constructed from this API-associated
+            // head and base. No floating pull ref reaches a credentialed job.
+            const { data: merge } = await github.rest.git.getCommit({
+              ...context.repo, commit_sha: current.merge_commit_sha
+            });
+            if (merge.parents?.length !== 2 || merge.parents[0]?.sha !== current.base.sha ||
+                merge.parents[1]?.sha !== headSha) {
+              core.setFailed('Merge source is not the event-associated head/base');
+              return;
+            }
+            core.setOutput('head_sha', headSha);
+            core.setOutput('merge_sha', current.merge_commit_sha);
+            core.setOutput('base_sha', current.base.sha);
+            core.setOutput('source_repo', current.head.repo.full_name);
+            core.setOutput('source_branch', current.head.ref);
             core.setOutput('pr_number', pr.number.toString());
             core.setOutput('author', pr.user.login);
 
@@ -97,10 +133,14 @@ jobs:
 
       - name: Discover changed skills
         id: discover
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          SOURCE_BRANCH: ${{ steps.pr.outputs.source_branch }}
+          MERGE_SHA: ${{ steps.pr.outputs.merge_sha }}
         uses: actions/github-script@v9
         with:
           script: |
-            const prNumber = parseInt('${{ steps.pr.outputs.pr_number }}');
+            const prNumber = Number(process.env.PR_NUMBER);
             const files = await github.paginate(github.rest.pulls.listFiles, {
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -118,7 +158,7 @@ jobs:
 
             for (const f of files) {
               const match = f.filename.match(skillPattern) || f.filename.match(evalPattern);
-              if (match) candidates.add(match[1]);
+              if (match && match[1] !== 'fullsend') candidates.add(match[1]);
             }
 
             const confirmed = [];
@@ -132,7 +172,7 @@ jobs:
                   owner: context.repo.owner,
                   repo: context.repo.repo,
                   path: `evals/${skill}/evals.json`,
-                  ref: `refs/pull/${prNumber}/merge`
+                  ref: process.env.MERGE_SHA
                 });
                 confirmed.push(skill);
               } catch {
@@ -141,6 +181,14 @@ jobs:
             }
 
             const skills = confirmed.join(',');
+            const nativeRelevant = files.some(f =>
+              /^evals\/fullsend\//.test(f.filename) ||
+              /^evals\/triage-security\//.test(f.filename) ||
+              /^plugins\/sdlc-workflow\/skills\/triage-security\//.test(f.filename) ||
+              /^plugins\/sdlc-workflow\/(policies\/triage-security\.yaml|providers\/vertex-ai\.yaml|profiles\/fullsend-vertex-ai\.yaml|env\/gcp-vertex\.env|schemas\/triage-security-(input|result)\.schema\.json|scripts\/(validate-output-schema\.sh|strip_extra_properties\.py|test_(fullsend_gate_eval|native_fullsend_eval_ci)\.py))$/.test(f.filename) ||
+              /^\.github\/(workflows\/eval-pr(-run)?\.yml|scripts\/run-native-fullsend-evals\.sh)$/.test(f.filename)
+            );
+            core.setOutput('native', String(nativeRelevant));
             core.setOutput('skills', skills);
             console.log(`Discovered changed skills with evals: ${skills || 'none'}`);
 
@@ -160,16 +208,19 @@ jobs:
             });
 
   gate:
-    name: Approval Gate
+    name: Approval Gate for ${{ needs.discover.outputs.head_sha }}
     needs: discover
     if: >-
       needs.discover.result == 'success' &&
       needs.discover.outputs.trusted != 'true' &&
-      needs.discover.outputs.skills != ''
+      (needs.discover.outputs.skills != '' || needs.discover.outputs.native == 'true')
     runs-on: ubuntu-latest
     environment: eval-protected
     steps:
-      - run: echo "Approved by reviewer"
+      - env:
+          APPROVED_HEAD: ${{ needs.discover.outputs.head_sha }}
+          APPROVED_MERGE: ${{ needs.discover.outputs.merge_sha }}
+        run: echo "Approved revision $APPROVED_HEAD / merge $APPROVED_MERGE"
 
   run-evals:
     name: Run PR Evals
@@ -182,17 +233,21 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
       pull-requests: write
+      issues: write
       id-token: write
     steps:
       - name: Checkout base branch
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
       - name: Checkout PR merge commit into subdirectory
         uses: actions/checkout@v7
         with:
-          ref: refs/pull/${{ needs.discover.outputs.pr_number }}/merge
+          ref: ${{ needs.discover.outputs.merge_sha }}
+          persist-credentials: false
           path: pr-head
           fetch-depth: 0
           allow-unsafe-pr-checkout: true
@@ -312,6 +367,8 @@ jobs:
         env:
           SKILLS_CSV: ${{ needs.discover.outputs.skills }}
           PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.discover.outputs.head_sha }}
+          MERGE_SHA: ${{ needs.discover.outputs.merge_sha }}
         uses: actions/github-script@v9
         with:
           script: |
@@ -320,7 +377,7 @@ jobs:
             const prNumber = parseInt(process.env.PR_NUMBER);
 
             const marker = '<!-- eval-pr-report -->';
-            let body = `${marker}\n## Eval Results\n\n`;
+            let body = `${marker}\n## Eval Results\n\nSource head: ${process.env.HEAD_SHA}\nMerge: ${process.env.MERGE_SHA}\n\n`;
             for (const skill of skills) {
               const summaryPath = `/tmp/${skill}-eval-pr/summary.md`;
               if (fs.existsSync(summaryPath)) {
@@ -356,17 +413,176 @@ jobs:
               });
             }
 
+  run-native-evals:
+    name: Run Native Fullsend Evals
+    needs: [discover, gate]
+    if: >-
+      !cancelled() &&
+      needs.discover.result == 'success' &&
+      needs.discover.outputs.native == 'true' &&
+      (needs.discover.outputs.trusted == 'true' || needs.gate.result == 'success')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout trusted base
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Checkout exact tested merge
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.discover.outputs.merge_sha }}
+          path: pr-head
+          persist-credentials: false
+          allow-unsafe-pr-checkout: true
+
+      - name: Checkout reviewed native eval source
+        uses: actions/checkout@v7
+        with:
+          repository: ${{ github.repository }}
+          ref: ${{ env.NATIVE_EVAL_SOURCE_SHA }}
+          path: native-eval-source
+          persist-credentials: false
+
+      - name: Checkout pinned Fullsend infrastructure
+        uses: actions/checkout@v7
+        with:
+          repository: fullsend-ai/fullsend
+          ref: d5f36921ac754705619f38c637ef692873809fbc
+          path: upstream-fullsend
+          persist-credentials: false
+
+      - name: Install Python3.12
+        uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+
+      - name: Install trusted native dependencies
+        run: bash .github/scripts/run-native-fullsend-evals.sh setup
+
+      - name: Recheck approved revision before WIF
+        id: revision
+        env:
+          PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.discover.outputs.head_sha }}
+          MERGE_SHA: ${{ needs.discover.outputs.merge_sha }}
+          BASE_SHA: ${{ needs.discover.outputs.base_sha }}
+          SOURCE_REPO: ${{ needs.discover.outputs.source_repo }}
+          SOURCE_BRANCH: ${{ needs.discover.outputs.source_branch }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo, pull_number: Number(process.env.PR_NUMBER)
+            });
+            if (pr.state !== 'open' || pr.base?.ref !== 'main' ||
+                pr.head?.sha !== process.env.HEAD_SHA || pr.base?.sha !== process.env.BASE_SHA ||
+                pr.merge_commit_sha !== process.env.MERGE_SHA ||
+                pr.head?.repo?.full_name !== process.env.SOURCE_REPO ||
+                pr.head?.ref !== process.env.SOURCE_BRANCH) {
+              core.setFailed('Approved PR revision changed; require a new source-bound run');
+            }
+
+      - name: Pre-mask host credential path
+        run: echo "::add-mask::${GITHUB_WORKSPACE}/gha-creds-"
+
+      - name: Authenticate native inference with existing Fullsend WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.FULLSEND_GCP_WIF_PROVIDER }}
+          project_id: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
+
+      - name: Run trusted native suite against sandbox plugin
+        env:
+          ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
+          GOOGLE_CLOUD_PROJECT: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
+          CLOUD_ML_REGION: ${{ vars.FULLSEND_GCP_REGION }}
+          CLAUDE_CODE_USE_VERTEX: '1'
+          TC6726_PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
+          TC6726_HEAD_SHA: ${{ needs.discover.outputs.head_sha }}
+          TC6726_MERGE_SHA: ${{ needs.discover.outputs.merge_sha }}
+          TC6726_BASE_SHA: ${{ needs.discover.outputs.base_sha }}
+          TC6726_TRUSTED_SHA: ${{ github.sha }}
+          TC6726_EVAL_SOURCE_SHA: ${{ env.NATIVE_EVAL_SOURCE_SHA }}
+        run: bash .github/scripts/run-native-fullsend-evals.sh run
+
+      - name: Upload only allowlisted source-bound native result
+        if: always() && steps.revision.outcome == 'success'
+        uses: actions/upload-artifact@v7
+        with:
+          name: native-fullsend-result
+          path: ${{ runner.temp }}/tc6726-safe/native-result.json
+          if-no-files-found: error
+          retention-days: 14
+
   report-status:
     name: Report Status
-    needs: [discover, gate, run-evals]
+    needs: [discover, gate, run-evals, run-native-evals]
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - name: Download safe native result
+        if: needs.discover.outputs.native == 'true' && needs.run-native-evals.result != 'skipped'
+        uses: actions/download-artifact@v8
+        with:
+          name: native-fullsend-result
+          path: native-report
+
+      - name: Publish native result alongside ordinary review
+        id: native-report
+        if: always() && needs.discover.outputs.native == 'true'
+        env:
+          PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
+          HEAD_SHA: ${{ needs.discover.outputs.head_sha }}
+          MERGE_SHA: ${{ needs.discover.outputs.merge_sha }}
+          BASE_SHA: ${{ needs.discover.outputs.base_sha }}
+          TRUSTED_SHA: ${{ github.sha }}
+          EVAL_SOURCE_SHA: ${{ env.NATIVE_EVAL_SOURCE_SHA }}
+          NATIVE_RESULT: ${{ needs.run-native-evals.result }}
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const fs = require('fs');
+            const expected = {pr_number: Number(process.env.PR_NUMBER), head_sha: process.env.HEAD_SHA,
+              merge_sha: process.env.MERGE_SHA, base_sha: process.env.BASE_SHA, trusted_sha: process.env.TRUSTED_SHA, eval_source_sha: process.env.EVAL_SOURCE_SHA};
+            let body = `## Native Fullsend Eval Results\n\nHead: ${expected.head_sha}\nMerge: ${expected.merge_sha}\nTrusted workflow: ${expected.trusted_sha}\nReviewed eval source: ${expected.eval_source_sha}\n\n`;
+            let valid = false;
+            if (fs.existsSync('native-report/native-result.json')) {
+              const report = JSON.parse(fs.readFileSync('native-report/native-result.json', 'utf8'));
+              const counts = {'033-absent': 4, '034-empty': 5, '035-malformed': 5, '036-valid': 7};
+              const bound = Object.entries(expected).every(([k,v]) => report.source?.[k] === v);
+              const complete = report.complete === true && report.total === 21 &&
+                Object.keys(report.outcomes || {}).length === 4 && Object.entries(counts).every(([k,n]) =>
+                  Object.keys(report.outcomes?.[k] || {}).length === n && Array.from({length:n}, (_,i) =>
+                    report.outcomes?.[k]?.[`assertion_${i+1}`]).every(v => typeof v === 'boolean'));
+              if (!bound) { core.setFailed('Native report source mismatch'); return; }
+              const passed = Object.values(report.outcomes || {}).flatMap(v => Object.values(v)).filter(v => v === true).length;
+              valid = complete && passed === 21 && report.exit_code === 0;
+              body += `Native job: ${process.env.NATIVE_RESULT}; complete: ${complete}; ${passed}/21 passed.\n`;
+            } else {
+              body += 'No safe native result was produced; native execution/approval failed.\n';
+            }
+            // Only constructed scalar/count data enters the review. No arbitrary
+            // rationale, transcript, credential path or PR-controlled Markdown.
+            await github.rest.pulls.createReview({...context.repo, pull_number: expected.pr_number,
+              commit_id: expected.head_sha, event: 'COMMENT', body});
+            if (!valid) core.setFailed('Native evidence incomplete, failed, or missing');
+
       - name: Set final commit status
+        if: always()
         env:
           DISCOVER_RESULT: ${{ needs.discover.result }}
           EVALS_RESULT: ${{ needs.run-evals.result }}
           GATE_RESULT: ${{ needs.gate.result }}
+          NATIVE_RESULT: ${{ needs.run-native-evals.result }}
+          NATIVE_REQUESTED: ${{ needs.discover.outputs.native }}
+          NATIVE_REPORT_RESULT: ${{ steps.native-report.outcome }}
+          SKILLS_CSV: ${{ needs.discover.outputs.skills }}
         uses: actions/github-script@v9
         with:
           script: |
@@ -374,23 +590,15 @@ jobs:
             const evalsResult = process.env.EVALS_RESULT;
             const gateResult = process.env.GATE_RESULT;
 
-            let state, description;
-            if (evalsResult === 'success') {
-              state = 'success';
-              description = 'Eval run completed — results posted as PR comment';
-            } else if (discoverResult !== 'success') {
-              state = 'failure';
-              description = 'Eval run failed — could not resolve PR context';
-            } else if (gateResult === 'failure') {
-              state = 'failure';
-              description = 'Approval was rejected in eval-protected environment';
-            } else if (evalsResult === 'skipped') {
-              state = 'success';
-              description = 'No evals to run for changed files';
-            } else {
-              state = 'failure';
-              description = 'Eval run failed — check workflow logs';
-            }
+            const nativeRequested = process.env.NATIVE_REQUESTED === 'true';
+            const ordinaryRequested = Boolean(process.env.SKILLS_CSV);
+            const nativeOk = !nativeRequested || (process.env.NATIVE_RESULT === 'success' &&
+              process.env.NATIVE_REPORT_RESULT === 'success');
+            const ordinaryOk = !ordinaryRequested || evalsResult === 'success';
+            const state = discoverResult === 'success' && gateResult !== 'failure' && gateResult !== 'cancelled' &&
+              nativeOk && ordinaryOk ? 'success' : 'failure';
+            const description = state === 'success' ? 'Requested eval suites completed successfully' :
+              'Eval execution, approval or native evidence failed';
 
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
