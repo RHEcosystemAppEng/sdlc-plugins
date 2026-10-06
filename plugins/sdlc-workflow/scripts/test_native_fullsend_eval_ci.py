@@ -40,10 +40,11 @@ const pr = {number:data.number || 299,state:'open',user:{login:'synthetic'},
  base:{sha:'b'.repeat(40),ref:data.base || 'main'},merge_commit_sha:'c'.repeat(40)};
 const github = {paginate:async (fn,args)=>{const response=await fn(args);return response.data || response;},rest:{
  actions:{getWorkflowRun:async()=>{
-   if(data.apiError) throw Error('API unavailable');
+   if(data.apiError && data.apiError !== 'list') throw Error('API unavailable');
    return {data:{id:1,workflow_id:10,run_attempt:data.attempt || 1,created_at:'2026-10-06T07:00:00Z'}};},
- listWorkflowRuns:async()=> (data.runs || []).map(r=>({...r,
-   display_title:`Eval PR Run ${r.other_head?'b'.repeat(40):process.env.HEAD_SHA}`}))},
+ listWorkflowRuns:async()=> {if(data.apiError === 'list') throw Error('API unavailable');
+ return (data.runs || []).map(r=>({...r,
+   display_title:`Eval PR Run ${r.other_head?'b'.repeat(40):process.env.HEAD_SHA}`}));}},
  pulls:{list:async()=>[pr],get:async()=>{
  const revision=(data.revisions || [])[Math.min(prReads,(data.revisions || []).length-1)] || {};
  prReads++;
@@ -413,3 +414,28 @@ def test_credential_parser_rejects_missing_or_unterminated_required_data(tmp_pat
     assert result.returncode != 0
     assert error in result.stdout + result.stderr
     assert captured is None
+
+
+@pytest.mark.parametrize("api_error,newer,expected", [("get", False, "failure"), ("list", False, "failure"), (False, True, None)])
+def test_guard_errors_publish_terminal_failure_but_superseded_runs_skip(api_error, newer, expected):
+    """API guard errors conclude the check; observed newer runs still suppress writes."""
+    # Given successful eval jobs and a guard error or an observed newer run
+    runs = [{"id": 1, "run_number": 1}]
+    if newer:
+        runs.append({"id": 2, "run_number": 2})
+    guard = run_js(script_step("report-status", "Check latest run before publishing")["with"]["script"],
+                   {"apiError": api_error, "runs": runs}, {"HEAD_SHA": "a" * 40})
+    # When evaluating the real final status step condition
+    step = script_step("report-status", "Set final commit status")
+    condition = step["if"].replace("always()", "true")
+    for key in ["latest", "error"]:
+        condition = condition.replace(f"steps.publication.outputs.{key}", json.dumps(guard["outputs"].get(key, "")))
+    allowed = subprocess.run(["node", "-e", f"process.stdout.write(JSON.stringify(Boolean({condition})));"],
+                             capture_output=True, text=True, check=True)
+    env = {"DISCOVER_RESULT": "success", "EVALS_RESULT": "success", "GATE_RESULT": "skipped",
+           "NATIVE_REQUESTED": "false", "SKILLS_CSV": "triage-security", "PUBLICATION_GUARD_ERROR": guard["outputs"].get("error", "")}
+    result = run_js(step["with"]["script"], {}, env) if json.loads(allowed.stdout) else {"statuses": []}
+    # Then API errors terminate with failure, while supersession posts no status
+    assert [s["state"] for s in result["statuses"]] == ([] if expected is None else [expected])
+    if api_error:
+        assert step["env"]["PUBLICATION_GUARD_ERROR"] == "${{ steps.publication.outputs.error }}"
