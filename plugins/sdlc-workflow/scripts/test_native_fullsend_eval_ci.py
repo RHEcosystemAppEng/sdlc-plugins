@@ -389,16 +389,21 @@ def test_credential_parser_accepts_blank_lines_and_heredoc_values(tmp_path, here
         assert f"::add-mask::{escaped}" in result.stdout
 
 
-def test_credential_parser_consumes_unknown_heredocs_without_exporting_them(tmp_path):
-    """Unknown records stay data; their nested lines cannot overwrite required credentials."""
-    # Given valid known outputs followed by an unrelated multiline record
-    output = "GOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\nGCP_OIDC_TOKEN_FILE=synthetic-token\nFULLSEND_GCP_OIDC_URL=https://synthetic.invalid/\nFULLSEND_GCP_OIDC_AUTH_FILE=synthetic-auth\nTC6742_UNEXPECTED<<END\nGOOGLE_APPLICATION_CREDENTIALS=unrelated-value\nEND\n"
-    # When consuming the complete environment file
+@pytest.mark.parametrize("record", [
+    "TC6742_UNEXPECTED=synthetic-unknown-value\n",
+    "TC6742_UNEXPECTED<<END\nGOOGLE_APPLICATION_CREDENTIALS=synthetic-unknown-value\nEND\n",
+])
+def test_credential_parser_rejects_unknown_names_without_exposing_values(tmp_path, record):
+    """Unknown names fail before inference with a diagnostic that exposes no value."""
+    # Given valid known outputs followed by an unrecognized name
+    output = "GOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\nGCP_OIDC_TOKEN_FILE=synthetic-token\nFULLSEND_GCP_OIDC_URL=https://synthetic.invalid/\nFULLSEND_GCP_OIDC_AUTH_FILE=synthetic-auth\n" + record
+    # When parsing a single-line or complete heredoc record
     result, captured = run_credential_wrapper(tmp_path, output)
-    # Then only allowlisted records are exported
-    assert result.returncode == 0, result.stderr
-    assert captured["TC6726_SANDBOX_CREDENTIALS"] == "synthetic-adc"
-    assert captured["TC6742_UNEXPECTED"] is None
+    # Then the allowlist fails closed before the native runner is invoked
+    assert result.returncode != 0
+    assert "::error::Unexpected upstream credential output" in result.stdout
+    assert "synthetic-unknown-value" not in result.stdout + result.stderr
+    assert captured is None
 
 
 @pytest.mark.parametrize("output,error", [

@@ -90,7 +90,7 @@ EOF
       fi
       case "$credential_name" in
         GOOGLE_APPLICATION_CREDENTIALS|GCP_OIDC_TOKEN_FILE|FULLSEND_GCP_OIDC_URL|FULLSEND_GCP_OIDC_AUTH_FILE) ;;
-        *) continue ;;
+        *) echo '::error::Unexpected upstream credential output'; exit 1 ;;
       esac
       # Escape multiline mask data so its lines cannot become workflow commands.
       credential_mask="${credential_value//%/%25}"
