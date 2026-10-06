@@ -333,3 +333,83 @@ def test_native_artifact_download_failure_keeps_controlled_reporting():
         "BASE_SHA": "b" * 40, "TRUSTED_SHA": "e" * 40, "EVAL_SOURCE_SHA": "f" * 40, "NATIVE_RESULT": "failure"})
     assert result["errors"] == ["Native evidence incomplete, failed, or missing"]
     assert "No safe native result was produced; native execution/approval failed." in result["reviews"][0]["body"]
+
+
+def run_credential_wrapper(tmp_path, output):
+    """SYNTHETIC TEST DATA — run the real wrapper with local credential/inference doubles."""
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    scripts = tmp_path / "upstream-fullsend/internal/scaffold/fullsend-repo/scripts"
+    scripts.mkdir(parents=True)
+    fixture = tmp_path / "prepared-output.txt"
+    fixture.write_text(output)
+    (scripts / "prepare-sandbox-credentials.sh").write_text(
+        '#!/bin/sh\n# SYNTHETIC TEST DATA — emit the test environment file\ncat "$TC6742_FIXTURE" >> "$GITHUB_ENV"\n')
+    doubles = {
+        "git": '#!/bin/sh\n# SYNTHETIC TEST DATA — immutable checkout identities\ncase "$2" in *upstream-fullsend) echo d5f36921ac754705619f38c637ef692873809fbc;; *) echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;; esac\n',
+        "jq": '#!/bin/sh\n# SYNTHETIC TEST DATA — host ADC type\necho external_account\n',
+        "python3.12": '#!/usr/bin/env python3\n# SYNTHETIC TEST DATA — capture parser output without inference\nimport json, os\nfrom pathlib import Path\nPath(os.environ["TC6742_CAPTURE"]).write_text(json.dumps({k: os.environ.get(k) for k in ["GOOGLE_APPLICATION_CREDENTIALS", "TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]}))\n',
+    }
+    for name, content in doubles.items():
+        path = tools / name
+        path.write_text(content)
+        path.chmod(0o755)
+    capture = tmp_path / "captured.json"
+    environment = dict(os.environ, GITHUB_WORKSPACE=str(tmp_path), RUNNER_TEMP=str(tmp_path),
+                       GOOGLE_APPLICATION_CREDENTIALS="synthetic-host-adc", ANTHROPIC_VERTEX_PROJECT_ID="synthetic",
+                       CLOUD_ML_REGION="global", TC6726_HEAD_SHA="a" * 40, NATIVE_EVAL_SOURCE_SHA="b" * 40,
+                       TC6742_FIXTURE=str(fixture), TC6742_CAPTURE=str(capture),
+                       PATH=str(tools) + os.pathsep + os.environ["PATH"])
+    for name in ["TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]:
+        environment.pop(name, None)
+    result = subprocess.run(["bash", str(ROOT / ".github/scripts/run-native-fullsend-evals.sh"), "run"],
+                            env=environment, capture_output=True, text=True)
+    return result, json.loads(capture.read_text()) if capture.exists() else None
+
+
+@pytest.mark.parametrize("heredoc", [False, True])
+def test_credential_parser_accepts_blank_lines_and_heredoc_values(tmp_path, heredoc):
+    """Valid environment syntax captures/masks required values and preserves host ADC."""
+    # Given synthetic credentials, with optional multiline output
+    expected = {"TC6726_SANDBOX_CREDENTIALS": "synthetic-sandbox-adc", "GCP_OIDC_TOKEN_FILE": "synthetic-token-file",
+                "FULLSEND_GCP_OIDC_URL": "https://synthetic.invalid/?audience=eval", "FULLSEND_GCP_OIDC_AUTH_FILE": "synthetic-auth-file"}
+    names = {"GOOGLE_APPLICATION_CREDENTIALS": "TC6726_SANDBOX_CREDENTIALS", **{k: k for k in expected if k != "TC6726_SANDBOX_CREDENTIALS"}}
+    if heredoc:
+        expected["FULLSEND_GCP_OIDC_AUTH_FILE"] = "synthetic-auth%file\nsynthetic-second-line"
+    output = "\n".join(f"{name}<<END\n{expected[key]}\nEND" if heredoc else f"{name}={expected[key]}"
+                       for name,key in names.items())
+    # When the actual wrapper parses blank lines and heredoc input
+    result, captured = run_credential_wrapper(tmp_path, "\n" + output + "\n\n")
+    # Then the scoring process gets parsed values and the original host ADC
+    assert result.returncode == 0, result.stderr
+    assert captured == {"GOOGLE_APPLICATION_CREDENTIALS": "synthetic-host-adc", **expected, "TC6742_UNEXPECTED": None}
+    for value in expected.values():
+        escaped = value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        assert f"::add-mask::{escaped}" in result.stdout
+
+
+def test_credential_parser_consumes_unknown_heredocs_without_exporting_them(tmp_path):
+    """Unknown records stay data; their nested lines cannot overwrite required credentials."""
+    # Given valid known outputs followed by an unrelated multiline record
+    output = "GOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\nGCP_OIDC_TOKEN_FILE=synthetic-token\nFULLSEND_GCP_OIDC_URL=https://synthetic.invalid/\nFULLSEND_GCP_OIDC_AUTH_FILE=synthetic-auth\nTC6742_UNEXPECTED<<END\nGOOGLE_APPLICATION_CREDENTIALS=unrelated-value\nEND\n"
+    # When consuming the complete environment file
+    result, captured = run_credential_wrapper(tmp_path, output)
+    # Then only allowlisted records are exported
+    assert result.returncode == 0, result.stderr
+    assert captured["TC6726_SANDBOX_CREDENTIALS"] == "synthetic-adc"
+    assert captured["TC6742_UNEXPECTED"] is None
+
+
+@pytest.mark.parametrize("output,error", [
+    ("\nGOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\n", "Native OIDC mount is required"),
+    ("GOOGLE_APPLICATION_CREDENTIALS<<END\nsynthetic-adc\n", "Unterminated upstream credential value"),
+])
+def test_credential_parser_rejects_missing_or_unterminated_required_data(tmp_path, output, error):
+    """Missing required fields and incomplete heredocs fail before native inference."""
+    # Given incomplete synthetic credential output
+    # When the actual wrapper processes it
+    result, captured = run_credential_wrapper(tmp_path, output)
+    # Then required guards prevent execution without complete credentials
+    assert result.returncode != 0
+    assert error in result.stdout + result.stderr
+    assert captured is None
