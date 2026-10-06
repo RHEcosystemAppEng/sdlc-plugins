@@ -67,6 +67,7 @@ jobs:
         with:
           script: &latest-run-check |
             core.setOutput('latest', 'false');
+            core.setOutput('error', 'false');
             try {
               const {data: current} = await github.rest.actions.getWorkflowRun({
                 ...context.repo, run_id: context.runId
@@ -85,6 +86,7 @@ jobs:
               }
               core.setOutput('latest', 'true');
             } catch (error) {
+              core.setOutput('error', 'true');
               core.setFailed('Cannot determine latest eval run; refusing publication');
             }
 
@@ -625,8 +627,9 @@ jobs:
             if (!valid) core.setFailed('Native evidence incomplete, failed, or missing');
 
       - name: Set final commit status
-        if: always() && steps.publication.outputs.latest == 'true'
+        if: always() && (steps.publication.outputs.latest == 'true' || steps.publication.outputs.error == 'true')
         env:
+          PUBLICATION_GUARD_ERROR: ${{ steps.publication.outputs.error }}
           DISCOVER_RESULT: ${{ needs.discover.result }}
           EVALS_RESULT: ${{ needs.run-evals.result }}
           GATE_RESULT: ${{ needs.gate.result }}
@@ -646,9 +649,11 @@ jobs:
             const nativeOk = !nativeRequested || (process.env.NATIVE_RESULT === 'success' &&
               process.env.NATIVE_REPORT_RESULT === 'success');
             const ordinaryOk = !ordinaryRequested || evalsResult === 'success';
-            const state = discoverResult === 'success' && gateResult !== 'failure' && gateResult !== 'cancelled' &&
+            const publicationError = process.env.PUBLICATION_GUARD_ERROR === 'true';
+            const state = !publicationError && discoverResult === 'success' && gateResult !== 'failure' && gateResult !== 'cancelled' &&
               nativeOk && ordinaryOk ? 'success' : 'failure';
-            const description = state === 'success' ? 'Requested eval suites completed successfully' :
+            const description = publicationError ? 'Could not verify latest eval run; rerun required' :
+              state === 'success' ? 'Requested eval suites completed successfully' :
               'Eval execution, approval or native evidence failed';
 
             await github.rest.repos.createCommitStatus({
