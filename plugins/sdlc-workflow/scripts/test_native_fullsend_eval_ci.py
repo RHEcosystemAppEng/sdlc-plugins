@@ -27,14 +27,19 @@ const data = JSON.parse(process.argv[1]);
 const outputs = {}, statuses = [], errors = [], reviews = [];
 const require = name => {if (name !== 'fs') throw Error('unexpected module');
  return {existsSync:()=>Boolean(data.report),readFileSync:()=>JSON.stringify(data.report)};};
-const core = {setOutput: (k,v) => outputs[k]=v, setFailed: x => errors.push(x)};
+const core = {setOutput: (k,v) => outputs[k]=v, setFailed: x => errors.push(x), info:()=>{}};
 const context = {repo:{owner:'RHEcosystemAppEng',repo:'sdlc-plugins'},
  payload:{workflow_run:{head_sha:data.eventHead || 'a'.repeat(40),
- head_repository:{full_name:'mrizzi/sdlc-plugins'}}}, serverUrl:'https://github.com',runId:1};
+ head_repository:{full_name:'mrizzi/sdlc-plugins'}}}, serverUrl:'https://github.com',runId:1,runAttempt:1};
 const pr = {number:data.number || 299,state:'open',user:{login:'synthetic'},
  head:{sha:data.head || 'a'.repeat(40),ref:data.branch || 'verify-pr-fullsend',repo:{full_name:'mrizzi/sdlc-plugins'}},
  base:{sha:'b'.repeat(40),ref:data.base || 'main'},merge_commit_sha:'c'.repeat(40)};
 const github = {paginate:async (fn,args)=>fn(args),rest:{
+ actions:{getWorkflowRun:async()=>{
+   if(data.apiError) throw Error('API unavailable');
+   return {data:{id:1,workflow_id:10,run_attempt:data.attempt || 1,created_at:'2026-10-06T07:00:00Z'}};},
+ listWorkflowRuns:async()=> (data.runs || []).map(r=>({...r,
+   display_title:`Eval PR Run ${r.other_head?'b'.repeat(40):process.env.HEAD_SHA}`}))},
  pulls:{list:async()=>[pr],get:async()=>({data:pr}),createReview:async r=>reviews.push(r),
  listFiles:async()=> (data.paths||[]).map(filename=>({filename}))},
  git:{getCommit:async()=>({data:{parents:(data.parents||['b'.repeat(40),'a'.repeat(40)]).map(sha=>({sha}))}})},
@@ -203,3 +208,35 @@ def test_wrapper_rejects_different_reviewed_suite_before_credentials(tmp_path):
     assert result.returncode != 0
     assert "Reviewed native eval source changed" in result.stdout
     assert "WIF host ADC" not in result.stderr
+
+
+@pytest.mark.parametrize("job", ["discover", "run-evals", "report-status"])
+def test_all_publication_jobs_check_latest_run(job):
+    """Every status/review write requires a successful latest-run check."""
+    job_data = workflow()["jobs"][job]
+    guard = next(s for s in job_data["steps"] if s.get("id") == "publication")
+    assert guard["env"]["HEAD_SHA"] == "${{ github.event.workflow_run.head_sha }}"
+    assert workflow()["run-name"] == "Eval PR Run ${{ github.event.workflow_run.head_sha }}"
+    if "permissions" in job_data:
+        assert job_data["permissions"]["actions"] == "read"
+    for step in job_data["steps"]:
+        script = step.get("with", {}).get("script", "")
+        if any(api in script for api in ["createCommitStatus(", "createReview(", "updateReview("]):
+            assert any(f"steps.{name}.outputs.latest == 'true'" in step["if"]
+                       for name in ["publication", "gate-publication"])
+
+
+@pytest.mark.parametrize("runs,attempt,api_error,expected", [
+    ([{"id": 1, "run_number": 1}], 1, False, "true"),
+    ([{"id": 1, "run_number": 1}, {"id": 2, "run_number": 2}], 1, False, "false"),
+    ([{"id": 1, "run_number": 1}, {"id": 2, "run_number": 2, "other_head": True}], 1, False, "true"),
+    ([], 1, False, "false"),
+    ([{"id": 1, "run_number": 1}], 2, False, "false"),
+    ([{"id": 1, "run_number": 1}], 1, True, "false"),
+])
+def test_latest_run_guard_refuses_superseded_or_unidentifiable_runs(runs, attempt, api_error, expected):
+    """Execute the real guard for newer runs, other heads, reruns and API failures."""
+    script = script_step("discover", "Check latest run before publishing")["with"]["script"]
+    result = run_js(script, {"runs": runs, "attempt": attempt, "apiError": api_error}, {"HEAD_SHA": "a" * 40})
+    assert result["outputs"].get("latest") == expected
+    assert bool(result["errors"]) == api_error

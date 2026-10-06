@@ -18,6 +18,7 @@
 # See docs/specs/2026-05-07-eval-pr-fork-dispatch-design.md for full design.
 
 name: Eval PR Run
+run-name: Eval PR Run ${{ github.event.workflow_run.head_sha }}
 
 on:
   workflow_run:
@@ -51,7 +52,39 @@ jobs:
       source_repo: ${{ steps.pr.outputs.source_repo }}
       source_branch: ${{ steps.pr.outputs.source_branch }}
     steps:
+      - &publication-guard
+        name: Check latest run before publishing
+        id: publication
+        if: always()
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        uses: actions/github-script@v9
+        with:
+          script: &latest-run-check |
+            core.setOutput('latest', 'false');
+            try {
+              const {data: current} = await github.rest.actions.getWorkflowRun({
+                ...context.repo, run_id: context.runId
+              });
+              // workflow_run's own head_sha is main, not the tested PR head.
+              // The API run title binds this consumer to the triggering PR head.
+              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {
+                ...context.repo, workflow_id: current.workflow_id, event: 'workflow_run',
+                created: `>=${current.created_at}`, per_page: 100
+              });
+              const matching = runs.filter(r => r.display_title === `Eval PR Run ${process.env.HEAD_SHA}`);
+              const latest = matching.sort((a,b) => b.run_number - a.run_number)[0];
+              if (latest?.id !== context.runId || current.run_attempt !== context.runAttempt) {
+                core.info('Superseded or unidentifiable run; skipping publication');
+                return;
+              }
+              core.setOutput('latest', 'true');
+            } catch (error) {
+              core.setFailed('Cannot determine latest eval run; refusing publication');
+            }
+
       - name: Set pending commit status
+        if: steps.publication.outputs.latest == 'true'
         uses: actions/github-script@v9
         with:
           script: |
@@ -195,8 +228,17 @@ jobs:
             core.setOutput('skills', skills);
             console.log(`Discovered changed skills with evals: ${skills || 'none'}`);
 
+      - name: Recheck latest run before approval status
+        id: gate-publication
+        if: always()
+        env:
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        uses: actions/github-script@v9
+        with:
+          script: *latest-run-check
+
       - name: Update status for approval gate
-        if: steps.pr.outputs.trusted != 'true' && steps.pr.outputs.pr_number != ''
+        if: steps.gate-publication.outputs.latest == 'true' && steps.pr.outputs.trusted != 'true' && steps.pr.outputs.pr_number != ''
         uses: actions/github-script@v9
         with:
           script: |
@@ -237,6 +279,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      actions: read
       id-token: write
     steps:
       - name: Checkout base branch
@@ -337,7 +380,10 @@ jobs:
             exit 1
           fi
 
+      - *publication-guard
+
       - name: Post eval results review
+        if: steps.publication.outputs.latest == 'true'
         env:
           SKILLS_CSV: ${{ needs.discover.outputs.skills }}
           PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
@@ -504,6 +550,8 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+      - *publication-guard
+
       - name: Download safe native result
         if: needs.discover.outputs.native == 'true' && needs.run-native-evals.result != 'skipped'
         uses: actions/download-artifact@v8
@@ -513,7 +561,7 @@ jobs:
 
       - name: Publish native result alongside ordinary review
         id: native-report
-        if: always() && needs.discover.outputs.native == 'true'
+        if: always() && steps.publication.outputs.latest == 'true' && needs.discover.outputs.native == 'true'
         env:
           PR_NUMBER: ${{ needs.discover.outputs.pr_number }}
           HEAD_SHA: ${{ needs.discover.outputs.head_sha }}
@@ -552,7 +600,7 @@ jobs:
             if (!valid) core.setFailed('Native evidence incomplete, failed, or missing');
 
       - name: Set final commit status
-        if: always()
+        if: always() && steps.publication.outputs.latest == 'true'
         env:
           DISCOVER_RESULT: ${{ needs.discover.result }}
           EVALS_RESULT: ${{ needs.run-evals.result }}
