@@ -41,7 +41,7 @@ const pr = {number:data.number || 299,state:'open',user:{login:'synthetic'},
 const github = {paginate:async (fn,args)=>{const response=await fn(args);return response.data || response;},rest:{
  actions:{getWorkflowRun:async()=>{
    if(data.apiError && data.apiError !== 'list') throw Error('API unavailable');
-   return {data:{id:1,workflow_id:10,run_attempt:data.attempt || 1,created_at:'2026-10-06T07:00:00Z'}};},
+   return {data:{id:1,run_number:1,workflow_id:10,run_attempt:data.attempt || 1,created_at:'2026-10-06T07:00:00Z'}};},
  listWorkflowRuns:async()=> {if(data.apiError === 'list') throw Error('API unavailable');
  return (data.runs || []).map(r=>({...r,
    display_title:`Eval PR Run ${r.other_head?'b'.repeat(40):process.env.HEAD_SHA}`}));}},
@@ -241,7 +241,7 @@ def test_all_publication_jobs_check_latest_run(job):
     ([{"id": 1, "run_number": 1}], 1, False, "true"),
     ([{"id": 1, "run_number": 1}, {"id": 2, "run_number": 2}], 1, False, "false"),
     ([{"id": 1, "run_number": 1}, {"id": 2, "run_number": 2, "other_head": True}], 1, False, "true"),
-    ([], 1, False, "false"),
+    ([], 1, False, "true"),
     ([{"id": 1, "run_number": 1}], 2, False, "false"),
     ([{"id": 1, "run_number": 1}], 1, True, "false"),
 ])
@@ -439,3 +439,30 @@ def test_guard_errors_publish_terminal_failure_but_superseded_runs_skip(api_erro
     assert [s["state"] for s in result["statuses"]] == ([] if expected is None else [expected])
     if api_error:
         assert step["env"]["PUBLICATION_GUARD_ERROR"] == "${{ steps.publication.outputs.error }}"
+
+
+@pytest.mark.parametrize("runs,expected", [
+    ([], True), ([{"id": 0, "run_number": 0}], True),
+    ([{"id": 1, "run_number": 1}], True), ([{"id": 2, "run_number": 2}], False),
+])
+def test_unindexed_current_run_posts_pending_and_approval_statuses(runs, expected):
+    """Only an observed newer run suppresses current pending/approval publication."""
+    # Given a lagging or newer Actions run list
+    guard = run_js(script_step("discover", "Check latest run before publishing")["with"]["script"],
+                   {"runs": runs}, {"HEAD_SHA": "a" * 40})
+    # When evaluating each real pending-status condition and script
+    states = []
+    for name in ["Set pending commit status", "Update status for approval gate"]:
+        step = script_step("discover", name)
+        condition = step["if"]
+        for key,value in {"steps.publication.outputs.latest": guard["outputs"].get("latest", ""),
+                          "steps.gate-publication.outputs.latest": guard["outputs"].get("latest", ""),
+                          "steps.pr.outputs.trusted": "false", "steps.pr.outputs.pr_number": "299"}.items():
+            condition = condition.replace(key, json.dumps(value))
+        allowed = subprocess.run(["node", "-e", f"process.stdout.write(JSON.stringify(Boolean({condition})));"],
+                                 capture_output=True, text=True, check=True)
+        if json.loads(allowed.stdout):
+            states.extend(s["state"] for s in run_js(step["with"]["script"], {})["statuses"])
+    # Then both statuses publish unless strictly newer execution is observed
+    assert guard["errors"] == []
+    assert states == (["pending", "pending"] if expected else [])

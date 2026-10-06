@@ -80,8 +80,9 @@ jobs:
               });
               const matching = runs.filter(r => r.display_title === `Eval PR Run ${process.env.HEAD_SHA}`);
               const latest = matching.sort((a,b) => b.run_number - a.run_number)[0];
-              if (latest?.id !== context.runId || current.run_attempt !== context.runAttempt) {
-                core.info('Superseded or unidentifiable run; skipping publication');
+              // The list can lag behind getWorkflowRun for a newly started run.
+              if ((latest && latest.run_number > current.run_number) || current.run_attempt !== context.runAttempt) {
+                core.info('Superseded run or attempt; skipping publication');
                 return;
               }
               core.setOutput('latest', 'true');
