@@ -125,9 +125,16 @@ jobs:
               core.setFailed(`No open PR targeting main found for commit ${headSha}`);
               return;
             }
-            const { data: current } = await github.rest.pulls.get({
+            let { data: current } = await github.rest.pulls.get({
               ...context.repo, pull_number: pr.number
             });
+            // GitHub can return null while computing the merge after a push.
+            for (let attempt = 1; current.merge_commit_sha === null && attempt < 3; attempt++) {
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              ({ data: current } = await github.rest.pulls.get({
+                ...context.repo, pull_number: pr.number
+              }));
+            }
             const shaPattern = /^[0-9a-f]{40}$/;
             if (current.state !== 'open' || current.base?.ref !== 'main' ||
                 current.head?.sha !== headSha ||
