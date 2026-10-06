@@ -97,6 +97,14 @@ EOF
       credential_mask="${credential_mask//$'\r'/%0D}"
       credential_mask="${credential_mask//$'\n'/%0A}"
       printf '::add-mask::%s\n' "$credential_mask"
+      if [[ "$credential_value" == *$'\n'* ]]; then
+        while IFS= read -r credential_mask_line || [ -n "$credential_mask_line" ]; do
+          if [ -z "$credential_mask_line" ]; then continue; fi
+          credential_mask_line="${credential_mask_line//%/%25}"
+          credential_mask_line="${credential_mask_line//$'\r'/%0D}"
+          printf '::add-mask::%s\n' "$credential_mask_line"
+        done <<< "$credential_value"
+      fi
       if [ "$credential_name" = GOOGLE_APPLICATION_CREDENTIALS ]; then
         export TC6726_SANDBOX_CREDENTIALS="$credential_value"
       else
