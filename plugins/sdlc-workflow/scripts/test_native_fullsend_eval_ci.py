@@ -90,7 +90,7 @@ def test_native_execution_uses_trusted_setup_and_readonly_github_permissions():
     jobs = workflow()["jobs"]
     assert "run-native-evals" in jobs, "Native CI is not implemented"
     native = jobs["run-native-evals"]
-    assert native["permissions"] == {"contents": "read", "id-token": "write"}
+    assert native["permissions"] == {"contents": "read", "pull-requests": "read", "id-token": "write"}
     assert native["needs"] == ["discover", "gate"]
     assert "needs.gate.result == 'success'" in native["if"]
     assert "needs.discover.outputs.native == 'true'" in native["if"]
