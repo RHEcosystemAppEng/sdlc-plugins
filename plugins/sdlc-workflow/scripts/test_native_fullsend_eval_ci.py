@@ -357,7 +357,7 @@ def run_credential_wrapper(tmp_path, output):
     doubles = {
         "git": '#!/bin/sh\n# SYNTHETIC TEST DATA — immutable checkout identities\ncase "$2" in *upstream-fullsend) echo d5f36921ac754705619f38c637ef692873809fbc;; *) echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;; esac\n',
         "jq": '#!/bin/sh\n# SYNTHETIC TEST DATA — host ADC type\necho external_account\n',
-        "python3.12": '#!/usr/bin/env python3\n# SYNTHETIC TEST DATA — capture parser output without inference\nimport json, os\nfrom pathlib import Path\nPath(os.environ["TC6742_CAPTURE"]).write_text(json.dumps({k: os.environ.get(k) for k in ["GOOGLE_APPLICATION_CREDENTIALS", "TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]}))\n',
+        "python3.12": '#!/usr/bin/env python3\n# SYNTHETIC TEST DATA — capture parser output without inference\nimport json, os, sys\nfrom pathlib import Path\nPath(os.environ["TC6742_CAPTURE"]).with_suffix(".argv.json").write_text(json.dumps(sys.argv[1:]))\nPath(os.environ["TC6742_CAPTURE"]).write_text(json.dumps({k: os.environ.get(k) for k in ["GOOGLE_APPLICATION_CREDENTIALS", "TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]}))\n',
     }
     for name, content in doubles.items():
         path = tools / name
@@ -713,3 +713,16 @@ def test_older_head_cannot_overwrite_current_sticky_report():
     # Then the current report is neither updated nor duplicated
     assert result["errors"] == []
     assert result["updates"] == result["comments"] == []
+
+
+def test_native_wrapper_passes_requested_judge_model(tmp_path):
+    """The trusted wrapper overrides the reviewed runner's older judge default."""
+    output = ("GOOGLE_APPLICATION_CREDENTIALS=synthetic-sandbox-adc\n"
+              "GCP_OIDC_TOKEN_FILE=synthetic-token\n"
+              "FULLSEND_GCP_OIDC_URL=synthetic-url\n"
+              "FULLSEND_GCP_OIDC_AUTH_FILE=synthetic-auth\n")
+    result, _ = run_credential_wrapper(tmp_path, output)
+    assert result.returncode == 0
+    arguments = json.loads((tmp_path / "captured.argv.json").read_text())
+    assert arguments[1] == "run"
+    assert arguments[arguments.index("--judge-model") + 1] == "claude-opus-4-8"
