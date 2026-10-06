@@ -62,12 +62,54 @@ EOF
     # Parse only known outputs as data; never source an environment file.
     prepared_env="$RUNNER_TEMP/tc6726-sandbox.env"
     GITHUB_ENV="$prepared_env" bash "$upstream/internal/scaffold/fullsend-repo/scripts/prepare-sandbox-credentials.sh"
-    while IFS='=' read -r credential_name credential_value; do
+    while IFS= read -r credential_line || [ -n "$credential_line" ]; do
+      if [ -z "$credential_line" ]; then continue; fi
+      if [[ "$credential_line" == *'<<'* && "${credential_line%%<<*}" != *'='* ]]; then
+        credential_name="${credential_line%%<<*}"
+        credential_delimiter="${credential_line#*<<}"
+        credential_value=''
+        credential_separator=''
+        credential_closed=false
+        while IFS= read -r credential_line || [ -n "$credential_line" ]; do
+          if [ "$credential_line" = "$credential_delimiter" ]; then
+            credential_closed=true
+            break
+          fi
+          credential_value+="${credential_separator}${credential_line}"
+          credential_separator=$'\n'
+        done
+        if [ "$credential_closed" != true ]; then
+          echo '::error::Unterminated upstream credential value'
+          exit 1
+        fi
+      elif [[ "$credential_line" == *'='* ]]; then
+        credential_name="${credential_line%%=*}"
+        credential_value="${credential_line#*=}"
+      else
+        continue
+      fi
       case "$credential_name" in
-        GOOGLE_APPLICATION_CREDENTIALS) export TC6726_SANDBOX_CREDENTIALS="$credential_value" ;;
-        GCP_OIDC_TOKEN_FILE|FULLSEND_GCP_OIDC_URL|FULLSEND_GCP_OIDC_AUTH_FILE) export "$credential_name=$credential_value" ;;
+        GOOGLE_APPLICATION_CREDENTIALS|GCP_OIDC_TOKEN_FILE|FULLSEND_GCP_OIDC_URL|FULLSEND_GCP_OIDC_AUTH_FILE) ;;
         *) echo '::error::Unexpected upstream credential output'; exit 1 ;;
       esac
+      # Escape multiline mask data so its lines cannot become workflow commands.
+      credential_mask="${credential_value//%/%25}"
+      credential_mask="${credential_mask//$'\r'/%0D}"
+      credential_mask="${credential_mask//$'\n'/%0A}"
+      printf '::add-mask::%s\n' "$credential_mask"
+      if [[ "$credential_value" == *$'\n'* ]]; then
+        while IFS= read -r credential_mask_line || [ -n "$credential_mask_line" ]; do
+          if [ -z "$credential_mask_line" ]; then continue; fi
+          credential_mask_line="${credential_mask_line//%/%25}"
+          credential_mask_line="${credential_mask_line//$'\r'/%0D}"
+          printf '::add-mask::%s\n' "$credential_mask_line"
+        done <<< "$credential_value"
+      fi
+      if [ "$credential_name" = GOOGLE_APPLICATION_CREDENTIALS ]; then
+        export TC6726_SANDBOX_CREDENTIALS="$credential_value"
+      else
+        export "$credential_name=$credential_value"
+      fi
     done < "$prepared_env"
     : "${TC6726_SANDBOX_CREDENTIALS:?Prepared sandbox ADC is required}"
     : "${GCP_OIDC_TOKEN_FILE:?Native OIDC mount is required}"

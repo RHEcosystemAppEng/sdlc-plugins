@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "Step 4 of plan.md explicitly lists inspecting at least 3 of the 4 files: (1) 'mcp__serena_backend__get_symbols_overview on modules/fundamental/src/advisory/service/advisory.rs' and 'find_symbol on AdvisoryService::fetch/list', (2) 'mcp__serena_backend__get_symbols_overview on modules/fundamental/src/advisory/endpoints/get.rs' under Convention conformance analysis, (3) 'mcp__serena_backend__get_symbols_overview on modules/fundamental/src/advisory/model/summary.rs' under Convention conformance analysis. Also 'search_for_pattern for AppError and .context()' covers common/src/error.rs indirectly."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": false,
+      "evidence": "The plan mentions modifying files outside the task's Files to Modify/Create scope. File-6 description (file-6-description.md line 28): 'If tests/api/mod.rs exists, add mod advisory_summary; to it' — tests/api/mod.rs is not in the task scope. Step 9 of plan.md: 'Check if docs/api.md needs updating for the new endpoint. If it documents all REST endpoints, add the new GET /api/v2/sbom/{id}/advisory-summary entry' — docs/api.md is not in the task scope. These are planned modifications to files not listed in Files to Modify or Files to Create."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "Plan.md Step 6 'Files to create (3)' lists: (5) 'modules/fundamental/src/advisory/model/severity_summary.rs — SeveritySummary response struct', (6) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs — GET handler', (7) 'tests/api/advisory_summary.rs — Integration tests'. Each has a dedicated file description (file-2-description.md, file-4-description.md, file-6-description.md) with detailed content."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "Plan.md Step 6 'Files to modify (3 actual modifications)' lists: (1) 'modules/fundamental/src/advisory/model/mod.rs', (2) 'modules/fundamental/src/advisory/service/advisory.rs', (3) 'modules/fundamental/src/advisory/endpoints/mod.rs'. Each has a dedicated file description (file-1-description.md, file-3-description.md, file-5-description.md)."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Plan.md Step 10 commit message: 'feat(advisory): add severity aggregation service and endpoint' (Conventional Commits format with type 'feat', scope 'advisory', description). Footer contains 'Implements TC-9201'."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "Plan.md Step 10 commit command explicitly includes: \"git commit --trailer='Assisted-by: Claude Code' -m ...\""
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "Plan.md Step 5: 'git checkout -b TC-9201' and 'Branch name TC-9201 derived from the Jira issue ID, based off target branch main'. Step 10: 'gh pr create --base main'. Step 1 parses 'Target Branch: main'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md 'Error Handling' section (lines 43-48): 'All handlers return Result<T, AppError> where AppError is from common/src/error.rs' and 'Error wrapping uses .context(\"descriptive message\") (anyhow-style)'. 'Module Structure' section (lines 38-41): 'Each domain module follows model/ + service/ + endpoints/ structure' with details on mod.rs re-exports and route registration patterns."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "Plan.md Step 1 parsed sections explicitly include: 'Target Branch: main'. Step 5 references 'based off target branch main'. Step 10 uses '--base main' in gh pr create."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "Plan.md Step 1.5 'Verify Description Integrity': Point 2 searches for 'comments whose body starts with [sdlc-workflow] Description digest:'. Point 3: 'If no digest comment found: log warning and proceed normally (backward compatibility -- tasks created before digest tracking was introduced have no digest comment): No description digest found -- skipping integrity check.'"
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": true,
+      "evidence": "Plan.md Step 7 (lines 184-188): 'To resolve the correct crate name, run: cargo metadata --no-deps --format-version 1 from the workspace root and find the package whose manifest or target source contains the modified files. Use that package's name field as <crate-name>. Do not derive it from the nearest Cargo.toml, which may be a virtual workspace manifest.' Also Step 9 (line 220): 'Run cargo metadata --no-deps --format-version 1 from the workspace root. Resolve the package name for each modified file.' Also file-6-description.md lines 30-37 repeat this pattern."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 1,
+    "total": 11,
+    "pass_rate": 0.909
+  }
+}

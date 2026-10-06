@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 1 states: 'Rationale for removing the parameter, not just the body logic: Per the implement-task skill's Step 9 \"Dead parameter detection\", after removing the filter logic from the body, the version_filter parameter has zero references in the function body. The correct fix is removal, not underscore-prefixing.' plan.md Step 9 states: 'After removing the VersionMatches filter logic from the list method body, the version_filter parameter becomes dead (zero references in the body).' parameter-cleanup.md states: 'Do not prefix the parameter with _ (i.e., do not rename to _version_filter). Underscore-prefixing silences the compiler warning but leaves dead code in the API surface.'"
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 1 explicitly shows: '1. Remove version_filter parameter from list method signature.' with before/after code blocks showing the signature changing from including 'version_filter: &str' to omitting it. parameter-cleanup.md Step 1 'Remove from function signature' also shows the same before/after signature change."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md Step 6 covers all 3 call sites: File 2 'modules/fundamental/src/sbom/endpoints/list.rs' (endpoint handler), 'Call site 3: modules/search/src/service/mod.rs' (search service), and File 3 'tests/api/sbom.rs' (tests). parameter-cleanup.md Step 2 table explicitly lists all 3: '1 | modules/fundamental/src/sbom/endpoints/list.rs | REST endpoint handler', '2 | modules/search/src/service/mod.rs | Search service', '3 | tests/api/sbom.rs | Integration tests'. Steps 3 provides update instructions for each."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md section 'Why Removal Over Underscore-Prefix' contains a comparison table: '_version_filter' approach has Effect 'Silences warning' and Problem 'All 3 callers still pass a useless argument; the dead parameter persists in the public API'. It also states: 'Underscore-prefixing is a compiler workaround, not a code quality fix. It leaves callers burdened with constructing and passing an argument that is ignored, and it obscures the fact that the functionality was intentionally removed.' Detection section states: 'Do not prefix the parameter with _ (i.e., do not rename to _version_filter). Underscore-prefixing silences the compiler warning but leaves dead code in the API surface, burdening all callers with an argument that serves no purpose.'"
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md Step 9 Dead parameter detection protocol includes '4. Re-run tests' and CI checks section lists 'cargo test -p trustify-fundamental' and 'cargo test -p trustify-search'. parameter-cleanup.md Step 5 'Re-run tests' states: 'After updating all call sites: cargo test -p trustify-fundamental / cargo test -p trustify-search' and 'Confirm that: All modified code compiles without warnings / All remaining tests pass'. Summary point 5: 'Re-run tests to confirm nothing broke (Step 9).'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -28,25 +28,45 @@ def run_js(script, data, env=None):
     """SYNTHETIC TEST DATA — double only GitHub API responses, execute real JS."""
     code = r'''
 const data = JSON.parse(process.argv[1]);
-const outputs = {}, statuses = [], errors = [], reviews = [];
+const outputs = {}, statuses = [], errors = [], reviews = [], updates = [];
+const storedReviews = data.existingReviews || [];
+const comments = [], storedComments = data.existingComments || [];
+let prReads = 0;
+const delays = [];
+const setTimeout = (fn,ms)=>{delays.push(ms);fn();};
 const require = name => {if (name !== 'fs') throw Error('unexpected module');
  return {existsSync:()=>Boolean(data.report),readFileSync:()=>JSON.stringify(data.report)};};
-const core = {setOutput: (k,v) => outputs[k]=v, setFailed: x => errors.push(x)};
+const core = {setOutput: (k,v) => outputs[k]=v, setFailed: x => errors.push(x), info:()=>{}};
 const context = {repo:{owner:'RHEcosystemAppEng',repo:'sdlc-plugins'},
  payload:{workflow_run:{head_sha:data.eventHead || 'a'.repeat(40),
- head_repository:{full_name:'mrizzi/sdlc-plugins'}}}, serverUrl:'https://github.com',runId:1};
+ head_repository:{full_name:'mrizzi/sdlc-plugins'}}}, serverUrl:'https://github.com',runId:1,runAttempt:1};
 const pr = {number:data.number || 299,state:'open',user:{login:'synthetic'},
  head:{sha:data.head || 'a'.repeat(40),ref:data.branch || 'verify-pr-fullsend',repo:{full_name:'mrizzi/sdlc-plugins'}},
  base:{sha:'b'.repeat(40),ref:data.base || 'main'},merge_commit_sha:'c'.repeat(40)};
-const github = {paginate:async (fn,args)=>fn(args),rest:{
- pulls:{list:async()=>[pr],get:async()=>({data:pr}),createReview:async r=>reviews.push(r),
+const github = {paginate:async (fn,args)=>{const response=await fn(args);return response.data || response;},rest:{
+ actions:{getWorkflowRun:async()=>{
+   if(data.apiError && data.apiError !== 'list') throw Error('API unavailable');
+   return {data:{id:1,run_number:1,workflow_id:10,run_attempt:data.attempt || 1,created_at:'2026-10-06T07:00:00Z'}};},
+ listWorkflowRuns:async()=> {if(data.apiError === 'list') throw Error('API unavailable');
+ return (data.runs || []).map(r=>({...r,
+   display_title:`Eval PR Run ${r.other_head?'b'.repeat(40):process.env.HEAD_SHA}`}));}},
+ pulls:{list:async()=>[pr],get:async()=>{
+ const revision=(data.revisions || [])[Math.min(prReads,(data.revisions || []).length-1)] || {};
+ prReads++;
+ return {data:{...pr,...revision}};},
+ listReviews:async()=>({data:storedReviews}),
+ updateReview:async r=>{updates.push(r);storedReviews.find(s=>s.id===r.review_id).body=r.body;},
+ createReview:async r=>{reviews.push(r);storedReviews.push({...r,id:storedReviews.length+1,user:{login:'github-actions[bot]'}});},
  listFiles:async()=> (data.paths||[]).map(filename=>({filename}))},
  git:{getCommit:async()=>({data:{parents:(data.parents||['b'.repeat(40),'a'.repeat(40)]).map(sha=>({sha}))}})},
+ issues:{listComments:async()=>({data:storedComments}),
+ updateComment:async r=>{updates.push(r);storedComments.find(s=>s.id===r.comment_id).body=r.body;},
+ createComment:async r=>{comments.push(r);storedComments.push({...r,id:storedComments.length+1,user:{login:'github-actions[bot]'}});}},
  repos:{getCollaboratorPermissionLevel:async()=>({data:{permission:data.permission||'read'}}),
  getContent:async()=>({data:{}}),createCommitStatus:async s=>statuses.push(s)}}};
-(async()=>{SCRIPT
-})().then(()=>process.stdout.write(JSON.stringify({outputs,statuses,errors,reviews})))
-.catch(e=>{process.stdout.write(JSON.stringify({outputs,statuses,errors:[...errors,e.message],reviews}));});
+(async()=>{for(let i=0;i<(data.repeat || 1);i++){SCRIPT
+}})().then(()=>process.stdout.write(JSON.stringify({outputs,statuses,errors,reviews,updates,comments,prReads,delays})))
+.catch(e=>{process.stdout.write(JSON.stringify({outputs,statuses,errors:[...errors,e.message],reviews,updates}));});
 '''.replace("SCRIPT", script)
     result = subprocess.run(["node", "-e", code, json.dumps(data)],
                             env=dict(os.environ, **(env or {})), capture_output=True, text=True, check=True)
@@ -94,7 +114,7 @@ def test_native_execution_uses_trusted_setup_and_readonly_github_permissions():
     jobs = workflow()["jobs"]
     assert "run-native-evals" in jobs, "Native CI is not implemented"
     native = jobs["run-native-evals"]
-    assert native["permissions"] == {"contents": "read", "id-token": "write"}
+    assert native["permissions"] == {"contents": "read", "pull-requests": "read", "id-token": "write"}
     assert native["needs"] == ["discover", "gate"]
     assert "needs.gate.result == 'success'" in native["if"]
     assert "needs.discover.outputs.native == 'true'" in native["if"]
@@ -207,6 +227,274 @@ def test_wrapper_rejects_different_reviewed_suite_before_credentials(tmp_path):
     assert result.returncode != 0
     assert "Reviewed native eval source changed" in result.stdout
     assert "WIF host ADC" not in result.stderr
+
+
+@pytest.mark.parametrize("job", ["discover", "run-evals", "report-status"])
+def test_all_publication_jobs_check_latest_run(job):
+    """Every status/review write requires a successful latest-run check."""
+    job_data = workflow()["jobs"][job]
+    guard = next(s for s in job_data["steps"] if s.get("id") == "publication")
+    assert guard["env"]["HEAD_SHA"] == "${{ github.event.workflow_run.head_sha }}"
+    assert workflow()["run-name"] == "Eval PR Run ${{ github.event.workflow_run.head_sha }}"
+    if "permissions" in job_data:
+        assert job_data["permissions"]["actions"] == "read"
+    for step in job_data["steps"]:
+        script = step.get("with", {}).get("script", "")
+        if any(api in script for api in ["createCommitStatus(", "createReview(", "updateReview(", "createComment(", "updateComment("]):
+            assert any(f"steps.{name}.outputs.latest == 'true'" in step["if"]
+                       for name in ["publication", "gate-publication"])
+
+
+@pytest.mark.parametrize("runs,attempt,api_error,expected", [
+    ([{"id": 1, "run_number": 1}], 1, False, "true"),
+    ([{"id": 1, "run_number": 1}, {"id": 2, "run_number": 2}], 1, False, "false"),
+    ([{"id": 1, "run_number": 1}, {"id": 2, "run_number": 2, "other_head": True}], 1, False, "true"),
+    ([], 1, False, "true"),
+    ([{"id": 1, "run_number": 1}], 2, False, "false"),
+    ([{"id": 1, "run_number": 1}], 1, True, "false"),
+])
+def test_latest_run_guard_refuses_superseded_or_unidentifiable_runs(runs, attempt, api_error, expected):
+    """Execute the real guard for newer runs, other heads, reruns and API failures."""
+    script = script_step("discover", "Check latest run before publishing")["with"]["script"]
+    result = run_js(script, {"runs": runs, "attempt": attempt, "apiError": api_error}, {"HEAD_SHA": "a" * 40})
+    assert result["outputs"].get("latest") == expected
+    assert bool(result["errors"]) == api_error
+
+
+def test_same_pr_head_cannot_publish_concurrently():
+    """The workflow lock covers both ordinary and native publication sequences."""
+    concurrency = workflow().get("concurrency", {})
+    assert concurrency.get("group") == "eval-pr-run-${{ github.event.workflow_run.head_sha }}"
+    assert concurrency["cancel-in-progress"] is False
+
+
+@pytest.mark.parametrize("native", [True])
+@pytest.mark.parametrize("existing_kind", ["none", "matching", "wrong-head", "human", "other-suite", "later-page"])
+def test_review_reruns_reuse_only_matching_bot_head_review(native, existing_kind):
+    """Native publishing creates once, updates reruns and leaves unrelated reviews alone."""
+    job, name = ("report-status", "Publish native result alongside ordinary review") if native else (
+        "run-evals", "Post eval results comment")
+    script = script_step(job, name)["with"]["script"]
+    marker = "## Native Fullsend Eval Results" if native else "## Eval Results"
+    existing = {"id": 888, "user": {"login": "github-actions[bot]"}, "commit_id": "a" * 40, "body": marker}
+    if existing_kind == "wrong-head": existing["commit_id"] = "b" * 40
+    elif existing_kind == "human": existing["user"]["login"] = "human"
+    elif existing_kind == "other-suite": existing["body"] = "## Eval Results" if native else "## Native Fullsend Eval Results"
+    stored = [] if existing_kind == "none" else [existing]
+    if existing_kind == "later-page":
+        stored = [{"id": i, "user": {"login": "human"}} for i in range(100)] + stored
+        assert "github.paginate(github.rest.pulls.listReviews" in script
+    source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
+              "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
+    report = {"source": source, "complete": True, "total": 21, "exit_code": 0,
+              "outcomes": {case: {f"assertion_{i}": True for i in range(1, n+1)}
+                           for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}.items()}}
+    result = run_js(script, {"report": report, "existingReviews": stored, "repeat": 2}, {
+        "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
+        "BASE_SHA": "b" * 40, "TRUSTED_SHA": "e" * 40, "EVAL_SOURCE_SHA": "f" * 40,
+        "NATIVE_RESULT": "success", "SKILLS_CSV": "triage-security"})
+    reuse = existing_kind in {"matching", "later-page"}
+    assert result["errors"] == []
+    assert len(result["reviews"]) == (0 if reuse else 1)
+    assert len(result["updates"]) == (2 if reuse else 1)
+    assert all(r["body"].startswith(marker) for r in result["reviews"] + result["updates"])
+    if reuse:
+        assert all(r["review_id"] == 888 for r in result["updates"])
+    else:
+        assert all(r["review_id"] != 888 for r in result["updates"])
+
+
+@pytest.mark.parametrize("revisions,parents,expected_sha,reads", [
+    ([{"merge_commit_sha": None}, {"merge_commit_sha": "c" * 40}], None, "c" * 40, 2),
+    ([{"merge_commit_sha": None}], None, None, 3),
+    ([{"merge_commit_sha": None}, {"merge_commit_sha": "c" * 40, "head": {"sha": "d" * 40}}], None, None, 2),
+    ([{"merge_commit_sha": None}, {"merge_commit_sha": "c" * 40}], ["b" * 40, "d" * 40], None, 2),
+    ([{"merge_commit_sha": "invalid"}], None, None, 1),
+])
+def test_merge_source_poll_is_bounded_and_preserves_revision_checks(revisions, parents, expected_sha, reads):
+    """Transient nulls recover; persistent nulls and changed revisions fail closed."""
+    # Given API mergeability responses and exact merge-parent evidence
+    data = {"revisions": revisions}
+    if parents is not None:
+        data["parents"] = parents
+    # When resolving the event-associated PR in the real workflow script
+    result = run_js(script_step("discover", "Resolve PR identity and check trust")["with"]["script"], data)
+    # Then retries are bounded and only the verified merge reaches downstream jobs
+    assert result["outputs"].get("merge_sha") == expected_sha
+    assert bool(result["errors"]) == (expected_sha is None)
+    assert result["prReads"] == reads
+    assert result["delays"] == [2000] * (reads - 1)
+    if revisions == [{"merge_commit_sha": None}]:
+        assert result["errors"] == ["PR identity/revision changed or merge source unavailable"]
+
+
+def test_native_artifact_download_failure_keeps_controlled_reporting():
+    """Missing native artifacts are nonfatal downloads while evidence still fails closed."""
+    # Given the reporting job's native artifact download
+    step = script_step("report-status", "Download safe native result")
+    # Then its existing guard is preserved and download errors can reach the reporter
+    assert step.get("continue-on-error") is True
+    assert step["if"] == "needs.discover.outputs.native == 'true' && needs.run-native-evals.result != 'skipped'"
+    assert step["with"] == {"name": "native-fullsend-result", "path": "native-report"}
+    # When no artifact is available, the real publisher emits controlled failure evidence
+    result = run_js(script_step("report-status", "Publish native result alongside ordinary review")["with"]["script"], {}, {
+        "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
+        "BASE_SHA": "b" * 40, "TRUSTED_SHA": "e" * 40, "EVAL_SOURCE_SHA": "f" * 40, "NATIVE_RESULT": "failure"})
+    assert result["errors"] == ["Native evidence incomplete, failed, or missing"]
+    assert "No safe native result was produced; native execution/approval failed." in result["reviews"][0]["body"]
+
+
+def run_credential_wrapper(tmp_path, output):
+    """SYNTHETIC TEST DATA — run the real wrapper with local credential/inference doubles."""
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    scripts = tmp_path / "upstream-fullsend/internal/scaffold/fullsend-repo/scripts"
+    scripts.mkdir(parents=True)
+    fixture = tmp_path / "prepared-output.txt"
+    fixture.write_text(output)
+    (scripts / "prepare-sandbox-credentials.sh").write_text(
+        '#!/bin/sh\n# SYNTHETIC TEST DATA — emit the test environment file\ncat "$TC6742_FIXTURE" >> "$GITHUB_ENV"\n')
+    doubles = {
+        "git": '#!/bin/sh\n# SYNTHETIC TEST DATA — immutable checkout identities\ncase "$2" in *upstream-fullsend) echo d5f36921ac754705619f38c637ef692873809fbc;; *) echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;; esac\n',
+        "jq": '#!/bin/sh\n# SYNTHETIC TEST DATA — host ADC type\necho external_account\n',
+        "python3.12": '#!/usr/bin/env python3\n# SYNTHETIC TEST DATA — capture parser output without inference\nimport json, os\nfrom pathlib import Path\nPath(os.environ["TC6742_CAPTURE"]).write_text(json.dumps({k: os.environ.get(k) for k in ["GOOGLE_APPLICATION_CREDENTIALS", "TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]}))\n',
+    }
+    for name, content in doubles.items():
+        path = tools / name
+        path.write_text(content)
+        path.chmod(0o755)
+    capture = tmp_path / "captured.json"
+    environment = dict(os.environ, GITHUB_WORKSPACE=str(tmp_path), RUNNER_TEMP=str(tmp_path),
+                       GOOGLE_APPLICATION_CREDENTIALS="synthetic-host-adc", ANTHROPIC_VERTEX_PROJECT_ID="synthetic",
+                       CLOUD_ML_REGION="global", TC6726_HEAD_SHA="a" * 40, NATIVE_EVAL_SOURCE_SHA="b" * 40,
+                       TC6742_FIXTURE=str(fixture), TC6742_CAPTURE=str(capture),
+                       PATH=str(tools) + os.pathsep + os.environ["PATH"])
+    for name in ["TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]:
+        environment.pop(name, None)
+    result = subprocess.run(["bash", str(ROOT / ".github/scripts/run-native-fullsend-evals.sh"), "run"],
+                            env=environment, capture_output=True, text=True)
+    return result, json.loads(capture.read_text()) if capture.exists() else None
+
+
+@pytest.mark.parametrize("heredoc", [False, True])
+def test_credential_parser_accepts_blank_lines_and_heredoc_values(tmp_path, heredoc):
+    """Valid environment syntax captures/masks required values and preserves host ADC."""
+    # Given synthetic credentials, with optional multiline output
+    expected = {"TC6726_SANDBOX_CREDENTIALS": "synthetic-sandbox-adc", "GCP_OIDC_TOKEN_FILE": "synthetic-token-file",
+                "FULLSEND_GCP_OIDC_URL": "https://synthetic.invalid/?audience=eval", "FULLSEND_GCP_OIDC_AUTH_FILE": "synthetic-auth-file"}
+    names = {"GOOGLE_APPLICATION_CREDENTIALS": "TC6726_SANDBOX_CREDENTIALS", **{k: k for k in expected if k != "TC6726_SANDBOX_CREDENTIALS"}}
+    if heredoc:
+        expected["FULLSEND_GCP_OIDC_AUTH_FILE"] = "synthetic-auth%file\nsynthetic-second-line"
+    output = "\n".join(f"{name}<<END\n{expected[key]}\nEND" if heredoc else f"{name}={expected[key]}"
+                       for name,key in names.items())
+    # When the actual wrapper parses blank lines and heredoc input
+    result, captured = run_credential_wrapper(tmp_path, "\n" + output + "\n\n")
+    # Then the scoring process gets parsed values and the original host ADC
+    assert result.returncode == 0, result.stderr
+    assert captured == {"GOOGLE_APPLICATION_CREDENTIALS": "synthetic-host-adc", **expected, "TC6742_UNEXPECTED": None}
+    for value in expected.values():
+        escaped = value.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+        assert f"::add-mask::{escaped}" in result.stdout
+
+
+@pytest.mark.parametrize("record", [
+    "TC6742_UNEXPECTED=synthetic-unknown-value\n",
+    "TC6742_UNEXPECTED<<END\nGOOGLE_APPLICATION_CREDENTIALS=synthetic-unknown-value\nEND\n",
+])
+def test_credential_parser_rejects_unknown_names_without_exposing_values(tmp_path, record):
+    """Unknown names fail before inference with a diagnostic that exposes no value."""
+    # Given valid known outputs followed by an unrecognized name
+    output = "GOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\nGCP_OIDC_TOKEN_FILE=synthetic-token\nFULLSEND_GCP_OIDC_URL=https://synthetic.invalid/\nFULLSEND_GCP_OIDC_AUTH_FILE=synthetic-auth\n" + record
+    # When parsing a single-line or complete heredoc record
+    result, captured = run_credential_wrapper(tmp_path, output)
+    # Then the allowlist fails closed before the native runner is invoked
+    assert result.returncode != 0
+    assert "::error::Unexpected upstream credential output" in result.stdout
+    assert "synthetic-unknown-value" not in result.stdout + result.stderr
+    assert captured is None
+
+
+@pytest.mark.parametrize("output,error", [
+    ("\nGOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\n", "Native OIDC mount is required"),
+    ("GOOGLE_APPLICATION_CREDENTIALS<<END\nsynthetic-adc\n", "Unterminated upstream credential value"),
+])
+def test_credential_parser_rejects_missing_or_unterminated_required_data(tmp_path, output, error):
+    """Missing required fields and incomplete heredocs fail before native inference."""
+    # Given incomplete synthetic credential output
+    # When the actual wrapper processes it
+    result, captured = run_credential_wrapper(tmp_path, output)
+    # Then required guards prevent execution without complete credentials
+    assert result.returncode != 0
+    assert error in result.stdout + result.stderr
+    assert captured is None
+
+
+@pytest.mark.parametrize("api_error,newer,expected", [("get", False, "failure"), ("list", False, "failure"), (False, True, None)])
+def test_guard_errors_publish_terminal_failure_but_superseded_runs_skip(api_error, newer, expected):
+    """API guard errors conclude the check; observed newer runs still suppress writes."""
+    # Given successful eval jobs and a guard error or an observed newer run
+    runs = [{"id": 1, "run_number": 1}]
+    if newer:
+        runs.append({"id": 2, "run_number": 2})
+    guard = run_js(script_step("report-status", "Check latest run before publishing")["with"]["script"],
+                   {"apiError": api_error, "runs": runs}, {"HEAD_SHA": "a" * 40})
+    # When evaluating the real final status step condition
+    step = script_step("report-status", "Set final commit status")
+    condition = step["if"].replace("always()", "true")
+    for key in ["latest", "error"]:
+        condition = condition.replace(f"steps.publication.outputs.{key}", json.dumps(guard["outputs"].get(key, "")))
+    allowed = subprocess.run(["node", "-e", f"process.stdout.write(JSON.stringify(Boolean({condition})));"],
+                             capture_output=True, text=True, check=True)
+    env = {"DISCOVER_RESULT": "success", "EVALS_RESULT": "success", "GATE_RESULT": "skipped",
+           "NATIVE_REQUESTED": "false", "SKILLS_CSV": "triage-security", "PUBLICATION_GUARD_ERROR": guard["outputs"].get("error", "")}
+    result = run_js(step["with"]["script"], {}, env) if json.loads(allowed.stdout) else {"statuses": []}
+    # Then API errors terminate with failure, while supersession posts no status
+    assert [s["state"] for s in result["statuses"]] == ([] if expected is None else [expected])
+    if api_error:
+        assert step["env"]["PUBLICATION_GUARD_ERROR"] == "${{ steps.publication.outputs.error }}"
+
+
+@pytest.mark.parametrize("runs,expected", [
+    ([], True), ([{"id": 0, "run_number": 0}], True),
+    ([{"id": 1, "run_number": 1}], True), ([{"id": 2, "run_number": 2}], False),
+])
+def test_unindexed_current_run_posts_pending_and_approval_statuses(runs, expected):
+    """Only an observed newer run suppresses current pending/approval publication."""
+    # Given a lagging or newer Actions run list
+    guard = run_js(script_step("discover", "Check latest run before publishing")["with"]["script"],
+                   {"runs": runs}, {"HEAD_SHA": "a" * 40})
+    # When evaluating each real pending-status condition and script
+    states = []
+    for name in ["Set pending commit status", "Update status for approval gate"]:
+        step = script_step("discover", name)
+        condition = step["if"]
+        for key,value in {"steps.publication.outputs.latest": guard["outputs"].get("latest", ""),
+                          "steps.gate-publication.outputs.latest": guard["outputs"].get("latest", ""),
+                          "steps.pr.outputs.trusted": "false", "steps.pr.outputs.pr_number": "299"}.items():
+            condition = condition.replace(key, json.dumps(value))
+        allowed = subprocess.run(["node", "-e", f"process.stdout.write(JSON.stringify(Boolean({condition})));"],
+                                 capture_output=True, text=True, check=True)
+        if json.loads(allowed.stdout):
+            states.extend(s["state"] for s in run_js(step["with"]["script"], {})["statuses"])
+    # Then both statuses publish unless strictly newer execution is observed
+    assert guard["errors"] == []
+    assert states == (["pending", "pending"] if expected else [])
+
+
+def test_multiline_credentials_register_individual_nonempty_masks(tmp_path):
+    """Each nonempty credential line receives an escaped explicit mask directive."""
+    # Given multiline synthetic credentials with an empty line and command-like data
+    output = "GOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\nGCP_OIDC_TOKEN_FILE=synthetic-token\nFULLSEND_GCP_OIDC_URL=https://synthetic.invalid/\nFULLSEND_GCP_OIDC_AUTH_FILE<<END\nsynthetic%first\n\n::warning::synthetic-second\nEND\n"
+    # When the real wrapper prepares credential masks
+    result, captured = run_credential_wrapper(tmp_path, output)
+    # Then each line is registered without emitting a second workflow command
+    assert result.returncode == 0, result.stderr
+    assert captured["FULLSEND_GCP_OIDC_AUTH_FILE"] == "synthetic%first\n\n::warning::synthetic-second"
+    lines = result.stdout.splitlines()
+    assert "::add-mask::synthetic%25first" in lines
+    assert "::add-mask::::warning::synthetic-second" in lines
+    assert "::add-mask::" not in lines
+    assert "::warning::synthetic-second" not in lines
 
 
 def test_host_validator_dependency_is_in_isolated_lock():
@@ -373,3 +661,55 @@ def test_native_plugin_symlinks_are_rejected_before_host_launch(tmp_path, monkey
         adapter.run_case(ROOT, workspace, workspace / "output", "valid", "unused", "high",
                          Path("/not-launched"), Path("/not-launched"), plugin_root=plugin)
 
+
+
+@pytest.mark.parametrize("existing_kind", ["none", "matching", "older-head", "human", "other-suite", "later-page"])
+def test_ordinary_reruns_reuse_only_matching_bot_sticky_comment(existing_kind):
+    """Ordinary reports reuse their bot comment across heads without duplicating reruns."""
+    # Given a prior bot report, unrelated comment, or no report
+    marker = "<!-- eval-pr-report -->"
+    existing = {"id": 888, "user": {"login": "github-actions[bot]"}, "body": marker}
+    if existing_kind == "older-head": existing["body"] += "\nSource head: " + "b" * 40
+    elif existing_kind == "human": existing["user"]["login"] = "human"
+    elif existing_kind == "other-suite": existing["body"] = "## Native Fullsend Eval Results"
+    stored = [] if existing_kind == "none" else [existing]
+    script = script_step("run-evals", "Post eval results comment")["with"]["script"]
+    if existing_kind == "later-page":
+        stored = [{"id": i, "user": {"login": "human"}} for i in range(100)] + stored
+        assert "github.paginate(github.rest.issues.listComments" in script
+    # When the actual publisher runs twice for the current source
+    result = run_js(script, {"existingComments": stored, "repeat": 2}, {
+        "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
+        "SKILLS_CSV": "triage-security"})
+    # Then only the marked bot comment is reused and its source is refreshed
+    reuse = existing_kind in {"matching", "older-head", "later-page"}
+    assert result["errors"] == []
+    assert len(result["comments"]) == (0 if reuse else 1)
+    assert len(result["updates"]) == (2 if reuse else 1)
+    assert all(r["body"].startswith(marker) and "a" * 40 in r["body"]
+               for r in result["comments"] + result["updates"])
+    assert all((r["comment_id"] == 888) is reuse for r in result["updates"])
+
+
+def test_activation_preserves_rendering_and_trusted_main_suite_selection():
+    """PR299 keeps deterministic rendering and selects suite code only from trusted main."""
+    jobs = workflow()["jobs"]
+    assert workflow()["env"]["NATIVE_EVAL_SOURCE_SHA"] == "${{ github.sha }}"
+    render = script_step("run-evals", "Render eval results")["run"]
+    assert "aggregate_benchmark.py" in render and "render_summary.py" in render
+    assert jobs["run-evals"]["permissions"]["issues"] == "write"
+
+
+def test_older_head_cannot_overwrite_current_sticky_report():
+    """A completed old-head run cannot replace the shared report for a newer PR head."""
+    # Given an existing current bot report and an obsolete publishing run
+    existing = {"id": 888, "user": {"login": "github-actions[bot]"},
+                "body": "<!-- eval-pr-report -->\nSource head: " + "d" * 40}
+    # When the actual publisher rechecks the PR head immediately before writing
+    result = run_js(script_step("run-evals", "Post eval results comment")["with"]["script"],
+                    {"head": "d" * 40, "existingComments": [existing]},
+                    {"PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
+                     "SKILLS_CSV": "triage-security"})
+    # Then the current report is neither updated nor duplicated
+    assert result["errors"] == []
+    assert result["updates"] == result["comments"] == []

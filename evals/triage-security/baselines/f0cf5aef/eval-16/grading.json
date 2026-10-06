@@ -1,0 +1,45 @@
+{
+  "assertion_results": [
+    {
+      "text": "The third JQL query uses labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, ON_QA) to find triaged CVEs still in a pre-QA state",
+      "passed": true,
+      "evidence": "ready-for-qa.md line 7 shows JQL: 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, 'ON_QA') ORDER BY created DESC' — matches the required labels and status filters exactly."
+    },
+    {
+      "text": "For each query 3 result, the skill checks issuelinks for linked Tasks with link type Depend and fetches each linked Task's status",
+      "passed": true,
+      "evidence": "ready-for-qa.md documents all 3 candidates with 'Linked remediation Tasks (Depend)' sections: TC-9020 lists TC-9021 (Done) and TC-9022 (Closed); TC-9023 lists TC-9024 (Done) and TC-9025 (In Progress); TC-9026 lists (none). Each linked task's status was fetched and reported."
+    },
+    {
+      "text": "TC-9020 is included in Ready for QA because ALL linked remediation Tasks are completed (TC-9021 Done, TC-9022 Closed)",
+      "passed": true,
+      "evidence": "discovery-listing.md line 39 shows TC-9020 in the Ready for QA table with 'TC-9021 (Done), TC-9022 (Closed)'. ready-for-qa.md line 22 states 'ALL linked remediation Tasks are in a completed state (Done or Closed)' with result QUALIFIED."
+    },
+    {
+      "text": "TC-9023 is excluded from Ready for QA because TC-9025 is still In Progress — remediation is not complete",
+      "passed": true,
+      "evidence": "discovery-listing.md line 45: 'TC-9023 — Excluded: remediation still in progress (TC-9025 is In Progress)'. ready-for-qa.md lines 33-35 confirm TC-9025 is In Progress and result is EXCLUDED."
+    },
+    {
+      "text": "TC-9026 is excluded from Ready for QA because it has no linked Tasks with type Depend — no remediation to verify",
+      "passed": true,
+      "evidence": "discovery-listing.md line 46: 'TC-9026 — Excluded: no linked Tasks with type \"Depend\" (no remediation to verify)'. ready-for-qa.md lines 43-44: 'No linked Tasks with link type \"Depend\" found. Without remediation task links, there is nothing to verify as completed.' Result: EXCLUDED."
+    },
+    {
+      "text": "The Ready for QA section includes a Remediation Tasks column showing the linked tasks and their statuses",
+      "passed": true,
+      "evidence": "discovery-listing.md lines 37-39 show the Ready for QA table with a 'Remediation Tasks' column containing 'TC-9021 (Done), TC-9022 (Closed)' for TC-9020."
+    },
+    {
+      "text": "For each Ready for QA issue, the output suggests transitioning to ON_QA",
+      "passed": true,
+      "evidence": "discovery-listing.md line 41: '> Consider transitioning TC-9020 to ON_QA.' ready-for-qa.md line 23 also states 'Consider transitioning to ON_QA.' TC-9020 is the only Ready for QA issue and it has this suggestion."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 0,
+    "total": 7,
+    "pass_rate": 1.0
+  }
+}

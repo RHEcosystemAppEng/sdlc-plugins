@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md lines 9-14 explicitly name both functions in 'modules/ingestor/src/graph/sbom/mod.rs' and specify changing from 'fn' to 'pub fn'. Lines 67-68 state: 'The describing_packages() and suppliers() functions in modules/ingestor/src/graph/sbom/mod.rs are currently private (fn, not pub fn). The implementation makes them public (pub fn).' reuse-decision.md lines 9-10 also list both functions with their file path and note 'Both are currently private (no pub modifier)'."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md lines 56-61 state: 'migration/Cargo.toml: No changes needed. The dependency on trustify-module-ingestor already exists' and quotes the exact toml dependency entry. reuse-decision.md lines 16-23 explicitly verify: 'Before deciding, the dependency relationship must be verified. The task description states that migration/Cargo.toml already contains: trustify-module-ingestor = { path = \"../modules/ingestor\" }. This confirms that the migration crate already depends on the trustify-module-ingestor crate. No new dependency needs to be introduced.'"
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md line 5: 'Make the functions public (pub fn) and import them in the migration crate. Do NOT duplicate or inline the function bodies.' Lines 28-31 state: 'Check the dependency relationship: Does the target package (migration) already depend on the source package (ingestor)? Yes... If the dependency already exists: Make the function public (pub, export, etc.) and import it rather than duplicating the code.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md line 5 states 'Do NOT duplicate or inline the function bodies.' The 'Why NOT Duplicate' section (lines 37-41) provides three explicit reasons against duplication. Line 69 states 'No function bodies are copied.' plan.md line 67 confirms the approach is to make functions public rather than duplicate. No part of either output proposes copying or inlining function bodies."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md line 31: 'This follows the DRY principle and ensures future bug fixes apply in one place.' Line 37: 'Duplicating the function bodies into the migration crate would violate the DRY (Don't Repeat Yourself) principle.' Lines 39-40: 'Bug fixes would need to be applied in two places. If a bug is found in describing_packages() or suppliers()... the fix would need to be applied both in the ingestor's copy and the migration's copy.' plan.md line 71 also states: 'The DRY principle ensures future bug fixes to the extraction logic apply in one place.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
