@@ -466,3 +466,19 @@ def test_unindexed_current_run_posts_pending_and_approval_statuses(runs, expecte
     # Then both statuses publish unless strictly newer execution is observed
     assert guard["errors"] == []
     assert states == (["pending", "pending"] if expected else [])
+
+
+def test_multiline_credentials_register_individual_nonempty_masks(tmp_path):
+    """Each nonempty credential line receives an escaped explicit mask directive."""
+    # Given multiline synthetic credentials with an empty line and command-like data
+    output = "GOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\nGCP_OIDC_TOKEN_FILE=synthetic-token\nFULLSEND_GCP_OIDC_URL=https://synthetic.invalid/\nFULLSEND_GCP_OIDC_AUTH_FILE<<END\nsynthetic%first\n\n::warning::synthetic-second\nEND\n"
+    # When the real wrapper prepares credential masks
+    result, captured = run_credential_wrapper(tmp_path, output)
+    # Then each line is registered without emitting a second workflow command
+    assert result.returncode == 0, result.stderr
+    assert captured["FULLSEND_GCP_OIDC_AUTH_FILE"] == "synthetic%first\n\n::warning::synthetic-second"
+    lines = result.stdout.splitlines()
+    assert "::add-mask::synthetic%25first" in lines
+    assert "::add-mask::::warning::synthetic-second" in lines
+    assert "::add-mask::" not in lines
+    assert "::warning::synthetic-second" not in lines
