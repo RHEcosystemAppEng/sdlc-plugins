@@ -24,7 +24,8 @@ def run_js(script, data, env=None):
     """SYNTHETIC TEST DATA — double only GitHub API responses, execute real JS."""
     code = r'''
 const data = JSON.parse(process.argv[1]);
-const outputs = {}, statuses = [], errors = [], reviews = [];
+const outputs = {}, statuses = [], errors = [], reviews = [], updates = [];
+const storedReviews = data.existingReviews || [];
 const require = name => {if (name !== 'fs') throw Error('unexpected module');
  return {existsSync:()=>Boolean(data.report),readFileSync:()=>JSON.stringify(data.report)};};
 const core = {setOutput: (k,v) => outputs[k]=v, setFailed: x => errors.push(x), info:()=>{}};
@@ -34,20 +35,23 @@ const context = {repo:{owner:'RHEcosystemAppEng',repo:'sdlc-plugins'},
 const pr = {number:data.number || 299,state:'open',user:{login:'synthetic'},
  head:{sha:data.head || 'a'.repeat(40),ref:data.branch || 'verify-pr-fullsend',repo:{full_name:'mrizzi/sdlc-plugins'}},
  base:{sha:'b'.repeat(40),ref:data.base || 'main'},merge_commit_sha:'c'.repeat(40)};
-const github = {paginate:async (fn,args)=>fn(args),rest:{
+const github = {paginate:async (fn,args)=>{const response=await fn(args);return response.data || response;},rest:{
  actions:{getWorkflowRun:async()=>{
    if(data.apiError) throw Error('API unavailable');
    return {data:{id:1,workflow_id:10,run_attempt:data.attempt || 1,created_at:'2026-10-06T07:00:00Z'}};},
  listWorkflowRuns:async()=> (data.runs || []).map(r=>({...r,
    display_title:`Eval PR Run ${r.other_head?'b'.repeat(40):process.env.HEAD_SHA}`}))},
- pulls:{list:async()=>[pr],get:async()=>({data:pr}),createReview:async r=>reviews.push(r),
+ pulls:{list:async()=>[pr],get:async()=>({data:pr}),
+ listReviews:async()=>({data:storedReviews}),
+ updateReview:async r=>{updates.push(r);storedReviews.find(s=>s.id===r.review_id).body=r.body;},
+ createReview:async r=>{reviews.push(r);storedReviews.push({...r,id:storedReviews.length+1,user:{login:'github-actions[bot]'}});},
  listFiles:async()=> (data.paths||[]).map(filename=>({filename}))},
  git:{getCommit:async()=>({data:{parents:(data.parents||['b'.repeat(40),'a'.repeat(40)]).map(sha=>({sha}))}})},
  repos:{getCollaboratorPermissionLevel:async()=>({data:{permission:data.permission||'read'}}),
  getContent:async()=>({data:{}}),createCommitStatus:async s=>statuses.push(s)}}};
-(async()=>{SCRIPT
-})().then(()=>process.stdout.write(JSON.stringify({outputs,statuses,errors,reviews})))
-.catch(e=>{process.stdout.write(JSON.stringify({outputs,statuses,errors:[...errors,e.message],reviews}));});
+(async()=>{for(let i=0;i<(data.repeat || 1);i++){SCRIPT
+}})().then(()=>process.stdout.write(JSON.stringify({outputs,statuses,errors,reviews,updates})))
+.catch(e=>{process.stdout.write(JSON.stringify({outputs,statuses,errors:[...errors,e.message],reviews,updates}));});
 '''.replace("SCRIPT", script)
     result = subprocess.run(["node", "-e", code, json.dumps(data)],
                             env=dict(os.environ, **(env or {})), capture_output=True, text=True, check=True)
@@ -240,3 +244,46 @@ def test_latest_run_guard_refuses_superseded_or_unidentifiable_runs(runs, attemp
     result = run_js(script, {"runs": runs, "attempt": attempt, "apiError": api_error}, {"HEAD_SHA": "a" * 40})
     assert result["outputs"].get("latest") == expected
     assert bool(result["errors"]) == api_error
+
+
+def test_same_pr_head_cannot_publish_concurrently():
+    """The workflow lock covers both ordinary and native publication sequences."""
+    concurrency = workflow().get("concurrency", {})
+    assert concurrency.get("group") == "eval-pr-run-${{ github.event.workflow_run.head_sha }}"
+    assert concurrency["cancel-in-progress"] is False
+
+
+@pytest.mark.parametrize("native", [True, False])
+@pytest.mark.parametrize("existing_kind", ["none", "matching", "wrong-head", "human", "other-suite", "later-page"])
+def test_review_reruns_reuse_only_matching_bot_head_review(native, existing_kind):
+    """Both publishers create once, update reruns and leave unrelated reviews alone."""
+    job, name = ("report-status", "Publish native result alongside ordinary review") if native else (
+        "run-evals", "Post eval results review")
+    script = script_step(job, name)["with"]["script"]
+    marker = "## Native Fullsend Eval Results" if native else "## Eval Results"
+    existing = {"id": 888, "user": {"login": "github-actions[bot]"}, "commit_id": "a" * 40, "body": marker}
+    if existing_kind == "wrong-head": existing["commit_id"] = "b" * 40
+    elif existing_kind == "human": existing["user"]["login"] = "human"
+    elif existing_kind == "other-suite": existing["body"] = "## Eval Results" if native else "## Native Fullsend Eval Results"
+    stored = [] if existing_kind == "none" else [existing]
+    if existing_kind == "later-page":
+        stored = [{"id": i, "user": {"login": "human"}} for i in range(100)] + stored
+        assert "github.paginate(github.rest.pulls.listReviews" in script
+    source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
+              "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
+    report = {"source": source, "complete": True, "total": 21, "exit_code": 0,
+              "outcomes": {case: {f"assertion_{i}": True for i in range(1, n+1)}
+                           for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}.items()}}
+    result = run_js(script, {"report": report, "existingReviews": stored, "repeat": 2}, {
+        "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
+        "BASE_SHA": "b" * 40, "TRUSTED_SHA": "e" * 40, "EVAL_SOURCE_SHA": "f" * 40,
+        "NATIVE_RESULT": "success", "SKILLS_CSV": "triage-security"})
+    reuse = existing_kind in {"matching", "later-page"}
+    assert result["errors"] == []
+    assert len(result["reviews"]) == (0 if reuse else 1)
+    assert len(result["updates"]) == (2 if reuse else 1)
+    assert all(r["body"].startswith(marker) for r in result["reviews"] + result["updates"])
+    if reuse:
+        assert all(r["review_id"] == 888 for r in result["updates"])
+    else:
+        assert all(r["review_id"] != 888 for r in result["updates"])

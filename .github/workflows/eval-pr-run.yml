@@ -25,6 +25,11 @@ on:
     workflows: ["Eval PR"]
     types: [completed]
 
+# Serialize the complete ordinary/native publication sequence for one PR head.
+concurrency:
+  group: eval-pr-run-${{ github.event.workflow_run.head_sha }}
+  cancel-in-progress: false
+
 permissions:
   contents: read
   pull-requests: write
@@ -406,7 +411,7 @@ jobs:
               }
             }
 
-            const { data: reviews } = await github.rest.pulls.listReviews({
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
               owner: context.repo.owner,
               repo: context.repo.repo,
               pull_number: prNumber
@@ -595,8 +600,20 @@ jobs:
             }
             // Only constructed scalar/count data enters the review. No arbitrary
             // rationale, transcript, credential path or PR-controlled Markdown.
-            await github.rest.pulls.createReview({...context.repo, pull_number: expected.pr_number,
-              commit_id: expected.head_sha, event: 'COMMENT', body});
+            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+              ...context.repo, pull_number: expected.pr_number
+            });
+            const marker = '## Native Fullsend Eval Results';
+            const existing = reviews.find(r =>
+              r.user?.login === 'github-actions[bot]' && r.commit_id === expected.head_sha && r.body?.startsWith(marker)
+            );
+            if (existing) {
+              await github.rest.pulls.updateReview({...context.repo, pull_number: expected.pr_number,
+                review_id: existing.id, body});
+            } else {
+              await github.rest.pulls.createReview({...context.repo, pull_number: expected.pr_number,
+                commit_id: expected.head_sha, event: 'COMMENT', body});
+            }
             if (!valid) core.setFailed('Native evidence incomplete, failed, or missing');
 
       - name: Set final commit status
