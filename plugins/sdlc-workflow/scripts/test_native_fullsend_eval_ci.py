@@ -26,6 +26,9 @@ def run_js(script, data, env=None):
 const data = JSON.parse(process.argv[1]);
 const outputs = {}, statuses = [], errors = [], reviews = [], updates = [];
 const storedReviews = data.existingReviews || [];
+let prReads = 0;
+const delays = [];
+const setTimeout = (fn,ms)=>{delays.push(ms);fn();};
 const require = name => {if (name !== 'fs') throw Error('unexpected module');
  return {existsSync:()=>Boolean(data.report),readFileSync:()=>JSON.stringify(data.report)};};
 const core = {setOutput: (k,v) => outputs[k]=v, setFailed: x => errors.push(x), info:()=>{}};
@@ -41,7 +44,10 @@ const github = {paginate:async (fn,args)=>{const response=await fn(args);return 
    return {data:{id:1,workflow_id:10,run_attempt:data.attempt || 1,created_at:'2026-10-06T07:00:00Z'}};},
  listWorkflowRuns:async()=> (data.runs || []).map(r=>({...r,
    display_title:`Eval PR Run ${r.other_head?'b'.repeat(40):process.env.HEAD_SHA}`}))},
- pulls:{list:async()=>[pr],get:async()=>({data:pr}),
+ pulls:{list:async()=>[pr],get:async()=>{
+ const revision=(data.revisions || [])[Math.min(prReads,(data.revisions || []).length-1)] || {};
+ prReads++;
+ return {data:{...pr,...revision}};},
  listReviews:async()=>({data:storedReviews}),
  updateReview:async r=>{updates.push(r);storedReviews.find(s=>s.id===r.review_id).body=r.body;},
  createReview:async r=>{reviews.push(r);storedReviews.push({...r,id:storedReviews.length+1,user:{login:'github-actions[bot]'}});},
@@ -50,7 +56,7 @@ const github = {paginate:async (fn,args)=>{const response=await fn(args);return 
  repos:{getCollaboratorPermissionLevel:async()=>({data:{permission:data.permission||'read'}}),
  getContent:async()=>({data:{}}),createCommitStatus:async s=>statuses.push(s)}}};
 (async()=>{for(let i=0;i<(data.repeat || 1);i++){SCRIPT
-}})().then(()=>process.stdout.write(JSON.stringify({outputs,statuses,errors,reviews,updates})))
+}})().then(()=>process.stdout.write(JSON.stringify({outputs,statuses,errors,reviews,updates,prReads,delays})))
 .catch(e=>{process.stdout.write(JSON.stringify({outputs,statuses,errors:[...errors,e.message],reviews,updates}));});
 '''.replace("SCRIPT", script)
     result = subprocess.run(["node", "-e", code, json.dumps(data)],
@@ -287,3 +293,27 @@ def test_review_reruns_reuse_only_matching_bot_head_review(native, existing_kind
         assert all(r["review_id"] == 888 for r in result["updates"])
     else:
         assert all(r["review_id"] != 888 for r in result["updates"])
+
+
+@pytest.mark.parametrize("revisions,parents,expected_sha,reads", [
+    ([{"merge_commit_sha": None}, {"merge_commit_sha": "c" * 40}], None, "c" * 40, 2),
+    ([{"merge_commit_sha": None}], None, None, 3),
+    ([{"merge_commit_sha": None}, {"merge_commit_sha": "c" * 40, "head": {"sha": "d" * 40}}], None, None, 2),
+    ([{"merge_commit_sha": None}, {"merge_commit_sha": "c" * 40}], ["b" * 40, "d" * 40], None, 2),
+    ([{"merge_commit_sha": "invalid"}], None, None, 1),
+])
+def test_merge_source_poll_is_bounded_and_preserves_revision_checks(revisions, parents, expected_sha, reads):
+    """Transient nulls recover; persistent nulls and changed revisions fail closed."""
+    # Given API mergeability responses and exact merge-parent evidence
+    data = {"revisions": revisions}
+    if parents is not None:
+        data["parents"] = parents
+    # When resolving the event-associated PR in the real workflow script
+    result = run_js(script_step("discover", "Resolve PR identity and check trust")["with"]["script"], data)
+    # Then retries are bounded and only the verified merge reaches downstream jobs
+    assert result["outputs"].get("merge_sha") == expected_sha
+    assert bool(result["errors"]) == (expected_sha is None)
+    assert result["prReads"] == reads
+    assert result["delays"] == [2000] * (reads - 1)
+    if revisions == [{"merge_commit_sha": None}]:
+        assert result["errors"] == ["PR identity/revision changed or merge source unavailable"]
