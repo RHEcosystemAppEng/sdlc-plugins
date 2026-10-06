@@ -317,3 +317,19 @@ def test_merge_source_poll_is_bounded_and_preserves_revision_checks(revisions, p
     assert result["delays"] == [2000] * (reads - 1)
     if revisions == [{"merge_commit_sha": None}]:
         assert result["errors"] == ["PR identity/revision changed or merge source unavailable"]
+
+
+def test_native_artifact_download_failure_keeps_controlled_reporting():
+    """Missing native artifacts are nonfatal downloads while evidence still fails closed."""
+    # Given the reporting job's native artifact download
+    step = script_step("report-status", "Download safe native result")
+    # Then its existing guard is preserved and download errors can reach the reporter
+    assert step.get("continue-on-error") is True
+    assert step["if"] == "needs.discover.outputs.native == 'true' && needs.run-native-evals.result != 'skipped'"
+    assert step["with"] == {"name": "native-fullsend-result", "path": "native-report"}
+    # When no artifact is available, the real publisher emits controlled failure evidence
+    result = run_js(script_step("report-status", "Publish native result alongside ordinary review")["with"]["script"], {}, {
+        "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
+        "BASE_SHA": "b" * 40, "TRUSTED_SHA": "e" * 40, "EVAL_SOURCE_SHA": "f" * 40, "NATIVE_RESULT": "failure"})
+    assert result["errors"] == ["Native evidence incomplete, failed, or missing"]
+    assert "No safe native result was produced; native execution/approval failed." in result["reviews"][0]["body"]
