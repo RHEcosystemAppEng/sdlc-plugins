@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md lines 86-102: Section 'Assertion Style on Collection Data' states 'Sibling pattern: Existence-only checks using `.filter().any()` and `.filter().count() > 0`.' and provides code examples explicitly sourced from 'tests/api/advisory.rs' (the .filter().any() pattern) and 'tests/api/sbom.rs' (the .filter().count() pattern). Both patterns and both source files are named."
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md lines 104-119: Section titled '**CONFLICT: Assertion Style**' explicitly states the sibling patterns 'check only for existence, not specific values. This conflicts with the implement-task skill's Step 7 guidance' and quotes the skill guidance: 'Prefer value-based assertions over length-only checks'. The conflict is flagged with bold formatting and a dedicated heading."
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md line 117: 'Resolution: SKILL GUIDANCE TAKES PRECEDENCE over sibling patterns.' Line 118-119: 'The new tests will use value-based assertions (`assert_eq!` on specific license names, exact counts, and specific list contents) rather than the `.any()` / `.count() > 0` patterns found in siblings.' The summary table (line 157) reinforces: 'OVERRIDE -- use skill guidance (value-based)'. The precedence relationship is clearly established, with sibling conventions treated as the default that gets overridden by explicit skill instructions."
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md uses value-based assertions throughout all four tests: Test 1 (lines 40-58) uses assert_eq!(body.permissive.count, 2), assert!(body.permissive.licenses.contains(&\"MIT\".to_string())), assert_eq!(body.copyleft.licenses[0], \"GPL-3.0\"), assert_eq!(body.unknown.licenses[0], \"LicenseRef-Custom\"). Test 3 (lines 100-114) uses assert_eq!(body.permissive.count, 0) and assert!(body.permissive.licenses.is_empty()). Test 4 (lines 136-152) uses assert_eq!(body.permissive.count, 2) with specific license name checks. No .any() or .count() > 0 patterns appear in any test assertions."
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md lines 174-181 section 'Conventions Followed from Siblings (Non-Conflicting)' explicitly lists: test file location (tests/api/package_license.rs following tests/api/<domain>.rs pattern), test naming (test_<action>_<scenario> format), test attribute (#[tokio::test]), HTTP status checks (assert_eq with StatusCode), database setup (real PostgreSQL test database), no parameterized tests. Lines 183-186 section 'Convention Overridden' states: 'Assertion style... This is the ONLY override; all other conventions match siblings.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

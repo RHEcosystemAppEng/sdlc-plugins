@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md lines 14-29 describe three searches: (1) 'Grep for SEVERITY_ORDER across the entire modules/ directory' using 'search_for_pattern (Serena) or Grep', (2) 'Grep for common naming variations' with patterns SEVERITY_ORDER, severity_order, SeverityOrder, SEVERITY_LEVELS, etc., and (3) 'find_symbol for SEVERITY_ORDER in the advisory service' using 'mcp__serena_backend__find_symbol'. All three tools mentioned in the assertion (find_symbol, search_for_pattern, grep) are referenced."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md lines 32-34 state: 'File: modules/fundamental/src/advisory/service/advisory.rs' and 'Definition: SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]'. The exact file path and definition are identified."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md lines 10-11 state: 'The SEVERITY_ORDER constant already exists in modules/fundamental/src/advisory/service/advisory.rs. It will be imported and reused -- no new constant will be declared.' Lines 46-48 show the import: 'use crate::advisory::service::SEVERITY_ORDER;'. The sorting logic on lines 85-90 uses the imported SEVERITY_ORDER directly."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "plan.md line 11 explicitly states 'no new constant will be declared'. symbol-search.md line 44 states 'Do NOT declare a duplicate constant in sbom/service/sbom.rs or any other file.' The plan's changes to sbom/service/sbom.rs (section 3, lines 39-91) only add an import statement, a struct definition (RemediationItem), and a method (build_remediation_list) -- no new SEVERITY_ORDER constant is declared anywhere in the plan."
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md lines 17-18 specify: 'Scope: modules/fundamental/src/ (the entire fundamental crate, which contains both the advisory and sbom modules)'. Lines 22-23 confirm the broad scope for variation searches: 'Scope: modules/fundamental/src/'. The analysis explicitly searched the entire fundamental crate, not just the sbom file being edited."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

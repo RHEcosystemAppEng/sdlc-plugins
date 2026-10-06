@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation traces compute_risk_score() output through create_assessment() to diesel::insert_into(assessments::table) and identifies the persistence boundary at the assessments table, risk_score column (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md lines 88-95 explicitly trace the full path: '1. compute_risk_score(total_deps, vulnerable_deps) returns f64', '2. create_assessment() in modules/risk/src/assessment.rs calls compute_risk_score() and assigns the return value to score', '3. create_assessment() executes diesel::insert_into(assessments::table).values((..., assessments::risk_score.eq(score), ...)) -- persistence boundary found.' The persistence boundary is identified as Table: assessments, Column: risk_score (DOUBLE PRECISION)."
+    },
+    {
+      "text": "Investigation records that risk_score is written at ingestion time (assessment creation) and is NOT recomputed on read, confirming a data migration is needed (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md line 97-98: 'Write timing: Ingestion time -- the score is computed and persisted once when the assessment is first created. It is NOT recomputed on read.' Lines 99-103 confirm: 'Fixing compute_risk_score() alone will only correct future assessments. All existing assessments in the assessments table have incorrect (inflated) risk_score values that will never self-correct... A data migration is required to recompute and correct the risk_score column for all existing records.'"
+    },
+    {
+      "text": "Task description Files to Create includes a data migration file following the Diesel naming convention discovered in the repository (YYYY-MM-DD-NNNNNN_description/up.sql) (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md lines 23-24 in 'Files to Create' section: 'migration/YYYY-MM-DD-000004_fix_risk_score_values/up.sql -- data migration to recompute and correct risk_score for all existing rows in the assessments table' and 'migration/YYYY-MM-DD-000004_fix_risk_score_values/down.sql'. This follows the YYYY-MM-DD-NNNNNN_description/up.sql Diesel convention documented in the investigation."
+    },
+    {
+      "text": "Task description Implementation Notes includes migration logic to recompute and update existing risk_score values in the assessments table (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md lines 38-43 in 'Implementation Notes' detail the migration logic: '1. Join assessments with sboms to access total_deps and vulnerable_deps source values. 2. Recompute risk_score as vulnerable_deps::double precision / total_deps::double precision. 3. Update all rows in the assessments table with the corrected values. 4. Handle the edge case where total_deps = 0 to avoid division by zero.'"
+    },
+    {
+      "text": "Task description Acceptance Criteria includes a criterion that existing assessments with incorrect persisted risk_score values are corrected by the migration (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md line 56 in 'Acceptance Criteria': '- [ ] A data migration corrects the risk_score column for all existing rows in the assessments table by recomputing the value with the correct formula'"
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before the data migration criterion and any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md lines 54-58 show the Acceptance Criteria ordering: first is '- [ ] A reproducer test with asymmetric inputs (e.g., total_deps=100, vulnerable_deps=5) is added that asserts risk_score == 0.05; this test fails before the fix and passes after', followed by the fix criterion ('compute_risk_score() computes vulnerable_deps / total_deps'), then the data migration criterion. The reproducer test is clearly the first item."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
