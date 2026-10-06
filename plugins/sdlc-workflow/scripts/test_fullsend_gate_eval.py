@@ -737,3 +737,117 @@ def test_native_adapter_preserves_signal_termination(tmp_path, termination):
                              env=environment, capture_output=True, text=True, check=False)
     # Then the outer process reports the same actual signal to CliRunner
     assert process.returncode == -termination
+
+
+@pytest.mark.parametrize("failure_phase", ["workspace", "execute", "collect", "score", "summary", None])
+def test_pipeline_exports_safe_failure_phase_without_changing_execution(tmp_path, monkeypatch, failure_phase):
+    """Diagnostics preserve phase exits and grading rules without exporting subprocess text."""
+    # Given synthetic framework failures and expected negative case exits
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    run_dir = tmp_path / "synthetic"
+    diagnostics = {}
+    calls = []
+
+    def fake_process(command, **kwargs):
+        """Double framework execution; deliberately secret-shaped stderr stays private."""
+        phase = Path(command[1]).stem
+        calls.append(phase)
+        if phase == "execute" and failure_phase != "execute":
+            for case in common.CASES:
+                directory = run_dir / "cases" / case
+                directory.mkdir(parents=True)
+                (directory / "run_result.json").write_text('{"exit_code":7}')
+        if phase == "score" and failure_phase != "summary":
+            (run_dir / "summary.yaml").write_text(yaml.safe_dump(synthetic_judge_summary()))
+        if phase == failure_phase:
+            kwargs["stderr"].write(b"SYNTHETIC SECRET bearer /private/credentials\n")
+        return subprocess.CompletedProcess(command, 7 if phase == failure_phase or phase == "execute" else 0)
+
+    monkeypatch.setattr(common.subprocess, "run", fake_process)
+    # When the real pipeline runs and exports diagnostics to the existing safe report
+    if failure_phase in {"execute", "summary"}:
+        with pytest.raises(ValueError):
+            common.pipeline(Path("/python"), Path("/harness"), tmp_path / "config.yaml",
+                            tmp_path / "ws", run_dir, "synthetic", {}, diagnostics)
+        result = 1
+    else:
+        result = common.pipeline(Path("/python"), Path("/harness"), tmp_path / "config.yaml",
+                                 tmp_path / "ws", run_dir, "synthetic", {}, diagnostics)
+    source = {key: "a" * 40 for key in ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}
+    source["pr_number"] = 299
+    common.publish_report(run_dir, tmp_path / "safe", source, result, diagnostics)
+    report = json.loads((tmp_path / "safe/native-result.json").read_text())
+    # Then only fixed phase/category identifiers and actual numeric exits leave the host
+    assert report["diagnostics"]["phase"] == (failure_phase or "complete")
+    assert report["diagnostics"]["phase_exits"] == {
+        phase: 7 if phase == failure_phase or phase == "execute" else 0 for phase in calls}
+    expected_code = {"execute": "missing-case-results", "summary": "invalid-summary"}.get(
+        failure_phase, "phase-exit" if failure_phase else "none")
+    assert report["diagnostics"]["code"] == expected_code
+    assert "SECRET" not in json.dumps(report)
+    assert "credentials" not in json.dumps(report)
+    assert result == (0 if failure_phase is None else 1 if failure_phase in {"execute", "summary"} else 7)
+
+
+@pytest.mark.parametrize("stderr,expected", [
+    (b"SYNTHETIC HTTP 401 Unauthorized SECRET", "authentication-error"),
+    (b"SYNTHETIC PermissionDenied SECRET", "permission-error"),
+    (b"SYNTHETIC RESOURCE_EXHAUSTED SECRET", "quota-error"),
+    (b"SYNTHETIC deadline exceeded SECRET", "timeout"),
+    (b"SYNTHETIC connection refused SECRET", "connection-error"),
+    (b"SYNTHETIC arbitrary hostile text SECRET", "phase-exit"),
+])
+def test_phase_failure_category_is_fixed_and_contains_no_upstream_text(tmp_path, monkeypatch, stderr, expected):
+    """Known error markers map to advisory categories; arbitrary bytes never enter reports."""
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    diagnostics = {}
+    def fake_process(command, **kwargs):
+        """SYNTHETIC TEST DATA — diagnostic text only, no real inference."""
+        kwargs["stderr"].write(stderr)
+        return subprocess.CompletedProcess(command, 1)
+    monkeypatch.setattr(common.subprocess, "run", fake_process)
+    assert common.pipeline(Path("/python"), Path("/harness"), tmp_path / "config.yaml",
+                           tmp_path / "ws", tmp_path / "run", "synthetic", {}, diagnostics) == 1
+    assert diagnostics["code"] == expected
+    assert "SECRET" not in json.dumps(diagnostics)
+
+
+def test_safe_diagnostics_reject_unknown_fields_and_untrusted_values(tmp_path):
+    """The safe report refuses diagnostic text or invented phase/category names."""
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    source = {key: "a" * 40 for key in ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}
+    source["pr_number"] = 299
+    for diagnostic in [
+        {"phase": "score", "code": "phase-exit", "phase_exits": {}, "message": "SECRET"},
+        {"phase": "SECRET", "code": "phase-exit", "phase_exits": {}},
+        {"phase": "score", "code": "SECRET", "phase_exits": {}},
+        {"phase": "score", "code": "phase-exit", "phase_exits": {"score": "SECRET"}},
+    ]:
+        with pytest.raises(ValueError, match="diagnostic"):
+            common.publish_report(tmp_path / "missing", tmp_path / "safe", source, 1, diagnostic)
+    assert not (tmp_path / "safe/native-result.json").exists()
+
+
+def test_phase_stderr_is_streamed_with_bounded_diagnostic_reads(tmp_path, monkeypatch, capsys):
+    """Large private stderr never requires a whole-log allocation before safe reporting."""
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    reads = []
+    class BoundedFile(io.BytesIO):
+        """SYNTHETIC TEST DATA — reject any unbounded spool read."""
+        def read(self, size=-1):
+            """Record and constrain diagnostic read sizes."""
+            assert 0 < size <= 65536
+            reads.append(size)
+            return super().read(size)
+    monkeypatch.setattr(common.tempfile, "TemporaryFile", BoundedFile)
+    def fake_process(command, **kwargs):
+        """SYNTHETIC TEST DATA — large output remains in the private stderr stream."""
+        kwargs["stderr"].write(b"HTTP 401 Unauthorized\n" + b"x" * 200000)
+        return subprocess.CompletedProcess(command, 1)
+    monkeypatch.setattr(common.subprocess, "run", fake_process)
+    diagnostics = {}
+    assert common.pipeline(Path("/python"), Path("/harness"), tmp_path / "config.yaml",
+                           tmp_path / "ws", tmp_path / "run", "synthetic", {}, diagnostics) == 1
+    assert len(reads) >= 4
+    assert diagnostics["code"] == "authentication-error"
+    assert len(capsys.readouterr().err) == len(b"HTTP 401 Unauthorized\n") + 200000

@@ -205,8 +205,24 @@ def validate_summary(run_dir, run_id):
                     raise ValueError(f"Invalid upstream summary: {case}/{name} requires its nonapplicable skip")
 
 
-def pipeline(python, source, config, workspace, run_dir, run_id, environment):
+def phase_failure_code(stderr):
+    """Map observed stderr markers to fixed advisory categories, never raw messages."""
+    for code, pattern in [
+        ("authentication-error", r"unauthenticated|unauthorized|invalid_grant|\b401\b"),
+        ("permission-error", r"permission.?denied|forbidden|\b403\b"),
+        ("quota-error", r"resource_exhausted|rate.limit|\b429\b"),
+        ("timeout", r"timed? ?out|deadline exceeded"),
+        ("connection-error", r"connection refused|connection reset|name resolution"),
+    ]:
+        if re.search(pattern, stderr, re.IGNORECASE):
+            return code
+    return "phase-exit"
+
+
+def pipeline(python, source, config, workspace, run_dir, run_id, environment, diagnostics=None):
     """Delegate case execution/collection/grading entirely to the upstream framework."""
+    diagnostics = diagnostics if diagnostics is not None else {}
+    diagnostics["phase_exits"] = {}
     scripts = source / "skills/eval-run/scripts"
     phases = [
         ("workspace", ["--config", str(config), "--run-id", run_id, "--symlinks", "none"]),
@@ -215,19 +231,32 @@ def pipeline(python, source, config, workspace, run_dir, run_id, environment):
         ("score", ["judges", "--config", str(config), "--run-id", run_id]),
     ]
     for phase, arguments in phases:
-        process = subprocess.run([str(python), str(scripts / f"{phase}.py"), *arguments], cwd=ROOT, env=environment, check=False)
+        diagnostics.update(phase=phase, code="runtime-error")
+        with tempfile.TemporaryFile() as stderr:
+            process = subprocess.run([str(python), str(scripts / f"{phase}.py"), *arguments],
+                                     cwd=ROOT, env=environment, stderr=stderr, check=False)
+            stderr.seek(0)
+            text = stderr.read(65536).decode("utf-8", errors="replace")
+            sys.stderr.write(text)  # The trusted wrapper keeps this stream private.
+            while chunk := stderr.read(65536):
+                sys.stderr.write(chunk.decode("utf-8", errors="replace"))
+        diagnostics["phase_exits"][phase] = process.returncode
+        diagnostics["code"] = phase_failure_code(text) if process.returncode else "none"
         if phase == "execute":
             if not all((run_dir / "cases" / case / "run_result.json").is_file() for case in CASES):
+                diagnostics["code"] = "missing-case-results"
                 raise ValueError("Missing native case results; infrastructure failure, refusing zero-case grading")
             if process.returncode:
                 print(f"Upstream execution exit {process.returncode}; retaining actual exits for native evidence judges", file=sys.stderr)
         elif process.returncode:
             return process.returncode
+    diagnostics.update(phase="summary", code="invalid-summary")
     validate_summary(run_dir, run_id)
+    diagnostics.update(phase="complete", code="none")
     return 0
 
 
-def publish_report(run_dir, destination, source, exit_code):
+def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
     """Export only source pins and Boolean outcomes; raw evidence stays private."""
     import yaml
     sha_keys = {"head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"}
@@ -247,6 +276,17 @@ def publish_report(run_dir, destination, source, exit_code):
         exit_code = exit_code or 1
     report = {"source": source, "exit_code": exit_code, "complete": complete, "outcomes": outcomes,
               "passed": sum(value is True for case in outcomes.values() for value in case.values()), "total": 21}
+    if diagnostics is not None:
+        phases = {"preflight", "configuration", "workspace", "execute", "collect", "score", "summary", "complete"}
+        codes = {"none", "runtime-error", "phase-exit", "missing-case-results", "invalid-summary",
+                 "authentication-error", "permission-error", "quota-error", "timeout", "connection-error"}
+        if (set(diagnostics) != {"phase", "code", "phase_exits"}
+                or diagnostics["phase"] not in phases or diagnostics["code"] not in codes
+                or not isinstance(diagnostics["phase_exits"], dict)
+                or any(key not in {"workspace", "execute", "collect", "score"} or type(value) is not int
+                       for key, value in diagnostics["phase_exits"].items())):
+            raise ValueError("Invalid safe diagnostic values")
+        report["diagnostics"] = diagnostics
     destination.mkdir(parents=True, exist_ok=True)
     (destination / "native-result.json").write_text(json.dumps(report, indent=2) + "\n")
 
@@ -266,6 +306,7 @@ def main():
     cache = args.cache.resolve()
     run_dir = args.output.resolve() / "missing-run"
     exit_code = 1
+    diagnostics = {"phase": "preflight", "code": "runtime-error", "phase_exits": {}}
     try:
         if args.command == "setup":
             setup(cache)
@@ -278,6 +319,7 @@ def main():
         preflight(cache, args.model, args.judge_model, args.effort)
         if args.command == "preflight":
             return 0
+        diagnostics["phase"] = "configuration"
         import yaml
         run_id = "tc6677-" + uuid.uuid4().hex
         workspace = Path(tempfile.gettempdir()) / "agent-eval" / run_id
@@ -292,7 +334,7 @@ def main():
         environment = dict(os.environ, TC6677_FULLSEND_BIN=str(host), TC6677_SANDBOX_FULLSEND_BIN=str(sandbox),
                            AGENT_EVAL_RUNS_DIR=str(args.output.resolve()))
         print(f"Native evidence destination: {run_dir}", flush=True)
-        exit_code = pipeline(python, cache / "agent-eval-harness", config, workspace, run_dir, run_id, environment)
+        exit_code = pipeline(python, cache / "agent-eval-harness", config, workspace, run_dir, run_id, environment, diagnostics)
         return exit_code
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         print(f"Fullsend eval setup/runner failed: {exc}", file=sys.stderr)
@@ -302,7 +344,7 @@ def main():
             source = {key: os.environ.get("TC6726_" + key.upper(), "")
                       for key in ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}
             source["pr_number"] = int(os.environ.get("TC6726_PR_NUMBER", "0"))
-            publish_report(run_dir, args.report_dir.resolve(), source, exit_code)
+            publish_report(run_dir, args.report_dir.resolve(), source, exit_code, diagnostics)
 
 
 if __name__ == "__main__":
