@@ -216,6 +216,70 @@ Remediate CVE-YYYY-XXXXX: update [package-name] to [fixed-version].
 - Depends on: [Vulnerability issue key] (parent tracking issue)
 ```
 
+## Dependency bump task (source dependency ecosystems)
+
+When the upstream fix is already available and the remediation is a straightforward
+`cargo update` or `npm update` (no source code changes required), create a single
+dependency bump task instead of the two-task upstream backport + downstream propagation
+pair. This template applies when Step 2.5 confirms the upstream branch already ships
+the fixed version.
+
+```
+## Repository
+
+<source-repository-name from Ecosystem Mappings Repository column>
+
+## Target Branch
+
+<upstream-branch from Ecosystem Mappings Upstream Branch column>
+
+## Description
+
+Remediate CVE-YYYY-XXXXX: bump [library] to [fixed-version] via dependency update.
+The vulnerable dependency ([library] [affected-range]) is already fixed upstream —
+a package manager update is sufficient.
+
+Affected versions: [list from version impact table]
+Source commit(s): [commit hash(es) from supportability matrix]
+
+Upstream fix: [upstream PR URL from remote links]
+Advisory: [advisory URL from remote links]
+
+## Implementation Notes
+
+- Target branch: [upstream-branch from Ecosystem Mappings]
+- **Dependency type**: [direct | transitive (chain: [dependency-chain])]
+- **Remediation action**: run the appropriate package manager update command:
+  - **Cargo**: `cargo update -p [library]` to pull in the latest compatible version
+  - **npm**: `npm update [library]` to pull in the latest compatible version
+- If the update pulls a version that still falls within the affected range,
+  pin explicitly: `cargo add [library]@[fixed-version]` or update `package.json`
+- Verify the lock file reflects >= [fixed-version] after the update
+- If the vulnerable dependency is dev-only or build-only (identified
+  in Step 2.3.5), the remediation priority is Normal regardless of CVE
+  severity. Add `dev-dependency` label to the task.
+
+## Acceptance Criteria
+
+- [ ] [library] dependency is >= [fixed-version]
+- [ ] Lock file updated via package manager (not manual edit)
+- [ ] No other dependency conflicts introduced
+- [ ] Existing tests pass
+
+## Test Requirements
+
+- [ ] Existing test suite passes with the updated dependency
+
+## Dependencies
+
+- Depends on: [Vulnerability issue key] (parent tracking issue)
+```
+
+After creating the dependency bump task, a downstream propagation subtask is still
+required to update the source reference in the Konflux release repo. Use the same
+downstream propagation template as the upstream backport flow (see above), linking
+it as blocked by the dependency bump task.
+
 **Omitted sections**: Files to Modify and Files to Create are intentionally omitted.
 These depend on repository structure that the triage skill does not have context for —
 `implement-task` discovers them via code analysis.
@@ -299,6 +363,41 @@ python3 scripts/sha256-digest.py /tmp/task-desc.md  # → sha256-md:<hex> or sha
 jira.add_comment(<upstream-task-key>, "[sdlc-workflow] Description digest: <tagged-digest>")
 
 # 2. Downstream propagation subtask
+downstream_task = jira.create_issue(
+  projectKey: "<project-key>",
+  issueTypeName: "Task",
+  summary: "Propagate CVE-YYYY-XXXXX fix: update [source-repo] ref in [konflux-repo] ([stream])",
+  description: <downstream-task-description>,
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>"]
+)
+
+# 2a. Post description digest comment (before links or other comments)
+downstream_desc = jira.get_issue(<downstream-task-key>, fields=["description"])
+python3 scripts/sha256-digest.py /tmp/task-desc.md
+jira.add_comment(<downstream-task-key>, "[sdlc-workflow] Description digest: <tagged-digest>")
+```
+
+### Source dependency ecosystems — dependency bump variant (one task + downstream):
+
+When Step 2.5 confirms the upstream branch already ships the fixed version,
+create a dependency bump task instead of the upstream backport task:
+
+```
+# 1. Dependency bump task
+bump_task = jira.create_issue(
+  projectKey: "<project-key>",
+  issueTypeName: "Task",
+  summary: "Remediate CVE-YYYY-XXXXX: update [library] to [fixed-version] ([stream])",
+  description: <dependency-bump-task-description>,
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>"]
+)
+
+# 1a. Post description digest comment (before links or other comments)
+bump_desc = jira.get_issue(<bump-task-key>, fields=["description"])
+python3 scripts/sha256-digest.py /tmp/task-desc.md
+jira.add_comment(<bump-task-key>, "[sdlc-workflow] Description digest: <tagged-digest>")
+
+# 2. Downstream propagation subtask (same template as upstream backport flow)
 downstream_task = jira.create_issue(
   projectKey: "<project-key>",
   issueTypeName: "Task",
@@ -426,9 +525,26 @@ After creating remediation tasks:
      type: "Blocks"
    )
    ```
-3. **Transition** the Vulnerability to In Progress (if not already).
-4. **Assign** the Vulnerability to the current user (if not already assigned).
-5. **Add comment** to the Vulnerability listing all created tasks:
+3. **Link remediation tasks to the release Task** (when release Jira orchestration
+   is active — see `jira-triage-operations.md` Step 7.5):
+   ```
+   jira.create_link(
+     inwardIssue: <remediation-task-key>,
+     outwardIssue: <release-task-key>,
+     type: "Blocks"
+   )
+   ```
+4. **Link the CVE to the release Task** (traceability):
+   ```
+   jira.create_link(
+     inwardIssue: <release-task-key>,
+     outwardIssue: <vulnerability-key>,
+     type: "Related"
+   )
+   ```
+5. **Transition** the Vulnerability to In Progress (if not already).
+6. **Assign** the Vulnerability to the current user (if not already assigned).
+7. **Add comment** to the Vulnerability listing all created tasks:
    - Source dependency: "Remediation tasks created: [upstream-task-key] (upstream
      backport), [downstream-task-key] (downstream propagation, blocked by
      [upstream-task-key])"

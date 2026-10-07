@@ -509,3 +509,204 @@ skip this step entirely — consistent with Step 4.3's conditional behavior.
      Step 4.3 cross-CVE overlap detection picks up the overlap.
 
 5. **If no results are returned**, proceed silently to Case A/B/C branching.
+
+## Step 7.5 – Release Jira Orchestration
+
+Before creating remediation tasks (Step 8), find or create the release Jira
+structure for each affected stream. This provides a release-scoped container
+that links all CVE triages and remediation tasks for a given product version.
+
+**Prerequisite:** This step runs after Step 7 (Concurrent Triage Detection) and
+before Case A/B/C branching in Step 8. It applies to all non-preemptive
+remediation types (upstream backport, downstream propagation, system package,
+dependency bump).
+
+### 7.5.1 – Resolve stream-to-version mapping
+
+For each affected stream, derive the release version from the stream name using
+the Version Streams table in Security Configuration:
+
+1. **Parse the stream name** — e.g., `rhtpa-3.0` maps to the `3.0.x` release family.
+2. **Search for an existing release Epic** matching the pattern
+   `"RHTPA <major>.<minor>.* Release Tasks"`:
+
+   ```
+   jira.search_jql(
+     "project = <project-key> AND issuetype = Epic AND summary ~ 'RHTPA <major>.<minor>' AND summary ~ 'Release Tasks' ORDER BY created DESC",
+     fields: ["summary", "status"],
+     maxResults: 5
+   )
+   ```
+
+3. **If an existing release Epic is found**, extract the version from its summary
+   (e.g., `"RHTPA 3.1.1 Release Tasks"` → version `3.1.1`). Use this Epic and
+   proceed to Step 7.5.2.
+
+4. **If no release Epic exists**, determine the version to use:
+   a. **Default**: next patch bump from the latest released version in that stream's
+      Supportability Matrix (e.g., latest is `3.0.2` → default to `3.0.3`).
+   b. **Prompt the engineer for confirmation**:
+
+      ```
+      No release Epic found for stream <stream>.
+
+      Proposed version: RHTPA <default-version> Release Tasks
+      (based on latest released version <latest-version> in supportability matrix)
+
+      Options:
+      1. Accept — create Epic with version <default-version>
+      2. Specify different version
+      3. Skip — do not create release Jira for this stream
+
+      Choose (1/2/3):
+      ```
+
+   c. **If the engineer specifies a different version**, use that version.
+   d. **If the engineer skips**, proceed to Step 8 without release Jira for this
+      stream — remediation tasks are still created but not linked to a release Task.
+
+5. **Create the release Epic** (after engineer confirmation):
+
+   ```
+   release_epic = jira.create_issue(
+     projectKey: "<project-key>",
+     issueTypeName: "Epic",
+     summary: "RHTPA <version> Release Tasks",
+     description: "Release tracking Epic for RHTPA <version>. Contains CVE triage and remediation tasks for this release.",
+     labels: ["ai-generated-jira"]
+   )
+   ```
+
+   Post a description digest comment per `shared/description-digest-protocol.md`.
+
+### 7.5.2 – Find or create the release Task
+
+Search for an existing release Task under the release Epic:
+
+```
+jira.search_jql(
+  "project = <project-key> AND issuetype = Task AND parent = <release-epic-key> AND summary ~ 'RHTPA <version> CVE triage' ORDER BY created DESC",
+  fields: ["summary", "status", "issuelinks"],
+  maxResults: 5
+)
+```
+
+1. **If a release Task exists**, use it and proceed to Step 7.5.3.
+
+2. **If no release Task exists**, prompt the engineer:
+
+   ```
+   No release Task found under <release-epic-key>.
+
+   Proposed: Create "RHTPA <version> CVE triage" as child of <release-epic-key>
+
+   Proceed? (Yes / No)
+   ```
+
+3. **Create the release Task** (after confirmation):
+
+   ```
+   release_task = jira.create_issue(
+     projectKey: "<project-key>",
+     issueTypeName: "Task",
+     summary: "RHTPA <version> CVE triage",
+     description: "CVE triage tracking task for RHTPA <version>. Linked to CVE Vulnerability issues (Related) and blocked by remediation Tasks (Blocks).",
+     labels: ["ai-generated-jira"],
+     parent: <release-epic-key>
+   )
+   ```
+
+   Post a description digest comment per `shared/description-digest-protocol.md`.
+
+Store the release Task key for use in Step 8's post-creation linking.
+
+### 7.5.3 – Cross-CVE dedup check
+
+Before creating remediation tasks, check whether an existing remediation Task
+already covers the same Upstream Affected Component for the same release version.
+This prevents duplicate tasks when multiple CVEs affect the same library.
+
+**Prerequisite:** Requires the Upstream Affected Component custom field to be
+configured. If not configured, skip dedup and proceed to Step 8.
+
+1. **Extract the Upstream Affected Component** from the current CVE issue
+   (already fetched in Step 1).
+
+2. **Inspect the release Task's issue links.** Fetch the release Task with
+   expanded issue links:
+
+   ```
+   jira.get_issue(<release-task-key>, fields=["issuelinks"])
+   ```
+
+   For each linked issue where `type.name` is `"Blocks"` (remediation Tasks that
+   block the release Task), fetch the linked Task with its own issue links:
+
+   ```
+   jira.get_issue(<linked-task-key>, fields=["summary", "labels", "issuelinks"])
+   ```
+
+3. **Resolve each remediation Task's parent CVE.** For each linked remediation
+   Task, traverse its `issuelinks` to find Depend links pointing to CVE
+   Vulnerability issues. The standard linkage (see `remediation-templates.md`)
+   creates a Depend link from each remediation Task to its originating CVE.
+
+   For each Depend-linked CVE, fetch the Upstream Affected Component:
+
+   ```
+   jira.get_issue(<linked-cve-key>, fields=["<upstream-affected-component-field>"])
+   ```
+
+4. **Match by Upstream Affected Component.** Compare the Upstream Affected
+   Component value on each resolved CVE against the current CVE's Upstream
+   Affected Component (extracted in Step 1). If the values match, the existing
+   remediation Task already covers the same upstream component.
+
+   **Fallback** (when the Depend link or Upstream Affected Component field is
+   missing on the resolved CVE): fall back to summary matching — if the
+   remediation Task's summary contains the same library name as the current
+   CVE's vulnerable library (from Step 1), treat it as a match.
+
+5. **If a covering remediation Task is found:**
+
+   a. **Skip remediation task creation** for this CVE/stream combination.
+   b. **Link the current CVE to the existing remediation Task** (Depend):
+      ```
+      jira.create_link(
+        inwardIssue: <current-cve-key>,
+        outwardIssue: <covering-task-key>,
+        type: "Depend"
+      )
+      ```
+   c. **Link the current CVE to the release Task** (Related):
+      ```
+      jira.create_link(
+        inwardIssue: <release-task-key>,
+        outwardIssue: <current-cve-key>,
+        type: "Related"
+      )
+      ```
+   d. **Add the current CVE's label to the existing remediation Task**:
+      ```
+      current_labels = <covering-task-labels>
+      updated_labels = current_labels + ["<current-CVE-ID>"]
+      jira.edit_issue(<covering-task-key>, fields={
+        "labels": updated_labels
+      })
+      ```
+   e. **Inform the engineer:**
+      ```
+      Dedup: existing remediation task <covering-task-key> already covers
+      <upstream-component> for release <version>. Skipping new task creation.
+
+      Actions taken:
+      - Linked <current-cve-key> → <covering-task-key> (Depend)
+      - Linked <release-task-key> → <current-cve-key> (Related)
+      - Added <current-CVE-ID> label to <covering-task-key>
+      ```
+   f. **Record the dedup** — mark that remediation already exists for this
+      stream so Step 8 skips task creation for it.
+
+6. **If no covering Task is found**, proceed to Step 8 for standard remediation
+   task creation. After task creation, link the new tasks to the release Task
+   (see `remediation-templates.md` Jira Linkage section).
