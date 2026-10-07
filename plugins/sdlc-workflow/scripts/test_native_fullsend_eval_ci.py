@@ -526,6 +526,11 @@ for name in ("benchmark.json", "feedback.json", "summary.md"):
     if mode == "directory-" + name:
         (target / name).mkdir()
         continue
+    if mode == "symlink-" + name:
+        outside = Path.cwd() / ("outside-" + name)
+        outside.write_text("synthetic outside result\n")
+        (target / name).symlink_to(outside)
+        continue
     (target / name).write_text("" if mode == "empty-" + name else "synthetic result\n")
 ''')
     claude.chmod(0o755)
@@ -546,9 +551,10 @@ for name in ("benchmark.json", "feedback.json", "summary.md"):
 @pytest.mark.parametrize("mode", ["absent", "misplaced", "missing-benchmark.json",
                                  "missing-feedback.json", "missing-summary.md",
                                  "empty-benchmark.json", "empty-feedback.json", "empty-summary.md",
-                                 "directory-benchmark.json", "directory-feedback.json", "directory-summary.md"])
+                                 "directory-benchmark.json", "directory-feedback.json", "directory-summary.md",
+                                 "symlink-benchmark.json", "symlink-feedback.json", "symlink-summary.md"])
 def test_ordinary_eval_rejects_missing_results_in_requested_workspace(tmp_path, mode):
-    """An exit-zero CLI cannot pass CI with absent, empty or relocated root results."""
+    """An exit-zero CLI cannot pass CI with absent, empty, relocated or linked results."""
     result, _ = run_ordinary_eval_step(tmp_path, mode)
     assert result.returncode == 1, result.stdout + result.stderr
     assert "::error::" in result.stdout
@@ -567,7 +573,7 @@ def test_ordinary_eval_authorizes_requested_workspace_and_keeps_results(tmp_path
     assert (tmp_path / "first-eval-pr/summary.md").read_text() == "synthetic result\n"
 
 
-@pytest.mark.parametrize("mode", ["exit", "absent"])
+@pytest.mark.parametrize("mode", ["exit", "absent", "symlink-summary.md"])
 def test_ordinary_eval_attempts_remaining_skills_after_failure(tmp_path, mode):
     """CLI and result-path failures must not skip subsequent requested skills."""
     result, calls = run_ordinary_eval_step(tmp_path, mode, "first,second")
