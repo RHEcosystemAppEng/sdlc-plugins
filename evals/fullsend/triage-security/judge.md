@@ -19,6 +19,17 @@ Do not infer tool success from literal source or an agent's claims. Fixture
 preparation, sandbox/bootstrap/inference failures, missing/truncated decisive
 tool results or timeouts must not masquerade as expected Skill rejection.
 
+Judge subsequent calls/results up to the case's prescribed stop, not completion
+of the entire triage workflow. In 033-absent, the real presence-gate Bash result
+is interactive mode; reading CLAUDE.md and stopping for missing Security
+Configuration is expected. In 034-empty, the real presence-gate Bash result
+exits 1 with ERROR: FULLSEND_OUTPUT_DIR is set but empty; stopping immediately
+is expected. These intentionally supplied environment states are case inputs,
+not fixture/bootstrap/inference failures. Neither stop requires later triage,
+input validation, a result write or execution of the final validator. Both still
+require the actual Skill invocation, supplied plugin binding, delivered gate
+and validator instructions, and genuine gate tool calls/results described above.
+
 Distinguish native fullsend CLI exit, the Skill's Bash tool exit, and the host
 validation loop. Expected negative-case CLI/schema failure is not itself proof
 of correct gate/input behavior. The valid case requires the actual Skill inline
