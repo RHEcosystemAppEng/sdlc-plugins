@@ -281,6 +281,7 @@ jobs:
 
   run-evals:
     name: Run PR Evals
+    timeout-minutes: 90
     needs: [discover, gate]
     if: >-
       !cancelled() &&
@@ -357,6 +358,8 @@ jobs:
           ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-6"
           ANTHROPIC_MODEL: "claude-opus-4-6"
           CLAUDE_CODE_SUBPROCESS_ENV_SCRUB: "1"
+          # Wait for eval agents to finish; the job timeout bounds total runtime.
+          CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS: "0"
         run: |
           IFS=',' read -ra SKILLS <<< "$SKILLS_CSV"
           failed=0

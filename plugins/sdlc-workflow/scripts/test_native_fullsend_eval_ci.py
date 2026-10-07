@@ -741,6 +741,9 @@ args = sys.argv[1:]
 workspace = Path(re.search(r"Workspace: (.+)", args[args.index("-p") + 1])[1])
 with open("calls.jsonl", "a") as capture:
     capture.write(json.dumps(args) + "\n")
+with open("wait-settings.jsonl", "a") as capture:
+    capture.write(json.dumps({name: os.environ.get(name) for name in (
+        "CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB")}) + "\n")
 mode = os.environ["EVAL_STUB_MODE"] if workspace.name == "first-eval-pr" else "correct"
 if mode == "exit":
     sys.exit(7)
@@ -764,14 +767,35 @@ for name in ("benchmark.json", "feedback.json", "summary.md"):
         source = tmp_path / "pr-head/evals" / skill
         source.mkdir(parents=True)
         (source / "evals.json").write_text('{"evals": [{"id": 1}]}')
-    script = script_step("run-evals", "Run PR evals")["run"].replace(
+    step = script_step("run-evals", "Run PR evals")
+    script = step["run"].replace(
         'workspace="/tmp/${skill}-eval-pr"', f'workspace="{tmp_path}/${{skill}}-eval-pr"')
+    env = dict(os.environ, PATH=f"{tools}:{os.environ['PATH']}",
+               SKILLS_CSV=skills, EVAL_STUB_MODE=mode)
+    env.pop("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", None)
+    for name in ("CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS", "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB"):
+        if name in step["env"]:
+            env[name] = step["env"][name]
     result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], cwd=tmp_path,
-                            env=dict(os.environ, PATH=f"{tools}:{os.environ['PATH']}",
-                                     SKILLS_CSV=skills, EVAL_STUB_MODE=mode),
+                            env=env,
                             capture_output=True, text=True)
     calls = [json.loads(line) for line in (tmp_path / "calls.jsonl").read_text().splitlines()]
     return result, calls
+
+
+def test_ordinary_eval_passes_background_wait_setting_to_each_cli(tmp_path):
+    """Both real shell invocations inherit the workflow wait policy and scrubbing."""
+    result, calls = run_ordinary_eval_step(tmp_path, "correct", "first,second")
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert len(calls) == 2
+    settings = [json.loads(line) for line in (tmp_path / "wait-settings.jsonl").read_text().splitlines()]
+    assert settings == [{"CLAUDE_CODE_PRINT_BG_WAIT_CEILING_MS": "0",
+                         "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1"}] * 2
+
+
+def test_ordinary_eval_job_bounds_background_wait():
+    """Disabling the CLI idle ceiling still leaves an explicit total CI limit."""
+    assert workflow()["jobs"]["run-evals"].get("timeout-minutes") == 90
 
 
 @pytest.mark.parametrize("mode", ["absent", "misplaced", "missing-benchmark.json",
