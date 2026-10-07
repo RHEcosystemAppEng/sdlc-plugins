@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md explicitly identifies all three fields with exact types: Field 1 'cves' as 'Option<Vec<String>>', Field 2 'affected_packages' as 'Option<Vec<AffectedPackage>>', and Field 3 'severity_counts' as 'Option<HashMap<String, u32>>'."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md shows idiomatic patterns for all three fields: cves uses '.as_ref().cloned().unwrap_or_default()', affected_packages uses '.as_ref().map(|pkgs| pkgs.len() as u32).unwrap_or(0)', severity_counts uses '.as_ref().cloned().unwrap_or_default()'. The Guard Pattern Summary table in plan.md explicitly confirms no .unwrap() is used."
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "plan.md states explicitly: 'No field is accessed with .unwrap(), .len() on Option, .join() on Option, or iteration on Option without unwrapping safely first.' The implementation code shows all Option fields are first converted to owned non-Option types via guard patterns before any .len() or other access occurs (e.g., cve_list.len() is called only after unwrap_or_default() yields a Vec<String>)."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md 'Why Guards Are Needed' section states: 'The AdvisoryIngestResult struct is defined in the ingestor module (modules/ingestor/src/service/mod.rs) and consumed by the fundamental module... This data crosses a module boundary -- the producer and consumer are in separate crates with independent ownership.' It also states: 'The producer's schema uses Option<T> for all three aggregate fields' and lists three reasons why None is valid (legitimate None returns, independent schema evolution, partial results)."
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md includes 'test_extract_vulnerability_summary_all_none -- verifies extraction when cves = None, affected_packages = None, severity_counts = None. Asserts cve_count == 0, cve_list is empty, affected_package_count == 0, severity_breakdown is empty.' null-guards.md also documents this test: 'All-None test (test_extract_vulnerability_summary_all_none): Constructs an AdvisoryIngestResult with cves = None, affected_packages = None, severity_counts = None' with specific assertions listed."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

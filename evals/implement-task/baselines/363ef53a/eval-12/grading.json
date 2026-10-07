@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md Step 1 explicitly states: 'Before declaring a new SEVERITY_ORDER constant in the sbom service, search the entire modules/fundamental/ package'. Tool used is listed as 'mcp__serena_backend__search_for_pattern (or equivalent Grep)' with search query 'SEVERITY_ORDER across modules/fundamental/src/'."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md Step 3 Results section states: 'File: modules/fundamental/src/advisory/service/advisory.rs' and 'Definition: SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]'."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md states 'Decision: Reuse existing constant -- do NOT declare a new one.' and specifies importing it: 'use crate::advisory::service::advisory::SEVERITY_ORDER;' in the sbom.rs changes section."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "plan.md explicitly states 'Decision: Reuse existing constant -- do NOT declare a new one.' The only change to SEVERITY_ORDER is making it pub(crate) in its existing location (advisory.rs). The sbom.rs section only imports it, never declares a new one. Key design decision #1 reiterates: 'Reuse SEVERITY_ORDER from advisory module rather than declaring a duplicate.'"
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md Step 1 explicitly states: 'search the entire modules/fundamental/ package (not just the file being edited)' and 'Search scope: The entire modules/fundamental crate -- this is the target package that contains both the sbom and advisory modules. Searching broadly ensures we find definitions in sibling modules, not just the file being edited (sbom/service/sbom.rs).' Step 2 also searches with naming variations across 'modules/fundamental/src/**/*.rs'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

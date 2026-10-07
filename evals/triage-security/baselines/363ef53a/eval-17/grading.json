@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 extracts the Embargo policy URL from the Security Configuration as an optional field without raising an error (S1.71 -- backward compatible extraction)",
+      "passed": true,
+      "evidence": "In embargo-check.md, the Configuration Check section (lines 5-6) shows: 'Embargo policy URL: configured -- https://example.com/security/embargo-policy' and 'Step 1.7 is not skipped (Embargo policy URL is present in Security Configuration)'. The URL was successfully extracted and no error was raised. The field is treated as optional -- its presence enables Step 1.7 rather than its absence causing an error."
+    },
+    {
+      "text": "Step 1.7 evaluates the CVE severity -- CVSS 7.5 (High) meets the Critical/Important threshold (CVSS >= 7.0) and triggers the embargo warning gate (S1.70)",
+      "passed": true,
+      "evidence": "In embargo-check.md (lines 10-15): 'CVSS score: 7.5', 'Severity: High', 'Trigger threshold: CVSS >= 7.0 (Critical or Important severity)', 'Result: Severity meets the threshold (7.5 >= 7.0)', 'Step is not skipped -- the severity is High, which meets the Critical/Important threshold.' The severity evaluation is performed and triggers the warning gate (presented in lines 19-29)."
+    },
+    {
+      "text": "Step 1.7 presents a warning gate to the engineer including the CVE ID (CVE-2026-31812), severity level, a statement about embargo risk, and a link to the configured embargo policy URL (https://example.com/security/embargo-policy) (S1.70)",
+      "passed": true,
+      "evidence": "In embargo-check.md (lines 21-29), the warning gate includes all required elements: CVE ID ('CVE-2026-31812'), severity level ('High severity'), embargo risk statement ('High-severity vulnerabilities may be under embargo. Before proceeding, verify with your security team that this CVE is cleared for public triage.'), and embargo policy URL ('Embargo policy: https://example.com/security/embargo-policy')."
+    },
+    {
+      "text": "Step 1.7 requires explicit engineer confirmation (Yes/No) before proceeding to Step 2 -- the gate is a confirmation prompt, not an informational message (S1.70)",
+      "passed": true,
+      "evidence": "In embargo-check.md, the warning gate ends with 'Proceed with triage? (Yes / No)' (line 29). The Decision Flow section (lines 33-34) confirms: 'If \"Yes\": proceed to Step 2 (Version Impact Analysis)' and 'If \"No\": stop execution; inform the user to check embargo status before re-running triage'. Line 36 adds: 'This gate fires before any triage output or Jira mutations, so stopping is safe. It is consistent with the existing guardrail pattern (every Jira mutation requires confirmation).' This is a confirmation prompt requiring explicit Yes/No, not an informational message."
+    },
+    {
+      "text": "The embargo warning gate does NOT trigger for Low or Moderate severity CVEs (CVSS < 7.0) -- it is skipped silently when severity is below threshold (S1.70)",
+      "passed": true,
+      "evidence": "In embargo-check.md, the threshold logic is explicitly defined: 'Trigger threshold: CVSS >= 7.0 (Critical or Important severity)' (line 12). The phrasing 'Step is not skipped -- the severity is High, which meets the Critical/Important threshold' (line 15) directly implies the step IS skipped for severities below the threshold. The conditional framing ('not skipped' for High) demonstrates the skip/trigger branching: CVEs with CVSS < 7.0 (Low or Moderate) would not meet the >= 7.0 threshold and the step would be skipped."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The remediation output describes the digest protocol for the upstream backport task: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md 'Description Digest Comment for Task 1' (lines 107-123) and 'Description Digest Comment for Task 3' (lines 299-315) both describe the protocol: Step 1 re-fetches via 'jira.get_issue(<key>, fields=[\"description\"])'; Step 2 computes digest via 'python3 scripts/sha256-digest.py /tmp/task-desc.md'; Step 3 posts comment. Task 1 (dependency bump for 2.2.x) and Task 3 (upstream backport for 2.1.x) both have the full digest protocol."
+    },
+    {
+      "text": "The remediation output describes the digest protocol for the downstream propagation subtask: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md 'Description Digest Comment for Task 2' (lines 194-211) and 'Description Digest Comment for Task 4' (lines 390-408) both describe the protocol: Step 1 re-fetches via 'jira.get_issue(<downstream-task-key>, fields=[\"description\"])'; Step 2 computes digest via 'python3 scripts/sha256-digest.py /tmp/task-desc.md'; Step 3 posts comment. Both downstream propagation tasks (2.2.x and 2.1.x) have the full digest protocol."
+    },
+    {
+      "text": "The remediation output includes the digest comment marker '[sdlc-workflow] Description digest:' in the described steps for each remediation task — both upstream and downstream (§1.66)",
+      "passed": true,
+      "evidence": "All four tasks include the marker in their digest comment step: Task 1 (line 122): 'jira.add_comment(<bump-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'. Task 2 (line 209): 'jira.add_comment(<downstream-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'. Task 3 (line 313): 'jira.add_comment(<preemptive-upstream-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'. Task 4 (line 407): 'jira.add_comment(<preemptive-downstream-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'. Marker is present for all upstream and downstream tasks."
+    },
+    {
+      "text": "The remediation output sequences digest comments BEFORE issue links (Depend, Blocks) or other comments in the described procedure for each task (§1.66, shared/description-digest-protocol.md Rules)",
+      "passed": false,
+      "evidence": "In all four tasks, the Jira linkage step is described BEFORE the digest comment step. Task 1: 'Jira linkage' with Depend link at lines 100-103, then 'Description Digest Comment' at lines 105-123. Task 2: 'Jira linkage' with Depend and Blocks links at lines 187-190, then 'Description Digest Comment' at lines 194-211. Task 3: 'Jira linkage (preemptive)' with Related link at lines 293-295, then 'Description Digest Comment' at lines 299-315. Task 4: 'Jira linkage (preemptive)' with Related and Blocks links at lines 385-388, then 'Description Digest Comment' at lines 390-408. The digest comments are sequenced AFTER issue links in all four cases, violating the required ordering."
+    },
+    {
+      "text": "The remediation output specifies that the digest is computed from the re-fetched description (via Jira API after create_issue), not from the description string passed to create_issue (shared/description-digest-protocol.md Hashing)",
+      "passed": true,
+      "evidence": "All four tasks explicitly describe re-fetching before computing the digest. Task 1 (lines 109-110): '1. Re-fetch the created task's description from Jira: jira.get_issue(<bump-task-key>, fields=[\"description\"])'. Task 2 (lines 196-197): same pattern with <downstream-task-key>. Task 3 (lines 301-302): same pattern with <preemptive-upstream-task-key>. Task 4 (lines 392-393): same pattern with <preemptive-downstream-task-key>. The digest is computed from the re-fetched Jira description, not from the description string passed to create_issue."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 1,
+    "total": 5,
+    "pass_rate": 0.8
+  }
+}
