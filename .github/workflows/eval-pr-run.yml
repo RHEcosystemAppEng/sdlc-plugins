@@ -375,11 +375,16 @@ jobs:
           Use the sdlc-workflow:run-evals skill for skill /${skill}.
           Evals path: pr-head/evals/${skill}/evals.json
           Workspace: ${workspace}
+          Use this exact absolute workspace for every eval, grader, and aggregation step.
+          Pass it unchanged to all subagents. Do not substitute pr-head/eval-workspace
+          or any other output directory. Finish by writing benchmark.json,
+          feedback.json, and summary.md directly under ${workspace}.
           PROMPT
             )" --permission-mode dontAsk \
               --allowedTools Read Write Bash Skill Agent Glob \
               --settings /tmp/eval-sandbox-settings.json \
               --add-dir pr-head \
+              --add-dir "${workspace}" \
               2>&1 || {
               echo "::error::PR eval run failed for ${skill} (exit $?)"
               failed=1
@@ -388,6 +393,13 @@ jobs:
 
             echo "--- Workspace contents ---"
             find "${workspace}" -type f 2>/dev/null | head -80 || true
+
+            for result in benchmark.json feedback.json summary.md; do
+              if [ ! -f "${workspace}/${result}" ] || [ ! -s "${workspace}/${result}" ]; then
+                echo "::error::Missing or empty required eval result: ${workspace}/${result}"
+                failed=1
+              fi
+            done
           done
 
           if [ "$failed" -ne 0 ]; then
