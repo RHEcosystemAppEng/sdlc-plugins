@@ -12,6 +12,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fullsend dual-mode execution for `triage-security`, with validated trusted input,
   tokenless sandbox analysis, and structured authorized or report-only Jira output
 
+## [0.13.10] - 2026-10-07
+
+### Added
+
+- Release Jira orchestration and cross-CVE dedup in `triage-security`
+- Module-level test requirement before committing for Rust repos in `implement-task`
+
+### Fixed
+
+- CVE Upstream Affected Component used for dedup matching in `triage-security`
+- Cargo metadata resolution for crate name in workspace repos in `implement-task`
+
 ## [0.13.9] - 2026-08-24
 
 ### Added

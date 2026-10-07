@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "Step 4 of plan.md explicitly lists all 4 files for inspection: (1) 'modules/fundamental/src/advisory/endpoints/get.rs -- Read this sibling endpoint handler to understand the existing GET handler pattern', (2) 'modules/fundamental/src/advisory/service/advisory.rs -- Read the existing AdvisoryService to understand the fetch and list method signatures', (3) 'modules/fundamental/src/advisory/model/summary.rs -- Read the existing AdvisorySummary struct', (4) 'common/src/error.rs -- Read the AppError enum and its IntoResponse implementation'."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "Step 6 lists exactly 3 files to modify (advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs) and 3 files to create (advisory/model/severity_summary.rs, advisory/endpoints/severity_summary.rs, tests/api/advisory_summary.rs). Step 9 includes a scope containment check: 'Run git diff --name-only and verify all modified/created files match the Files to Modify and Files to Create sections. No out-of-scope files should be modified.' No unrelated files are listed for modification."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "Step 6 'Files to Create' lists: (1) 'modules/fundamental/src/advisory/model/severity_summary.rs -- SeveritySummary response struct', (2) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs -- GET handler for /api/v2/sbom/{id}/advisory-summary', (3) 'tests/api/advisory_summary.rs -- Integration tests for the new endpoint'. These match the 3 required files."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "Step 6 'Files to Modify' lists: (1) 'modules/fundamental/src/advisory/service/advisory.rs -- Add severity_summary method to AdvisoryService', (2) 'modules/fundamental/src/advisory/endpoints/mod.rs -- Register the new /api/v2/sbom/{id}/advisory-summary route', (3) 'modules/fundamental/src/advisory/model/mod.rs -- Add pub mod severity_summary; to register the new model module'. All 3 required files are present."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Step 10 shows the commit message: 'feat(advisory): add severity aggregation endpoint' (Conventional Commits format with type 'feat', scope 'advisory') and footer 'Implements TC-9201'. The plan explicitly notes: 'Conventional Commits format: feat(advisory): add severity aggregation endpoint' and 'Footer references TC-9201'."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "Step 10 shows: 'git commit --trailer=\"Assisted-by: Claude Code\" -m \"feat(advisory): add severity aggregation endpoint...\"' and explicitly states: '--trailer=\"Assisted-by: Claude Code\" for AI attribution'."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "Step 5 shows: 'git checkout main / git pull / git checkout -b TC-9201' and states: 'Branch name TC-9201 follows the convention of naming branches after the Jira issue ID. The target branch is main as specified in the Target Branch section of the task description.' The PR creation in Step 10 also uses '--base main'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md Error Handling section states: 'All service methods and endpoint handlers return Result<T, AppError>' and 'Errors are wrapped with .context(\"descriptive message\") using anyhow-style context chaining.' Module Structure section states: 'Each domain module (sbom, advisory, package) follows a consistent model/ + service/ + endpoints/ tri-directory structure.' Both patterns are explicitly identified with examples."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "Plan.md line 8 states: 'Target Branch: main (extracted from the Target Branch section of the task description)'. Step 1 lists 'Target Branch: main' under parsed sections. Step 5 reiterates: 'The target branch is main as specified in the Target Branch section of the task description.'"
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "Step 1.5 'Verify Description Integrity' searches for digest comments and explicitly handles the no-digest case: 'If no digest comment is found: log a warning and proceed normally (backward compatibility -- tasks created before digest tracking was introduced have no digest comment). Do not block execution: \"No description digest found -- skipping integrity check. This task may have been created before digest tracking was introduced.\"'"
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": true,
+      "evidence": "Step 9 states: 'Run cargo metadata --no-deps --format-version 1 from the workspace root to resolve the package name for each modified file. Use the resolved name field from the package whose manifest or target source contains the modified file as <crate-name>. Do not derive the crate name from the nearest Cargo.toml, which may be a virtual workspace manifest (the root Cargo.toml is likely a workspace manifest).' Then follows with 'cargo test -p <crate-name>'."
+    }
+  ],
+  "summary": {"passed": 11, "failed": 0, "total": 11, "pass_rate": 1.00}
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md line 5: 'Once that filtering logic is removed, the `version_filter` parameter becomes dead -- it is no longer referenced anywhere in the function body.' Line 26: 'The correct action is removal, not renaming to `_version_filter`.' The plan explicitly identifies the parameter as dead after filter removal and explicitly rejects the rename-to-underscore approach."
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md line 26: 'Remove the `version_filter: &str` parameter from the function signature entirely.' Lines 30-36 show the resulting signature without version_filter, going from 4 parameters (search, paginated, version_filter, tx) to 3 (search, paginated, tx)."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md sections 2-4 explicitly enumerate all 3 call sites: '### 2. modules/fundamental/src/sbom/endpoints/list.rs -- endpoint handler (call site 1 of 3)', '### 3. modules/search/src/service/mod.rs -- search service (call site 2 of 3)', '### 4. tests/api/sbom.rs -- integration tests (call site 3 of 3)'. Each section details the specific changes needed. The summary table at lines 95-99 also lists all 3."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md section 'Why Remove, Not Rename' (lines 19-36): 'The temptation when encountering an unused parameter is to prefix it with an underscore (e.g., `_version_filter`) to suppress the compiler warning. This is the wrong approach for a public API method.' Specifically addresses API surface: 'Unnecessary API surface: The parameter remains part of the function's public signature. Every caller must still pass a value for it, even though that value is ignored.'"
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md 'Verification Steps' section (lines 84-91): 'Run `cargo check` to confirm compilation succeeds', 'Run `cargo test -p <crate-name>` for each affected crate', 'Verify that existing SBOM list tests (those not dependent on version filtering) still pass without changes.' Also parameter-cleanup.md line 53: 'Re-run tests: Run `cargo test` for all affected crates to confirm that: The code compiles without the parameter... Existing tests that do not depend on version filtering still pass. No regressions were introduced by the parameter removal.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

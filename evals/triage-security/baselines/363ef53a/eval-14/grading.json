@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Dependency chain output includes both the rpms.lock.yaml classification AND the SBOM verification result for the affected versions (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "In version-impact.md Section 2.3.5, each affected version (2.2.0, 2.2.1, 2.2.2) shows both signals side by side: 'rpms.lock.yaml: present (3.0.7-25.el9_3) -> explicit install' AND 'SBOM verification (cosign): Final image SBOM: openssl-libs PRESENT / Base image SBOM: openssl-libs PRESENT / SBOM classification: present in both final and base image SBOMs -> base image'. The classification summary table (lines 86-91) also lists both rpms.lock.yaml classification and SBOM classification columns for each version."
+    },
+    {
+      "text": "SBOM verification uses cosign download sbom to compare the final container image SBOM against the base image SBOM (Step 2.3.5 sub-steps 2 and 4)",
+      "passed": true,
+      "evidence": "In version-impact.md Section 2.3.5, the method line states 'rpms.lock.yaml inspection + SBOM verification (cosign available at /usr/bin/cosign)'. For each version, the output shows the comparison: 'SBOM verification (cosign): Final image SBOM: openssl-libs PRESENT / Base image SBOM: openssl-libs PRESENT / SBOM classification: present in both final and base image SBOMs -> base image'. This demonstrates cosign-based SBOM comparison of final container image SBOM against base image SBOM."
+    },
+    {
+      "text": "When SBOM classification (base image) disagrees with rpms.lock.yaml classification (explicit install), the discrepancy is flagged to the engineer with a warning (Step 2.3.5 sub-step 5 disagreement handling)",
+      "passed": true,
+      "evidence": "In version-impact.md, for each affected version, when the classifications disagree the output includes: '!! DISAGREEMENT: rpms.lock.yaml says explicit install, SBOM comparison says base image / Origin: CONFLICTING -- investigate manually' followed by 'WARNING: SBOM classification disagrees with rpms.lock.yaml -- lock file says explicit install but SBOM comparison says base image. Investigate manually.' (lines 44-49, 58-63, 74-80). The discrepancy is explicitly flagged with both a DISAGREEMENT marker and a WARNING."
+    },
+    {
+      "text": "The rpms.lock.yaml classification remains the primary signal -- the SBOM result supplements but does not override it (Step 2.3.5 non-MVP enhancement)",
+      "passed": false,
+      "evidence": "In version-impact.md, when SBOM disagrees with rpms.lock.yaml, the output sets 'Origin: CONFLICTING -- investigate manually' (lines 45, 59, 75) rather than keeping the rpms.lock.yaml classification as primary. The classification summary table shows Agreement column as 'NO -- disagrees' with no indication that rpms.lock.yaml takes precedence. The final paragraph (lines 92-93) states 'This discrepancy requires manual investigation to determine the true origin' -- effectively putting both signals on equal footing rather than treating rpms.lock.yaml as the primary signal that SBOM merely supplements. The SBOM result overrides the rpms.lock.yaml classification from 'explicit install' to 'CONFLICTING'."
+    },
+    {
+      "text": "The SBOM verification result is presented alongside the rpms.lock.yaml result in the dependency chain output, not as a separate section (Step 2.3.5 sub-step 6)",
+      "passed": true,
+      "evidence": "In version-impact.md Section 2.3.5, the SBOM verification result is integrated within each version's dependency chain block alongside the rpms.lock.yaml result. For example, version 2.2.0 (lines 38-49) shows both within the same code block: 'rpms.lock.yaml: present (3.0.7-25.el9_3) -> explicit install' immediately followed by 'SBOM verification (cosign): ...'. They are not in separate sections -- they are co-located within the same dependency chain output for each version. The classification summary table (lines 86-91) also presents both classifications side by side in the same table."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 1,
+    "total": 5,
+    "pass_rate": 0.8
+  }
+}
