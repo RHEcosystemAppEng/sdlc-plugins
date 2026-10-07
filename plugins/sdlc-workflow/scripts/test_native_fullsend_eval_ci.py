@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 
 import pytest
 import yaml
@@ -500,3 +501,76 @@ def test_native_wrapper_passes_requested_judge_model(tmp_path):
     arguments = json.loads((tmp_path / "captured.argv.json").read_text())
     assert arguments[1] == "run"
     assert arguments[arguments.index("--judge-model") + 1] == "claude-opus-4-8"
+
+
+def run_ordinary_eval_step(tmp_path, mode, skills="first"):
+    """SYNTHETIC TEST DATA — execute real CI shell with a non-inference Claude stub."""
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    claude = tools / "claude"
+    claude.write_text(f"#!{sys.executable}\n" + r'''
+import json, os, re, sys
+from pathlib import Path
+args = sys.argv[1:]
+workspace = Path(re.search(r"Workspace: (.+)", args[args.index("-p") + 1])[1])
+with open("calls.jsonl", "a") as capture:
+    capture.write(json.dumps(args) + "\n")
+mode = os.environ["EVAL_STUB_MODE"] if workspace.name == "first-eval-pr" else "correct"
+if mode == "exit":
+    sys.exit(7)
+target = Path("pr-head/eval-workspace") if mode == "misplaced" else workspace
+target.mkdir(parents=True, exist_ok=True)
+for name in ("benchmark.json", "feedback.json", "summary.md"):
+    if mode == "missing-" + name or mode == "absent":
+        continue
+    if mode == "directory-" + name:
+        (target / name).mkdir()
+        continue
+    (target / name).write_text("" if mode == "empty-" + name else "synthetic result\n")
+''')
+    claude.chmod(0o755)
+    for skill in skills.split(","):
+        source = tmp_path / "pr-head/evals" / skill
+        source.mkdir(parents=True)
+        (source / "evals.json").write_text('{"evals": [{"id": 1}]}')
+    script = script_step("run-evals", "Run PR evals")["run"].replace(
+        'workspace="/tmp/${skill}-eval-pr"', f'workspace="{tmp_path}/${{skill}}-eval-pr"')
+    result = subprocess.run(["bash", "-e", "-o", "pipefail", "-c", script], cwd=tmp_path,
+                            env=dict(os.environ, PATH=f"{tools}:{os.environ['PATH']}",
+                                     SKILLS_CSV=skills, EVAL_STUB_MODE=mode),
+                            capture_output=True, text=True)
+    calls = [json.loads(line) for line in (tmp_path / "calls.jsonl").read_text().splitlines()]
+    return result, calls
+
+
+@pytest.mark.parametrize("mode", ["absent", "misplaced", "missing-benchmark.json",
+                                 "missing-feedback.json", "missing-summary.md",
+                                 "empty-benchmark.json", "empty-feedback.json", "empty-summary.md",
+                                 "directory-benchmark.json", "directory-feedback.json", "directory-summary.md"])
+def test_ordinary_eval_rejects_missing_results_in_requested_workspace(tmp_path, mode):
+    """An exit-zero CLI cannot pass CI with absent, empty or relocated root results."""
+    result, _ = run_ordinary_eval_step(tmp_path, mode)
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert "::error::" in result.stdout
+
+
+def test_ordinary_eval_authorizes_requested_workspace_and_keeps_results(tmp_path):
+    """The invocation grants the exact output directory without dropping sandbox settings."""
+    result, calls = run_ordinary_eval_step(tmp_path, "correct")
+    assert result.returncode == 0, result.stdout + result.stderr
+    args = calls[0]
+    directories = [args[i + 1] for i, arg in enumerate(args) if arg == "--add-dir"]
+    assert "pr-head" in directories
+    assert str(tmp_path / "first-eval-pr") in directories
+    assert args[args.index("--permission-mode") + 1] == "dontAsk"
+    assert args[args.index("--settings") + 1] == "/tmp/eval-sandbox-settings.json"
+    assert (tmp_path / "first-eval-pr/summary.md").read_text() == "synthetic result\n"
+
+
+@pytest.mark.parametrize("mode", ["exit", "absent"])
+def test_ordinary_eval_attempts_remaining_skills_after_failure(tmp_path, mode):
+    """CLI and result-path failures must not skip subsequent requested skills."""
+    result, calls = run_ordinary_eval_step(tmp_path, mode, "first,second")
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert len(calls) == 2
+    assert (tmp_path / "second-eval-pr/summary.md").is_file()
