@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The remediation output describes the digest protocol for the upstream backport task: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "In remediation.md, 'Description Digest Comment (Preemptive Task 3)' (lines 315-338) describes the full digest protocol for the upstream backport task: step 1 fetches via 'jira.get_issue(<preemptive-upstream-task-key>, fields=[\"description\"])', step 3 computes the digest via 'python3 scripts/sha256-digest.py /tmp/task-desc.md'. This is clearly after the create_issue call on lines 242-249."
+    },
+    {
+      "text": "The remediation output describes the digest protocol for the downstream propagation subtask: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "In remediation.md, two downstream propagation tasks have digest sections: Task 2 (lines 191-214) with 'jira.get_issue(<downstream-task-key>, fields=[\"description\"])' and 'python3 scripts/sha256-digest.py /tmp/task-desc.md'; and Preemptive Task 4 (lines 422-445) with 'jira.get_issue(<preemptive-downstream-task-key>, fields=[\"description\"])' and 'python3 scripts/sha256-digest.py /tmp/task-desc.md'. Both re-fetch after create_issue and compute SHA-256 using scripts/sha256-digest.py."
+    },
+    {
+      "text": "The remediation output includes the digest comment marker '[sdlc-workflow] Description digest:' in the described steps for each remediation task — both upstream and downstream (§1.66)",
+      "passed": true,
+      "evidence": "All four tasks in remediation.md include the exact marker in their digest comment step 4: Task 1 (line 109): 'jira.add_comment(<bump-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'; Task 2 (line ~213): same pattern for <downstream-task-key>; Task 3 (line ~337): same pattern for <preemptive-upstream-task-key>; Task 4 (line ~444): same pattern for <preemptive-downstream-task-key>. The marker '[sdlc-workflow] Description digest:' is present in all."
+    },
+    {
+      "text": "The remediation output sequences digest comments BEFORE issue links (Depend, Blocks) or other comments in the described procedure for each task (§1.66, shared/description-digest-protocol.md Rules)",
+      "passed": false,
+      "evidence": "In remediation.md, the document structure consistently places the Jira link sections BEFORE the digest comment sections for all tasks. Task 1: '**Jira link:**' with create_link (Depend) at lines 78-85 appears before '#### Description Digest Comment (Task 1)' at line 87. Task 2: '**Jira links:**' with create_link (Depend, Blocks) at lines 174-189 appears before digest section at line 191. Task 3: '**Jira link**' (Related) at lines 306-313 appears before digest section at line 315. Task 4: '**Jira links:**' (Related, Blocks) at lines 404-420 appears before digest section at line 422. While each digest section's step 4 contains a parenthetical '(before creating issue links or other comments)', the document's structural ordering contradicts this by presenting links first in the procedural flow. Contradictory evidence per grading rule 6."
+    },
+    {
+      "text": "The remediation output specifies that the digest is computed from the re-fetched description (via Jira API after create_issue), not from the description string passed to create_issue (shared/description-digest-protocol.md Hashing)",
+      "passed": true,
+      "evidence": "All four digest sections in remediation.md explicitly show step 1 as re-fetching from Jira: Task 1 uses 'jira.get_issue(<bump-task-key>, fields=[\"description\"])'; Task 2 uses 'jira.get_issue(<downstream-task-key>, fields=[\"description\"])'; Task 3 uses 'jira.get_issue(<preemptive-upstream-task-key>, fields=[\"description\"])'; Task 4 uses 'jira.get_issue(<preemptive-downstream-task-key>, fields=[\"description\"])'. Each section heading says 'After creating the [task type] task, perform the following steps', confirming the fetch is from Jira after create_issue, not from the passed description string."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 1,
+    "total": 5,
+    "pass_rate": 0.8
+  }
+}

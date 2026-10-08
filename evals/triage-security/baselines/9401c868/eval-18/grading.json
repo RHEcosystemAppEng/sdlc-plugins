@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Step 8 (lines 98-103): 'Two remediation tasks already exist: TC-8100: upstream backport (Depend link to TC-8001, status In Progress), TC-8101: downstream propagation (Depend link to TC-8001, Blocks TC-8100, status Open)' and 'The skill detects that remediation tasks already exist for this CVE/stream combination through the issue's existing issuelinks array (fetched in Step 1). No new remediation tasks created.' triage-outcome.md confirms: 'The skill detects that remediation already exists for this CVE and stream, and skips task creation entirely. No duplicate tasks are created.' Net Effect table shows 'Jira issues created | 0'."
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Post-Triage Summary (lines 110-113): 'The ai-cve-triaged label is already present on the issue... Label: ai-cve-triaged already in labels array. Adding it again is a no-op (label sets are idempotent in Jira). Mutation: None.' data-extraction.md lists 'ai-cve-triaged' in Existing Labels. triage-outcome.md confirms 'Labels changed | 0' and states 'The second run is a pure read-only verification pass... produces no side effects.'"
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md Step 0.7 (lines 35-37): 'Issue status is In Progress, which is past Assigned. The skill's status-aware handling notes: If the issue is already in Assigned or any later status, skip the transition silently.' and 'the transition is SKIPPED because the issue is already past Assigned status.' Step 1 (lines 41-42) also warns: 'This issue is already in In Progress. It may be actively worked on.' Both conditions of the assertion are met: the transition is skipped AND a warning is issued. Net Effect confirms 'Status transitions | 0'."
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md (line 48) lists the existing digest comment: '[sdlc-workflow] Description digest: sha256-md:a1b2c3d4e5f6... (posted 2026-07-01T10:00:00Z)'. triage-outcome.md (lines 64-65): 'The description digest comment already exists (Comment #1 on the issue, posted at 2026-07-01T10:00:00Z). No new digest comment is needed.' idempotency-check.md mechanism #7 (line 131): 'Comment deduplication: The description digest comment and post-triage summary comment already exist, preventing duplicate postings.' Net Effect: 'Jira comments posted | 0'."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "data-extraction.md (line 49) lists the existing summary comment: 'Post-triage summary comment: Documents version impact... (posted 2026-07-01T10:01:00Z)'. triage-outcome.md (lines 61-63): 'The post-triage summary comment already exists (Comment #2 on the issue, posted at 2026-07-01T10:01:00Z). The skill detects existing comments from sdlc-workflow/triage-security and avoids posting a duplicate summary.' idempotency-check.md (lines 112-113) confirms: 'A post-triage summary comment already exists from the prior run. Posting a duplicate summary would create noise. The skill should detect the existing summary and skip posting a new one.' Net Effect: 'Jira comments posted | 0'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

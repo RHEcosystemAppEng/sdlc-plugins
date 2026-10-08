@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+      "passed": true,
+      "evidence": "discovery-listing.md shows a 'Configuration Used' table at the top listing 'Project key: TC' and 'Vulnerability issue type ID: 10024'. All three JQL queries use these values: Query 1 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged)', Query 2 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status = New', Query 3 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, 'ON_QA')'. The configuration table demonstrates values were sourced from configuration, not hardcoded."
+    },
+    {
+      "text": "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (§1.48)",
+      "passed": true,
+      "evidence": "discovery-listing.md contains three separate queries: Query 1 JQL 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged) ORDER BY status ASC, created DESC' (untriaged), Query 2 JQL 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status = New ORDER BY created DESC' (triaged-but-new), Query 3 JQL 'project = TC AND issuetype = 10024 AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, 'ON_QA') ORDER BY created DESC' (Ready for QA candidates). All three match the required filter patterns."
+    },
+    {
+      "text": "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
+      "passed": true,
+      "evidence": "discovery-listing.md has three clearly separated sections with horizontal rules (---) between them: 'Query 1: Untriaged Issues' (4 issues), 'Query 2: Triaged but still New' (1 issue), and 'Query 3: Ready for QA' (1 ready + 2 excluded). Each section has its own heading, JQL, and results table."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": false,
+      "evidence": "Most issues show all five fields, but the 'Excluded from Ready for QA' table in discovery-listing.md (lines 85-87) lists TC-9023 and TC-9026 with columns: Issue, Status, CVE, Summary, Reason -- but omits the Created date column. TC-9023 shows 'In Progress | CVE-2026-39102 | rustls - Certificate validation bypass [rhtpa-2.1]' and TC-9026 shows 'Modified | CVE-2026-39330 | openssl - Buffer overflow in X.509 parsing [rhtpa-2.2]', both without created dates."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "status-handling.md explicitly handles each issue: TC-9001 (New): 'Decision: Proceed with full triage (default path)'; TC-9002 (New): 'Decision: Proceed with full triage (default path)'; TC-9004 (New): 'Decision: Proceed with full triage (default path)'; TC-9003 (In Progress): 'Decision: Warn before proceeding.' with 'Warning: \"This issue is already in `In Progress`. It may be actively worked on.\"' and offers options to proceed or skip."
+    },
+    {
+      "text": "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)",
+      "passed": true,
+      "evidence": "discovery-listing.md Query 3 results: TC-9020 in 'Ready for QA (1 issue)' section with 'TC-9021 (Done), TC-9022 (Closed)' remediation tasks listed. TC-9023 in 'Excluded from Ready for QA' with reason 'Remediation in progress: TC-9025 still In Progress (TC-9024 Done)'. TC-9026 in 'Excluded from Ready for QA' with reason 'No linked Tasks with type \"Depend\" -- no remediation to verify'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.83
+  }
+}

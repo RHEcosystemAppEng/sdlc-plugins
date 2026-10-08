@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "assertion": "Step 2.3.5 dependency chain context identifies criterion as a dev-only dependency based on its presence in [dev-dependencies] in the manifest",
+      "verdict": "PASS",
+      "evidence": "version-impact.md Step 2.3.5 section: \"Dependency chain for criterion: backend (workspace) -> criterion (direct dev-dependency) Type: direct dependency Profile: dev-only ([dev-dependencies] in backend/Cargo.toml) NOT present in production builds -- used for benchmarks only\" and \"criterion is declared in `[dev-dependencies]` in `backend/Cargo.toml`.\""
+    },
+    {
+      "assertion": "The dependency scope decision tree classifies criterion as 'dev-only — not shipped in production' and applies the dev-dependency remediation handling",
+      "verdict": "PASS",
+      "evidence": "version-impact.md: \"criterion is declared in `[dev-dependencies]` in `backend/Cargo.toml`. It is used for benchmarks only and is NOT shipped in production container images. Per the dependency scope decision tree: Dev-only dependencies still represent a supply chain risk... Remediation tasks will carry the `dev-dependency` label... Priority is overridden to **Normal** regardless of CVE severity\""
+    },
+    {
+      "assertion": "Remediation tasks include the dev-dependency label in the labels array: labels contain 'dev-dependency' alongside 'ai-generated-jira', 'Security', and the CVE ID",
+      "verdict": "PASS",
+      "evidence": "remediation.md Task 1 labels: \"`ai-generated-jira`, `Security`, `CVE-2026-99001`, `dev-dependency`\" and Task 2 labels: \"`ai-generated-jira`, `Security`, `CVE-2026-99001`, `dev-dependency`\" -- all four required labels are present in both tasks."
+    },
+    {
+      "assertion": "Remediation task priority is set to Normal regardless of the CVE severity (CVSS 5.3 Medium) — the priority override is applied per the decision tree",
+      "verdict": "PASS",
+      "evidence": "remediation.md states: \"Priority: **Normal** (overrides CVE severity of Medium/CVSS 5.3)\" and both Task 1 and Task 2 show \"**Priority**: Normal\""
+    },
+    {
+      "assertion": "Remediation task description includes a note indicating the dependency is dev/build-only and not shipped in production",
+      "verdict": "PASS",
+      "evidence": "remediation.md Task 1 description: \"This dependency is dev/build-only and is not shipped in production. Remediation priority is Normal (supply chain risk only).\" Task 2 description contains the same note: \"This dependency is dev/build-only and is not shipped in production. Remediation priority is Normal (supply chain risk only).\""
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
