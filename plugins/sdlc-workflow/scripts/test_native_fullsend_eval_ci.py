@@ -1,15 +1,25 @@
 """Trusted workflow contracts; no native suite or model execution lives here."""
 
+import importlib.util
 import json
 import os
 from pathlib import Path
 import subprocess
 import sys
+import shutil
 
 import pytest
 import yaml
 
 ROOT = Path(__file__).resolve().parents[3]
+
+
+def synthetic_execution(cases):
+    """SYNTHETIC TEST DATA — fixed observations, never authentic runtime evidence."""
+    return {"phases_completed": True, "cases": {case: dict.fromkeys([
+        "case_result_valid", "transcript_readable", "runtime_completed", "skill_invoked", "tools_completed"], True)
+        for case in cases}}
+
 
 def workflow():
     """Read the actual trusted workflow rather than a duplicate implementation."""
@@ -90,6 +100,8 @@ def test_source_resolution_refuses_stale_or_unrelated_revisions(defect):
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/schemas/triage-security-input.schema.json", "true"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/providers/vertex-ai.yaml", "true"),
     (299, "verify-pr-fullsend", ".github/scripts/run-native-fullsend-evals.sh", "true"),
+    (299, "verify-pr-fullsend", ".github/scripts/check-native-fullsend-execution.py", "true"),
+    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/scripts/test_native_fullsend_execution.py", "true"),
     (300, "verify-pr-fullsend", "evals/fullsend/run.py", "false"),
     (299, "wrong", "evals/fullsend/run.py", "false"),
     (299, "verify-pr-fullsend", "README.md", "false"),
@@ -179,29 +191,36 @@ def test_native_job_requires_collaborator_or_current_run_approval(trusted, gate,
     assert json.loads(result.stdout) is expected
 
 
-@pytest.mark.parametrize("defect", [None, "wrong-source", "wrong-eval-source", "missing-outcome", "null", "false", "scorer-failed", "missing-report"])
+@pytest.mark.parametrize("defect", [None, "wrong-source", "wrong-eval-source", "missing-outcome", "null", "false", "scorer-failed", "missing-report", "execution-failed", "missing-execution"])
 def test_reporting_verifies_source_and_boolean_outcomes(defect):
-    """Missing/incomplete/scorer failure cannot be published as successful native evidence."""
+    """Execution and report integrity block CI while quality outcomes remain advisory."""
     source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
               "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
     outcomes = {case: {f"assertion_{i}": True for i in range(1, n+1)}
                 for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}.items()}
     report = {"source": source, "outcomes": outcomes, "complete": True, "total": 21, "exit_code": 0,
-              "rationale": "SECRET /tmp/gha-creds-evil"}
+              "rationale": "SECRET /tmp/gha-creds-evil", "execution_valid": True,
+              "execution": synthetic_execution(outcomes)}
     if defect == "wrong-source": source["head_sha"] = "d" * 40
     elif defect == "wrong-eval-source": source["eval_source_sha"] = "d" * 40
     elif defect == "missing-outcome": del outcomes["033-absent"]["assertion_1"]
     elif defect in {"null", "false"}: outcomes["033-absent"]["assertion_1"] = None if defect == "null" else False
-    elif defect == "scorer-failed": report["exit_code"] = 7
+    elif defect == "scorer-failed":
+        report["exit_code"] = 7
+        report["execution_valid"] = False
+    elif defect == "execution-failed": report["execution"]["cases"]["035-malformed"]["skill_invoked"] = False
+    elif defect == "missing-execution": del report["execution"]
     elif defect == "missing-report": report = None
     env = {"PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
            "BASE_SHA": "b" * 40, "TRUSTED_SHA": "e" * 40, "EVAL_SOURCE_SHA": "f" * 40, "NATIVE_RESULT": "success"}
     result = run_js(script_step("report-status", "Publish native result alongside ordinary review")["with"]["script"],
                     {"report": report}, env)
-    assert bool(result["errors"]) == (defect is not None)
+    assert bool(result["errors"]) == (defect not in (None, "false"))
     if result["reviews"]:
         assert result["reviews"][0]["commit_id"] == "a" * 40
         assert "SECRET" not in result["reviews"][0]["body"]
+        if report is not None:
+            assert "quality score (advisory)" in result["reviews"][0]["body"]
 
 
 
@@ -282,6 +301,7 @@ def test_review_reruns_reuse_only_matching_bot_head_review(native, existing_kind
     report = {"source": source, "complete": True, "total": 21, "exit_code": 0,
               "outcomes": {case: {f"assertion_{i}": True for i in range(1, n+1)}
                            for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}.items()}}
+    report.update(execution_valid=True, execution=synthetic_execution(report["outcomes"]))
     result = run_js(script, {"report": report, "existingReviews": stored, "repeat": 2}, {
         "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
         "BASE_SHA": "b" * 40, "TRUSTED_SHA": "e" * 40, "EVAL_SOURCE_SHA": "f" * 40,
@@ -337,8 +357,24 @@ def test_native_artifact_download_failure_keeps_controlled_reporting():
     assert "No safe native result was produced; native execution/approval failed." in result["reviews"][0]["body"]
 
 
-def run_credential_wrapper(tmp_path, output):
-    """SYNTHETIC TEST DATA — run the real wrapper with local credential/inference doubles."""
+def run_credential_wrapper(tmp_path, output, passed=21, broken_execution=False):
+    """Run the real wrapper/checker with synthetic credentials and inference records."""
+    # Given explicitly synthetic native artifacts, generated without inference
+    spec = importlib.util.spec_from_file_location("execution_fixtures", ROOT / "plugins/sdlc-workflow/scripts/test_native_fullsend_execution.py")
+    fixtures = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fixtures)
+    private, run, safe, source, status = fixtures.synthetic_run(tmp_path, passed)
+    source.update(merge_sha="c" * 40, base_sha="b" * 40, trusted_sha="e" * 40, eval_source_sha="b" * 40)
+    report = json.loads(safe.read_text())
+    report["source"] = source
+    safe.write_text(json.dumps(report))
+    if broken_execution:
+        next((run / "cases/035-malformed").glob("output/native/*/iteration-*/output.jsonl")).unlink()
+    private.rename(tmp_path / "tc6726-private")
+    safe.parent.rename(tmp_path / "tc6726-safe")
+    checker_path = tmp_path / ".github/scripts/check-native-fullsend-execution.py"
+    checker_path.parent.mkdir(parents=True)
+    shutil.copy2(ROOT / ".github/scripts/check-native-fullsend-execution.py", checker_path)
     tools = tmp_path / "tools"
     tools.mkdir()
     scripts = tmp_path / "upstream-fullsend/internal/scaffold/fullsend-repo/scripts"
@@ -350,7 +386,7 @@ def run_credential_wrapper(tmp_path, output):
     doubles = {
         "git": '#!/bin/sh\n# SYNTHETIC TEST DATA — immutable checkout identities\ncase "$2" in *upstream-fullsend) echo d5f36921ac754705619f38c637ef692873809fbc;; *) echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;; esac\n',
         "jq": '#!/bin/sh\n# SYNTHETIC TEST DATA — host ADC type\necho external_account\n',
-        "python3.12": '#!/usr/bin/env python3\n# SYNTHETIC TEST DATA — capture parser output without inference\nimport json, os, sys\nfrom pathlib import Path\nPath(os.environ["TC6742_CAPTURE"]).with_suffix(".argv.json").write_text(json.dumps(sys.argv[1:]))\nPath(os.environ["TC6742_CAPTURE"]).write_text(json.dumps({k: os.environ.get(k) for k in ["GOOGLE_APPLICATION_CREDENTIALS", "TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]}))\n',
+        "python3.12": '#!/usr/bin/env python3\n# SYNTHETIC TEST DATA — double inference only; execute the actual checker\nimport json, os, sys\nfrom pathlib import Path\nif sys.argv[1].endswith("check-native-fullsend-execution.py"):\n    os.execv(sys.executable, [sys.executable, *sys.argv[1:]])\nPath(os.environ["TC6742_CAPTURE"]).with_suffix(".argv.json").write_text(json.dumps(sys.argv[1:]))\nPath(os.environ["TC6742_CAPTURE"]).write_text(json.dumps({k: os.environ.get(k) for k in ["GOOGLE_APPLICATION_CREDENTIALS", "TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]}))\nsys.exit(int(os.environ["TC6809_RUNNER_EXIT"]))\n',
     }
     for name, content in doubles.items():
         path = tools / name
@@ -360,6 +396,8 @@ def run_credential_wrapper(tmp_path, output):
     environment = dict(os.environ, GITHUB_WORKSPACE=str(tmp_path), RUNNER_TEMP=str(tmp_path),
                        GOOGLE_APPLICATION_CREDENTIALS="synthetic-host-adc", ANTHROPIC_VERTEX_PROJECT_ID="synthetic",
                        CLOUD_ML_REGION="global", TC6726_HEAD_SHA="a" * 40, NATIVE_EVAL_SOURCE_SHA="b" * 40,
+                       TC6726_MERGE_SHA="c" * 40, TC6726_BASE_SHA="b" * 40, TC6726_TRUSTED_SHA="e" * 40,
+                       TC6726_EVAL_SOURCE_SHA="b" * 40, TC6726_PR_NUMBER="299", TC6809_RUNNER_EXIT=str(status),
                        TC6742_FIXTURE=str(fixture), TC6742_CAPTURE=str(capture),
                        PATH=str(tools) + os.pathsep + os.environ["PATH"])
     for name in ["TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]:
@@ -367,6 +405,18 @@ def run_credential_wrapper(tmp_path, output):
     result = subprocess.run(["bash", str(ROOT / ".github/scripts/run-native-fullsend-evals.sh"), "run"],
                             env=environment, capture_output=True, text=True)
     return result, json.loads(capture.read_text()) if capture.exists() else None
+
+
+@pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (21, True, 1)])
+def test_wrapper_enforces_execution_integrity_instead_of_quality_score(tmp_path, passed, broken, expected):
+    """The real wrapper accepts advisory scores but blocks missing native execution."""
+    # Given synthetic credential preparation and native artifacts
+    output = "GOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\nGCP_OIDC_TOKEN_FILE=synthetic-token\nFULLSEND_GCP_OIDC_URL=https://synthetic.invalid/\nFULLSEND_GCP_OIDC_AUTH_FILE=synthetic-auth\n"
+    # When running the actual shell wrapper and trusted Python checker
+    result, _ = run_credential_wrapper(tmp_path, output, passed, broken)
+    # Then CI exit policy follows execution evidence, not the LLM score
+    assert result.returncode == expected, result.stderr
+    assert "Native execution evidence:" in result.stdout
 
 
 @pytest.mark.parametrize("heredoc", [False, True])
