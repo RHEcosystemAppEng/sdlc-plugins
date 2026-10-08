@@ -125,7 +125,11 @@ EOF
       --output "$RUNNER_TEMP/tc6726-private" --report-dir "$RUNNER_TEMP/tc6726-safe" \
       > "$RUNNER_TEMP/tc6726-private-run.log" 2>&1 || status=$?
     echo "Native Fullsend execution/scoring finished (exit $status); safe source-bound result only."
-    exit "$status"
+    # Scores are advisory; trusted host checks still block incomplete execution,
+    # missing native tool evidence and invalid provenance. No PR host code runs.
+    python3.12 "$GITHUB_WORKSPACE/.github/scripts/check-native-fullsend-execution.py" \
+      --private-root "$RUNNER_TEMP/tc6726-private" \
+      --report "$RUNNER_TEMP/tc6726-safe/native-result.json" --runner-exit "$status"
     ;;
   *) echo '::error::Expected setup or run'; exit 1 ;;
 esac
