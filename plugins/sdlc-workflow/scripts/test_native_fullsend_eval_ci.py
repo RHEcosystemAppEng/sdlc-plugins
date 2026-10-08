@@ -211,11 +211,20 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
     elif defect == "execution-failed": report["execution"]["cases"]["035-malformed"]["skill_invoked"] = False
     elif defect == "missing-execution": del report["execution"]
     elif defect == "missing-report": report = None
+    if defect == "false": report["exit_code"] = 1
     env = {"PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
            "BASE_SHA": "b" * 40, "TRUSTED_SHA": "e" * 40, "EVAL_SOURCE_SHA": "f" * 40, "NATIVE_RESULT": "success"}
     result = run_js(script_step("report-status", "Publish native result alongside ordinary review")["with"]["script"],
                     {"report": report}, env)
     assert bool(result["errors"]) == (defect not in (None, "false"))
+    if defect == "false":
+        assert len(result["reviews"]) == 1
+        body = result["reviews"][0]["body"]
+        assert "quality score (advisory): 20/21 passed." in body
+        assert "| Case | Execution evidence | Quality score (advisory) |" in body
+        for row in ["| 033-absent | valid | 3/4 |", "| 034-empty | valid | 5/5 |",
+                    "| 035-malformed | valid | 5/5 |", "| 036-valid | valid | 7/7 |"]:
+            assert row in body
     if result["reviews"]:
         assert result["reviews"][0]["commit_id"] == "a" * 40
         assert "SECRET" not in result["reviews"][0]["body"]
