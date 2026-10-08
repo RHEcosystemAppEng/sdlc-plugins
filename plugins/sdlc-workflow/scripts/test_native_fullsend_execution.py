@@ -177,3 +177,33 @@ def test_later_malformed_bash_result_cannot_inherit_earlier_success(tmp_path, in
     assert checker().assess(private, safe, status, source) == 1
     # Then earlier valid tool evidence does not mask the malformed later result
     assert json.loads(safe.read_text())["execution_valid"] is False
+
+
+@pytest.mark.parametrize("invalid_error", [None, 0, 1, "true", "false", [], {}])
+def test_skill_result_rejects_non_boolean_error_when_present(tmp_path, invalid_error):
+    """A present malformed Skill error flag cannot count as successful execution."""
+    # Given ADVERSARIAL synthetic Skill metadata with a non-Boolean error flag
+    private, run, safe, source, status = synthetic_run(tmp_path)
+    path = run / "cases/036-valid/output/native/synthetic/iteration-1/output.jsonl"
+    records = synthetic_records()
+    records[1]["message"]["content"][0]["is_error"] = invalid_error
+    path.write_text("".join(json.dumps(r) + "\n" for r in records))
+    # When checking actual-shaped paired execution records
+    assert checker().assess(private, safe, status, source) == 1
+    # Then malformed Skill evidence fails even though launch metadata claims success
+    assert json.loads(safe.read_text())["execution_valid"] is False
+
+
+@pytest.mark.parametrize("is_error,expected", [(False, 0), (True, 1)])
+def test_skill_result_honors_boolean_error_flag(tmp_path, is_error, expected):
+    """Explicit Boolean Skill errors reject execution while false preserves launch."""
+    # Given a well-formed synthetic Skill result with explicit error status
+    private, run, safe, source, status = synthetic_run(tmp_path)
+    path = run / "cases/036-valid/output/native/synthetic/iteration-1/output.jsonl"
+    records = synthetic_records()
+    records[1]["message"]["content"][0]["is_error"] = is_error
+    path.write_text("".join(json.dumps(r) + "\n" for r in records))
+    # When checking Skill launch and subsequent tool execution
+    assert checker().assess(private, safe, status, source) == expected
+    # Then the explicit error status controls validity
+    assert json.loads(safe.read_text())["execution_valid"] is (not is_error)
