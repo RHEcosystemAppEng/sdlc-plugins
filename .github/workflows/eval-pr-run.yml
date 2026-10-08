@@ -233,8 +233,8 @@ jobs:
               /^evals\/fullsend\//.test(f.filename) ||
               /^evals\/triage-security\//.test(f.filename) ||
               /^plugins\/sdlc-workflow\/skills\/triage-security\//.test(f.filename) ||
-              /^plugins\/sdlc-workflow\/(policies\/triage-security\.yaml|providers\/vertex-ai\.yaml|profiles\/fullsend-vertex-ai\.yaml|env\/gcp-vertex\.env|schemas\/triage-security-(input|result)\.schema\.json|scripts\/(validate-output-schema\.sh|strip_extra_properties\.py|test_(fullsend_gate_eval|native_fullsend_eval_ci)\.py))$/.test(f.filename) ||
-              /^\.github\/(workflows\/eval-pr(-run)?\.yml|scripts\/run-native-fullsend-evals\.sh)$/.test(f.filename)
+              /^plugins\/sdlc-workflow\/(policies\/triage-security\.yaml|providers\/vertex-ai\.yaml|profiles\/fullsend-vertex-ai\.yaml|env\/gcp-vertex\.env|schemas\/triage-security-(input|result)\.schema\.json|scripts\/(validate-output-schema\.sh|strip_extra_properties\.py|test_(fullsend_gate_eval|native_fullsend_eval_ci|native_fullsend_execution)\.py))$/.test(f.filename) ||
+              /^\.github\/(workflows\/eval-pr(-run)?\.yml|scripts\/(run-native-fullsend-evals\.sh|check-native-fullsend-execution\.py))$/.test(f.filename)
             );
             core.setOutput('native', String(nativeRelevant));
             core.setOutput('skills', skills);
@@ -652,8 +652,22 @@ jobs:
                     report.outcomes?.[k]?.[`assertion_${i+1}`]).every(v => typeof v === 'boolean'));
               if (!bound) { core.setFailed('Native report source mismatch'); return; }
               const passed = Object.values(report.outcomes || {}).flatMap(v => Object.values(v)).filter(v => v === true).length;
-              valid = complete && passed === 21 && report.exit_code === 0;
-              body += `Native job: ${process.env.NATIVE_RESULT}; complete: ${complete}; ${passed}/21 passed.\n`;
+              const fields = ['case_result_valid', 'transcript_readable', 'runtime_completed', 'skill_invoked', 'tools_completed'];
+              const execution = report.execution;
+              const executed = execution?.phases_completed === true &&
+                Object.keys(execution.cases || {}).length === 4 && Object.keys(counts).every(k =>
+                  Object.keys(execution.cases?.[k] || {}).length === fields.length &&
+                  fields.every(f => execution.cases?.[k]?.[f] === true));
+              // Quality scores are advisory; actual execution and source integrity remain blocking.
+              valid = complete && executed && report.execution_valid === true;
+              body += `Native job: ${process.env.NATIVE_RESULT}; complete: ${complete}.\n`;
+              body += `Execution evidence: ${valid ? 'valid' : 'invalid'}; quality score (advisory): ${passed}/21 passed.\n\n`;
+              body += '| Case | Execution evidence | Quality score (advisory) |\n|---|---|---|\n';
+              for (const [k,n] of Object.entries(counts)) {
+                const evidence = fields.every(f => execution?.cases?.[k]?.[f] === true);
+                const casePassed = Object.values(report.outcomes?.[k] || {}).filter(v => v === true).length;
+                body += `| ${k} | ${evidence ? 'valid' : 'invalid'} | ${casePassed}/${n} |\n`;
+              }
             } else {
               body += 'No safe native result was produced; native execution/approval failed.\n';
             }
