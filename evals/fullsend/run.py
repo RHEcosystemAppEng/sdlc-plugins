@@ -256,8 +256,96 @@ def pipeline(python, source, config, workspace, run_dir, run_id, environment, di
     return 0
 
 
+def valid_case_tool_observations(run_dir):
+    """Observe matched native tools without exporting text or replacing judgments."""
+    observations = dict.fromkeys([
+        "transcript_found", "transcript_readable", "skill_invoked",
+        "presence_gate_succeeded", "presence_gate_failed",
+        "input_validation_succeeded", "input_validation_failed",
+    ], False)
+    try:
+        paths = list(run_dir.glob("cases/036-valid/output/native/*/iteration-*/transcripts/*.jsonl"))
+        observations["transcript_found"] = bool(paths)
+        observations["transcript_readable"] = bool(paths)
+        skill = (ROOT / "plugins/sdlc-workflow/skills/triage-security/SKILL.md").read_text()
+        commands = {}
+        for step, kind in [("0.6", "presence_gate"), ("0.7", "input_validation")]:
+            command = skill.split(f"### Step {step}", 1)[1].split("```bash\n", 1)[1].split("\n```", 1)[0]
+            commands[command.replace("${CLAUDE_PLUGIN_ROOT}", "/sandbox/claude-config/plugins/sdlc-workflow")] = kind
+    except (OSError, UnicodeError, IndexError):
+        observations["transcript_readable"] = False
+        return observations
+    expected = {"presence_gate": "sandbox mode: /sandbox/workspace/output",
+                "input_validation": "Trusted triage-security input available"}
+    for path in paths:
+        pending = {}
+        identities = set()
+        observed = dict.fromkeys(observations, False)
+        try:
+            if any(parent.is_symlink() for parent in [path, *path.parents]):
+                raise ValueError("Symlinked transcript")
+            with path.open() as transcript:
+                seen = False
+                for line in transcript:
+                    seen = True
+                    if not line.endswith("\n"):
+                        raise ValueError("Truncated transcript")
+                    record = json.loads(line)
+                    if not isinstance(record, dict):
+                        raise ValueError("Invalid transcript record")
+                    if record.get("type") not in ("assistant", "user"):
+                        continue
+                    message = record.get("message", {})
+                    if not isinstance(message, dict) or message.get("role") != record.get("type"):
+                        continue
+                    blocks = message.get("content", [])
+                    if not isinstance(blocks, list):
+                        continue
+                    for block in blocks:
+                        if not isinstance(block, dict):
+                            continue
+                        if record["type"] == "assistant" and block.get("type") == "tool_use":
+                            identity = block.get("id")
+                            if not isinstance(identity, str) or not identity or identity in identities:
+                                raise ValueError("Invalid or duplicate tool ID")
+                            identities.add(identity)
+                            inputs = block.get("input", {})
+                            if not isinstance(inputs, dict):
+                                continue
+                            if (block.get("name") == "Skill" and inputs.get("skill") == "sdlc-workflow:triage-security"
+                                    and inputs.get("args") == "TC-8101"):
+                                observed["skill_invoked"] = True
+                            command = inputs.get("command")
+                            if block.get("name") == "Bash" and isinstance(identity, str) and isinstance(command, str):
+                                pending[identity] = commands.get(command.strip())
+                        elif record["type"] == "user" and block.get("type") == "tool_result":
+                            identity = block.get("tool_use_id")
+                            kind = pending.pop(identity, None) if isinstance(identity, str) else None
+                            if kind is None:
+                                continue
+                            content = block.get("content", "")
+                            if isinstance(content, list):
+                                content = "\n".join(item["text"] for item in content
+                                                    if isinstance(item, dict) and item.get("type") == "text"
+                                                    and isinstance(item.get("text"), str))
+                            success = (block.get("is_error") is False and isinstance(content, str)
+                                       and expected[kind] in content.splitlines())
+                            observed[kind + ("_succeeded" if success else "_failed")] = True
+                if not seen:
+                    raise ValueError("Empty transcript")
+        except (OSError, UnicodeError, ValueError, RecursionError):
+            observations["transcript_readable"] = False
+            continue
+        for key, value in observed.items():
+            observations[key] = observations[key] or value
+    if not observations["transcript_readable"]:
+        for key in ["skill_invoked", "presence_gate_succeeded", "input_validation_succeeded"]:
+            observations[key] = False
+    return observations
+
+
 def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
-    """Export only source pins and Boolean outcomes; raw evidence stays private."""
+    """Export source pins, Boolean outcomes and fixed observations; raw evidence stays private."""
     import yaml
     sha_keys = {"head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"}
     if (set(source) != sha_keys | {"pr_number"} or type(source["pr_number"]) is not int
@@ -275,7 +363,8 @@ def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
     except ValueError:
         exit_code = exit_code or 1
     report = {"source": source, "exit_code": exit_code, "complete": complete, "outcomes": outcomes,
-              "passed": sum(value is True for case in outcomes.values() for value in case.values()), "total": 21}
+              "passed": sum(value is True for case in outcomes.values() for value in case.values()), "total": 21,
+              "valid_case_tools": valid_case_tool_observations(run_dir)}
     if diagnostics is not None:
         phases = {"preflight", "configuration", "workspace", "execute", "collect", "score", "summary", "complete"}
         codes = {"none", "runtime-error", "phase-exit", "missing-case-results", "invalid-summary",

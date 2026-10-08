@@ -281,6 +281,25 @@ records; a complete summary alone does not prove correct Skill execution.
 No task/bug closure follows from static tests, host schema validation or a
 successful dependency preflight.
 
+The source-bound `native-result.json` also includes `valid_case_tools`, containing
+only Boolean flags: `transcript_found`, `transcript_readable`, `skill_invoked`,
+`presence_gate_succeeded`, `presence_gate_failed`, `input_validation_succeeded`,
+and `input_validation_failed`. These observations concern only `036-valid`.
+The extractor recognizes the exact Step0.6/0.7 Bash instructions in the trusted
+eval source (with the native plugin mount substituted), pairs actual user tool
+results with preceding assistant Bash calls by ID, and requires a non-error result
+with the expected stdout line for success. Skill invocation requires the actual
+`sdlc-workflow:triage-security` tool call for `TC-8101`. Narration, quoted commands
+and unmatched results cannot establish success. Command variants are unrecognized.
+
+Conflicting observed results retain both success and failure flags. Missing,
+empty, malformed, truncated, unreadable or symlinked transcripts cannot establish
+success; incomplete evidence sets `transcript_readable=false` and clears success
+and invocation flags. A false flag means no qualifying observation, not proof
+that the step was skipped, that the Skill is correct, or that Fullsend has a bug.
+These flags do not change any judge assertion, outcome or exit code. Raw logs,
+commands, paths, stdout, credentials and judge rationales remain private.
+
 ## Deterministic development checks
 
 ```bash
