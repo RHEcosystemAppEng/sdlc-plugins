@@ -92,3 +92,18 @@ def test_case3_assertion_agrees_with_production_detection_criteria(criterion):
     # Then both contracts retain each independently declared detection criterion
     assert criterion in assertion
     assert criterion in detection
+
+
+def test_case6_human_classification_allows_an_explicit_non_eval_explanation():
+    """Reject lexical bans that penalize correctly distinguishing human feedback."""
+    # Given the retained human-comment classification assertion
+    cases = json.loads((EVAL_DIR / "evals.json").read_text())["evals"]
+    case = next(case for case in cases if case["id"] == 6)
+    assertion = case["assertions"][2]
+
+    # Then the contract tests classification grounds rather than forbidden words
+    assert "its classification does not reference eval detection or eval metrics" not in assertion
+    assert "classification is grounded in the human reviewer's substantive feedback" in assertion
+    assert "Explicitly explaining that the comment is not an eval result is allowed" in assertion
+    assert "treated as an automated eval result or classified using eval metrics" in assertion
+    assert len(cases) == 6 and sum(len(item["assertions"]) for item in cases) == 68

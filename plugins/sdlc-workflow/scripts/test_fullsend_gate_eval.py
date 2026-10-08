@@ -159,7 +159,8 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
         (triage, {"205eeca4b564c0483c919be0951e50b3d5510f981278c61fa1c47468af5fe76d",
                   "b3f9e9d4f4ab1eb92f053c0c0e4199a36eabb12ab9589e9d27e9c59509eee501"}),
         (verify, {"251863edaed38f0b133c0cf0981ddffe80692f5d0655b51f7bfe214be38f69b1",
-                  "cf587edf1e94e6a1a210d5c97788f33b3336a0818a86551e364ec056bd1a3be1"}),
+                  "cf587edf1e94e6a1a210d5c97788f33b3336a0818a86551e364ec056bd1a3be1",
+                  "501a5fd500ff19ad460e9b1c65f7c4422b743ab6db6b58ba331b50197b45aabd"}),
     ]:
         assert hashlib.sha256(json.dumps(cases, sort_keys=True, separators=(",", ":")).encode()).hexdigest() in digests
     assert not (FIXTURES / "fullsend-gate-tools.py").exists()
