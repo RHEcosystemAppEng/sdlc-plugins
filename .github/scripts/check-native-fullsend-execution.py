@@ -77,6 +77,8 @@ def observe_case(case_dir):
                         kind = pending.get(identity) if isinstance(identity, str) else None
                         if kind == "bash" and type(block.get("is_error")) is not bool:
                             raise ValueError("Invalid Bash tool result")
+                        if kind == "skill" and "is_error" in block and type(block["is_error"]) is not bool:
+                            raise ValueError("Invalid Skill tool result")
                         if kind is not None:
                             del pending[identity]
                         if kind == "skill":
