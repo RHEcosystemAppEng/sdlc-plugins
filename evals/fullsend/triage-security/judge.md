@@ -36,4 +36,13 @@ of correct gate/input behavior. The valid case requires the actual Skill inline
 validator after the completed result write, not merely host validate-output-schema.sh
 or standalone validation of a sample. Inspect actual output file inventory and
 raw tools to establish that no prohibited sandbox files or external calls occurred.
+
+For output-inventory assertions, inspect only the Skill's FULLSEND_OUTPUT_DIR
+(`/sandbox/workspace/output`), extracted under
+`output/native/<run>/iteration-*/output/`. Require exactly the prescribed files
+there; any additional file inside that directory fails. Fullsend's stdout/stderr,
+logs, telemetry, metrics and transcripts outside that directory are runtime
+evidence, not Skill output, and must not count as extra Skill files. Creating the
+directory or rewriting the same result path does not add an inventory file;
+still inspect raw tools for prohibited writes and genuine execution as above.
 Opaque CLI metrics may lack cost_usd; that is not a runtime success signal.
