@@ -418,11 +418,20 @@ def run_credential_wrapper(tmp_path, output, passed=21, broken_execution=False):
 
 @pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (21, True, 1)])
 def test_wrapper_enforces_execution_integrity_instead_of_quality_score(tmp_path, passed, broken, expected):
-    """The real wrapper accepts advisory scores but blocks missing native execution."""
+    """The wrapper invokes the runner correctly and gates execution independently of score."""
     # Given synthetic credential preparation and native artifacts
     output = "GOOGLE_APPLICATION_CREDENTIALS=synthetic-adc\nGCP_OIDC_TOKEN_FILE=synthetic-token\nFULLSEND_GCP_OIDC_URL=https://synthetic.invalid/\nFULLSEND_GCP_OIDC_AUTH_FILE=synthetic-auth\n"
     # When running the actual shell wrapper and trusted Python checker
     result, _ = run_credential_wrapper(tmp_path, output, passed, broken)
+    arguments = json.loads((tmp_path / "captured.argv.json").read_text())
+    assert arguments == [
+        str(tmp_path / "native-eval-source/evals/fullsend/run.py"), "run",
+        "--cache", str(tmp_path / "tc6726-deps"),
+        "--judge-model", "claude-opus-4-8",
+        "--plugin-root", str(tmp_path / "pr-head/plugins/sdlc-workflow"),
+        "--output", str(tmp_path / "tc6726-private"),
+        "--report-dir", str(tmp_path / "tc6726-safe"),
+    ]
     # Then CI exit policy follows execution evidence, not the LLM score
     assert result.returncode == expected, result.stderr
     assert "Native execution evidence:" in result.stdout
