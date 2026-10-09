@@ -5,6 +5,38 @@ triage-security skill. These steps handle Affects Versions correction,
 duplicate and sibling detection, cross-CVE overlap detection, preemptive task
 reconciliation, version lifecycle checks, and already-fixed detection.
 
+## Fullsend action mapping
+
+This file's interactive procedures and confirmation prompts are unchanged when
+`FULLSEND_OUTPUT_DIR` is absent. In Fullsend mode, use only validated trusted input
+and `authorization.mutation_authorized`; never call Jira or ask the engineer to
+confirm a sandbox action.
+
+If authorization is false, do not serialize any mutation from Steps 3–7. Return the
+top-level evidence-backed report-only result with exactly its one `report-only`
+action, and name each withheld correction, link, closure, assignment, label update,
+or comment in the report. If authorization is true, map each write one-for-one to
+the existing result-schema types below. Every marker is stable and unique in the
+form `triage-security:<lowercase-issue>:<operation>:<target>` (using only
+schema-valid marker characters), and existing `idempotency.action_markers` or trusted
+existing artifacts mean the action is omitted on retry.
+
+| Procedure write | Fullsend action |
+|---|---|
+| Affects Versions correction, VEX value, assignment, add/remove label, resolution | `field-edit` |
+| Assigned, In Progress, Closed | `status-transition` |
+| Affects Versions, duplicate, overlap, lifecycle, already-fixed, reconciliation, and skip comments | `comment` with `body_adf` |
+| Related, Depend, Blocks links | `link` with the same `link_type` |
+
+Build all comment bodies as ADF documents, retaining required Comment Footnotes and
+ProdSec mentions. Step 4.4 reconciliation is specifically a `link` action for the
+new `Depend` relationship and a `field-edit` action that removes
+`security-preemptive`; it is never a direct Jira update in the sandbox. Keep the
+skill's step order, and defer comments that list newly created tasks until the
+executor-owned `remediation-task` action has registered each task reference and
+posted its description digest exactly once, followed by that task's links. Do not
+serialize a separate digest comment or post-creation `resolve-reference` action.
+
 ## Step 3 – Affects Versions Correction
 
 ### 3.1 – Discover available Jira versions
@@ -488,6 +520,55 @@ that links all CVE triages and remediation tasks for a given product version.
 before Case A/B/C branching in Step 8. It applies to all non-preemptive
 remediation types (upstream backport, downstream propagation, system package,
 dependency bump).
+
+### Fullsend release procedure
+
+The following 7.5.1–7.5.3 searches, confirmations and writes are interactive-only.
+In Fullsend mode, use only the validated `jira_metadata.release_jira` entries for
+matrix release families and `authorization.release_decisions`. Do not fetch a
+release issue, choose a patch bump, prompt or contact Jira.
+
+1. For each affected family, require its trusted release entry. If missing, report
+   **manual release decision required**, identify the family and withheld work,
+   and leave release-dependent remediation unresolved. Do not claim completion.
+2. Honor `{family, skip: true}` by explicitly reporting the skip and continuing
+   Step 8 without release links for that family. Otherwise use the decision's
+   exact version, or reuse the existing Epic selected by the trusted query order
+   (7.5.1). Require exact configured prefix/version summaries, Epic type, Task type
+   and child parent identity. Ambiguous identities require manual review.
+3. Reuse existing Epic/Task keys with `resolve-reference` before dependent actions;
+   reuse never needs a creation permission. If an identity is missing, require
+   `mutation_authorized: true`, the decision's exact family/version, and its
+   individual `create_epic: true` or `create_task: true`. A permission for one
+   does not authorize the other. Missing permission/decision yields the manual
+   release decision required report, no guessed version or dependent creation.
+4. Append `release-epic` before `release-task`; the Task's `parent` is the matching
+   existing Epic key or `{{release-epic-ref.key}}`. Both actions carry family,
+   version, ref, project, exact summary, description_adf and labels (optional
+   priority/fix_versions). Use unique stable markers and one creation action per
+   identity. Always retain planned release creation actions on partial retries,
+   even with a recorded marker: the host reuses the typed snapshot and repairs
+   its digest before dependent links/comments. Do not add standalone digest
+   comments or post-creation resolve-reference actions.
+5. For dedup, inspect only the selected release Task's Blocks inward endpoints
+   in `remediation`, then their Depend-linked `originating_cves`. Compare the
+   originating CVE's `upstream_affected_component` with the current issue's
+   configured `upstream_affected_component_field`. Preserve 7.5.3's prerequisite:
+   no configured field means skip dedup. Use library-summary fallback only when
+   the Depend link or component field on the originating CVE is missing; a
+   present nonmatching component never authorizes a summary fallback. Missing
+   trusted graph evidence must not be replaced by a Jira query.
+6. A match emits no new remediation Task: append Depend with current CVE inward
+   and covering Task outward, Related with release Task inward and current CVE
+   outward, and field-edit adding the CVE label while retaining all existing
+   labels. Record family/version, covering Task and match evidence in the report.
+   Nonmatches follow Step 8, including dependency bump plus downstream
+   propagation when applicable, then Blocks (remediation inward, release Task
+   outward) and Related (release Task inward, current CVE outward).
+7. When global authorization is false, serialize none of these mutations. Keep
+   exactly one report-only action and report existing release references, dedup
+   evidence, explicit skips and all withheld creation/link/label work. Missing
+   decisions remain unresolved; never describe withheld operations as completed.
 
 ### 7.5.1 – Resolve stream-to-version mapping
 

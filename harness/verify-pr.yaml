@@ -1,0 +1,152 @@
+# verify-pr — standalone root-level fullsend harness (no base composition).
+#
+# Runs /sdlc-workflow:verify-pr as a fullsend BYOA agent that checks a PR
+# against its Jira task's acceptance criteria. Placed at the REPO ROOT so
+# fullsend (invoked with --fullsend-dir = repo root) resolves this harness's
+# relative children against the repo root: `plugins/sdlc-workflow` is delivered
+# in place as a whole plugin (fullsend fabricates the marketplace cache) and its
+# sibling `shared/` resources resolve intact. Confirmed against fullsend v0.37.0
+# — see docs/plans/notes/task1-findings.md (TC-5805).
+#
+# No base composition and no explicit `security:` block: the Go defaults already
+# supply security (enabled: true, fail_mode: closed) plus the ADR-0090 sandbox
+# hooks. Composing agents/review.yaml would only leak its review-agent semantics.
+#
+# Split-trust I/O: the Jira and GitHub tokens live ONLY on the runner (pre_script
+# prefetch + post_script writes) and are NEVER exposed to the sandbox. The
+# sandbox receives read-only context only (JIRA_BASE_URL for display links) and
+# reads the Jira task + PR URL from the pre_script's verify-pr-input.json.
+#
+# Several referenced children are authored by later tasks in this epic and do not
+# exist yet — providers/vertex-ai.yaml (TC-5808), policies/verify-pr.yaml
+# (TC-5809), profiles/fullsend-vertex-ai.yaml + schemas/verify-pr-result.schema.json
+# + scripts/pre-verify-pr.sh (TC-5810), scripts/post-verify-pr.sh (TC-5811). This
+# task validates the harness syntactically only; full fullsend resolution is
+# deferred to TC-5810/TC-5811.
+
+role: review
+
+# Least-privilege GitHub token levels per run-stage (fullsend ADR-0073). The
+# review role's token is minted at the named level each stage actually needs,
+# instead of a blanket write token for the whole run:
+#   pre_script  read  — GitHub prefetch is read-only (gh pr view/diff; reviews +
+#                       comments via gh api). No writes.
+#   runtime     read  — the sandbox has NO api.github.com egress and no token at
+#                       all (split-trust I/O), so it never needs write. The
+#                       validation_loop inherits this stage's level.
+#   post_script write — the ONLY writer: posts PR review comments, inline
+#                       replies, and the sticky report/summary
+#                       (execute-actions.py), which needs PullRequests: write.
+# `read` downgrades every `*:write` in the role to read; `write` is the role's
+# full current permission set, so post_script's token is unchanged from today.
+# ${GH_TOKEN} in env.runner keeps expanding to the stage-minted token (ADR-0073
+# sets the correct-level token before env expansion). Declaring this applies
+# least-privilege now AND survives fullsend #6516 flipping the mint default from
+# write to read (post_script keeps requesting write explicitly).
+privilege_levels:
+  pre_script: read
+  runtime: read
+  post_script: write
+
+# CEL trigger (ADR 0061). Evaluated by `fullsend dispatch` over the normalized
+# event (internal/normevent); root var `event`, must return bool. Fires when a
+# PR change_proposal is opened, updated, or reopened. This is the dispatch-path
+# equivalent of the CI poller's `on: pull_request` types in
+# .github/workflows/fullsend-verify-pr.yml — kept in sync with it. Kinds stay
+# within fullsend's TransitionKind vocabulary (no CI-completion kind exists).
+trigger: |
+  event.entity.kind == "change_proposal" &&
+  event.transition.kind in ["synchronized", "opened", "reopened"]
+
+agent: plugins/sdlc-workflow/agents/verify-pr.md
+# Pinned to a concrete generation, not the floating `opus` alias: under fullsend
+# CLI v0.43.0 that alias resolves to claude-opus-4-6, which the Red Hat Vertex
+# deployment has not enabled (run 34951983374: "model claude-opus-4-6 is not
+# available on your vertex deployment"). opus 4.8 is the fleet's target model.
+model: claude-opus-4-8
+# Reasoning effort pinned to the fleet's implicit default: Claude Code runs at
+# high effort on effort-capable models, and the fullsend pi runtime passes
+# --thinking high when effort is unset. Revisit if `model:` moves to a
+# generation with a different default effort.
+effort: high
+image: ghcr.io/fullsend-ai/fullsend-code@sha256:9743bc7b6e451e0bcea25ae4a67e0c040c296f1fee04c08988ae80c53fafcfe6
+readonly_repo: true
+
+# In-place whole-plugin delivery — resolved at the repo root.
+plugins:
+  - plugins/sdlc-workflow
+
+policy: plugins/sdlc-workflow/policies/verify-pr.yaml
+
+# Vertex only — GitHub is tier-1 and needs no provider.
+providers:
+  - plugins/sdlc-workflow/providers/vertex-ai.yaml
+
+openshell:
+  profiles:
+    - plugins/sdlc-workflow/profiles/fullsend-vertex-ai.yaml
+
+# URL-pinned base: only repo-relative host_files may live here. When this harness
+# is consumed via a pinned raw URL (config.yaml / a child's `base:`), fullsend
+# fetches these entries from the base URL and rewrites their paths (ADR-0038).
+# Runner-local absolute mounts — the GCP credential/OIDC files and the pre_script
+# prefetch output — CANNOT be URL-sourced (fullsend v0.37.0 rejects an absolute
+# host_files.src that is inherited from a URL-sourced harness). They are declared
+# instead in the local composing child (.fullsend/harness/verify-pr.yaml), whose
+# host_files are concatenated with these (dedup by dest, child wins).
+host_files:
+  - src: plugins/sdlc-workflow/env/gcp-vertex.env
+    dest: /sandbox/workspace/.env.d/gcp-vertex.env
+    expand: true
+
+pre_script: plugins/sdlc-workflow/scripts/pre-verify-pr.sh
+post_script: plugins/sdlc-workflow/scripts/post-verify-pr.sh
+
+validation_loop:
+  # Custom validator: the result schema uses additionalProperties:false
+  # throughout to document the contract, so strip_extra_properties.py drops
+  # benign agent-added metadata before jsonschema validates (fullsend's
+  # native schema-only check would reject it). fullsend requires a script for
+  # validation_loop regardless — schema alone is not sufficient.
+  script: plugins/sdlc-workflow/scripts/validate-output-schema.sh
+  schema: plugins/sdlc-workflow/schemas/verify-pr-result.schema.json
+  max_iterations: 2
+
+env:
+  # Tokens (JIRA_API_TOKEN, GH_TOKEN) live on the runner ONLY — the pre_script
+  # prefetch and post_script writes need them; they are never placed in
+  # env.sandbox.
+  runner:
+    # Disable Python bytecode writes for every runner-side Python invocation.
+    # The pre/post scripts execute in place inside fullsend's content-addressed
+    # cache tree; a stray __pycache__/*.pyc written there mutates the tree and
+    # trips fullsend's next-run integrity check. Defense in depth alongside
+    # execute-actions.py's own sys.dont_write_bytecode (TC-6112).
+    PYTHONDONTWRITEBYTECODE: "1"
+    # Map fullsend's dispatch-provided Jira host vars (JIRA_BASE_URL /
+    # JIRA_USER_EMAIL / JIRA_TOKEN — set by reusable-dispatch harness-run) onto
+    # the canonical names jira-client.py reads. A local run must export the same
+    # JIRA_BASE_URL / JIRA_USER_EMAIL / JIRA_TOKEN host vars. JIRA_ISSUE_ID is no
+    # longer an input: the pre_script derives the Jira key from the triggering PR
+    # URL (FULLSEND_WORK_ITEM_URL, read ambiently) by JQL on customfield_10875.
+    JIRA_SERVER_URL: "${JIRA_BASE_URL}"
+    JIRA_EMAIL: "${JIRA_USER_EMAIL}"
+    JIRA_API_TOKEN: "${JIRA_TOKEN}"
+    # Project key for post_script root-cause task creation. The CI dispatch path
+    # exports no project-key host var, so pin this repo's constant (CLAUDE.md
+    # Jira Configuration: Project key TC) as a literal rather than a ${ref} that
+    # would fail `fullsend run` env-validation on CI.
+    JIRA_PROJECT_KEY: "TC"
+    GH_TOKEN: "${GH_TOKEN}"
+    FULLSEND_OUTPUT_SCHEMA: "${FULLSEND_DIR}/plugins/sdlc-workflow/schemas/verify-pr-result.schema.json"
+    FULLSEND_OUTPUT_FILE: "agent-result.json"
+  # Read-only context only — no tokens, and no atlassian/github egress from the
+  # sandbox (network policy enforced in TC-5809). JIRA_BASE_URL is the base for
+  # display links only (no token), sourced from the dispatch-provided host var.
+  # The Jira key and PR URL reach the sandbox via verify-pr-input.json (the
+  # pre_script writes the JQL-derived key as task_id), so no JIRA_ISSUE_ID env
+  # var is needed here.
+  sandbox:
+    JIRA_BASE_URL: "${JIRA_BASE_URL}"
+
+timeout_minutes: 30

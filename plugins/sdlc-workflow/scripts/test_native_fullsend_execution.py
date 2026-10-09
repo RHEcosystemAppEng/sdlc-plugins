@@ -209,19 +209,21 @@ def test_skill_result_honors_boolean_error_flag(tmp_path, is_error, expected):
     assert json.loads(safe.read_text())["execution_valid"] is (not is_error)
 
 
-@pytest.mark.parametrize("defect", ["old-inventory", "missing-runtime"])
-def test_release_case_is_required_for_execution_integrity(tmp_path, defect):
-    """Old suites and absent release runtime evidence cannot complete the new gate."""
-    # Given a complete five-case synthetic report and runtime
+def test_missing_release_execution_stays_blocking(tmp_path):
+    """A complete 28-outcome report cannot hide missing release runtime evidence."""
     private, run, safe, source, status = synthetic_run(tmp_path, 28)
-    if defect == "old-inventory":
-        report = json.loads(safe.read_text())
-        del report["outcomes"]["037-release"]
-        report.update(total=21, passed=21)
-        safe.write_text(json.dumps(report))
-    else:
-        (run / "cases/037-release/run_result.json").unlink()
-    # When enforcing the actual trusted checker policy
+    (run / 'cases/037-release/run_result.json').unlink()
     assert checker().assess(private, safe, status, source) == 1
-    # Then missing release coverage remains blocking
-    assert json.loads(safe.read_text())["execution_valid"] is False
+    report = json.loads(safe.read_text())
+    assert report['execution_valid'] is False
+    assert report['execution']['cases']['037-release']['case_result_valid'] is False
+
+
+def test_old_native_inventory_is_not_accepted_as_release_coverage(tmp_path):
+    """The trusted checker never derives its expected count from the report."""
+    private, run, safe, source, status = synthetic_run(tmp_path, 28)
+    report = json.loads(safe.read_text())
+    report['total'] = report['passed'] = 21
+    report['outcomes'].pop('037-release')
+    safe.write_text(json.dumps(report))
+    assert checker().assess(private, safe, status, source) == 1
