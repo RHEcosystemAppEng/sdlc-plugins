@@ -56,6 +56,68 @@ def synthetic_judge_summary(value=True):
     return {"run_id": "synthetic", "per_case": cases}
 
 
+@pytest.mark.parametrize("defect,reason,category", [
+    ("error", "scorer-error", "quota-error"),
+    ("null", "non-boolean", "none"),
+    ("condition", "condition-error", "none"),
+    ("skip", "applicable-skip", "none"),
+    ("missing", "missing-value", "none"),
+    ("invalid", "invalid-result", "none"),
+])
+def test_incomplete_summary_keeps_valid_judgments_and_safe_failure(tmp_path, defect, reason, category):
+    """A bad judgment retains unrelated Booleans and publishes only fixed diagnostics."""
+    # Given an adversarial synthetic scorer result with private text
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    summary = synthetic_judge_summary(False)
+    summary["run_id"] = tmp_path.name
+    result = summary["per_case"]["037-release"]["assertion_2"]
+    if defect == "error": result["error"] = "SECRET HTTP 429 /tmp/credential"
+    elif defect == "null": result["value"] = None
+    elif defect == "condition": result["rationale"] = "Condition error: SECRET"
+    elif defect == "skip": result["skipped"] = True
+    elif defect == "invalid": summary["per_case"]["037-release"]["assertion_2"] = []
+    else: del result["value"]
+    (tmp_path / "summary.yaml").write_text(yaml.safe_dump(summary))
+    original = (tmp_path / "summary.yaml").read_bytes()
+    source = {key: "a" * 40 for key in ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}
+    source["pr_number"] = 299
+    # When the real safe publisher handles incomplete grading
+    common.publish_report(tmp_path, tmp_path / "safe", source, 0)
+    report = json.loads((tmp_path / "safe/native-result.json").read_text())
+    # Then grading blocks, 27 genuine Boolean judgments remain, and secrets stay private
+    assert report["complete"] is False and report["exit_code"] == 1
+    assert sum(len(v) for v in report["outcomes"].values()) == 27
+    assert report["outcomes"]["033-absent"]["assertion_1"] is False
+    assert "assertion_2" not in report["outcomes"]["037-release"]
+    assert report["summary_failures"] == [{"case": "037-release", "assertion": "assertion_2",
+                                          "reason": reason, "category": category}]
+    assert "SECRET" not in json.dumps(report) and "credential" not in json.dumps(report)
+    assert (tmp_path / "summary.yaml").read_bytes() == original
+
+
+@pytest.mark.parametrize("raw,reason", [
+    (None, "missing-summary"), ("[SECRET", "malformed-summary"),
+    ("run_id: !!timestamp 2026-13-01\n", "malformed-summary"),
+    ("run_id: synthetic\nrun_id: SECRET\n", "duplicate-key"),
+    ("run_id: SECRET\n", "run-mismatch"),
+    ("run_id: synthetic\nper_case: {}\n", "case-inventory"),
+])
+def test_summary_envelope_failures_publish_no_untrusted_partial_values(tmp_path, raw, reason):
+    """Unreadable or unbound summaries export fixed failures and no judgments."""
+    # Given a malformed or missing synthetic summary
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    if raw is not None: (tmp_path / "summary.yaml").write_text(raw.replace("synthetic", tmp_path.name))
+    source = {key: "a" * 40 for key in ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}
+    source["pr_number"] = 299
+    # When constructing the public safe report
+    common.publish_report(tmp_path, tmp_path / "safe", source, 0)
+    report = json.loads((tmp_path / "safe/native-result.json").read_text())
+    # Then no unsafe values or error strings are exposed
+    assert report["outcomes"] == {} and report["complete"] is False
+    assert report["summary_failures"] == [{"case": "", "assertion": "", "reason": reason, "category": "none"}]
+    assert "SECRET" not in json.dumps(report)
+
+
 def synthetic_valid_tool_records():
     """SYNTHETIC TEST DATA — native-shaped records, never real execution evidence."""
     skill = (ROOT / "plugins/sdlc-workflow/skills/triage-security/SKILL.md").read_text()

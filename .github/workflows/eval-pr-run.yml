@@ -652,7 +652,9 @@ jobs:
                   Object.keys(report.outcomes?.[k] || {}).length === n && Array.from({length:n}, (_,i) =>
                     report.outcomes?.[k]?.[`assertion_${i+1}`]).every(v => typeof v === 'boolean'));
               if (!bound) { core.setFailed('Native report source mismatch'); return; }
-              const passed = Object.values(report.outcomes || {}).flatMap(v => Object.values(v)).filter(v => v === true).length;
+              const judgments = Object.entries(counts).flatMap(([k,n]) => Array.from({length:n}, (_,i) =>
+                report.outcomes?.[k]?.[`assertion_${i+1}`])).filter(v => typeof v === 'boolean');
+              const passed = judgments.filter(v => v === true).length;
               const fields = ['case_result_valid', 'transcript_readable', 'runtime_completed', 'skill_invoked', 'tools_completed'];
               const execution = report.execution;
               const executed = execution?.phases_completed === true &&
@@ -662,12 +664,34 @@ jobs:
               // Quality scores are advisory; actual execution and source integrity remain blocking.
               valid = complete && executed && report.execution_valid === true;
               body += `Native job: ${process.env.NATIVE_RESULT}; complete: ${complete}.\n`;
-              body += `Execution evidence: ${valid ? 'valid' : 'invalid'}; quality score (advisory): ${passed}/${total} passed.\n\n`;
+              const quality = complete ? `${passed}/${total} passed` :
+                `unavailable (grading incomplete; ${judgments.length}/${total} judgments available)`;
+              body += `Execution evidence: ${valid ? 'valid' : 'invalid'}; quality score (advisory): ${quality}.\n\n`;
+              const reasons = ['missing-summary', 'malformed-summary', 'duplicate-key', 'run-mismatch',
+                'case-inventory', 'assertion-inventory', 'invalid-result', 'missing-value', 'scorer-error',
+                'condition-error', 'applicable-skip', 'non-boolean', 'invalid-skip'];
+              const categories = ['none', 'phase-exit', 'authentication-error', 'permission-error',
+                'quota-error', 'timeout', 'connection-error'];
+              if (Array.isArray(report.summary_failures)) {
+                for (const f of report.summary_failures.slice(0,35)) {
+                  if (f && typeof f.case === 'string' && typeof f.assertion === 'string' &&
+                      (f.case === '' || Object.hasOwn(counts, f.case)) &&
+                      (f.assertion === '' || /^assertion_[1-7]$/.test(f.assertion)) &&
+                      reasons.includes(f.reason) && categories.includes(f.category)) {
+                    const location = f.case ? `${f.case}${f.assertion ? ' / ' + f.assertion : ''}` : 'summary';
+                    body += `- ${location}: ${f.reason} (${f.category})\n`;
+                  }
+                }
+                body += '\n';
+              }
               body += '| Case | Execution evidence | Quality score (advisory) |\n|---|---|---|\n';
               for (const [k,n] of Object.entries(counts)) {
                 const evidence = fields.every(f => execution?.cases?.[k]?.[f] === true);
-                const casePassed = Object.values(report.outcomes?.[k] || {}).filter(v => v === true).length;
-                body += `| ${k} | ${evidence ? 'valid' : 'invalid'} | ${casePassed}/${n} |\n`;
+                const values = Array.from({length:n}, (_,i) => report.outcomes?.[k]?.[`assertion_${i+1}`])
+                  .filter(v => typeof v === 'boolean');
+                const score = values.length === n ? `${values.filter(v => v === true).length}/${n}` :
+                  `unavailable (${values.length}/${n} judgments)`;
+                body += `| ${k} | ${evidence ? 'valid' : 'invalid'} | ${score} |\n`;
               }
             } else {
               body += 'No safe native result was produced; native execution/approval failed.\n';

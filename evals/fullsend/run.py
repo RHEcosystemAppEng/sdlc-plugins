@@ -161,9 +161,21 @@ def preflight(cache, model, judge_model, effort):
     print("NO-INFERENCE preflight passed; propagation, services, credentials and runtime success remain unproven")
 
 
+class SummaryValidationError(ValueError):
+    """Carry only fixed failure identifiers and individually valid Boolean outcomes."""
+
+    def __init__(self, failures, outcomes=None):
+        super().__init__("Invalid upstream summary: " + failures[0]["reason"])
+        self.failures = failures
+        self.outcomes = outcomes if outcomes is not None else {}
+
+
 def validate_summary(run_dir, run_id):
-    """Require complete upstream outcomes without judging or rewriting the artifact."""
+    """Require complete outcomes; retain safe partial judgments when grading fails."""
     import yaml
+
+    def failure(reason, case="", assertion="", category="none"):
+        return {"case": case, "assertion": assertion, "reason": reason, "category": category}
 
     class UniqueKeyLoader(yaml.SafeLoader):
         """Reject ambiguous YAML mappings instead of silently keeping the last key."""
@@ -171,38 +183,62 @@ def validate_summary(run_dir, run_id):
         def construct_mapping(self, node, deep=False):
             keys = [self.construct_object(key, deep=deep) for key, _ in node.value]
             if len(keys) != len(set(keys)):
-                raise ValueError("Ambiguous upstream summary: duplicate YAML key")
+                raise SummaryValidationError([failure("duplicate-key")])
             return super().construct_mapping(node, deep=deep)
 
     try:
         summary = yaml.load((run_dir / "summary.yaml").read_text(), Loader=UniqueKeyLoader)
-    except (OSError, yaml.YAMLError, TypeError) as exc:
-        raise ValueError(f"Invalid or missing upstream summary: {exc}") from exc
+    except SummaryValidationError:
+        raise
+    except OSError as exc:
+        raise SummaryValidationError([failure("missing-summary")]) from exc
+    except (yaml.YAMLError, ValueError, TypeError, UnicodeError, RecursionError) as exc:
+        raise SummaryValidationError([failure("malformed-summary")]) from exc
     if not isinstance(summary, dict) or summary.get("run_id") != run_id:
-        raise ValueError("Invalid upstream summary: expected current run mapping")
+        raise SummaryValidationError([failure("run-mismatch")])
     cases = summary.get("per_case")
     if not isinstance(cases, dict) or set(cases) != set(CASES):
-        raise ValueError("Invalid upstream summary: expected exactly the reviewed gate and release cases")
+        raise SummaryValidationError([failure("case-inventory")])
     names = {f"assertion_{index}" for index in range(1, 8)}
+    outcomes, failures = {}, []
     for case, count in ASSERTION_COUNTS.items():
         results = cases[case]
         # The pinned scorer emits all seven names, including conditional skips.
         if not isinstance(results, dict) or set(results) != names:
-            raise ValueError(f"Invalid upstream summary: unexpected assertions for {case}")
+            failures.append(failure("assertion-inventory", case))
+            continue
+        outcomes[case] = {}
         for index in range(1, 8):
             name = f"assertion_{index}"
             result = results[name]
-            if not isinstance(result, dict) or "value" not in result or "error" in result:
-                raise ValueError(f"Incomplete upstream summary: {case}/{name}")
-            rationale = result.get("rationale", "")
-            if index <= count:
-                if (type(result["value"]) is not bool or result.get("skipped")
-                        or (isinstance(rationale, str) and rationale.startswith(("Skipped:", "Condition error:")))):
-                    raise ValueError(f"Incomplete upstream summary: {case}/{name} requires a Boolean outcome")
+            reason, category = "", "none"
+            if not isinstance(result, dict):
+                reason = "invalid-result"
+            elif "error" in result:
+                reason = "scorer-error"
+                category = phase_failure_code(result["error"]) if isinstance(result["error"], str) else "phase-exit"
+            elif "value" not in result:
+                reason = "missing-value"
             else:
-                condition = f'annotations.get("assertion_count", 0) > {index - 1}'
-                if result["value"] is not None or rationale != f"Skipped: condition '{condition}' is false":
-                    raise ValueError(f"Invalid upstream summary: {case}/{name} requires its nonapplicable skip")
+                rationale = result.get("rationale", "")
+                if isinstance(rationale, str) and rationale.startswith("Condition error:"):
+                    reason = "condition-error"
+                elif index <= count:
+                    if result.get("skipped") or (isinstance(rationale, str) and rationale.startswith("Skipped:")):
+                        reason = "applicable-skip"
+                    elif type(result["value"]) is not bool:
+                        reason = "non-boolean"
+                    else:
+                        outcomes[case][name] = result["value"]
+                else:
+                    condition = f'annotations.get("assertion_count", 0) > {index - 1}'
+                    if result["value"] is not None or rationale != f"Skipped: condition '{condition}' is false":
+                        reason = "invalid-skip"
+            if reason:
+                failures.append(failure(reason, case, name, category))
+    if failures:
+        raise SummaryValidationError(failures, outcomes)
+    return outcomes
 
 
 def phase_failure_code(stderr):
@@ -346,7 +382,6 @@ def valid_case_tool_observations(run_dir):
 
 def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
     """Export source pins, Boolean outcomes and fixed observations; raw evidence stays private."""
-    import yaml
     sha_keys = {"head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"}
     if (set(source) != sha_keys | {"pr_number"} or type(source["pr_number"]) is not int
             or source["pr_number"] <= 0
@@ -354,17 +389,19 @@ def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
         raise ValueError("Invalid CI source provenance")
     outcomes = {}
     complete = False
+    summary_failures = []
     try:
-        validate_summary(run_dir, run_dir.name)
-        summary = yaml.safe_load((run_dir / "summary.yaml").read_text())
-        outcomes = {case: {f"assertion_{i}": summary["per_case"][case][f"assertion_{i}"]["value"]
-                          for i in range(1, count + 1)} for case, count in ASSERTION_COUNTS.items()}
+        outcomes = validate_summary(run_dir, run_dir.name)
         complete = True
-    except ValueError:
+    except SummaryValidationError as exc:
+        outcomes = exc.outcomes
+        summary_failures = exc.failures
         exit_code = exit_code or 1
     report = {"source": source, "exit_code": exit_code, "complete": complete, "outcomes": outcomes,
               "passed": sum(value is True for case in outcomes.values() for value in case.values()), "total": sum(ASSERTION_COUNTS.values()),
               "valid_case_tools": valid_case_tool_observations(run_dir)}
+    if summary_failures:
+        report["summary_failures"] = summary_failures
     if diagnostics is not None:
         phases = {"preflight", "configuration", "workspace", "execute", "collect", "score", "summary", "complete"}
         codes = {"none", "runtime-error", "phase-exit", "missing-case-results", "invalid-summary",

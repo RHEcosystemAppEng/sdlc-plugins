@@ -22,6 +22,31 @@ def synthetic_execution(cases):
         for case in cases}}
 
 
+def test_incomplete_grading_reports_unavailable_score_and_allowlisted_failure():
+    """Incomplete judgments block publication status without fabricated zero scores."""
+    # Given synthetic partial outcomes and adversarial diagnostics
+    source = {"pr_number": 299, **{k: "a" * 40 for k in
+              ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}}
+    report = {"source": source, "complete": False, "total": 28, "exit_code": 1,
+              "outcomes": {"037-release": {"assertion_1": True}}, "execution_valid": False,
+              "summary_failures": [
+                  {"case": "037-release", "assertion": "assertion_2", "reason": "scorer-error", "category": "quota-error"},
+                  {"case": "SECRET", "assertion": "assertion_1", "reason": "scorer-error", "category": "quota-error"},
+                  {"case": "037-release", "assertion": "assertion_2", "reason": "SECRET", "category": "quota-error"}]}
+    env = {"PR_NUMBER": "299", **{k.upper(): "a" * 40 for k in source if k != "pr_number"}, "NATIVE_RESULT": "failure"}
+    # When the actual trusted workflow publishes the report
+    result = run_js(script_step("report-status", "Publish native result alongside ordinary review")["with"]["script"],
+                    {"report": report}, env)
+    body = result["reviews"][0]["body"]
+    # Then incomplete grading remains red and only fixed identifiers enter Markdown
+    assert result["errors"]
+    assert "quality score (advisory): unavailable" in body
+    assert "1/28 judgments available" in body and "0/28 passed" not in body
+    assert "037-release / assertion_2: scorer-error (quota-error)" in body
+    assert "| 033-absent | invalid | unavailable (0/4 judgments) |" in body
+    assert "SECRET" not in body
+
+
 def workflow():
     """Read the actual trusted workflow rather than a duplicate implementation."""
     return yaml.safe_load((ROOT / ".github/workflows/eval-pr-run.yml").read_text())
