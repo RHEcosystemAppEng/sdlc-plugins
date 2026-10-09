@@ -68,7 +68,7 @@ def synthetic_run(tmp_path, passed=20):
     return private, run, safe, source, status
 
 
-@pytest.mark.parametrize("passed", [0, 16, 20, 28])
+@pytest.mark.parametrize("passed", [0, 16, 20, 27, 28])
 def test_quality_scores_are_advisory_with_genuine_execution(tmp_path, passed):
     """Completed tool execution accepts expected negative exits at every quality score."""
     # Given synthetic expected input rejection with a separate judge score

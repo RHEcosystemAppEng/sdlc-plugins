@@ -196,7 +196,7 @@ def test_native_job_requires_collaborator_or_current_run_approval(trusted, gate,
     assert json.loads(result.stdout) is expected
 
 
-@pytest.mark.parametrize("defect", [None, "wrong-source", "wrong-eval-source", "missing-outcome", "null", "false", "scorer-failed", "missing-report", "execution-failed", "missing-execution"])
+@pytest.mark.parametrize("defect", [None, "wrong-source", "wrong-eval-source", "missing-outcome", "null", "false", "scorer-failed", "missing-report", "execution-failed", "missing-execution", "old-inventory", "release-execution-failed"])
 def test_reporting_verifies_source_and_boolean_outcomes(defect):
     """Execution and report integrity block CI while quality outcomes remain advisory."""
     source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
@@ -215,6 +215,11 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
         report["execution_valid"] = False
     elif defect == "execution-failed": report["execution"]["cases"]["035-malformed"]["skill_invoked"] = False
     elif defect == "missing-execution": del report["execution"]
+    elif defect == "old-inventory":
+        del outcomes["037-release"]
+        del report["execution"]["cases"]["037-release"]
+        report["total"] = 21
+    elif defect == "release-execution-failed": report["execution"]["cases"]["037-release"]["tools_completed"] = False
     elif defect == "missing-report": report = None
     if defect == "false": report["exit_code"] = 1
     env = {"PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
@@ -228,7 +233,7 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
         assert "quality score (advisory): 27/28 passed." in body
         assert "| Case | Execution evidence | Quality score (advisory) |" in body
         for row in ["| 033-absent | valid | 3/4 |", "| 034-empty | valid | 5/5 |",
-                    "| 035-malformed | valid | 5/5 |", "| 036-valid | valid | 7/7 |"]:
+                    "| 035-malformed | valid | 5/5 |", "| 036-valid | valid | 7/7 |", "| 037-release | valid | 7/7 |"]:
             assert row in body
     if result["reviews"]:
         assert result["reviews"][0]["commit_id"] == "a" * 40
@@ -421,7 +426,7 @@ def run_credential_wrapper(tmp_path, output, passed=28, broken_execution=False):
     return result, json.loads(capture.read_text()) if capture.exists() else None
 
 
-@pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (28, True, 1)])
+@pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (27, False, 0), (28, False, 0), (28, True, 1)])
 def test_wrapper_enforces_execution_integrity_instead_of_quality_score(tmp_path, passed, broken, expected):
     """The wrapper invokes the runner correctly and gates execution independently of score."""
     # Given synthetic credential preparation and native artifacts
