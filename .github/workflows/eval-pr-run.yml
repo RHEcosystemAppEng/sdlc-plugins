@@ -38,7 +38,7 @@ permissions:
 
 env:
   # Reviewed PR299 suite; normal activation switches this to trusted github.sha.
-  NATIVE_EVAL_SOURCE_SHA: 5ba86c132fd409fc8e3412b11d0f8d5f422a4416
+  NATIVE_EVAL_SOURCE_SHA: 94ae24551e2be4bef16936779049d7ebcf0412a1
 
 jobs:
   discover:
@@ -611,10 +611,11 @@ jobs:
             let valid = false;
             if (fs.existsSync('native-report/native-result.json')) {
               const report = JSON.parse(fs.readFileSync('native-report/native-result.json', 'utf8'));
-              const counts = {'033-absent': 4, '034-empty': 5, '035-malformed': 5, '036-valid': 7};
+              const counts = {'033-absent': 4, '034-empty': 5, '035-malformed': 5, '036-valid': 7, '037-release': 7};
+              const total = Object.values(counts).reduce((sum,n) => sum+n, 0);
               const bound = Object.entries(expected).every(([k,v]) => report.source?.[k] === v);
-              const complete = report.complete === true && report.total === 21 &&
-                Object.keys(report.outcomes || {}).length === 4 && Object.entries(counts).every(([k,n]) =>
+              const complete = report.complete === true && report.total === total &&
+                Object.keys(report.outcomes || {}).length === Object.keys(counts).length && Object.entries(counts).every(([k,n]) =>
                   Object.keys(report.outcomes?.[k] || {}).length === n && Array.from({length:n}, (_,i) =>
                     report.outcomes?.[k]?.[`assertion_${i+1}`]).every(v => typeof v === 'boolean'));
               if (!bound) { core.setFailed('Native report source mismatch'); return; }
@@ -622,13 +623,13 @@ jobs:
               const fields = ['case_result_valid', 'transcript_readable', 'runtime_completed', 'skill_invoked', 'tools_completed'];
               const execution = report.execution;
               const executed = execution?.phases_completed === true &&
-                Object.keys(execution.cases || {}).length === 4 && Object.keys(counts).every(k =>
+                Object.keys(execution.cases || {}).length === Object.keys(counts).length && Object.keys(counts).every(k =>
                   Object.keys(execution.cases?.[k] || {}).length === fields.length &&
                   fields.every(f => execution.cases?.[k]?.[f] === true));
               // Quality scores are advisory; actual execution and source integrity remain blocking.
               valid = complete && executed && report.execution_valid === true;
               body += `Native job: ${process.env.NATIVE_RESULT}; complete: ${complete}.\n`;
-              body += `Execution evidence: ${valid ? 'valid' : 'invalid'}; quality score (advisory): ${passed}/21 passed.\n\n`;
+              body += `Execution evidence: ${valid ? 'valid' : 'invalid'}; quality score (advisory): ${passed}/${total} passed.\n\n`;
               body += '| Case | Execution evidence | Quality score (advisory) |\n|---|---|---|\n';
               for (const [k,n] of Object.entries(counts)) {
                 const evidence = fields.every(f => execution?.cases?.[k]?.[f] === true);
