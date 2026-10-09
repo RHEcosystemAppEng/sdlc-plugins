@@ -8,7 +8,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[3]
-CASES = {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}
+CASES = {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}
 
 
 def checker():
@@ -57,8 +57,8 @@ def synthetic_run(tmp_path, passed=20):
         for i in range(1, count + 1):
             outcomes[case][f"assertion_{i}"] = index < passed
             index += 1
-    status = int(passed != 21)
-    report = {"source": source, "complete": True, "total": 21, "passed": passed,
+    status = int(passed != 28)
+    report = {"source": source, "complete": True, "total": 28, "passed": passed,
               "exit_code": status, "outcomes": outcomes, "diagnostics": {
                   "phase": "score" if status else "complete", "code": "phase-exit" if status else "none",
                   "phase_exits": {"workspace": 0, "execute": 1, "collect": 0, "score": status}}}
@@ -68,7 +68,7 @@ def synthetic_run(tmp_path, passed=20):
     return private, run, safe, source, status
 
 
-@pytest.mark.parametrize("passed", [0, 16, 20, 21])
+@pytest.mark.parametrize("passed", [0, 16, 20, 27, 28])
 def test_quality_scores_are_advisory_with_genuine_execution(tmp_path, passed):
     """Completed tool execution accepts expected negative exits at every quality score."""
     # Given synthetic expected input rejection with a separate judge score
@@ -94,8 +94,8 @@ def test_quality_scores_are_advisory_with_genuine_execution(tmp_path, passed):
 ])
 def test_missing_or_invalid_execution_blocks_even_complete_judgments(tmp_path, defect):
     """A complete grading summary cannot turn bootstrap or broken tool evidence green."""
-    # Given ADVERSARIAL synthetic runtime evidence and a complete 21/21 judge report
-    private, run, safe, source, status = synthetic_run(tmp_path, 21)
+    # Given ADVERSARIAL synthetic runtime evidence and a complete 28/28 judge report
+    private, run, safe, source, status = synthetic_run(tmp_path, 28)
     path = run / "cases/035-malformed/output/native/synthetic/iteration-1/output.jsonl"
     records = synthetic_records()
     if defect == "narration":
@@ -132,7 +132,7 @@ def test_missing_or_invalid_execution_blocks_even_complete_judgments(tmp_path, d
     # Then only allowlisted failure observations are published
     report = json.loads(safe.read_text())
     assert report["execution_valid"] is False
-    assert report["passed"] == 21 and report["complete"] is True
+    assert report["passed"] == 28 and report["complete"] is True
 
 
 @pytest.mark.parametrize("defect", ["source", "incomplete", "missing-outcome", "non-boolean",
@@ -207,3 +207,21 @@ def test_skill_result_honors_boolean_error_flag(tmp_path, is_error, expected):
     assert checker().assess(private, safe, status, source) == expected
     # Then the explicit error status controls validity
     assert json.loads(safe.read_text())["execution_valid"] is (not is_error)
+
+
+@pytest.mark.parametrize("defect", ["old-inventory", "missing-runtime"])
+def test_release_case_is_required_for_execution_integrity(tmp_path, defect):
+    """Old suites and absent release runtime evidence cannot complete the new gate."""
+    # Given a complete five-case synthetic report and runtime
+    private, run, safe, source, status = synthetic_run(tmp_path, 28)
+    if defect == "old-inventory":
+        report = json.loads(safe.read_text())
+        del report["outcomes"]["037-release"]
+        report.update(total=21, passed=21)
+        safe.write_text(json.dumps(report))
+    else:
+        (run / "cases/037-release/run_result.json").unlink()
+    # When enforcing the actual trusted checker policy
+    assert checker().assess(private, safe, status, source) == 1
+    # Then missing release coverage remains blocking
+    assert json.loads(safe.read_text())["execution_valid"] is False

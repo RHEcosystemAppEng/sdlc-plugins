@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 
-CASES = {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}
+CASES = {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}
 FIELDS = ("case_result_valid", "transcript_readable", "runtime_completed", "skill_invoked", "tools_completed")
 
 
@@ -105,7 +105,7 @@ def assess(private_root, report_path, runner_exit, expected_source):
         if not isinstance(report, dict):
             return 1
         outcomes = report.get("outcomes", {})
-        complete = (report.get("complete") is True and report.get("total") == 21
+        complete = (report.get("complete") is True and report.get("total") == sum(CASES.values())
                     and isinstance(outcomes, dict) and set(outcomes) == set(CASES)
                     and all(isinstance(outcomes[c], dict)
                             and set(outcomes[c]) == {f"assertion_{i}" for i in range(1, n + 1)}
@@ -119,7 +119,7 @@ def assess(private_root, report_path, runner_exit, expected_source):
                             and set(phases) == {"workspace", "execute", "collect", "score"}
                             and all(type(v) is int for v in phases.values())
                             and phases["workspace"] == phases["collect"] == 0 and phases["execute"] in (0, 1)
-                            and runner_exit == phases["score"] == int(score < 21)
+                            and runner_exit == phases["score"] == int(score < sum(CASES.values()))
                             and (diagnostics.get("phase"), diagnostics.get("code")) ==
                             (("score", "phase-exit") if runner_exit else ("complete", "none")))
         runs = list(private_root.glob("triage-security-gate/*"))

@@ -116,6 +116,7 @@ def test_native_discovery_is_relevant_and_bootstrap_only(number, branch, path, e
 
 def test_native_execution_uses_trusted_setup_and_readonly_github_permissions():
     """Credentialed host executes base scripts, and the tested revision is immutable data."""
+    assert workflow()["env"]["NATIVE_EVAL_SOURCE_SHA"] == "94ae24551e2be4bef16936779049d7ebcf0412a1"
     jobs = workflow()["jobs"]
     assert "run-native-evals" in jobs, "Native CI is not implemented"
     native = jobs["run-native-evals"]
@@ -191,14 +192,14 @@ def test_native_job_requires_collaborator_or_current_run_approval(trusted, gate,
     assert json.loads(result.stdout) is expected
 
 
-@pytest.mark.parametrize("defect", [None, "wrong-source", "wrong-eval-source", "missing-outcome", "null", "false", "scorer-failed", "missing-report", "execution-failed", "missing-execution"])
+@pytest.mark.parametrize("defect", [None, "wrong-source", "wrong-eval-source", "missing-outcome", "null", "false", "scorer-failed", "missing-report", "execution-failed", "missing-execution", "old-inventory", "release-execution-failed"])
 def test_reporting_verifies_source_and_boolean_outcomes(defect):
     """Execution and report integrity block CI while quality outcomes remain advisory."""
     source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
               "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
     outcomes = {case: {f"assertion_{i}": True for i in range(1, n+1)}
-                for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}.items()}
-    report = {"source": source, "outcomes": outcomes, "complete": True, "total": 21, "exit_code": 0,
+                for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}
+    report = {"source": source, "outcomes": outcomes, "complete": True, "total": 28, "exit_code": 0,
               "rationale": "SECRET /tmp/gha-creds-evil", "execution_valid": True,
               "execution": synthetic_execution(outcomes)}
     if defect == "wrong-source": source["head_sha"] = "d" * 40
@@ -210,6 +211,11 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
         report["execution_valid"] = False
     elif defect == "execution-failed": report["execution"]["cases"]["035-malformed"]["skill_invoked"] = False
     elif defect == "missing-execution": del report["execution"]
+    elif defect == "old-inventory":
+        del outcomes["037-release"]
+        del report["execution"]["cases"]["037-release"]
+        report["total"] = 21
+    elif defect == "release-execution-failed": report["execution"]["cases"]["037-release"]["tools_completed"] = False
     elif defect == "missing-report": report = None
     if defect == "false": report["exit_code"] = 1
     env = {"PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
@@ -220,10 +226,10 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
     if defect == "false":
         assert len(result["reviews"]) == 1
         body = result["reviews"][0]["body"]
-        assert "quality score (advisory): 20/21 passed." in body
+        assert "quality score (advisory): 27/28 passed." in body
         assert "| Case | Execution evidence | Quality score (advisory) |" in body
         for row in ["| 033-absent | valid | 3/4 |", "| 034-empty | valid | 5/5 |",
-                    "| 035-malformed | valid | 5/5 |", "| 036-valid | valid | 7/7 |"]:
+                    "| 035-malformed | valid | 5/5 |", "| 036-valid | valid | 7/7 |", "| 037-release | valid | 7/7 |"]:
             assert row in body
     if result["reviews"]:
         assert result["reviews"][0]["commit_id"] == "a" * 40
@@ -307,9 +313,9 @@ def test_review_reruns_reuse_only_matching_bot_head_review(native, existing_kind
         assert "github.paginate(github.rest.pulls.listReviews" in script
     source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
               "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
-    report = {"source": source, "complete": True, "total": 21, "exit_code": 0,
+    report = {"source": source, "complete": True, "total": 28, "exit_code": 0,
               "outcomes": {case: {f"assertion_{i}": True for i in range(1, n+1)}
-                           for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}.items()}}
+                           for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}}
     report.update(execution_valid=True, execution=synthetic_execution(report["outcomes"]))
     result = run_js(script, {"report": report, "existingReviews": stored, "repeat": 2}, {
         "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
@@ -366,7 +372,7 @@ def test_native_artifact_download_failure_keeps_controlled_reporting():
     assert "No safe native result was produced; native execution/approval failed." in result["reviews"][0]["body"]
 
 
-def run_credential_wrapper(tmp_path, output, passed=21, broken_execution=False):
+def run_credential_wrapper(tmp_path, output, passed=28, broken_execution=False):
     """Run the real wrapper/checker with synthetic credentials and inference records."""
     # Given explicitly synthetic native artifacts, generated without inference
     spec = importlib.util.spec_from_file_location("execution_fixtures", ROOT / "plugins/sdlc-workflow/scripts/test_native_fullsend_execution.py")
@@ -416,7 +422,7 @@ def run_credential_wrapper(tmp_path, output, passed=21, broken_execution=False):
     return result, json.loads(capture.read_text()) if capture.exists() else None
 
 
-@pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (21, True, 1)])
+@pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (27, False, 0), (28, False, 0), (28, True, 1)])
 def test_wrapper_enforces_execution_integrity_instead_of_quality_score(tmp_path, passed, broken, expected):
     """The wrapper invokes the runner correctly and gates execution independently of score."""
     # Given synthetic credential preparation and native artifacts
