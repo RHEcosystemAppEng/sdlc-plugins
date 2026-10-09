@@ -292,6 +292,10 @@
         "related_issues": {
           "type": "array",
           "items": { "$ref": "#/$defs/related_issue" }
+        },
+        "release_jira": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/release_family" }
         }
       }
     },
@@ -319,7 +323,49 @@
         "labels": { "type": "array", "items": { "type": "string" } },
         "description": { "type": "object" },
         "comments": { "type": "array", "items": { "type": "object" } },
-        "links": { "type": "array", "items": { "type": "object" } }
+        "links": { "type": "array", "items": { "type": "object" } },
+        "issue_type": { "type": "string", "minLength": 1 },
+        "parent": { "$ref": "#/$defs/issue_key" },
+        "upstream_affected_component": { "type": "string" }
+      }
+    },
+    "release_family": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["family", "epics", "tasks", "remediation", "originating_cves"],
+      "properties": {
+        "family": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+        "epics": { "type": "array", "items": { "$ref": "#/$defs/related_issue" } },
+        "tasks": { "type": "array", "items": { "$ref": "#/$defs/related_issue" } },
+        "remediation": { "type": "array", "items": { "$ref": "#/$defs/related_issue" } },
+        "originating_cves": { "type": "array", "items": { "$ref": "#/$defs/related_issue" } }
+      }
+    },
+    "release_decisions": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["family", "skip"],
+            "properties": {
+              "family": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+              "skip": { "const": true }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["family", "version", "create_epic", "create_task"],
+            "properties": {
+              "family": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+$" },
+              "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$" },
+              "create_epic": { "type": "boolean" },
+              "create_task": { "type": "boolean" }
+            }
+          }
+        ]
       }
     },
     "idempotency": {
@@ -342,6 +388,9 @@
         "mutation_authorized": {
           "type": "boolean",
           "description": "Trusted runner authorization. False requires report-only sandbox output."
+        },
+        "release_decisions": {
+          "$ref": "#/$defs/release_decisions"
         }
       }
     }

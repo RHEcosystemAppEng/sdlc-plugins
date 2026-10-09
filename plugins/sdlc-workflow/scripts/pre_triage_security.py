@@ -415,13 +415,17 @@ def validate_bundle(bundle, schema_path=None):
         with path.open() as schema_file:
             schema = json.load(schema_file)
         validate(instance=bundle, schema=schema, format_checker=format_checker)
+        decisions = bundle.get("authorization", {}).get("release_decisions")
+        if decisions is not None:
+            families = {entry["family"] for entry in bundle["jira_metadata"].get("release_jira", [])}
+            _validate_release_decisions(decisions, families)
     except (OSError, json.JSONDecodeError, ValidationError) as error:
         raise EvidenceError("triage-security input validation failed: {}".format(error)) from error
 
 
 def build_bundle(issue, remote_links, configuration, external_evidence, matrix,
                  source_evidence, jira_metadata, idempotency,
-                 mutation_authorized):
+                 mutation_authorized, release_decisions=None):
     """Build a schema-validated, credential-free triage-security input bundle."""
     configuration = _require_mapping(configuration, "configuration")
     external_evidence = _require_mapping(external_evidence, "external_evidence")
@@ -440,6 +444,8 @@ def build_bundle(issue, remote_links, configuration, external_evidence, matrix,
         "idempotency": idempotency,
         "authorization": {"mutation_authorized": bool(mutation_authorized)},
     }
+    if release_decisions is not None:
+        bundle["authorization"]["release_decisions"] = release_decisions
     validate_bundle(bundle)
     return bundle
 
@@ -565,11 +571,11 @@ def _git_show(repository_path, ref, path):
     }
 
 
-def _related_issue(issue):
+def _related_issue(issue, component_field=None):
     """Normalize a fetched related Jira issue for audit and idempotency checks."""
     fields = _require_mapping(issue.get("fields"), "related issue fields")
     status = _require_mapping(fields.get("status"), "related issue status")
-    return {
+    snapshot = {
         "key": issue.get("key", ""),
         "summary": fields.get("summary", ""),
         "status": status.get("name", ""),
@@ -578,6 +584,124 @@ def _related_issue(issue):
         "comments": (fields.get("comment") or {}).get("comments", []) or [],
         "links": fields.get("issuelinks", []) or [],
     }
+    if fields.get("issuetype"):
+        snapshot["issue_type"] = fields["issuetype"].get("name", "")
+    if fields.get("parent"):
+        snapshot["parent"] = fields["parent"].get("key", "")
+    if component_field and fields.get(component_field) is not None:
+        snapshot["upstream_affected_component"] = fields[component_field]
+    return snapshot
+
+
+def _validate_release_decisions(decisions, families):
+    """Bind explicit host decisions to known release families, never infer consent."""
+    try:
+        with _SCHEMA_PATH.open() as schema_file:
+            schema = json.load(schema_file)
+        validate(decisions, {"$defs": schema["$defs"], "$ref": "#/$defs/release_decisions"})
+    except ValidationError as error:
+        raise EvidenceError("invalid trusted release decisions: {}".format(error.message)) from error
+    seen = set()
+    for decision in decisions:
+        family = decision["family"]
+        if family not in families or family in seen:
+            raise EvidenceError("release decision has unknown or duplicate family: {}".format(family))
+        seen.add(family)
+        if "version" in decision and not decision["version"].startswith(family + "."):
+            raise EvidenceError("release decision version does not match its family")
+    return decisions
+
+
+def _collect_release_evidence(configuration, streams, fetched):
+    """Collect only release children, blocking remediation and originating CVEs."""
+    if not streams:
+        return []
+    project = configuration["project_key"]
+    prefix = configuration["jira_version_prefix"]
+    component_field = configuration.get("upstream_affected_component_field")
+    families = set()
+    for stream in streams:
+        for row in stream["rows"]:
+            version = re.search(r"\b(\d+\.\d+)(?:\.\d+)?\b", row["version"])
+            if not version:
+                raise EvidenceError("matrix version has no release family: {}".format(row["version"]))
+            families.add(version.group(1))
+
+    def snapshot(issue, expected_type=None, parent=None):
+        """Reject identities that the bounded release query did not establish."""
+        issue = _require_mapping(issue, "release issue")
+        key = issue.get("key")
+        if not isinstance(key, str) or not _ISSUE_KEY_RE.fullmatch(key) or not key.startswith(project + "-"):
+            raise EvidenceError("release issue is outside the configured project")
+        fields = _require_mapping(issue.get("fields"), "release issue fields")
+        _require_list(fields.get("issuelinks"), "release issue links", allow_empty=True)
+        normalized = _related_issue(issue, component_field)
+        if expected_type and normalized.get("issue_type") != expected_type:
+            raise EvidenceError("release issue has unexpected type")
+        if parent and normalized.get("parent") != parent:
+            raise EvidenceError("release Task parent does not match its Epic")
+        return normalized
+
+    def search(jql):
+        """Keep query failure distinct from a successful empty result."""
+        result = _require_mapping(
+            _jira_client("search_jql", "--jql", jql, "--fields", "*all", "--all"),
+            "release search")
+        return _require_list(result.get("issues"), "release search issues", allow_empty=True)
+
+    def fetch(key):
+        """Reuse already fetched evidence without following unrelated graph edges."""
+        if not isinstance(key, str) or not _ISSUE_KEY_RE.fullmatch(key) or not key.startswith(project + "-"):
+            raise EvidenceError("release relationship is outside the configured project")
+        if key not in fetched:
+            fetched[key] = _jira_client("get_issue", key, "--fields", "*all")
+        issue = _require_mapping(fetched[key], "linked release issue")
+        if issue.get("key") != key:
+            raise EvidenceError("linked release issue identity is missing or mismatched")
+        return issue
+
+    evidence = []
+    for family in sorted(families):
+        entry = {"family": family, "epics": [], "tasks": [], "remediation": [], "originating_cves": []}
+        pattern = re.compile(re.escape(prefix + " " + family) + r"\.\d+ Release Tasks")
+        jql = ('project = "{}" AND issuetype = Epic AND summary ~ "{}" '
+               'AND summary ~ "Release Tasks" ORDER BY created DESC').format(
+                   _jql_escape(project), _jql_escape(prefix + " " + family))
+        remediation = {}
+        cves = {}
+        for epic in search(jql):
+            epic = snapshot(epic, "Epic")
+            if not pattern.fullmatch(epic["summary"]):
+                continue
+            entry["epics"].append(epic)
+            task_summary = epic["summary"].removesuffix("Release Tasks") + "CVE triage"
+            task_jql = ('project = "{}" AND issuetype = Task AND parent = "{}" '
+                        'AND summary ~ "{}" ORDER BY created DESC').format(
+                            _jql_escape(project), epic["key"], _jql_escape(task_summary))
+            for task in search(task_jql):
+                task = snapshot(task, "Task", epic["key"])
+                if task["summary"] != task_summary:
+                    continue
+                entry["tasks"].append(task)
+                for link in task["links"]:
+                    if link.get("type", {}).get("name") != "Blocks" or not link.get("inwardIssue"):
+                        continue
+                    key = link["inwardIssue"].get("key")
+                    blocking = fetch(key)
+                    remediation[key] = snapshot(blocking, "Task")
+                    for dependency in remediation[key]["links"]:
+                        if dependency.get("type", {}).get("name") != "Depend":
+                            continue
+                        origin_key = (dependency.get("inwardIssue") or dependency.get("outwardIssue") or {}).get("key")
+                        origin = fetch(origin_key)
+                        fields = _require_mapping(origin.get("fields"), "originating issue fields")
+                        issue_type = _require_mapping(fields.get("issuetype"), "originating issue type")
+                        if issue_type.get("id") == configuration.get("vulnerability_issue_type_id"):
+                            cves[origin_key] = snapshot(origin)
+        entry["remediation"] = [remediation[key] for key in sorted(remediation)]
+        entry["originating_cves"] = [cves[key] for key in sorted(cves)]
+        evidence.append(entry)
+    return evidence
 
 
 def _related_keys(issue):
@@ -605,7 +729,7 @@ def _jql_escape(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def collect_bundle(issue_key, project_root):
+def collect_bundle(issue_key, project_root, release_decisions=None):
     """Collect all credentialed evidence for one poller-dispatched security issue."""
     # Validate the key before it is interpolated into any JQL. A conforming key
     # carries no JQL metacharacters, so this is a self-contained injection defense
@@ -709,6 +833,7 @@ def collect_bundle(issue_key, project_root):
             "issues": [_related_issue(item) for item in items],
         } for purpose, jql, items in search_results],
         "related_issues": related,
+        "release_jira": _collect_release_evidence(configuration, matrix_streams, fetched),
     }
     return build_bundle(
         issue=issue,
@@ -723,6 +848,7 @@ def collect_bundle(issue_key, project_root):
             "existing_remediation": related,
         },
         mutation_authorized=False,
+        **({"release_decisions": release_decisions} if release_decisions is not None else {}),
     )
 
 
@@ -738,10 +864,15 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         if args.command == "collect":
-            result = collect_bundle(args.issue_key, args.project_root)
+            # Only the trusted host supplies this optional invocation policy.
+            decision_text = os.environ.get("FULLSEND_RELEASE_DECISIONS")
+            decisions = json.loads(decision_text) if decision_text is not None else None
+            if decision_text is not None:
+                _require_list(decisions, "trusted release decisions", allow_empty=True)
+            result = collect_bundle(args.issue_key, args.project_root, decisions)
         else:
             result = parse_security_configuration(Path(args.claude_md).read_text())
-    except (EvidenceError, subprocess.CalledProcessError) as error:
+    except (EvidenceError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
         print("ERROR: {}".format(error), file=sys.stderr)
         return 1
     json.dump(result, sys.stdout, indent=2)

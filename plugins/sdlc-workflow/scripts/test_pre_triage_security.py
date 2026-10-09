@@ -818,3 +818,280 @@ def test_collect_bundle_rejects_malformed_issue_key(tmp_path):
     # Then it fails on the key before interpolating it into any JQL
     with pytest.raises(pre_triage_security.EvidenceError, match="issue_key"):
         pre_triage_security.collect_bundle("not-a-key", tmp_path)
+
+
+def _release_issue(key, summary, issue_type, parent=None, links=None, component=None):
+    """Build the relevant Jira release graph without external requests."""
+    fields = {
+        "summary": summary, "issuetype": {
+            "name": issue_type, "id": {"Epic": "10000", "Task": "10014", "Vulnerability": "10016"}[issue_type]},
+        "status": {"name": "New"}, "labels": ["existing-label"],
+        "issuelinks": links or [],
+    }
+    if parent:
+        fields["parent"] = {"key": parent}
+    if component is not None:
+        fields["customfield_12345"] = component
+    return {"key": key, "fields": fields}
+
+
+def test_collect_release_evidence_preserves_scoped_dedup_graph(monkeypatch):
+    """Release collection retains the parent and originating CVE component once."""
+    # Given two release families sharing a stream and a dedup graph in one family
+    epic = _release_issue("TC-10", "PRODUCT 3.1.2 Release Tasks", "Epic")
+    task = _release_issue("TC-11", "PRODUCT 3.1.2 CVE triage", "Task", "TC-10", [
+        {"type": {"name": "Blocks"}, "inwardIssue": {"key": "TC-12"}},
+        {"type": {"name": "Related"}, "outwardIssue": {"key": "TC-99"}},
+    ])
+    remediation = _release_issue("TC-12", "Update library", "Task", links=[
+        {"type": {"name": "Depend"}, "outwardIssue": {"key": "TC-13"}},
+    ])
+    cve = _release_issue("TC-13", "CVE issue", "Vulnerability", component="library")
+    fetched = {"TC-13": cve}
+    calls = []
+
+    def jira(command, *args):
+        """Return scoped synthetic release search and linked issue results."""
+        calls.append((command, args))
+        if command == "search_jql":
+            jql = args[args.index("--jql") + 1]
+            if "parent" in jql:
+                return {"issues": [task], "isLast": True}
+            return {"issues": [epic], "isLast": True}
+        return {"TC-12": remediation}[args[0]]
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira)
+    configuration = {"project_key": "TC", "jira_version_prefix": "PRODUCT",
+                     "vulnerability_issue_type_id": "10016",
+                     "upstream_affected_component_field": "customfield_12345"}
+    streams = [{"rows": [{"version": "3.0.9"}, {"version": "3.1.1"}]}]
+
+    # When collecting only the release/remediation/CVE relationship paths
+    graph = pre_triage_security._collect_release_evidence(configuration, streams, fetched)
+
+    # Then fuzzy-search false positives do not cross release families
+    assert [entry["family"] for entry in graph] == ["3.0", "3.1"]
+    assert graph[0]["epics"] == graph[0]["tasks"] == []
+    release = graph[1]
+    assert release["tasks"][0]["parent"] == "TC-10"
+    assert release["remediation"][0]["issue_type"] == "Task"
+    assert release["originating_cves"][0]["upstream_affected_component"] == "library"
+    assert release["originating_cves"][0]["labels"] == ["existing-label"]
+    assert [args[0] for command, args in calls if command == "get_issue"] == ["TC-12"]
+    assert "TC-99" not in fetched
+
+
+@pytest.mark.parametrize("response", [{}, {"issues": None}, {"issues": [None]}])
+def test_collect_release_evidence_rejects_malformed_search(monkeypatch, response):
+    """Malformed release searches never become trusted no-match evidence."""
+    # Given a broken search response from the Jira client
+    monkeypatch.setattr(pre_triage_security, "_jira_client", lambda *_args: response)
+    configuration = {"project_key": "TC", "jira_version_prefix": "PRODUCT"}
+
+    # When collecting a known release family, then collection fails closed
+    with pytest.raises(pre_triage_security.EvidenceError):
+        pre_triage_security._collect_release_evidence(
+            configuration, [{"rows": [{"version": "3.1.1"}]}], {})
+
+
+def test_collect_release_evidence_keeps_search_failure(monkeypatch):
+    """Failed Jira queries cannot be mistaken for absent release structures."""
+    # Given an infrastructure failure instead of an empty successful result
+    def failing_client(*_args):
+        """Simulate the existing fail-fast Jira process."""
+        raise subprocess.CalledProcessError(1, ["jira-client"])
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", failing_client)
+
+    # When collecting release evidence, then the original failure propagates
+    with pytest.raises(subprocess.CalledProcessError):
+        pre_triage_security._collect_release_evidence(
+            {"project_key": "TC", "jira_version_prefix": "PRODUCT"},
+            [{"rows": [{"version": "3.1.1"}]}], {})
+
+
+@pytest.mark.parametrize("defect", ["wrong-parent", "wrong-project", "missing-linked-issue"])
+def test_collect_release_evidence_rejects_invalid_relationship(monkeypatch, defect):
+    """Release graph collection rejects unproven or out-of-scope identities."""
+    # Given a matching release Epic and an invalid child/linked identity
+    epic = _release_issue("TC-10", "PRODUCT 3.1.2 Release Tasks", "Epic")
+    task = _release_issue("TC-11", "PRODUCT 3.1.2 CVE triage", "Task", "TC-10")
+    if defect == "wrong-parent":
+        task["fields"]["parent"]["key"] = "TC-99"
+    elif defect == "wrong-project":
+        task["key"] = "OTHER-11"
+    else:
+        task["fields"]["issuelinks"] = [
+            {"type": {"name": "Blocks"}, "inwardIssue": {"key": "TC-12"}}]
+
+    def jira(command, *args):
+        """Return malformed bounded relationship evidence."""
+        if command == "get_issue":
+            return {}
+        return {"issues": [task if "parent" in args[1] else epic]}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira)
+
+    # When collecting this family, then the invalid graph is rejected
+    with pytest.raises(pre_triage_security.EvidenceError):
+        pre_triage_security._collect_release_evidence(
+            {"project_key": "TC", "jira_version_prefix": "PRODUCT"},
+            [{"rows": [{"version": "3.1.1"}]}], {})
+
+
+@pytest.mark.parametrize("target", ["release-task", "remediation-task"])
+@pytest.mark.parametrize("missing", [True, False])
+def test_collect_release_evidence_rejects_missing_link_evidence(monkeypatch, target, missing):
+    """Missing or null links cannot prove there is no release remediation to reuse."""
+    # Given a matching release with an incomplete Task relationship snapshot
+    epic = _release_issue("TC-10", "PRODUCT 3.1.2 Release Tasks", "Epic")
+    task = _release_issue("TC-11", "PRODUCT 3.1.2 CVE triage", "Task", "TC-10", [
+        {"type": {"name": "Blocks"}, "inwardIssue": {"key": "TC-12"}}])
+    remediation = _release_issue("TC-12", "Update library", "Task")
+    fields = (task if target == "release-task" else remediation)["fields"]
+    if missing:
+        fields.pop("issuelinks")
+    else:
+        fields["issuelinks"] = None
+
+    def jira(command, *args):
+        """Return the selected incomplete snapshot without external calls."""
+        if command == "get_issue":
+            return remediation
+        return {"issues": [task if "parent" in args[1] else epic]}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira)
+
+    # When collecting the relationship graph, then incomplete evidence fails
+    with pytest.raises(pre_triage_security.EvidenceError, match="release issue links"):
+        pre_triage_security._collect_release_evidence(
+            {"project_key": "TC", "jira_version_prefix": "PRODUCT"},
+            [{"rows": [{"version": "3.1.1"}]}], {})
+
+
+@pytest.mark.parametrize("decisions", [
+    [{"family": "3.1", "version": "3.1.2", "create_epic": True, "create_task": False}],
+    [{"family": "3.1", "skip": True}],
+    [],
+])
+def test_release_decisions_preserve_explicit_trusted_choices(decisions):
+    """Trusted choices are retained without inventing creation permission."""
+    assert pre_triage_security._validate_release_decisions(decisions, {"3.1"}) == decisions
+
+
+@pytest.mark.parametrize("decisions", [
+    None, {}, [{"family": "3.1", "create_epic": True}],
+    [{"family": "3.1", "version": "3.0.2", "create_epic": True, "create_task": True}],
+    [{"family": "3.0", "skip": True}],
+    [{"family": "3.1", "skip": True}, {"family": "3.1", "skip": True}],
+    [{"family": "3.1", "skip": True, "create_task": True}],
+    [{"family": "3.1", "version": "3.1.2", "create_epic": "yes", "create_task": True}],
+])
+def test_release_decisions_reject_unbound_or_malformed_permissions(decisions):
+    """Invalid, duplicated or cross-family decisions cannot authorize creation."""
+    with pytest.raises(pre_triage_security.EvidenceError):
+        pre_triage_security._validate_release_decisions(decisions, {"3.1"})
+
+
+@requires_format_extra
+def test_release_bundle_schema_preserves_optional_evidence_and_decisions():
+    """Optional release evidence and decisions coexist with the old bundle contract."""
+    # Given a previously valid trusted input and explicit release decision
+    bundle = _complete_bundle()
+    bundle["jira_metadata"]["release_jira"] = [{
+        "family": "1.0", "epics": [], "tasks": [], "remediation": [], "originating_cves": []}]
+    bundle["authorization"]["release_decisions"] = [{
+        "family": "1.0", "version": "1.0.2", "create_epic": True, "create_task": True}]
+
+    # When the extended trusted contract is validated
+    pre_triage_security.validate_bundle(bundle)
+
+    # Then release creation decisions do not enable generic mutations
+    assert bundle["authorization"]["mutation_authorized"] is False
+
+
+def test_release_decisions_are_supplied_by_the_trusted_runner(monkeypatch, capsys):
+    """The existing runner process can supply decisions without sandbox input."""
+    # Given explicit decisions on the host that invokes the collector
+    decisions = [{"family": "3.1", "skip": True}]
+    monkeypatch.setenv("FULLSEND_RELEASE_DECISIONS", json.dumps(decisions))
+    monkeypatch.setattr(pre_triage_security, "collect_bundle",
+                        lambda issue, root, choices: {"issue": issue, "decisions": choices})
+
+    # When the normal pre-script collection command runs
+    assert pre_triage_security.main(["collect", "TC-42", "/project"]) == 0
+
+    # Then host decisions reach the collector unchanged without authorizing writes
+    assert json.loads(capsys.readouterr().out) == {"issue": "TC-42", "decisions": decisions}
+
+
+@pytest.mark.parametrize("decision_text", ["{", "null", "{}", '"unexpected"'])
+def test_release_decisions_invalid_json_stops_collection(monkeypatch, capsys, decision_text):
+    """Malformed runner decisions fail before any evidence request."""
+    # Given malformed decisions and a collector that must never be called
+    monkeypatch.setenv("FULLSEND_RELEASE_DECISIONS", decision_text)
+    collector = MagicMock(return_value={})
+    monkeypatch.setattr(pre_triage_security, "collect_bundle", collector)
+
+    # When the normal collection command starts
+    assert pre_triage_security.main(["collect", "TC-42", "/project"]) == 1
+
+    # Then no request is made and the command reports its configuration failure
+    collector.assert_not_called()
+    assert "ERROR:" in capsys.readouterr().err
+
+
+@requires_format_extra
+def test_collect_bundle_includes_release_evidence_without_authorizing_writes(tmp_path, monkeypatch):
+    """Actual collection carries release decisions into a validated report-only bundle."""
+    # Given complete mocked host evidence and a confirmed release creation decision
+    original = _complete_bundle()
+    (tmp_path / "CLAUDE.md").write_text("# Project Configuration\n")
+    configuration = original["configuration"]
+    stream = original["matrix"]["streams"][0]
+    issue = {"key": original["issue"]["key"], "fields": original["issue"]["fields"]}
+    decisions = [{"family": "1.0", "version": "1.0.2", "create_epic": True, "create_task": True}]
+    monkeypatch.setattr(pre_triage_security, "_runner_configuration", lambda *_args: (
+        configuration, "https://example.com/lifecycle",
+        [{"Stream": "1.0.x", "Security Matrix Path": "matrix.md", "Local Path": str(tmp_path)}],
+        {"component": tmp_path}))
+    monkeypatch.setattr(pre_triage_security, "parse_security_matrix", lambda *_args: (
+        stream, [{"repository": "component", "lock_file": "Cargo.lock", "upstream_branch": "main"}]))
+    monkeypatch.setattr(pre_triage_security, "_git_show", lambda _repo, ref, path: {
+        "ref": ref, "path": path, "command": "git show {}:{}".format(ref, path), "content": "evidence"})
+    monkeypatch.setattr(pre_triage_security, "_fetch_url", lambda url, **_kwargs: next(
+        item for item in original["external_evidence"].values() if item["source_url"] == url))
+
+    def jira(command, *_args):
+        """Return successful empty release searches alongside the primary CVE."""
+        return {"get_issue": issue, "get_remote_links": original["remote_links"],
+                "get_versions": [], "search_jql": {"issues": []}}[command]
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira)
+
+    # When the normal collector builds and validates the extended input
+    bundle = pre_triage_security.collect_bundle("TC-42", tmp_path, decisions)
+
+    # Then an empty release search is proven evidence, not authorization to mutate
+    assert bundle["jira_metadata"]["release_jira"] == [{
+        "family": "1.0", "epics": [], "tasks": [], "remediation": [], "originating_cves": []}]
+    assert bundle["authorization"] == {"mutation_authorized": False, "release_decisions": decisions}
+    assert bundle["jira_metadata"]["related_issues"] == []
+
+
+@requires_format_extra
+@pytest.mark.parametrize("decisions", [
+    [{"family": "1.0", "version": "2.0.1", "create_epic": True, "create_task": True}],
+    [{"family": "1.0", "skip": True}, {"family": "1.0", "skip": True}],
+])
+def test_validate_bundle_checks_release_decision_family_bindings(decisions):
+    """Schema-valid but unbound decisions fail the trusted bundle validation."""
+    # Given a complete bundle with conflicting trusted family decisions
+    bundle = _complete_bundle()
+    bundle["jira_metadata"]["release_jira"] = [{
+        "family": "1.0", "epics": [], "tasks": [], "remediation": [], "originating_cves": []}]
+    bundle["authorization"]["release_decisions"] = decisions
+
+    # When validating the full bundle, then semantic conflicts fail closed
+    with pytest.raises(pre_triage_security.EvidenceError):
+        pre_triage_security.validate_bundle(bundle)
