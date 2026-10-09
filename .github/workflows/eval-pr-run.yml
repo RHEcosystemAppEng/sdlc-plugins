@@ -665,7 +665,7 @@ jobs:
               valid = complete && executed && report.execution_valid === true;
               body += `Native job: ${process.env.NATIVE_RESULT}; complete: ${complete}.\n`;
               const quality = complete ? `${passed}/${total} passed` :
-                `unavailable (grading incomplete; ${judgments.length}/${total} judgments available)`;
+                `unavailable (grading incomplete; ${judgments.length}/${total} judgments available, ${passed} passed / ${judgments.length - passed} failed)`;
               body += `Execution evidence: ${valid ? 'valid' : 'invalid'}; quality score (advisory): ${quality}.\n\n`;
               const reasons = ['missing-summary', 'malformed-summary', 'duplicate-key', 'run-mismatch',
                 'case-inventory', 'assertion-inventory', 'invalid-result', 'missing-value', 'scorer-error',
@@ -689,8 +689,9 @@ jobs:
                 const evidence = fields.every(f => execution?.cases?.[k]?.[f] === true);
                 const values = Array.from({length:n}, (_,i) => report.outcomes?.[k]?.[`assertion_${i+1}`])
                   .filter(v => typeof v === 'boolean');
-                const score = values.length === n ? `${values.filter(v => v === true).length}/${n}` :
-                  `unavailable (${values.length}/${n} judgments)`;
+                const casePassed = values.filter(v => v === true).length;
+                const score = values.length === n ? `${casePassed}/${n}` :
+                  `unavailable (${values.length}/${n} judgments, ${casePassed} passed / ${values.length - casePassed} failed)`;
                 body += `| ${k} | ${evidence ? 'valid' : 'invalid'} | ${score} |\n`;
               }
             } else {

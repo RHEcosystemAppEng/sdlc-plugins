@@ -28,7 +28,7 @@ def test_incomplete_grading_reports_unavailable_score_and_allowlisted_failure():
     source = {"pr_number": 299, **{k: "a" * 40 for k in
               ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}}
     report = {"source": source, "complete": False, "total": 28, "exit_code": 1,
-              "outcomes": {"037-release": {"assertion_1": True}}, "execution_valid": False,
+              "outcomes": {"037-release": {"assertion_1": True, "assertion_3": False}}, "execution_valid": False,
               "summary_failures": [
                   {"case": "037-release", "assertion": "assertion_2", "reason": "scorer-error", "category": "quota-error"},
                   {"case": "SECRET", "assertion": "assertion_1", "reason": "scorer-error", "category": "quota-error"},
@@ -41,9 +41,11 @@ def test_incomplete_grading_reports_unavailable_score_and_allowlisted_failure():
     # Then incomplete grading remains red and only fixed identifiers enter Markdown
     assert result["errors"]
     assert "quality score (advisory): unavailable" in body
-    assert "1/28 judgments available" in body and "0/28 passed" not in body
+    assert "2/28 judgments available, 1 passed / 1 failed" in body
+    assert "0/28 passed" not in body and "1/28 passed" not in body
     assert "037-release / assertion_2: scorer-error (quota-error)" in body
-    assert "| 033-absent | invalid | unavailable (0/4 judgments) |" in body
+    assert "| 033-absent | invalid | unavailable (0/4 judgments, 0 passed / 0 failed) |" in body
+    assert "| 037-release | invalid | unavailable (2/7 judgments, 1 passed / 1 failed) |" in body
     assert "SECRET" not in body
 
 
