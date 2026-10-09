@@ -49,6 +49,8 @@ _ACTION_DEFINITIONS = {
     "comment": {"required": {"type", "marker", "issue", "body_adf"}, "targets": ("issue",)},
     "link": {"required": {"type", "marker", "link_type", "inward", "outward"}, "targets": ("inward", "outward")},
     "remediation-task": {"required": {"type", "marker", "ref", "project", "summary", "description_adf", "labels"}, "targets": ("project",)},
+    "release-epic": {"required": {"type", "marker", "ref", "project", "summary", "description_adf", "labels", "family", "version"}, "targets": ("project",)},
+    "release-task": {"required": {"type", "marker", "ref", "project", "summary", "description_adf", "labels", "family", "version", "parent"}, "targets": ("project", "parent")},
     "resolve-reference": {"required": {"type", "marker", "ref", "issue"}, "targets": ("issue",)},
 }
 _REQUIRED_ACTION_FIELDS = {
@@ -188,6 +190,115 @@ def _resolve_action(action: dict[str, Any], registry: dict[str, dict[str, str]])
         raise ActionError("unresolved action reference: {}".format(error.args[0])) from error
 
 
+
+def _release_graph(trusted_input: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """Authorize only typed release identities and their verified relationship graph."""
+    configuration = trusted_input.get("configuration") or {}
+    project = configuration.get("project_key")
+    prefix = configuration.get("jira_version_prefix")
+    graph = {}
+    families = set()
+    for entry in (trusted_input.get("jira_metadata") or {}).get("release_jira", []):
+        family = entry.get("family")
+        if not isinstance(family, str) or not re.fullmatch(r"\d+\.\d+", family) or family in families:
+            raise ActionError("invalid or duplicate trusted release family")
+        families.add(family)
+        if not isinstance(prefix, str) or not prefix:
+            raise ActionError("release evidence requires the configured version prefix")
+        entry_keys = set()
+        for bucket, expected_type in (("epics", "Epic"), ("tasks", "Task"),
+                                      ("remediation", "Task"), ("originating_cves", None)):
+            for item in entry.get(bucket, []):
+                key = item.get("key")
+                if (not isinstance(key, str) or not re.fullmatch(re.escape(project) + r"-\d+", key)
+                        or key in entry_keys or not isinstance(item.get("labels"), list)
+                        or not all(isinstance(label, str) for label in item.get("labels", []))
+                        or not isinstance(item.get("comments"), list)
+                        or not isinstance(item.get("links"), list)
+                        or not isinstance(item.get("description"), dict)):
+                    raise ActionError("invalid trusted release snapshot")
+                if expected_type and item.get("issue_type") != expected_type:
+                    raise ActionError("trusted release issue has incorrect type")
+                version = None
+                if bucket in {"epics", "tasks"}:
+                    suffix = "Release Tasks" if bucket == "epics" else "CVE triage"
+                    match = re.fullmatch(re.escape(prefix) + r" (" + re.escape(family) + r"\.\d+) " + suffix,
+                                         item.get("summary", ""))
+                    if not match:
+                        raise ActionError("trusted release summary has incorrect family")
+                    version = match.group(1)
+                if bucket == "tasks":
+                    parent = graph.get(item.get("parent"))
+                    if not parent or parent["bucket"] != "epics" or parent["version"] != version:
+                        raise ActionError("trusted release Task has incorrect parent")
+                if bucket == "remediation" and not any(
+                        link.get("type", {}).get("name") == "Blocks" and
+                        link.get("inwardIssue", {}).get("key") == key
+                        for member in entry.get("tasks", []) for link in member.get("links", [])):
+                    raise ActionError("remediation is not linked to the trusted release")
+                if bucket == "originating_cves" and not any(
+                        link.get("type", {}).get("name") == "Depend" and key in (
+                            link.get("inwardIssue", {}).get("key"), link.get("outwardIssue", {}).get("key"))
+                        for member in entry.get("remediation", []) for link in member.get("links", [])):
+                    raise ActionError("originating CVE is not linked to trusted remediation")
+                if key in graph:
+                    prior = {name: value for name, value in graph[key].items()
+                             if name not in {"family", "version", "bucket"}}
+                    if bucket not in {"remediation", "originating_cves"} or prior != item or graph[key]["bucket"] != bucket:
+                        raise ActionError("conflicting trusted release identity")
+                entry_keys.add(key)
+                graph[key] = dict(item, family=family, version=version, bucket=bucket)
+    return graph
+
+
+def _existing_release(action: dict[str, Any], trusted_input: dict[str, Any]) -> dict[str, Any] | None:
+    """Match exact typed release identity; never choose among ambiguous retries."""
+    bucket = "epics" if action["type"] == "release-epic" else "tasks"
+    matches = [item for item in _release_graph(trusted_input).values()
+               if item["bucket"] == bucket and item["family"] == action["family"]
+               and item["version"] == action["version"] and item["summary"] == action["summary"]]
+    if len(matches) > 1:
+        raise ActionError("ambiguous existing release identity")
+    if matches and bucket == "tasks" and matches[0].get("parent") != action["parent"]:
+        raise ActionError("existing release Task has incorrect parent")
+    return matches[0] if matches else None
+
+
+def _register_existing_release(action: dict[str, Any], registry: dict[str, dict[str, str]],
+                               trusted_input: dict[str, Any]) -> bool:
+    """Repair partial release creation before dependent actions execute."""
+    existing = _existing_release(action, trusted_input)
+    if existing is None:
+        return False
+    key = existing["key"]
+    registry[action["ref"]] = {"key": key, "url": _browse_url(key)}
+    if not _has_description_digest(existing):
+        _post_digest(key)
+    return True
+
+
+def _authorize_release(action: dict[str, Any], trusted_input: dict[str, Any], identities: dict) -> None:
+    """Require individual host decisions and an exact existing/generated Epic parent."""
+    decisions = [item for item in trusted_input.get("authorization", {}).get("release_decisions", [])
+                 if item.get("family") == action["family"]]
+    permission = "create_epic" if action["type"] == "release-epic" else "create_task"
+    if (len(decisions) != 1 or decisions[0].get(permission) is not True
+            or decisions[0].get("skip") is True or decisions[0].get("version") != action["version"]
+            or not re.fullmatch(re.escape(action["family"]) + r"\.\d+", action["version"])
+            or action["family"] not in {entry["family"] for entry in
+                                       trusted_input.get("jira_metadata", {}).get("release_jira", [])}):
+        raise ActionError("release creation lacks the trusted family/version permission")
+    suffix = "Release Tasks" if action["type"] == "release-epic" else "CVE triage"
+    prefix = trusted_input["configuration"].get("jira_version_prefix")
+    if not prefix or action["summary"] != "{} {} {}".format(prefix, action["version"], suffix):
+        raise ActionError("release summary does not match the trusted version")
+    if action["type"] == "release-task":
+        parent = identities.get(action["parent"])
+        if (not parent or parent.get("bucket") != "epics"
+                or parent.get("family") != action["family"] or parent.get("version") != action["version"]):
+            raise ActionError("release Task requires its matching trusted Epic")
+
+
 def _trusted_targets(trusted_input: dict[str, Any]) -> set[str]:
     """Collect existing targets from the runner's documented triage relationships."""
     issue = trusted_input.get("issue")
@@ -206,6 +317,7 @@ def _trusted_targets(trusted_input: dict[str, Any]) -> set[str]:
         if not isinstance(key, str) or not re.fullmatch(r"[A-Z][A-Z0-9]+-[0-9]+", key):
             raise ActionError("trusted triage relationship requires a valid issue key")
         targets.add(key)
+    targets.update(_release_graph(trusted_input))
     return targets
 
 
@@ -215,6 +327,8 @@ def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> No
     if result["report"]["issue"] != trusted_input["issue"]["key"]:
         raise ActionError("report issue does not match the trusted issue")
     registry: dict[str, dict[str, str]] = {}
+    release_identities = _release_graph(trusted_input)
+    planned_releases = set()
     markers = set((trusted_input.get("idempotency") or {}).get("action_markers") or [])
     for raw_action in result["actions"]:
         _validate_action(raw_action)
@@ -230,7 +344,16 @@ def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> No
                     raise ActionError("remediation project does not match the trusted project")
             elif action[field] not in targets:
                 raise ActionError("unauthorized action target: {}".format(action[field]))
-        if action_type not in {"resolve-reference", "remediation-task"}:
+        if action_type in {"release-epic", "release-task"}:
+            _authorize_release(action, trusted_input, release_identities)
+            identity = (action_type, action["family"], action["version"])
+            if identity in planned_releases:
+                raise ActionError("duplicate planned release identity")
+            planned_releases.add(identity)
+        if action_type == "field-edit" and action["issue"] in release_identities and "labels" in action["fields"]:
+            if not isinstance(action["fields"]["labels"], list) or not all(isinstance(label, str) for label in action["fields"]["labels"]):
+                raise ActionError("release labels must be strings")
+        if action_type not in {"resolve-reference", "remediation-task", "release-epic", "release-task"}:
             continue
         ref = action["ref"]
         if ref in registry:
@@ -239,12 +362,15 @@ def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> No
             key = action["issue"]
         else:
             # Keep generated identities symbolic until the existing executor creates them.
-            existing = _existing_remediation(
-                raw_action if raw_action["marker"] in markers else action, trusted_input)
+            existing = (_existing_release(action, trusted_input) if action_type.startswith("release-") else
+                        _existing_remediation(raw_action if raw_action["marker"] in markers else action, trusted_input))
             if raw_action["marker"] in markers and existing is None:
                 raise ActionError("marked remediation task is absent from trusted retry state")
             key = existing["key"] if existing else "{{" + ref + ".key}}"
             targets.add(key)
+            if action_type.startswith("release-"):
+                release_identities[key] = {"bucket": "epics" if action_type == "release-epic" else "tasks",
+                                           "family": action["family"], "version": action["version"]}
         registry[ref] = {"key": key, "url": _browse_url(key)}
 
 
@@ -301,6 +427,10 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
     if action_type == "report-only":
         return
     if action_type == "field-edit":
+        existing = _release_graph(trusted_input).get(action["issue"])
+        if existing and "labels" in action["fields"]:
+            action = copy.deepcopy(action)
+            action["fields"]["labels"] = list(dict.fromkeys(existing["labels"] + action["fields"]["labels"]))
         _jira_mod.update_issue(action["issue"], action["fields"])
         return
     if action_type == "status-transition":
@@ -332,6 +462,23 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
         return
     if action_type == "resolve-reference":
         registry[action["ref"]] = {"key": action["issue"], "url": _browse_url(action["issue"])}
+        return
+    if action_type in {"release-epic", "release-task"}:
+        if _register_existing_release(action, registry, trusted_input):
+            return
+        created = _jira_mod.create_issue(
+            project_key=action["project"], summary=action["summary"],
+            issue_type="Epic" if action_type == "release-epic" else "Task",
+            parent=action.get("parent"),
+            labels=list(dict.fromkeys(["ai-generated-jira", *action["labels"]])),
+            priority=action.get("priority"), fix_versions=action.get("fix_versions"),
+            description_adf=action["description_adf"],
+        )
+        key = created.get("key")
+        if not isinstance(key, str) or not re.fullmatch(re.escape(action["project"]) + r"-\d+", key):
+            raise ActionError("release creation returned an invalid issue key")
+        registry[action["ref"]] = {"key": key, "url": _browse_url(key)}
+        _post_digest(key)
         return
     if action_type == "remediation-task":
         if _register_existing_remediation(action, registry, trusted_input):
@@ -380,20 +527,32 @@ def execute_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> dict[
     _preflight_plan(result, trusted_input)
     markers = set(trusted_input.get("idempotency", {}).get("action_markers", []))
     registry: dict[str, dict[str, str]] = {}
+    release_labels = {key: item["labels"] for key, item in _release_graph(trusted_input).items()}
     for raw_action in actions:
         _validate_action(raw_action)
         if raw_action["type"] == "resolve-reference":
             _execute_action(raw_action, registry, trusted_input)
             continue
         if raw_action["marker"] in markers:
+            if raw_action["type"] in {"release-epic", "release-task"}:
+                if not _register_existing_release(_resolve_action(raw_action, registry), registry, trusted_input):
+                    raise ActionError("marked release is absent from trusted retry state")
             if raw_action["type"] == "remediation-task":
                 if not _register_existing_remediation(raw_action, registry, trusted_input):
                     raise ActionError("marked remediation task is absent from trusted retry state")
             continue
         action = _resolve_action(raw_action, registry)
+        if action["type"] == "field-edit" and action["issue"] in release_labels and "labels" in action["fields"]:
+            action = copy.deepcopy(action)
+            labels = list(dict.fromkeys(release_labels[action["issue"]] + action["fields"]["labels"]))
+            action["fields"]["labels"] = labels
+            release_labels[action["issue"]] = labels
         if _already_applied(action, trusted_input):
             continue
         _execute_action(action, registry, trusted_input)
+        if action["type"] in {"release-epic", "release-task"}:
+            key = registry[action["ref"]]["key"]
+            release_labels.setdefault(key, list(dict.fromkeys(["ai-generated-jira", *action["labels"]])))
     return registry
 
 

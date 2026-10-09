@@ -795,3 +795,251 @@ def test_post_script_selects_an_in_run_result_from_a_different_working_directory
     # Then it completes without needing Jira credentials or performing a mutation
     assert result.returncode == 0, result.stderr
     assert "completed successfully" in result.stdout
+
+
+# SYNTHETIC TEST DATA — release issues and decisions are fictional host evidence.
+def _release_trusted():
+    trusted = _trusted_input()
+    trusted['configuration']['jira_version_prefix'] = 'Product'
+    trusted['authorization']['release_decisions'] = [
+        {'family': '3.1', 'version': '3.1.2', 'create_epic': True, 'create_task': True}]
+    trusted['jira_metadata']['release_jira'] = [
+        {'family': '3.1', 'epics': [], 'tasks': [], 'remediation': [], 'originating_cves': []}]
+    return trusted
+
+
+def _release_action(kind='release-epic'):
+    action = _remediation_action()
+    action.update(type=kind, marker='triage-security:' + kind, ref=kind,
+                  family='3.1', version='3.1.2',
+                  summary='Product 3.1.2 ' + ('Release Tasks' if kind == 'release-epic' else 'CVE triage'))
+    if kind == 'release-task':
+        action['parent'] = '{{release-epic.key}}'
+    return action
+
+
+def _release_snapshot(key, kind, parent=None):
+    item = {'key': key, 'issue_type': kind, 'summary': 'Product 3.1.2 ' + (
+        'Release Tasks' if kind == 'Epic' else 'CVE triage'), 'labels': ['keep-me'],
+        'comments': [], 'links': [], 'description': {'type': 'doc', 'version': 1, 'content': []}}
+    if parent:
+        item['parent'] = parent
+    return item
+
+
+def test_release_creation_parent_and_digest_order(recorder):
+    """Given authorized releases, create Epic then child with digests before linking."""
+    actions = [_release_action(), _release_action('release-task'), {
+        'type': 'link', 'marker': 'triage-security:release-link', 'link_type': 'Depend',
+        'inward': 'TC-42', 'outward': '{{release-task.key}}'}]
+    registry = executor.execute_plan(_plan(actions), _release_trusted())
+    creates = [call[1] for call in recorder.calls if call[0] == 'remediation-task']
+    assert [call['issue_type'] for call in creates] == ['Epic', 'Task']
+    assert creates[1]['parent'] == 'TC-9001'
+    assert registry['release-task']['key'] == 'TC-9002'
+    assert [call[0] for call in recorder.calls] == [
+        'remediation-task', 'get-issue', 'digest', 'remediation-task', 'get-issue', 'digest', 'link']
+
+
+@pytest.mark.parametrize('defect', ['decision', 'project', 'family', 'version', 'summary',
+                                  'permission', 'future-parent', 'rebound', 'untrusted'])
+def test_release_preflight_rejects_entire_plan(defect, recorder):
+    """Given a valid prefix and unsafe release suffix, reject before any Jira call."""
+    trusted = _release_trusted()
+    actions = [_release_action(), _release_action('release-task')]
+    if defect == 'decision':
+        trusted['authorization'].pop('release_decisions')
+    elif defect == 'permission':
+        trusted['authorization']['release_decisions'][0]['create_task'] = False
+    elif defect == 'future-parent':
+        actions.reverse()
+    elif defect == 'rebound':
+        actions[1]['ref'] = actions[0]['ref']
+    elif defect == 'untrusted':
+        actions.append({'type': 'comment', 'marker': 'triage-security:bad', 'issue': 'TC-999',
+                        'body_adf': actions[0]['description_adf']})
+    else:
+        actions[1][defect] = {'project': 'OTHER', 'family': '4.0', 'version': '3.1.3',
+                              'summary': 'unrelated'}[defect]
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(_plan(actions), trusted)
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize('kind', ['release-epic', 'release-task'])
+def test_release_report_only_rejects_new_actions(kind, recorder):
+    """Given a report-only plan, release creation never runs."""
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(_plan([_release_action(kind)], mode='report-only'), _release_trusted())
+    assert recorder.calls == []
+
+
+def test_release_retry_reuses_and_repairs_digests(recorder):
+    """Given a partially created graph, retry repairs digests without duplicating issues."""
+    trusted = _release_trusted()
+    graph = trusted['jira_metadata']['release_jira'][0]
+    graph['epics'] = [_release_snapshot('TC-70', 'Epic')]
+    graph['tasks'] = [_release_snapshot('TC-71', 'Task', 'TC-70')]
+    trusted['idempotency']['action_markers'] = ['triage-security:release-epic', 'triage-security:release-task']
+    registry = executor.execute_plan(_plan([_release_action(), _release_action('release-task')]), trusted)
+    assert registry['release-task']['key'] == 'TC-71'
+    assert [call[0] for call in recorder.calls] == ['get-issue', 'digest', 'get-issue', 'digest']
+
+
+@pytest.mark.parametrize('defect', ['wrong-type', 'wrong-parent', 'wrong-project', 'wrong-family',
+                                  'ambiguous', 'missing-marked'])
+def test_release_retry_invalid_snapshot_fails_before_calls(defect, recorder):
+    """Given inconsistent retry evidence, fail closed before repair or creation."""
+    trusted = _release_trusted()
+    graph = trusted['jira_metadata']['release_jira'][0]
+    graph['epics'] = [_release_snapshot('TC-70', 'Epic')]
+    graph['tasks'] = [_release_snapshot('TC-71', 'Task', 'TC-70')]
+    if defect == 'wrong-type':
+        graph['tasks'][0]['issue_type'] = 'Epic'
+    elif defect == 'wrong-parent':
+        graph['tasks'][0]['parent'] = 'TC-88'
+    elif defect == 'wrong-project':
+        graph['epics'][0]['key'] = 'OTHER-70'
+    elif defect == 'wrong-family':
+        graph['family'] = '4.0'
+    elif defect == 'ambiguous':
+        graph['epics'].append(_release_snapshot('TC-72', 'Epic'))
+    else:
+        graph['epics'] = []
+        graph['tasks'] = []
+        trusted['idempotency']['action_markers'] = ['triage-security:release-epic']
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(_plan([_release_action(), _release_action('release-task')]), trusted)
+    assert recorder.calls == []
+
+
+def test_release_labels_preserve_snapshot_labels(recorder):
+    """Given a bounded release target, a label addition preserves existing labels."""
+    trusted = _release_trusted()
+    trusted['jira_metadata']['release_jira'][0]['epics'] = [_release_snapshot('TC-70', 'Epic')]
+    executor.execute_plan(_plan([{'type': 'field-edit', 'marker': 'triage-security:release-labels',
+                                 'issue': 'TC-70', 'fields': {'labels': ['ai-cve-triaged']}}]), trusted)
+    assert recorder.calls == [('field-edit', 'TC-70', {'labels': ['keep-me', 'ai-cve-triaged']})]
+
+
+@pytest.mark.parametrize('failure', ['epic-digest', 'task-create', 'task-digest'])
+def test_release_partial_failure_then_retry(failure, recorder, monkeypatch):
+    """Given interrupted creation, refreshed host snapshots reuse issues and repair digests."""
+    trusted = _release_trusted()
+    actions = [_release_action(), _release_action('release-task')]
+    original_create = recorder.create_issue
+    original_digest = recorder.make_request
+
+    def create(**kwargs):
+        if failure == 'task-create' and kwargs['issue_type'] == 'Task':
+            raise RuntimeError('synthetic create interruption')
+        return original_create(**kwargs)
+
+    def digest(method, path, body):
+        if path == ('issue/TC-9001/comment' if failure == 'epic-digest' else 'issue/TC-9002/comment'):
+            raise RuntimeError('synthetic digest interruption')
+        return original_digest(method, path, body)
+
+    monkeypatch.setattr(executor._jira_mod, 'create_issue', create)
+    monkeypatch.setattr(executor._jira_mod, 'make_request', digest)
+    with pytest.raises(RuntimeError):
+        executor.execute_plan(_plan(actions), trusted)
+    graph = trusted['jira_metadata']['release_jira'][0]
+    graph['epics'] = [_release_snapshot('TC-9001', 'Epic')]
+    if failure == 'task-digest':
+        graph['tasks'] = [_release_snapshot('TC-9002', 'Task', 'TC-9001')]
+    monkeypatch.setattr(executor._jira_mod, 'create_issue', original_create)
+    monkeypatch.setattr(executor._jira_mod, 'make_request', original_digest)
+    registry = executor.execute_plan(_plan(actions), trusted)
+    assert recorder.created == 2
+    assert registry['release-task']['key'] == 'TC-9002'
+
+
+@pytest.mark.parametrize('defect', ['orphan-remediation', 'orphan-cve', 'wrong-parent-type'])
+def test_arbitrary_release_metadata_does_not_authorize(defect, recorder):
+    """Given unrelated issues inserted in release metadata, fail before any Jira operation."""
+    trusted = _release_trusted()
+    graph = trusted['jira_metadata']['release_jira'][0]
+    graph['epics'] = [_release_snapshot('TC-70', 'Epic')]
+    if defect == 'orphan-remediation':
+        graph['remediation'] = [_release_snapshot('TC-72', 'Task')]
+    elif defect == 'orphan-cve':
+        graph['originating_cves'] = [_release_snapshot('TC-72', 'Vulnerability')]
+    else:
+        graph['epics'][0]['issue_type'] = 'Task'
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(_plan([{'type': 'field-edit', 'marker': 'triage-security:bad-graph',
+                                     'issue': 'TC-70', 'fields': {'labels': ['triaged']}}]), trusted)
+    assert recorder.calls == []
+
+
+def test_release_dedup_targets_require_genuine_links(recorder):
+    """Given a bounded release graph, linked remediation and CVE accept dedup updates."""
+    trusted = _release_trusted()
+    graph = trusted['jira_metadata']['release_jira'][0]
+    graph['epics'] = [_release_snapshot('TC-70', 'Epic')]
+    graph['tasks'] = [_release_snapshot('TC-71', 'Task', 'TC-70')]
+    graph['remediation'] = [_release_snapshot('TC-72', 'Task')]
+    graph['originating_cves'] = [_release_snapshot('TC-73', 'Vulnerability')]
+    graph['tasks'][0]['links'] = [{'type': {'name': 'Blocks'}, 'inwardIssue': {'key': 'TC-72'}}]
+    graph['remediation'][0]['links'] = [{'type': {'name': 'Depend'}, 'outwardIssue': {'key': 'TC-73'}}]
+    executor.execute_plan(_plan([
+        {'type': 'field-edit', 'marker': 'triage-security:dedup-labels', 'issue': 'TC-72',
+         'fields': {'labels': ['ai-cve-triaged']}},
+        {'type': 'link', 'marker': 'triage-security:dedup-link', 'link_type': 'Related',
+         'inward': 'TC-42', 'outward': 'TC-73'}]), trusted)
+    assert recorder.calls == [('field-edit', 'TC-72', {'labels': ['keep-me', 'ai-cve-triaged']}),
+                              ('link', 'TC-42', 'TC-73', 'Related')]
+
+
+def test_shared_remediation_across_release_families(recorder):
+    """Given two release families sharing remediation, authorize the same linked issue."""
+    trusted = _release_trusted()
+    entries = trusted['jira_metadata']['release_jira']
+    for family, epic_key, task_key in [('3.1', 'TC-70', 'TC-71'), ('3.2', 'TC-80', 'TC-81')]:
+        entry = {'family': family, 'epics': [_release_snapshot(epic_key, 'Epic')],
+                 'tasks': [_release_snapshot(task_key, 'Task', epic_key)],
+                 'remediation': [_release_snapshot('TC-72', 'Task')], 'originating_cves': []}
+        for member in entry['epics'] + entry['tasks']:
+            member['summary'] = member['summary'].replace('3.1.2', family + '.2')
+        entry['tasks'][0]['links'] = [{'type': {'name': 'Blocks'}, 'inwardIssue': {'key': 'TC-72'}}]
+        if family == '3.1':
+            entries[0] = entry
+        else:
+            entries.append(entry)
+    executor.execute_plan(_plan([{'type': 'field-edit', 'marker': 'triage-security:shared-label',
+                                 'issue': 'TC-72', 'fields': {'labels': ['triaged']}}]), trusted)
+    assert recorder.calls == [('field-edit', 'TC-72', {'labels': ['keep-me', 'triaged']})]
+
+
+def test_sequential_release_label_additions_preserve_each_other(recorder):
+    """Given two label additions, the second preserves both original and newly added labels."""
+    trusted = _release_trusted()
+    trusted['jira_metadata']['release_jira'][0]['epics'] = [_release_snapshot('TC-70', 'Epic')]
+    executor.execute_plan(_plan([
+        {'type': 'field-edit', 'marker': 'triage-security:label-' + label,
+         'issue': 'TC-70', 'fields': {'labels': [label]}} for label in ['one', 'two']]), trusted)
+    assert recorder.calls[-1] == ('field-edit', 'TC-70', {'labels': ['keep-me', 'one', 'two']})
+
+
+def test_created_release_labels_survive_followup_edit(recorder):
+    """Given a new Epic, a following label edit preserves its creation labels."""
+    action = _release_action()
+    action['labels'] = ['release-owned']
+    executor.execute_plan(_plan([action, {
+        'type': 'field-edit', 'marker': 'triage-security:created-label',
+        'issue': '{{release-epic.key}}', 'fields': {'labels': ['triaged']}}]), _release_trusted())
+    assert recorder.calls[-1] == ('field-edit', 'TC-9001',
+                                 {'labels': ['ai-generated-jira', 'release-owned', 'triaged']})
+
+
+@pytest.mark.parametrize('kind', ['release-epic', 'release-task'])
+def test_duplicate_planned_release_identity_fails_before_calls(kind, recorder):
+    """Given distinct refs for the same release identity, preflight rejects duplicate creation."""
+    first = _release_action(kind)
+    second = copy.deepcopy(first)
+    second.update(ref='another-release', marker='triage-security:another-release')
+    actions = [first, second] if kind == 'release-epic' else [_release_action(), first, second]
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(_plan(actions), _release_trusted())
+    assert recorder.calls == []

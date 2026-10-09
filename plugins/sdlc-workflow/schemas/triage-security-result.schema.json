@@ -120,7 +120,9 @@
             "comment",
             "link",
             "remediation-task",
-            "resolve-reference"
+            "resolve-reference",
+            "release-epic",
+            "release-task"
           ]
         },
         "marker": { "$ref": "#/$defs/stable_marker" }
@@ -221,6 +223,47 @@
               "marker": {},
               "ref": { "$ref": "#/$defs/reference_name" },
               "issue": { "$ref": "#/$defs/issue_key" }
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "release-epic" } } },
+          "then": {
+            "required": ["type", "marker", "ref", "project", "summary", "description_adf", "labels", "family", "version"],
+            "properties": {
+              "type": {},
+              "marker": {},
+              "ref": {"$ref": "#/$defs/reference_name"},
+              "project": {"type": "string", "minLength": 1},
+              "summary": {"type": "string", "minLength": 1, "maxLength": 255},
+              "description_adf": {"$ref": "#/$defs/adf_document"},
+              "labels": {"type": "array", "items": {"type": "string"}},
+              "priority": {"type": "string", "minLength": 1},
+              "fix_versions": {"type": "array", "items": {"type": "string"}},
+              "family": {"type": "string", "pattern": "^\\d+\\.\\d+$"},
+              "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"}
+            },
+            "additionalProperties": false
+          }
+        },
+        {
+          "if": { "properties": { "type": { "const": "release-task" } } },
+          "then": {
+            "required": ["type", "marker", "ref", "project", "summary", "description_adf", "labels", "family", "version", "parent"],
+            "properties": {
+              "type": {},
+              "marker": {},
+              "ref": {"$ref": "#/$defs/reference_name"},
+              "project": {"type": "string", "minLength": 1},
+              "summary": {"type": "string", "minLength": 1, "maxLength": 255},
+              "description_adf": {"$ref": "#/$defs/adf_document"},
+              "labels": {"type": "array", "items": {"type": "string"}},
+              "priority": {"type": "string", "minLength": 1},
+              "fix_versions": {"type": "array", "items": {"type": "string"}},
+              "family": {"type": "string", "pattern": "^\\d+\\.\\d+$"},
+              "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+              "parent": {"$ref": "#/$defs/issue_reference"}
             },
             "additionalProperties": false
           }
