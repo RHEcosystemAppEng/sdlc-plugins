@@ -306,6 +306,17 @@ compatibility), omit the coordination guidance entirely — do not add the subse
 
 ### Fullsend serialization
 
+Apply Step 7.5's trusted release and dedup decisions before creating remediation.
+A covered family emits no new remediation task. A dependency bump uses the
+existing `remediation-task` description variant above, followed by its downstream
+propagation Task; it does not introduce a new action type. Create/reuse the
+release Epic and child Task first, and bind existing/generated release references
+before remediation links. Preserve Blocks direction (remediation inward, release
+Task outward), Related direction (release Task inward, CVE outward), and Depend
+direction (CVE inward, remediation outward). Include release references, skips,
+manual decisions and dedup evidence in the final summary. Global report-only mode
+withholds the entire creation/digest/link sequence.
+
 The following creation pseudocode is interactive-only and retains its existing
 confirmation behavior. In Fullsend mode, do not call `create_issue`, `add_comment`,
 or `create_link`. Use the validated task description, labels, priority, fix-version,

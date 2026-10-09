@@ -8,7 +8,7 @@ import sys
 
 def prepare(root, scenario):
     """Prepare only host mounts; Fullsend sources the fragment before inference."""
-    if scenario not in {"absent", "empty", "malformed", "valid"}:
+    if scenario not in {"absent", "empty", "malformed", "valid", "release"}:
         raise ValueError("Unknown synthetic gate scenario")
     fixtures = root / "evals/triage-security/files"
     pre = root / "pre"
@@ -22,8 +22,10 @@ def prepare(root, scenario):
         fragment += "unset FULLSEND_OUTPUT_DIR\n"
     elif scenario == "empty":
         fragment += "export FULLSEND_OUTPUT_DIR=''\n"
-    if scenario in {"malformed", "valid"}:
+    if scenario in {"malformed", "valid", "release"}:
         name = "fullsend-invalid-trusted-input.md" if scenario == "malformed" else "fullsend-report-only-trusted-input.json"
+        if scenario == "release":
+            name = "fullsend-release-trusted-input.json"
         data = (fixtures / name).read_bytes()
         if scenario == "malformed":
             data = data.split(b"```json\n", 1)[1].split(b"\n```", 1)[0]

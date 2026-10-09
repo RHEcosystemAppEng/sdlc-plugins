@@ -521,6 +521,55 @@ before Case A/B/C branching in Step 8. It applies to all non-preemptive
 remediation types (upstream backport, downstream propagation, system package,
 dependency bump).
 
+### Fullsend release procedure
+
+The following 7.5.1–7.5.3 searches, confirmations and writes are interactive-only.
+In Fullsend mode, use only the validated `jira_metadata.release_jira` entries for
+matrix release families and `authorization.release_decisions`. Do not fetch a
+release issue, choose a patch bump, prompt or contact Jira.
+
+1. For each affected family, require its trusted release entry. If missing, report
+   **manual release decision required**, identify the family and withheld work,
+   and leave release-dependent remediation unresolved. Do not claim completion.
+2. Honor `{family, skip: true}` by explicitly reporting the skip and continuing
+   Step 8 without release links for that family. Otherwise use the decision's
+   exact version, or reuse the existing Epic selected by the trusted query order
+   (7.5.1). Require exact configured prefix/version summaries, Epic type, Task type
+   and child parent identity. Ambiguous identities require manual review.
+3. Reuse existing Epic/Task keys with `resolve-reference` before dependent actions;
+   reuse never needs a creation permission. If an identity is missing, require
+   `mutation_authorized: true`, the decision's exact family/version, and its
+   individual `create_epic: true` or `create_task: true`. A permission for one
+   does not authorize the other. Missing permission/decision yields the manual
+   release decision required report, no guessed version or dependent creation.
+4. Append `release-epic` before `release-task`; the Task's `parent` is the matching
+   existing Epic key or `{{release-epic-ref.key}}`. Both actions carry family,
+   version, ref, project, exact summary, description_adf and labels (optional
+   priority/fix_versions). Use unique stable markers and one creation action per
+   identity. Always retain planned release creation actions on partial retries,
+   even with a recorded marker: the host reuses the typed snapshot and repairs
+   its digest before dependent links/comments. Do not add standalone digest
+   comments or post-creation resolve-reference actions.
+5. For dedup, inspect only the selected release Task's Blocks inward endpoints
+   in `remediation`, then their Depend-linked `originating_cves`. Compare the
+   originating CVE's `upstream_affected_component` with the current issue's
+   configured `upstream_affected_component_field`. Preserve 7.5.3's prerequisite:
+   no configured field means skip dedup. Use library-summary fallback only when
+   the Depend link or component field on the originating CVE is missing; a
+   present nonmatching component never authorizes a summary fallback. Missing
+   trusted graph evidence must not be replaced by a Jira query.
+6. A match emits no new remediation Task: append Depend with current CVE inward
+   and covering Task outward, Related with release Task inward and current CVE
+   outward, and field-edit adding the CVE label while retaining all existing
+   labels. Record family/version, covering Task and match evidence in the report.
+   Nonmatches follow Step 8, including dependency bump plus downstream
+   propagation when applicable, then Blocks (remediation inward, release Task
+   outward) and Related (release Task inward, current CVE outward).
+7. When global authorization is false, serialize none of these mutations. Keep
+   exactly one report-only action and report existing release references, dedup
+   evidence, explicit skips and all withheld creation/link/label work. Missing
+   decisions remain unresolved; never describe withheld operations as completed.
+
 ### 7.5.1 – Resolve stream-to-version mapping
 
 For each affected stream, derive the release version from the stream name using

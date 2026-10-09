@@ -1,7 +1,8 @@
 # Native Fullsend gate evals
 
 TC-6677 moves cases 033–036 into a separate native Fullsend suite. Ordinary
-`sdlc-workflow:run-evals` retains the original triage32/164 and verify6/68.
+`sdlc-workflow:run-evals` retains all original triage32/164 assertions and verify6/68; TC-6820 adds
+two interactive release assertions to existing triage case1 (32/166).
 This suite invokes the actual `sdlc-workflow:triage-security` Skill for synthetic
 TC-8101 through a test agent. It covers real Skill execution in Fullsend with
 synthetic bundles; full production pre/post integration and native verify-pr coverage remain separate.
@@ -114,8 +115,8 @@ python3.12 evals/fullsend/run.py run \
   --effort high
 ```
 
-This command **does perform paid inference**: four serial native Fullsend runs
-and21 upstream Boolean LLM judgments. Select model IDs supported by your Vertex
+This command **does perform paid inference**: five serial native Fullsend runs
+and28 upstream Boolean LLM judgments. Select model IDs supported by your Vertex
 project/region. Model availability is not checked by preflight. The native
 agent timeout is30minutes, the opaque CLI case timeout40minutes, and the test
 validation loop has one iteration. Framework budget hints are advisory, not a
@@ -151,9 +152,10 @@ key, GitHub App, Jira token, forge mint or production pre/post hook is added.
 Trusted suite resources supply the pre-script, policy/profile/provider and host
 schema validator. Only the selected PR plugin is sandbox test content.
 
-All four cases and21 Boolean judgments retain their original texts. Missing,
-null, skipped applicable judgments, errors or failed scoring fail reporting and
-the combined ordinary/native check. Expected negative native exits remain intact.
+Cases033–036 retain all21 original assertion texts. Case037 adds seven release
+assertions, for28 total. Missing, null, skipped applicable judgments, errors or
+failed infrastructure block reporting and the combined check. Complete False
+judgments are advisory when genuine runtime execution and provenance are valid. Expected negative native exits remain intact.
 Only source pins, Boolean outcomes, counts and exit/completeness status are
 published as `native-result.json`, retained14days. Raw logs, arbitrary rationale,
 transcripts, configs and credentials stay private in runner temporary storage.
@@ -164,8 +166,9 @@ Merge sequence:
 1. Review the native suite source on PR299 and its explicit immutable pin in the
    minimal PR323 bootstrap. Human merges PR323 first.
 2. The restricted main workflow evaluates PR299's exact approved plugin revision
-   with that reviewed suite source. Require actual WIF-backed21/21 alongside
-   successful ordinary evals; local21/21 and preflight do not prove hosted success.
+   with that reviewed suite source. Require complete WIF-backed execution evidence
+   alongside successful ordinary evals; native quality scores are advisory. Local
+   historical21/21 and preflight do not prove hosted release-case success.
 3. Human merges PR299 after successful hosted validation. PR299's normal
    activation removes only the initial identity restriction and selects trusted
    `github.sha` as suite source. Future runs then use the trusted suite on main.
@@ -182,6 +185,7 @@ Native verify-pr and production pre/post mutation coverage remain separate.
 | 034-empty | Test fragment exports an empty gate; no target CLAUDE.md/input | 5 |
 | 035-malformed | Native nonempty gate; exact retained malformed bytes mounted | 5 |
 | 036-valid | Native nonempty gate; retained trusted report-only bundle mounted | 7 |
+| 037-release | Native nonempty gate; typed release/dedup evidence and explicit creation decisions; proposals only | 7 |
 
 The input mount is `/sandbox/workspace/.pre-script/triage-security-input.json`.
 The native output directory is `/sandbox/workspace/output`, **not `/sandbox/output`**.
@@ -239,7 +243,7 @@ Expected retained evidence includes:
   Malformed may produce no file or sole `agent-result.json` containing `{}` after host stripping;
   valid produces sole `agent-result.json`, while absent/empty produce none.
 - Native metrics/logs/traces and the unchanged root metrics copy when uniquely found.
-- Upstream judge results and summary, with all21 individual Boolean results/rationales.
+- Upstream judge results and summary, with all28 individual Boolean results/rationales.
 
 Negative cases may cause a nonzero native CLI exit because the production host
 schema intentionally rejects absent/no result or the malformed abort result.
@@ -266,8 +270,8 @@ upstream judges.
 
 At the pinned framework revision, partial judge exceptions yield `value:null`
 and are omitted from aggregate values. After successful upstream scoring, the
-entrypoint checks the unchanged `summary.yaml`: exactly four expected cases and
-all21 applicable Boolean outcomes (4/5/5/7) are mandatory. Missing, null,
+entrypoint checks the unchanged `summary.yaml`: exactly five reviewed cases and
+all28 applicable Boolean outcomes (4/5/5/7/7) are mandatory. Missing, null,
 non-Boolean, error or skipped applicable outcomes fail the command. Invalid YAML,
 duplicate keys, wrong run/case identities and unexpected assertion names also
 fail. The scorer emits seven named records per case; only the configured
@@ -330,3 +334,32 @@ TC6677_GO_CACHE=/tmp/tc-6677-go-build-cache \
 python3 -m pytest plugins/sdlc-workflow/scripts/test_fullsend_gate_eval.py \
   -q -k actual_pinned_fullsend_resolver
 ```
+
+
+## TC-6820 release coverage and activation
+
+Case037-release uses fictional TC-8101. It reuses release2.2.1 (EpicTC-9200,
+TaskTC-9201), follows Blocks to remediationTC-9202 and Depend to CVETC-9203,
+then compares the originating CVE's openssl-libs component. It separately proposes
+release2.3.1 using the explicit individual Epic/Task grants. No production Jira
+post-script or sandbox credential is introduced. The original cases/assertions
+remain intact; deterministic fixtures prove contracts, not LLM skill behavior.
+Actual native Skill/tool execution and the completed result must be judged.
+
+Before this can be claimed tested on PR299, the **trusted default-branch bootstrap**
+needs one reviewed update: set `NATIVE_EVAL_SOURCE_SHA` to the exact published
+TC-6820 commit; update the trusted execution checker's fixed CASES and total to
+4/5/5/7/7; update Report Status's fixed counts, completeness and displayed total to
+match. No wrapper credential, WIF, approval, host script selection or sandbox
+policy change is needed. The reviewed suite must include the new trusted host
+result schema and adapter/fixture bytes. Do not select arbitrary PR host scripts
+or derive the expected inventory from untrusted result totals.
+
+Submit and review that minimal bootstrap update before activation; its merge is a
+human operation. PR299-only workflow/checker edits do not change workflow_run's
+live default-branch definition. Until then, current hosted four-case/21-judgment
+results test only the old guard coverage, even against the newer plugin. After
+activation, run the existing ordinary and native workflow, report all five cases
+and28 advisory outcomes with genuine execution validity and exact tested plugin,
+merge, trusted-workflow and suite SHAs. No paid manual rerun during development.
+After PR299 merges, the workflow uses trusted `github.sha` as the suite source.

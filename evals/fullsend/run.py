@@ -19,8 +19,8 @@ import venv
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
-CASES = ["033-absent", "034-empty", "035-malformed", "036-valid"]
-ASSERTION_COUNTS = dict(zip(CASES, [4, 5, 5, 7]))
+CASES = ["033-absent", "034-empty", "035-malformed", "036-valid", "037-release"]
+ASSERTION_COUNTS = dict(zip(CASES, [4, 5, 5, 7, 7]))
 
 
 def pins():
@@ -155,8 +155,8 @@ def preflight(cache, model, judge_model, effort):
             raise ValueError("Opaque CLI config binding mismatch")
     cases = sorted((HERE / "triage-security/cases").iterdir())
     if [p.name for p in cases] != CASES:
-        raise ValueError("Native dataset must contain exactly four gate cases")
-    if [yaml.safe_load((p / "annotations.yaml").read_text())["assertion_count"] for p in cases] != [4, 5, 5, 7]:
+        raise ValueError("Native dataset must contain exactly the reviewed gate and release cases")
+    if [yaml.safe_load((p / "annotations.yaml").read_text())["assertion_count"] for p in cases] != [4, 5, 5, 7, 7]:
         raise ValueError("Native assertion count mismatch")
     print("NO-INFERENCE preflight passed; propagation, services, credentials and runtime success remain unproven")
 
@@ -182,7 +182,7 @@ def validate_summary(run_dir, run_id):
         raise ValueError("Invalid upstream summary: expected current run mapping")
     cases = summary.get("per_case")
     if not isinstance(cases, dict) or set(cases) != set(CASES):
-        raise ValueError("Invalid upstream summary: expected exactly four gate cases")
+        raise ValueError("Invalid upstream summary: expected exactly the reviewed gate and release cases")
     names = {f"assertion_{index}" for index in range(1, 8)}
     for case, count in ASSERTION_COUNTS.items():
         results = cases[case]
@@ -363,7 +363,7 @@ def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
     except ValueError:
         exit_code = exit_code or 1
     report = {"source": source, "exit_code": exit_code, "complete": complete, "outcomes": outcomes,
-              "passed": sum(value is True for case in outcomes.values() for value in case.values()), "total": 21,
+              "passed": sum(value is True for case in outcomes.values() for value in case.values()), "total": sum(ASSERTION_COUNTS.values()),
               "valid_case_tools": valid_case_tool_observations(run_dir)}
     if diagnostics is not None:
         phases = {"preflight", "configuration", "workspace", "execute", "collect", "score", "summary", "complete"}

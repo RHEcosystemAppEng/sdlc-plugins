@@ -202,8 +202,8 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
     source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
               "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
     outcomes = {case: {f"assertion_{i}": True for i in range(1, n+1)}
-                for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}.items()}
-    report = {"source": source, "outcomes": outcomes, "complete": True, "total": 21, "exit_code": 0,
+                for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}
+    report = {"source": source, "outcomes": outcomes, "complete": True, "total": 28, "exit_code": 0,
               "rationale": "SECRET /tmp/gha-creds-evil", "execution_valid": True,
               "execution": synthetic_execution(outcomes)}
     if defect == "wrong-source": source["head_sha"] = "d" * 40
@@ -225,7 +225,7 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
     if defect == "false":
         assert len(result["reviews"]) == 1
         body = result["reviews"][0]["body"]
-        assert "quality score (advisory): 20/21 passed." in body
+        assert "quality score (advisory): 27/28 passed." in body
         assert "| Case | Execution evidence | Quality score (advisory) |" in body
         for row in ["| 033-absent | valid | 3/4 |", "| 034-empty | valid | 5/5 |",
                     "| 035-malformed | valid | 5/5 |", "| 036-valid | valid | 7/7 |"]:
@@ -312,9 +312,9 @@ def test_review_reruns_reuse_only_matching_bot_head_review(native, existing_kind
         assert "github.paginate(github.rest.pulls.listReviews" in script
     source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
               "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
-    report = {"source": source, "complete": True, "total": 21, "exit_code": 0,
+    report = {"source": source, "complete": True, "total": 28, "exit_code": 0,
               "outcomes": {case: {f"assertion_{i}": True for i in range(1, n+1)}
-                           for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7}.items()}}
+                           for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}}
     report.update(execution_valid=True, execution=synthetic_execution(report["outcomes"]))
     result = run_js(script, {"report": report, "existingReviews": stored, "repeat": 2}, {
         "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
@@ -371,7 +371,7 @@ def test_native_artifact_download_failure_keeps_controlled_reporting():
     assert "No safe native result was produced; native execution/approval failed." in result["reviews"][0]["body"]
 
 
-def run_credential_wrapper(tmp_path, output, passed=21, broken_execution=False):
+def run_credential_wrapper(tmp_path, output, passed=28, broken_execution=False):
     """Run the real wrapper/checker with synthetic credentials and inference records."""
     # Given explicitly synthetic native artifacts, generated without inference
     spec = importlib.util.spec_from_file_location("execution_fixtures", ROOT / "plugins/sdlc-workflow/scripts/test_native_fullsend_execution.py")
@@ -421,7 +421,7 @@ def run_credential_wrapper(tmp_path, output, passed=21, broken_execution=False):
     return result, json.loads(capture.read_text()) if capture.exists() else None
 
 
-@pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (21, True, 1)])
+@pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (28, True, 1)])
 def test_wrapper_enforces_execution_integrity_instead_of_quality_score(tmp_path, passed, broken, expected):
     """The wrapper invokes the runner correctly and gates execution independently of score."""
     # Given synthetic credential preparation and native artifacts
@@ -700,7 +700,7 @@ def test_safe_report_contains_boolean_outcomes_and_revision_without_raw_credenti
     common.publish_report(run, tmp_path / "safe", source, 0)
     result = json.loads((tmp_path / "safe/native-result.json").read_text())
     assert result["source"] == source
-    assert result["passed"] == result["total"] == 21 and result["exit_code"] == 0
+    assert result["passed"] == result["total"] == 28 and result["exit_code"] == 0
     assert result["outcomes"]["033-absent"] == {f"assertion_{i}": True for i in range(1, 5)}
     assert "SECRET" not in (tmp_path / "safe/native-result.json").read_text()
     assert sorted(p.name for p in (tmp_path / "safe").iterdir()) == ["native-result.json"]
@@ -895,3 +895,12 @@ def test_ordinary_eval_attempts_remaining_skills_after_failure(tmp_path, mode):
     assert result.returncode == 1, result.stdout + result.stderr
     assert len(calls) == 2
     assert (tmp_path / "second-eval-pr/summary.md").is_file()
+
+
+def test_publication_has_fixed_reviewed_release_inventory():
+    """Publication checks exact reviewed counts rather than trusting report totals."""
+    script = script_step('report-status', 'Publish native result alongside ordinary review')['with']['script']
+    assert "'037-release': 7" in script
+    assert 'report.total === total' in script
+    assert 'Object.values(counts).reduce' in script
+    assert 'quality score (advisory)' in script

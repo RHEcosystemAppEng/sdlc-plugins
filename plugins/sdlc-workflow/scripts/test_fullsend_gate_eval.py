@@ -44,7 +44,7 @@ def synthetic_fixture_root(path):
 def synthetic_judge_summary(value=True):
     """SYNTHETIC STATIC RECORDS — summary contract only, never live eval evidence."""
     cases = {}
-    for case, count in zip(["033-absent", "034-empty", "035-malformed", "036-valid"], [4, 5, 5, 7]):
+    for case, count in zip(["033-absent", "034-empty", "035-malformed", "036-valid", "037-release"], [4, 5, 5, 7, 7]):
         cases[case] = {}
         for index in range(1, 8):
             condition = f'annotations.get("assertion_count", 0) > {index - 1}'
@@ -103,7 +103,7 @@ def test_safe_report_observes_matched_valid_tools_without_changing_scores(tmp_pa
         "input_validation_succeeded": True, "input_validation_failed": False,
     }
     assert report["source"] == source and report["exit_code"] == 7
-    assert report["complete"] is True and report["passed"] == 0 and report["total"] == 21
+    assert report["complete"] is True and report["passed"] == 0 and report["total"] == 28
     assert all(value is False for case in report["outcomes"].values() for value in case.values())
     assert all(path.read_bytes() == raw for path, raw in original.items())
     assert "command" not in json.dumps(report) and "tool_use_id" not in json.dumps(report)
@@ -277,7 +277,7 @@ def test_valid_tool_observations_handle_excessive_json_nesting(tmp_path):
 def test_summary_integrity_accepts_complete_boolean_results_without_grading(tmp_path, value):
     """Completeness accepts actual False outcomes; upstream alone owns thresholds."""
     common = load_script(ROOT / "evals/fullsend/run.py")
-    # Given 21 explicitly synthetic Boolean outcomes and seven legitimate skips
+    # Given 28 explicitly synthetic Boolean outcomes and seven legitimate skips
     path = tmp_path / "summary.yaml"
     raw = yaml.safe_dump(synthetic_judge_summary(value)).encode()
     path.write_bytes(raw)
@@ -365,15 +365,25 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     verify = json.loads((ROOT / "evals/verify-pr/evals.json").read_text())["evals"]
     # Then native cases are separate and every retained object is unchanged
     assert [c["id"] for c in triage] == list(range(1, 33))
-    assert sum(len(c["assertions"]) for c in triage) == 164
+    assert sum(len(c["assertions"]) for c in triage) == 166
     assert len(verify) == 6 and sum(len(c["assertions"]) for c in verify) == 68
+    # TC-6820 appends exactly two release assertions and one prompt suffix to case1.
+    # Hash the retained prefix and all other cases against the original baseline.
+    baseline = json.loads(json.dumps(triage))
+    suffix = ' In outputs/remediation.md also explain the Step 7.5 release orchestration confirmations and dedup decision before proposing remediation; retain all existing outputs and do not claim any Jira operation was performed.'
+    assert baseline[0]["prompt"].endswith(suffix)
+    assert len(baseline[0]["assertions"]) == 13
+    assert baseline[0]["assertions"][-2].startswith("Release orchestration preserves")
+    assert baseline[0]["assertions"][-1].startswith("Release dedup is skipped")
+    baseline[0]["prompt"] = baseline[0]["prompt"].removesuffix(suffix)
+    baseline[0]["assertions"] = baseline[0]["assertions"][:11]
     # Bootstrap main and reviewed PR299 contain different pre-existing triage
     # assertion objects. Accept only those two immutable baselines, never edit
     # the active ordinary manifests to match the native branch's historical hash.
     # Canonical complete-object digests keep this portable to a shallow checkout:
     # main ab20bee6, native aa15d776, and PR299 d83ee90b (TC4636 prompt repair).
     for cases, digests in [
-        (triage, {"205eeca4b564c0483c919be0951e50b3d5510f981278c61fa1c47468af5fe76d",
+        (baseline, {"205eeca4b564c0483c919be0951e50b3d5510f981278c61fa1c47468af5fe76d",
                   "b3f9e9d4f4ab1eb92f053c0c0e4199a36eabb12ab9589e9d27e9c59509eee501"}),
         (verify, {"251863edaed38f0b133c0cf0981ddffe80692f5d0655b51f7bfe214be38f69b1",
                   "cf587edf1e94e6a1a210d5c97788f33b3336a0818a86551e364ec056bd1a3be1",
@@ -487,7 +497,7 @@ def test_malformed_assertion_requires_raw_abort_and_host_retention_evidence():
 
 
 def test_separate_suite_declares_all_strict_execution_assertions():
-    """Native scenarios must retain 21 distinct execution requirements."""
+    """Native scenarios must retain 28 distinct execution requirements."""
     # Given the native framework's dataset rather than ordinary evals.json
     assert (SUITE / "eval.yaml").is_file(), "Separate native suite is missing"
     config = yaml.safe_load((SUITE / "eval.yaml").read_text())
@@ -498,14 +508,14 @@ def test_separate_suite_declares_all_strict_execution_assertions():
     assert not config.get("hooks")
     assert config["outputs"] == [{"path": "output"}]
     cases = sorted((SUITE / "cases").iterdir())
-    assert [p.name for p in cases] == ["033-absent", "034-empty", "035-malformed", "036-valid"]
-    assert [len(yaml.safe_load((p / "annotations.yaml").read_text())["assertions"]) for p in cases] == [4, 5, 5, 7]
+    assert [p.name for p in cases] == ["033-absent", "034-empty", "035-malformed", "036-valid", "037-release"]
+    assert [len(yaml.safe_load((p / "annotations.yaml").read_text())["assertions"]) for p in cases] == [4, 5, 5, 7, 7]
     assert all(j["feedback_type"] == "bool" for j in config["judges"])
     assert all(t["min_pass_rate"] == 1.0 for t in config["thresholds"].values())
 
 
 @pytest.mark.parametrize("exit_code", [0, 7])
-@pytest.mark.parametrize("scenario", ["absent", "empty", "malformed", "valid"])
+@pytest.mark.parametrize("scenario", ["absent", "empty", "malformed", "valid", "release"])
 def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypatch, exit_code, scenario):
     """Only the external CLI is doubled: staging, arguments and raw retention are real."""
     # Given a synthetic CLI process, explicitly not model or Skill execution
@@ -586,6 +596,9 @@ def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypat
         assert (staged / "evals/fullsend/triage-security" / name).read_bytes() == (SUITE / name).read_bytes()
     fixture_names = [
         "fullsend-gate-interactive-config.md", "fullsend-invalid-trusted-input.md", "fullsend-report-only-trusted-input.json"]
+    if scenario == "release":
+        fixture_names.append("fullsend-release-trusted-input.json")
+        fixture_names.sort()
     assert sorted(p.name for p in (staged / "evals/triage-security/files").iterdir()) == fixture_names
     for name in fixture_names:
         assert (staged / "evals/triage-security/files" / name).read_bytes() == (FIXTURES / name).read_bytes()
@@ -777,7 +790,7 @@ def test_common_pipeline_collects_failures_before_upstream_judging(tmp_path, mon
         phase = Path(command[1]).stem
         calls.append((phase, command, kwargs))
         if phase == "execute":
-            for case in ["033-absent", "034-empty", "035-malformed", "036-valid"]:
+            for case in ["033-absent", "034-empty", "035-malformed", "036-valid", "037-release"]:
                 p = run_dir / "cases" / case
                 p.mkdir(parents=True)
                 (p / "run_result.json").write_text('{"exit_code":7}')
@@ -1069,3 +1082,17 @@ def test_phase_stderr_is_streamed_with_bounded_diagnostic_reads(tmp_path, monkey
     assert len(reads) >= 4
     assert diagnostics["code"] == "authentication-error"
     assert len(capsys.readouterr().err) == len(b"HTTP 401 Unauthorized\n") + 200000
+
+
+def test_release_case_inventory_and_fixture_preparation(tmp_path):
+    """Reviewed release coverage stages only the synthetic credential-free bundle."""
+    common = load_script(ROOT / 'evals/fullsend/run.py')
+    assert common.CASES == ['033-absent', '034-empty', '035-malformed', '036-valid', '037-release']
+    assert common.ASSERTION_COUNTS['037-release'] == 7
+    root = synthetic_fixture_root(tmp_path)
+    shutil.copy2(FIXTURES / 'fullsend-release-trusted-input.json',
+                 root / 'evals/triage-security/files/fullsend-release-trusted-input.json')
+    load_script(SUITE / 'prepare-fixture.py').prepare(root, 'release')
+    assert (root / 'pre/triage-security-input.json').read_bytes() == (
+        FIXTURES / 'fullsend-release-trusted-input.json').read_bytes()
+    assert 'unset FULLSEND_OUTPUT_DIR' not in (root / 'pre/tc-6677-gate.env').read_text()

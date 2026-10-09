@@ -614,3 +614,47 @@ the TC-6257 deliverable branch) are removed after acceptance is recorded.
   doesn't support GFM tables (parser has no table extension; no table node
   handler). GitHub renders the same body correctly. Tracked upstream:
   <https://github.com/fullsend-ai/fullsend/issues/7345>.
+
+
+## Triage-security release orchestration (TC-6818–TC-6820)
+
+The host prefetch captures `jira_metadata.release_jira` for each matrix release
+family: typed release Epics, child CVE triage Tasks, their blocking remediation and
+Depend-linked originating CVEs. Missing graph evidence is unresolved, not a grant
+to query Jira from the sandbox. Existing releases can be reused without creation
+permission; dedup compares the originating CVE component and preserves labels.
+
+The host can supply optional `FULLSEND_RELEASE_DECISIONS` JSON before prefetch:
+
+```bash
+export FULLSEND_RELEASE_DECISIONS='[{"family":"2.3","version":"2.3.1","create_epic":true,"create_task":true}]'
+```
+
+The exact version and each creation Boolean are separate decisions. An explicit
+skip is `[{"family":"2.3","skip":true}]`. Missing decisions never imply approval
+or an inferred patch bump. This variable does **not** grant general mutation
+permission: production prefetch remains `mutation_authorized: false`. A trusted
+operator must separately authorize mutations before the host executor may write.
+The tokenless sandbox only emits the action plan, with no Jira calls or prompts.
+
+For authorized missing structures, order `release-epic`, then `release-task` with
+its matching existing/generated Epic parent, then remediation, links and comments.
+The host posts persisted-description digests before dependent work, reuses exact
+typed identities on partial retries, and rejects ambiguous or duplicate identities
+before writes. Existing identities use `resolve-reference`; created identities
+use generated placeholders, never guessed keys. Dedup emits Depend/Related links
+and a label addition without creating another remediation. Dependency bumps use
+`remediation-task` plus downstream propagation, not a new action type.
+
+Report-only mode has exactly one report-only action and describes withheld release,
+remediation, link and label work. Missing evidence/decisions are reported as manual
+release decisions; explicit skips are reported separately. Neither is described
+as a completed creation. Interactive confirmations remain unchanged.
+
+The native release case proposes authorized actions on synthetic data with
+`--no-post-script`; it never executes live Jira mutations. New coverage is five
+native cases / 28 advisory judgments. TC-6820 is not integration-validated until
+that reviewed suite revision and matching trusted checker/publication inventory
+are activated and hosted eval evidence is posted. The plugin revision under test
+is separate from the older production triage harness pin; final pin refresh belongs
+to the release/merge bookend after validation.

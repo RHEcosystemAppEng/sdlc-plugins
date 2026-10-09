@@ -198,6 +198,8 @@ branch once from `authorization.mutation_authorized` after trusted-input validat
 | Triage, correction, overlap, reconciliation, cross-stream, and summary comments | `comment` with `body_adf`, preserving required ADF mentions and footnotes |
 | Related, Depend, or Blocks relationship | `link` with the matching `link_type` |
 | Remediation Task creation | `remediation-task` with `ref`, `description_adf`, labels, and optional priority/fix versions |
+| Release Epic creation | `release-epic` with family, version, ref, project, exact release summary, description_adf and labels |
+| Child release Task creation | `release-task` with the same fields and its existing/generated Epic `parent` |
 | Registering a separately trusted, pre-existing reference before dependent work | `resolve-reference` |
 
 Preserve the existing step order. For every newly planned remediation task, append
@@ -985,6 +987,15 @@ After concurrent triage detection (Step 7) and before remediation task creation
 (Step 8), find or create the release Jira structure for each affected stream.
 This provides a release-scoped container that groups all CVE triages and
 remediation tasks for a given product version.
+
+**Fullsend mode:** use `jira_metadata.release_jira` and
+`authorization.release_decisions` for this step. Follow the companion's Fullsend
+release procedure: reuse bounded existing identities, create only with explicit
+family/version and individual permissions, and report unresolved decisions.
+Never prompt, infer a new release version, or call Jira. Missing release evidence
+is unresolved work, not proof that no release exists. Preserve explicit skip.
+The host executes ordered `release-epic` and `release-task` actions, including
+digest repair on retries; later links/comments use their references.
 
 Follow the release Jira orchestration protocol in
 `jira-triage-operations.md` — Step 7.5.

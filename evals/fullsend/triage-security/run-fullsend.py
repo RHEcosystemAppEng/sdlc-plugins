@@ -14,7 +14,7 @@ import yaml
 
 def run_case(root, workspace, output, scenario, model, effort, host_binary, sandbox_binary, plugin_root=None):
     """Stage test-only resources, call native CLI once, preserve its actual exit."""
-    if scenario not in {"absent", "empty", "malformed", "valid"}:
+    if scenario not in {"absent", "empty", "malformed", "valid", "release"}:
         raise ValueError("Unknown synthetic gate scenario")
     if os.environ.get("FULLSEND_MINT_URL"):
         raise ValueError("Synthetic suite requires FULLSEND_MINT_URL unset; live forge minting is forbidden")
@@ -50,6 +50,9 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
     staged_fixtures.mkdir(parents=True)
     for name in ["fullsend-gate-interactive-config.md", "fullsend-invalid-trusted-input.md",
                  "fullsend-report-only-trusted-input.json"]:
+        shutil.copy2(root / "evals/triage-security/files" / name, staged_fixtures / name)
+    if scenario == "release":
+        name = "fullsend-release-trusted-input.json"
         shutil.copy2(root / "evals/triage-security/files" / name, staged_fixtures / name)
     for field in ["agent", "policy", "pre_script"]:
         h[field] = str(setup / h[field])
@@ -109,7 +112,7 @@ def main():
     parser.add_argument("--agent", choices=["triage-security-gate"], required=True)
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--scenario", choices=["absent", "empty", "malformed", "valid"], required=True)
+    parser.add_argument("--scenario", choices=["absent", "empty", "malformed", "valid", "release"], required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--effort", required=True)
     parser.add_argument("--plugin-root", type=Path)

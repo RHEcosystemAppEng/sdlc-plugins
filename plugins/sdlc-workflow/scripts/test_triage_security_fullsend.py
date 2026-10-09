@@ -450,3 +450,193 @@ def test_conditional_retry_fixture_repairs_digest_before_resolving_new_link(reco
     recorder.calls.clear()
     assert executor.execute_plan(result, bundle) == registry
     assert recorder.calls == []
+
+
+def test_release_instructions_bind_trusted_decisions_and_actions():
+    """Delivered Fullsend procedures bind release orchestration to host decisions."""
+    skill = (ROOT / 'plugins/sdlc-workflow/skills/triage-security/SKILL.md').read_text()
+    operations = (ROOT / 'plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md').read_text()
+    for term in ['authorization.release_decisions', 'jira_metadata.release_jira',
+                 'release-epic', 'release-task']:
+        assert term in skill and term in operations
+    assert 'manual release decision required' in operations
+    assert 'create_epic' in operations and 'create_task' in operations
+    assert 'originating_cves' in operations
+
+
+def test_release_fixture_matches_prefetch_schema():
+    """Synthetic native release evidence uses the actual trusted input contract."""
+    bundle = _trusted_input('fullsend-release-trusted-input.json')
+    pre_triage.validate_bundle(bundle)
+    assert bundle['issue']['key'] == 'TC-8101'
+    assert bundle['authorization']['mutation_authorized'] is True
+    assert {entry['family'] for entry in bundle['jira_metadata']['release_jira']} == {'2.2', '2.3'}
+
+
+def _release_result(actions):
+    """SYNTHETIC TEST DATA — proposed sandbox output, not actual model analysis."""
+    return {'schema_version': '1', 'mode': 'mutation-authorized', 'report': {
+        'issue': 'TC-8101', 'outcome': 'affected',
+        'summary_markdown': '2.2.1 dedup TC-9202; 2.3.1 release/remediation proposals.',
+        'evidence': [{'source': 'jira_metadata.release_jira', 'detail': 'Synthetic typed host graph'}]},
+        'actions': actions}
+
+
+def _release_create(kind, ref, **extra):
+    """Build an explicit reviewed-family release proposal."""
+    return dict(type=kind, marker='triage-security:tc-8101:' + ref, ref=ref, project='TC',
+                family='2.3', version='2.3.1', labels=['release-test'],
+                summary='RHTPA 2.3.1 ' + ('Release Tasks' if kind == 'release-epic' else 'CVE triage'),
+                description_adf={'type': 'doc', 'version': 1, 'content': [
+                    {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'SYNTHETIC TEST DATA — release tracking'}]}]},
+                **extra)
+
+
+def test_release_fixture_executes_reuse_dedup_and_creation(recorder, monkeypatch):
+    """Typed prefetch input and schema output cross the real host executor boundary."""
+    bundle = _trusted_input('fullsend-release-trusted-input.json')
+    pre_triage.validate_bundle(bundle)
+    # Generated keys are distinct across Epic/child/remediation creation.
+    created = []
+
+    def create(**kwargs):
+        created.append(kwargs)
+        recorder.calls.append(('create', kwargs))
+        return {'key': 'TC-' + str(9500 + len(created))}
+
+    monkeypatch.setattr(executor._jira_mod, "create_issue", create)
+    actions = [
+        {'type': 'resolve-reference', 'marker': 'triage-security:existing-release',
+         'ref': 'existing-release', 'issue': 'TC-9201'},
+        {'type': 'field-edit', 'marker': 'triage-security:dedup-label', 'issue': 'TC-9202',
+         'fields': {'labels': ['CVE-2026-8101']}},
+        {'type': 'link', 'marker': 'triage-security:dedup-depend', 'link_type': 'Depend',
+         'inward': 'TC-8101', 'outward': 'TC-9202'},
+        {'type': 'link', 'marker': 'triage-security:dedup-related', 'link_type': 'Related',
+         'inward': '{{existing-release.key}}', 'outward': 'TC-8101'},
+        _release_create('release-epic', 'new-epic'),
+        _release_create('release-task', 'new-release', parent='{{new-epic.key}}'),
+    ]
+    registry = executor.execute_plan(_release_result(actions), bundle)
+    assert created[0]['issue_type'] == 'Epic'
+    assert created[1]['issue_type'] == 'Task' and created[1]['parent'] == 'TC-9501'
+    assert len(created) == 2  # Existing 2.2 remediation/release is not recreated.
+    assert registry['existing-release']['key'] == 'TC-9201'
+    assert registry['new-release']['key'] == 'TC-9502'
+    assert recorder.calls[0] == ('field-edit', 'TC-9202', {'labels': ['existing-label', 'CVE-2026-8101']})
+    assert ('link', 'TC-8101', 'TC-9202', 'Depend') in recorder.calls
+    assert ('link', 'TC-9201', 'TC-8101', 'Related') in recorder.calls
+
+
+@pytest.mark.parametrize('decision', ['missing', 'skip', 'wrong-family', 'unauthorized'])
+def test_release_fixture_missing_or_withheld_permission_never_writes(decision, recorder):
+    """Explicit decisions cannot be inferred from a release proposal."""
+    bundle = _trusted_input('fullsend-release-trusted-input.json')
+    if decision == 'missing':
+        bundle['authorization'].pop('release_decisions')
+    elif decision == 'skip':
+        bundle['authorization']['release_decisions'] = [{'family': '2.3', 'skip': True}]
+    elif decision == 'wrong-family':
+        bundle['authorization']['release_decisions'][0]['family'] = '2.2'
+    else:
+        bundle['authorization']['mutation_authorized'] = False
+    with pytest.raises(executor.ActionError):
+        executor.execute_plan(_release_result([_release_create('release-epic', 'new-epic')]), bundle)
+    assert recorder.calls == []
+
+
+def test_release_report_only_withheld_and_manual_decisions(recorder):
+    """Report-only release analysis names unresolved decisions without writes."""
+    bundle = _trusted_input('fullsend-release-trusted-input.json')
+    bundle['authorization'] = {'mutation_authorized': False}
+    result = _release_result([{'type': 'report-only', 'marker': 'triage-security:release-report'}])
+    result['mode'] = 'report-only'
+    result['report']['outcome'] = 'blocked'
+    result['report']['summary_markdown'] = '2.2.1 release references TC-9200/TC-9201, dedup TC-9202; 2.3 manual release decision required. Creation, links and label edits withheld.'
+    executor.execute_plan(result, bundle)
+    assert recorder.calls == []
+
+
+def test_release_dedup_instructions_preserve_fallback_and_dependency_bump():
+    """Instructions keep released match/fallback/nonmatch and dependency-bump semantics."""
+    operations = (ROOT / 'plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md').read_text()
+    assert 'no configured field means skip dedup' in operations
+    assert 'present nonmatching component never authorizes a summary fallback' in operations
+    templates = (ROOT / 'plugins/sdlc-workflow/skills/triage-security/remediation-templates.md').read_text()
+    assert 'dependency bump uses the' in templates
+    assert 'followed by its downstream' in templates
+
+
+def test_release_output_strips_unexpected_properties_before_execution(tmp_path, recorder):
+    """The actual host stripper retains release fields while removing injected extras."""
+    result = _release_result([_release_create('release-epic', 'new-epic')])
+    result['unexpected'] = 'ADVERSARIAL TEST FIXTURE — unauthorized output'
+    result['actions'][0]['unexpected'] = 'ADVERSARIAL TEST FIXTURE — unauthorized action'
+    path = tmp_path / 'result.json'
+    path.write_text(json.dumps(result))
+    process = subprocess.run(['python3', str(SCRIPT_DIR / 'strip_extra_properties.py'), str(path),
+                              str(SCRIPT_DIR.parent / 'schemas/triage-security-result.schema.json')],
+                             capture_output=True, text=True, check=False)
+    assert process.returncode == 0
+    cleaned = json.loads(path.read_text())
+    assert 'unexpected' not in cleaned and 'unexpected' not in cleaned['actions'][0]
+    assert cleaned['actions'][0]['family'] == '2.3' and cleaned['actions'][0]['version'] == '2.3.1'
+    executor.execute_plan(cleaned, _trusted_input('fullsend-release-trusted-input.json'))
+    assert recorder.calls[0][1]['issue_type'] == 'Epic'
+
+
+def test_release_dependency_bump_and_propagation_use_existing_task_action(recorder, monkeypatch):
+    """Release parents, source dependency bumps and downstream propagation form one ordered plan."""
+    created = []
+
+    def create(**kwargs):
+        created.append(kwargs)
+        return {'key': 'TC-' + str(9600 + len(created))}
+
+    monkeypatch.setattr(executor._jira_mod, 'create_issue', create)
+    actions = [_release_create('release-epic', 'new-epic'),
+               _release_create('release-task', 'new-release', parent='{{new-epic.key}}')]
+    for ref, description in [('bump', 'SYNTHETIC TEST DATA — bump source dependency to upstream fixed version'),
+                             ('propagation', 'SYNTHETIC TEST DATA — propagate merged source reference downstream')]:
+        actions.extend([
+            {'type': 'remediation-task', 'marker': 'triage-security:' + ref, 'ref': ref,
+             'project': 'TC', 'summary': description, 'labels': ['CVE-2026-8101'],
+             'description_adf': {'type': 'doc', 'version': 1, 'content': [
+                 {'type': 'paragraph', 'content': [{'type': 'text', 'text': description}]}]}},
+            {'type': 'link', 'marker': 'triage-security:' + ref + ':depend', 'link_type': 'Depend',
+             'inward': 'TC-8101', 'outward': '{{' + ref + '.key}}'},
+            {'type': 'link', 'marker': 'triage-security:' + ref + ':release', 'link_type': 'Blocks',
+             'inward': '{{' + ref + '.key}}', 'outward': '{{new-release.key}}'},
+        ])
+    actions.append({'type': 'link', 'marker': 'triage-security:propagation-blocked', 'link_type': 'Blocks',
+                    'inward': '{{bump.key}}', 'outward': '{{propagation.key}}'})
+    registry = executor.execute_plan(_release_result(actions), _trusted_input('fullsend-release-trusted-input.json'))
+    assert [item['issue_type'] for item in created] == ['Epic', 'Task', 'Task', 'Task']
+    assert created[1]['parent'] == 'TC-9601'
+    assert registry['bump']['key'] == 'TC-9603' and registry['propagation']['key'] == 'TC-9604'
+    assert ('link', 'TC-9603', 'TC-9604', 'Blocks') in recorder.calls
+    assert ('link', 'TC-9603', 'TC-9602', 'Blocks') in recorder.calls
+    assert ('link', 'TC-9604', 'TC-9602', 'Blocks') in recorder.calls
+
+
+def test_release_partial_retry_reuses_prefetched_hierarchy_and_repairs_digest(recorder):
+    """A refreshed trusted input safely rehydrates both created release references."""
+    bundle = _trusted_input('fullsend-release-trusted-input.json')
+    entry = bundle['jira_metadata']['release_jira'][1]
+    for kind, bucket, key, parent in [('release-epic', 'epics', 'TC-9501', None),
+                                    ('release-task', 'tasks', 'TC-9502', 'TC-9501')]:
+        action = _release_create(kind, bucket)
+        snapshot = {'key': key, 'summary': action['summary'], 'issue_type': 'Epic' if parent is None else 'Task',
+                    'status': 'New', 'description': action['description_adf'],
+                    'labels': ['ai-generated-jira'], 'comments': [], 'links': []}
+        if parent:
+            snapshot['parent'] = parent
+        entry[bucket] = [snapshot]
+    pre_triage.validate_bundle(bundle)
+    actions = [_release_create('release-epic', 'new-epic'),
+               _release_create('release-task', 'new-release', parent='{{new-epic.key}}'),
+               {'type': 'link', 'marker': 'triage-security:retry-related', 'link_type': 'Related',
+                'inward': '{{new-release.key}}', 'outward': 'TC-8101'}]
+    registry = executor.execute_plan(_release_result(actions), bundle)
+    assert registry['new-release']['key'] == 'TC-9502'
+    assert [call[0] for call in recorder.calls] == ['get-issue', 'digest', 'get-issue', 'digest', 'link']
