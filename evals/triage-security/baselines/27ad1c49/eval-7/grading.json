@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Sibling check correctly classifies TC-8001 as a different-stream companion (stream [rhtpa-2.2] vs current issue's [rhtpa-2.1]), not a same-stream duplicate (Step 4)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 18-22: TC-8006 stream suffix [rhtpa-2.1] (stream 2.1.x), TC-8001 stream suffix [rhtpa-2.2] (stream 2.2.x), Classification: 'Different-stream sibling (cross-stream companion tracker)'. Explicitly states 'TC-8001 is NOT a duplicate.' Step 4.1 confirms 'No same-stream siblings found.'"
+    },
+    {
+      "text": "Step 4.2 checks the current issue's existing issuelinks before attempting to create a 'Related' link to TC-8001 (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 32-44: 'Per Step 4.2 procedure, before creating a Related link to a different-stream sibling, the skill checks the current issue's issuelinks array for an existing link that satisfies ALL of: 1. type.name is Related, 2. inwardIssue.key or outwardIssue.key matches the sibling key (TC-8001).' The existing links table on TC-8006 is inspected showing Link ID 1990401, Type Related, outward TC-8001. data-extraction.md lines 47-51 confirms the pre-existing link was extracted in Step 1."
+    },
+    {
+      "text": "Step 4.2 detects the pre-existing 'Related' link to TC-8001 and skips link creation — does NOT call jira.create_link (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 42-46: Check result states 'A link matching ALL criteria was found' with type.name=Related and outwardIssue.key=TC-8001. Action: 'Related link to TC-8001 already exists -- skipping link creation.' triage-outcome.md line 29 confirms: 'does NOT attempt to create a duplicate link.' No jira.create_link call appears anywhere in the outputs."
+    },
+    {
+      "text": "The output includes a log message indicating the link was skipped because it already exists (e.g., 'Related link to TC-8001 already exists — skipping')",
+      "passed": true,
+      "evidence": "sibling-check.md line 46: 'Related link to TC-8001 already exists -- skipping link creation.' Line 48 also quotes the expected log format: 'Related link to [sibling-key] already exists -- skipping'. triage-outcome.md line 29 repeats: 'logs \"Related link to TC-8001 already exists -- skipping\"'."
+    },
+    {
+      "text": "The sibling landscape table is still presented to the engineer despite the link already existing — the idempotent check only affects link creation, not the sibling summary",
+      "passed": true,
+      "evidence": "sibling-check.md lines 62-68: 'Sibling Landscape' section presents a table with TC-8001 (2.2.x, In Progress) and TC-8006 (current, 2.1.x, New). triage-outcome.md line 43 confirms: 'Sibling landscape presentation: Displayed the companion issue table showing both TC-8006 (2.1.x, New) and TC-8001 (2.2.x, In Progress) for engineer review.' The table appears after the skip decision, confirming the idempotent check only affected link creation."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

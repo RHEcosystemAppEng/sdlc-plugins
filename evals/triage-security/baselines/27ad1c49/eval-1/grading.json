@@ -1,0 +1,75 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+      "passed": true,
+      "evidence": "data-extraction.md Step 1 table: CVE ID = CVE-2026-31812, Vulnerable library = quinn-proto, Affected version range = 'versions before 0.11.14', Fixed version = 0.11.14. All four fields correctly identified."
+    },
+    {
+      "text": "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+      "passed": true,
+      "evidence": "data-extraction.md Step 1 table shows 'Ecosystem | Cargo (Rust crate)'. The Ecosystem Detection section states: 'quinn-proto is a Rust crate, which maps to the Cargo ecosystem. This is a source dependency ecosystem.'"
+    },
+    {
+      "text": "Version impact table includes ALL versions from the security-matrix.md supportability matrix — no versions are skipped (Important Rule 4)",
+      "passed": true,
+      "evidence": "version-impact.md Step 2.1 lists 7 versions across two streams: 2.1.0, 2.1.1 (stream 2.1.x) and 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4 (stream 2.2.x). Step 2.4 Version Impact Table includes all 7 versions. None skipped."
+    },
+    {
+      "text": "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+      "passed": true,
+      "evidence": "version-impact.md Step 2.3 maps each version to a specific pinned tag: 2.1.0=v0.3.8, 2.1.1=v0.3.12, 2.2.0=v0.4.5, 2.2.1=v0.4.8, 2.2.2=v0.4.9, 2.2.3=v0.4.11, 2.2.4=v0.4.12. Check command is 'git show <tag>:Cargo.lock', not branch HEAD."
+    },
+    {
+      "text": "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+      "passed": true,
+      "evidence": "version-impact.md Step 2.3 and 2.4: version 2.2.2 shown with quinn-proto = '--', Notes = 'retag of 2.2.1', Affected = YES. Step 2.3 explains: 'retag of 2.2.1 (same as 2.2.1: 0.11.12)'. Affected status carried forward from 2.2.1 (also YES)."
+    },
+    {
+      "text": "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md Step 3.2: Current = '[RHTPA 2.0.0]', Proposed = '[RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]'. Diff displayed as 'Correction: [RHTPA 2.0.0] --> [RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]'. Rationale cites 'Lock file analysis at pinned commits from the supportability matrix'."
+    },
+    {
+      "text": "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+      "passed": true,
+      "evidence": "affects-versions.md Step 3.2 uses version names (RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2) throughout. API call uses placeholder IDs: '<RHTPA-2.2.0-jira-id>' etc. Explicitly states: 'Version IDs would be resolved dynamically from the getJiraIssueTypeMetaWithFields response (Step 3.1). No hardcoded IDs.'"
+    },
+    {
+      "text": "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+      "passed": true,
+      "evidence": "remediation.md Task 1 (upstream backport): Repository = 'backend', Target Branch = 'release/0.3.z', Acceptance Criteria = 3 checkboxes, Dependencies section present. Task 2 (downstream propagation): Repository = 'rhtpa-release.0.3.z', Target Branch = 'main', Acceptance Criteria = 2 checkboxes. Dependency linkage: downstream depends on upstream via Blocks link: 'jira.create_link(inwardIssue: <upstream-task-key>, outwardIssue: <downstream-task-key>, type: \"Blocks\")'."
+    },
+    {
+      "text": "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+      "passed": true,
+      "evidence": "remediation.md creates exactly two tasks for 2.1.x: (1) 'Preemptive Task 1: Upstream Backport (2.1.x)' and (2) 'Preemptive Task 2: Downstream Propagation (2.1.x)'. Blocks dependency: 'jira.create_link(inwardIssue: <upstream-task-key>, outwardIssue: <downstream-task-key>, type: \"Blocks\")'. Pre-Creation Checklist: '2.1.x gets 2 preemptive tasks (upstream backport + downstream propagation) -- matches the Cargo source dependency classification.'"
+    },
+    {
+      "text": "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
+      "passed": true,
+      "evidence": "Consistent proposal framing throughout. data-extraction.md: 'Proposed action:' for assignment and transition. affects-versions.md: 'Proposed Affects Versions', 'Proposed Jira Mutation', 'Proposed API call (after engineer confirmation)'. remediation.md: 'Proposed Jira Issue Creation', 'Proposed action: Add the ai-cve-triaged label'. Final line: 'All proposed actions above are recommendations. No Jira operations were performed.'"
+    },
+    {
+      "text": "The data-extraction output describes Step 0.7 actions before the Step 1 data table: assigning the CVE issue to the current user and transitioning it to Assigned status (Step 0.7)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 1-29: Section labeled 'Step 0.8 — Assign and Transition to Assigned (Early Assignment)' appears before Step 1 data table. Describes both required actions: (1) 'Assign TC-8001 to the current user' with jira.edit_issue assignee call, and (2) 'Transition TC-8001 to Assigned status' with jira.transition_issue call. Step numbering is 0.8 rather than 0.7 but the substantive actions (assignment + transition to Assigned) and ordering (before Step 1) match the assertion."
+    },
+    {
+      "text": "Release orchestration preserves interactive confirmation of the exact release Epic version and separate child Task creation; when release evidence or confirmation is unavailable, it reports pending work instead of claiming creation.",
+      "passed": true,
+      "evidence": "remediation.md Step 7.5.1: Presents interactive options requiring engineer confirmation: '1. Accept -- create Epic with version 2.2.5, 2. Specify different version, 3. Skip'. States: 'The engineer must confirm before creation proceeds. This is a high-stakes version decision requiring individual confirmation.' Step 7.5.2: Separate child Task creation also requires confirmation: 'Proceed? (Yes / No)'. No creation claimed as executed; uses conditional language ('If an existing Epic is found', 'if created in Step 7.5') and placeholder keys throughout."
+    },
+    {
+      "text": "Release dedup is skipped when its Upstream Affected Component configuration is absent. When trusted release evidence is available, the proposed procedure resolves originating CVEs through Blocks/Depend links, compares their components and allows library-summary fallback only for a missing Depend link or component field; a known nonmatch does not count as dedup, and unavailable release evidence is not fabricated.",
+      "passed": true,
+      "evidence": "remediation.md Step 7.5.3: 'SKIPPED. The Upstream Affected Component custom field is not configured in Security Configuration. Cross-CVE dedup requires this field to match remediation tasks against the current CVE's upstream component.' Pre-Creation Checklist: 'Dedup consistency: Dedup was skipped (Upstream Affected Component not configured). No dedup exclusions to enforce.' No release evidence is fabricated; placeholder keys and conditional framing used consistently."
+    }
+  ],
+  "summary": {
+    "passed": 13,
+    "failed": 0,
+    "total": 13,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,45 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references checking out TC-9005 (the Target Branch) before creating the task branch — includes git checkout TC-9005 or equivalent, not git checkout main (constraint 3.1, Step 5)",
+      "passed": true,
+      "evidence": "Step 5 explicitly contains 'git checkout TC-9005' followed by 'git checkout -b TC-9205' and states: 'This is the critical branching step. The Target Branch is TC-9005, NOT main.'"
+    },
+    {
+      "text": "The plan specifies opening a PR with --base TC-9005 targeting the feature branch, not --base main (Step 10)",
+      "passed": true,
+      "evidence": "Step 10 contains 'gh pr create --base TC-9005 --title \"feat(migration): add migration to drop advisory status column\"' and explicitly notes 'The PR targets --base TC-9005 (the feature branch), NOT --base main.' The fork case also uses '--base TC-9005'."
+    },
+    {
+      "text": "The plan names the task branch TC-9205 (the task issue ID), not TC-9005 (the feature branch) — the task branch is distinct from the Target Branch (constraint 3.1)",
+      "passed": true,
+      "evidence": "Step 5 shows 'git checkout -b TC-9205' creating the task branch. The summary table confirms: 'Create task branch | git checkout -b TC-9205 | Named after the Jira task issue ID'. The task branch TC-9205 is clearly distinct from the target/feature branch TC-9005."
+    },
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 1 of: migration/src/m0001_initial/mod.rs, entity/src/advisory.rs, migration/src/lib.rs (constraint 1.5, Steps 4-9 unaffected by Target Branch)",
+      "passed": true,
+      "evidence": "Step 4 explicitly plans to inspect all three files: (1) 'Inspect migration/src/lib.rs: Call mcp__serena_backend__get_symbols_overview...', (2) 'Inspect migration/src/m0001_initial/mod.rs: Call mcp__serena_backend__get_symbols_overview to see the MigrationTrait implementation pattern', (3) 'Verify advisory entity: Inspect entity/src/advisory.rs using mcp__serena_backend__get_symbols_overview to confirm the status column is NOT referenced.'"
+    },
+    {
+      "text": "The plan includes --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "Step 10 commit command contains '--trailer=\"Assisted-by: Claude Code\"'. The summary table also confirms: 'Commit trailer | --trailer=\"Assisted-by: Claude Code\" | Required by skill Step 10'."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9205 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Step 10 commit message uses 'feat(migration): add migration to drop advisory status column' which is valid Conventional Commits format (type=feat, scope=migration, description follows colon). The footer contains 'Implements TC-9205' referencing the task issue ID."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying TC-9005 as the target branch",
+      "passed": true,
+      "evidence": "The plan has a dedicated 'Target Branch Extraction' section stating: 'The task description contains a Target Branch section with value TC-9005. This is a feature branch (not main), indicating that TC-9205 is part of a feature-branch workflow.' Step 1 also explicitly lists 'Target Branch: TC-9005' as a parsed field."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 0,
+    "total": 7,
+    "pass_rate": 1.0
+  }
+}

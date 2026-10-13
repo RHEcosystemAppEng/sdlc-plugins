@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md lines 45-65 explicitly identify both patterns under 'Assertion patterns (CONFLICT IDENTIFIED)'. It shows the .filter().any() pattern from tests/api/advisory.rs (with a code example filtering by severity) and the .filter().count() > 0 pattern from tests/api/sbom.rs (with a code example filtering by name). Both source files are named."
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md lines 67-77 contain a section titled 'Conflict: Sibling Assertion Patterns vs. Skill Quality Guidance' that explicitly contrasts the sibling patterns (.filter().any() and .filter().count() > 0 as 'existence-only checks') against the skill's Step 7 guidance ('Prefer value-based assertions over length-only checks'). The skill guidance is quoted directly."
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md lines 79-84 state: 'The skill's built-in quality guidance takes precedence over sibling patterns, as stated in both Step 4 (\"Skill guidance takes precedence over sibling patterns\") and Step 7 (\"Skill guidance overrides sibling patterns\"). The existence-only assertion style from advisory.rs and sbom.rs will NOT be adopted.' This establishes that skill instructions override sibling conventions."
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md uses assert_eq! throughout all four test cases: Test 1 asserts exact counts (assert_eq!(summary.permissive.count, 2)) and specific license identifiers (assert!(summary.permissive.licenses.contains(&\"MIT\".to_string()))); Test 3 asserts zero counts and Vec::<String>::new(); Test 4 asserts assert_eq!(summary.permissive.count, 1) and assert_eq!(summary.permissive.licenses, vec![\"MIT\".to_string()]). Lines 20-24 explicitly state the sibling .filter().any() and .filter().count() > 0 patterns are NOT used."
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md lines 7-15 explicitly list adopted sibling conventions: file location (tests/api/ directory), naming (test_ prefix with snake_case), setup (shared test database harness), status code checks (assert_eq! on StatusCode), and HTTP client. The summary table at lines 165-172 shows 'Same' for status codes, test naming, and setup/teardown, with 'Skill Step 7 override' only for collection contents and collection size assertions."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

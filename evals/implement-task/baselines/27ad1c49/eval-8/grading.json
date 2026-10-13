@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md lines 9-17 explicitly identify both as private helper functions in modules/ingestor/src/graph/sbom/mod.rs and state the planned change: 'Change the visibility of both functions from private to public: fn describing_packages(...) becomes pub fn describing_packages(...), fn suppliers(...) becomes pub fn suppliers(...)'. reuse-decision.md lines 5-10 also identify them as private in that exact file."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md line 56 states: 'The migration/Cargo.toml already declares a dependency on trustify-module-ingestor (trustify-module-ingestor = { path = \"../modules/ingestor\" }), so no new dependency is needed'. reuse-decision.md has a dedicated 'Dependency Check' section (lines 14-19) showing the exact Cargo.toml entry and confirming 'No new dependency needs to be introduced.'"
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md line 25: 'Recommendation: Change fn describing_packages(...) and fn suppliers(...) to pub fn in modules/ingestor/src/graph/sbom/mod.rs, then import and call them from migration/src/m0002_supplier/mod.rs.' Line 32-33: 'Since migration/Cargo.toml already depends on trustify-module-ingestor, the only barrier to reuse is the pub visibility modifier.' The summary table marks 'Make pub and import' as Accepted with reason 'Dependency exists; DRY; single source of truth; backward-compatible'."
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "plan.md line 38: 'The functions are imported and called directly -- their logic is NOT copied or inlined into this file.' plan.md line 57: 'The function bodies are NOT copied or inlined into the migration crate'. reuse-decision.md line 27: 'Duplication is explicitly rejected. The function bodies must NOT be copied, inlined, or reimplemented in the migration crate.' The summary table marks 'Copy/inline function bodies' as Rejected."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md section '2. DRY principle -- bug fixes apply in one place' (lines 35-37): 'Making the functions public and importing them ensures there is exactly one implementation of the describing-packages and supplier-extraction logic. If a bug is discovered in either function, fixing it in modules/ingestor/src/graph/sbom/mod.rs automatically fixes it for both the ingestor's own usage and the migration's usage. Duplication would require finding and fixing the same bug in two places -- a maintenance hazard that grows worse over time.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

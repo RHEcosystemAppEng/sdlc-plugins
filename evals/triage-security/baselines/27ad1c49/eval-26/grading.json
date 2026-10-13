@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 2.3.5 dependency chain context identifies criterion as a dev-only dependency based on its presence in [dev-dependencies] in the manifest",
+      "passed": true,
+      "evidence": "version-impact.md lines 34-39 (Step 2.3.5 Dependency Chain Context): 'backend (workspace) -> criterion (direct dev-dependency) / Type: direct dependency / Profile: dev-only ([dev-dependencies] in backend/Cargo.toml) / NOT present in production builds -- used for benchmarks only'. Manifest evidence on lines 47-49: '[dev-dependencies] criterion = \"0.5.1\"'. Line 53: 'criterion is declared in `[dev-dependencies]` and is used for benchmarks only.'"
+    },
+    {
+      "text": "The dependency scope decision tree classifies criterion as 'dev-only — not shipped in production' and applies the dev-dependency remediation handling",
+      "passed": true,
+      "evidence": "version-impact.md lines 53-61: 'criterion is declared in `[dev-dependencies]` and is used for benchmarks only. It is NOT shipped in production builds. Per the dependency scope decision tree: Label: dev-dependency... Priority override: Normal (regardless of CVE severity of Medium/5.3)... Rationale: Dev-only dependencies are not shipped in production.' remediation.md lines 10-15 confirm: 'Per the dependency scope decision tree: Add dev-dependency label... Override priority to Normal... Include dev-dependency note in task descriptions.'"
+    },
+    {
+      "text": "Remediation tasks include the dev-dependency label in the labels array: labels contain 'dev-dependency' alongside 'ai-generated-jira', 'Security', and the CVE ID",
+      "passed": true,
+      "evidence": "remediation.md line 40 (Task 1): '**Labels**: `ai-generated-jira`, `Security`, `CVE-2026-99001`, `dev-dependency`'. Line 104 (Task 2): '**Labels**: `ai-generated-jira`, `Security`, `CVE-2026-99001`, `dev-dependency`'. Both tasks contain all four required labels."
+    },
+    {
+      "text": "Remediation task priority is set to Normal regardless of the CVE severity (CVSS 5.3 Medium) — the priority override is applied per the decision tree",
+      "passed": true,
+      "evidence": "remediation.md line 42 (Task 1): '**Priority**: Normal (override -- dev-dependency, not shipped in production)'. Line 106 (Task 2): '**Priority**: Normal (override -- dev-dependency, not shipped in production)'. Lines 166-167 (Priority Override Rationale): 'Priority: Normal (overrides the CVE severity of Medium/5.3)'. The override explicitly references the CVE severity being overridden."
+    },
+    {
+      "text": "Remediation task description includes a note indicating the dependency is dev/build-only and not shipped in production",
+      "passed": true,
+      "evidence": "remediation.md lines 62-63 (Task 1 Description): 'This dependency is dev/build-only and is not shipped in production. Remediation priority is Normal (supply chain risk only).' Lines 128-129 (Task 2 Description): 'This dependency is dev/build-only and is not shipped in production. Remediation priority is Normal (supply chain risk only).' Both tasks include the required note in their descriptions."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

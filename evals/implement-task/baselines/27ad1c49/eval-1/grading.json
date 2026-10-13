@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "Step 4 ('Understand the Code') references all 4 files: (1) advisory/service/advisory.rs for AdvisoryService::fetch and ::list symbol inspection, (2) advisory/endpoints/get.rs for handler function pattern inspection, (3) advisory/model/summary.rs for AdvisorySummary struct inspection, and (4) common/src/error.rs for AppError and .context() pattern. All are inspected via Serena tools before implementation."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "Step 6 lists exactly the 3 files to modify (model/mod.rs, service/advisory.rs, endpoints/mod.rs) and 3 files to create (model/severity_summary.rs, endpoints/severity_summary.rs, tests/api/advisory_summary.rs). The plan mentions docs/api.md and tests/api/mod.rs as potential impacts but explicitly flags them as 'out-of-scope' in Step 9, requiring user approval rather than silently modifying them."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "Step 6 'Files to Create' lists: (4) modules/fundamental/src/advisory/model/severity_summary.rs, (5) modules/fundamental/src/advisory/endpoints/severity_summary.rs, (6) tests/api/advisory_summary.rs. Each has a corresponding detailed description file (file-4, file-5, file-6)."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "Step 6 'Files to Modify' lists: (1) modules/fundamental/src/advisory/model/mod.rs, (2) modules/fundamental/src/advisory/service/advisory.rs, (3) modules/fundamental/src/advisory/endpoints/mod.rs. Each has a corresponding detailed description file (file-1, file-2, file-3)."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Step 10 commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' follows type(scope): description format. Footer contains 'Implements TC-9201' referencing the Jira issue key."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "Step 10 commit command explicitly includes: git commit --trailer=\"Assisted-by: Claude Code\" -m \"...\""
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "Step 5 states: 'Branch name: TC-9201 (named after the Jira issue ID). Based on: main (the Target Branch from the task description).' Commands show: git checkout main; git pull; git checkout -b TC-9201."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md 'Error Handling' section: 'All handlers return Result<T, AppError>' and 'Error wrapping uses .context(\"descriptive message\")'. 'Module Structure' section: 'Each domain module follows the triple-directory pattern: model/ + service/ + endpoints/'. Both patterns are clearly documented with examples."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "Step 1 parsed sections table: 'Target Branch | main'. Step 1 Target Branch Extraction: 'Target Branch: main. This will be used as the --base argument for gh pr create and as the branch to check out from in Step 5.' Step 10 PR creation uses --base main."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "Step 1.5 'Verify Description Integrity' describes: (1) retrieving issue comments, (2) locating digest comment starting with '[sdlc-workflow] Description digest:', (3) if no digest found, logging warning: 'No description digest found -- skipping integrity check. This task may have been created before digest tracking was introduced.' and proceeding normally (backward compatibility)."
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": true,
+      "evidence": "Step 7: '(Package name resolved via cargo metadata --no-deps --format-version 1, not derived from the nearest Cargo.toml.)' Step 9 Module-Level Test Requirement: 'Resolve crate names using cargo metadata --no-deps --format-version 1'. file-6-description.md also states: 'After writing tests, resolve the test crate name: cargo metadata --no-deps --format-version 1'."
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md lines 39-50: TC-8100 detected via Depend link with matching summary, action is 'SKIP creation. The upstream backport remediation task already exists and is linked to the CVE. Creating a duplicate would violate the idempotency contract.' TC-8101 similarly detected via Depend link, action is 'SKIP creation. The downstream propagation task already exists with correct linkage. Creating a duplicate would violate idempotency.' triage-outcome.md lines 104-112 confirms: 'The skill detects existing remediation tasks by inspecting the issue’s issuelinks for Depend-type links...Since both tasks exist with correct linkage, no new tasks are created.'"
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md lines 9-12: 'Status: PRESENT on TC-8001. Detection: The issue’s labels field contains ai-cve-triaged. Action: SKIP. The label is already applied.' data-extraction.md line 39 confirms the label is present: 'Labels | CVE-2026-31812, pscomponent:org/rhtpa-server, ai-cve-triaged'. triage-outcome.md line 116: 'The ai-cve-triaged label is already present on TC-8001.'"
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md lines 14-17: 'Status: TC-8001 is currently in In Progress status...Action: SKIP transition. Step 0.8 would normally transition from New to Assigned...Since the issue is already in In Progress, both transitions are unnecessary.' data-extraction.md line 38 confirms 'Status | In Progress'. triage-outcome.md lines 24-28 confirms no mutation for status transition."
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md lines 58-62: 'Status: PRESENT on TC-8001. Detection: Comment 1 contains the text [sdlc-workflow] Description digest: sha256-md:a1b2c3d4e5f6..., posted by sdlc-workflow/triage-security on 2026-07-01T10:00:00Z. Action: SKIP. The digest comment already exists. Re-posting would create a duplicate comment.' data-extraction.md line 50 confirms the comment exists."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md lines 64-69: 'Status: PRESENT on TC-8001. Detection: Comment 2 is the post-triage summary documenting version impact, Affects Versions correction, remediation tasks (TC-8100, TC-8101), and the In Progress transition. Action: SKIP. The summary comment already exists. Re-posting would create a duplicate comment with identical content.' triage-outcome.md lines 116-119 confirms: 'The post-triage summary comment already exists...Posting another summary comment would create a duplicate.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
