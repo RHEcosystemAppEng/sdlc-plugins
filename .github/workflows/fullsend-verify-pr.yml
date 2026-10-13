@@ -5,7 +5,7 @@
 # as input data — never as a gate. verify-pr runs whether CI passed or failed
 # (TC-6180 Reqs 4, 6, 7).
 #
-# Why a dedicated workflow (not just the fullsend shim):
+# Why a dedicated workflow (not the vendor shim's event routing):
 #   fullsend has no CI-completion event (no check_suite / check_run /
 #   workflow_run TransitionKind), and GitHub's recursion guard suppresses
 #   check_suite / check_run for Actions-created suites. An inline
@@ -27,13 +27,15 @@
 #   reviews its code and applies the label, which is auto-removed on every new
 #   push to force re-review.
 #
-# Why this coexists with .github/workflows/fullsend.yaml (the vendor shim):
+# Why this is the ONLY fullsend workflow (no vendor shim) — TC-6909:
+#   `fullsend github setup` also scaffolds the vendor shim
+#   .github/workflows/fullsend.yaml, a `pull_request_target` router that runs
+#   the vendor's standard agents (e.g. its Review stage). This repo's deployment
+#   is verify-pr-only, so the shim was removed once it went live on main.
 #   verify-pr is registered in .fullsend/config.base.yaml (the vendor preset
-#   base layer), NOT in .fullsend/config.yaml. The shim's harness-dispatch job
-#   greps ONLY config.yaml for agents, so it never dispatches verify-pr — no
-#   premature or duplicate run on pull_request_target. `fullsend dispatch` /
-#   `fullsend run` still see verify-pr because LoadConfig merges config.yaml
-#   over config.base.yaml (ADR 0069; reusable-dispatch.yml harness-dispatch).
+#   base layer); `fullsend dispatch` / `fullsend run` resolve it because
+#   LoadConfig merges config.yaml over config.base.yaml (ADR 0069), and this
+#   workflow dispatches it directly via reusable-dispatch.yml.
 #
 # How Step 2 runs the agent with mint OIDC:
 #   The vendor reusable-dispatch workflow exposes a pre-computed `matrix` input
@@ -170,7 +172,12 @@ jobs:
       issues: write
       packages: read
       pull-requests: write
-    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@v0
+    # Pinned to a full SHA (TC-6909): the floating `@v0` tag advanced to a
+    # reusable-dispatch that moved GCP setup into `./.defaults` and no longer
+    # exports GOOGLE_APPLICATION_CREDENTIALS before `fullsend run`, failing the
+    # child harness's host_files validation. Advance the pin only after the
+    # harness credential mounts are adapted to the new vendor model.
+    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@d5f36921ac754705619f38c637ef692873809fbc # v0 as of 2026-09-30
     with:
       matrix: ${{ needs.wait-for-checks.outputs.matrix }}
       install_mode: per-repo
