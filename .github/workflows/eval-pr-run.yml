@@ -37,8 +37,8 @@ permissions:
   statuses: write
 
 env:
-  # Reviewed PR299 suite; normal activation switches this to trusted github.sha.
-  NATIVE_EVAL_SOURCE_SHA: fd7977cbec3a7ddcde6a44a32a25db3e818ad4ad
+  # After integration merge, suite execution always comes from trusted main.
+  NATIVE_EVAL_SOURCE_SHA: ${{ github.sha }}
 
 jobs:
   discover:
@@ -229,9 +229,6 @@ jobs:
             }
 
             const skills = confirmed.join(',');
-            // TC-6726 bootstrap restriction: remove only this identity condition
-            // during the separately reviewed PR299 activation delivery.
-            const bootstrap = prNumber === 299 && process.env.SOURCE_BRANCH === 'verify-pr-fullsend';
             const nativeRelevant = files.some(f =>
               /^evals\/fullsend\//.test(f.filename) ||
               /^evals\/triage-security\//.test(f.filename) ||
@@ -239,7 +236,7 @@ jobs:
               /^plugins\/sdlc-workflow\/(policies\/triage-security\.yaml|providers\/vertex-ai\.yaml|profiles\/fullsend-vertex-ai\.yaml|env\/gcp-vertex\.env|schemas\/triage-security-(input|result)\.schema\.json|scripts\/(validate-output-schema\.sh|strip_extra_properties\.py|test_(fullsend_gate_eval|native_fullsend_eval_ci|native_fullsend_execution)\.py))$/.test(f.filename) ||
               /^\.github\/(workflows\/eval-pr(-run)?\.yml|scripts\/(run-native-fullsend-evals\.sh|check-native-fullsend-execution\.py))$/.test(f.filename)
             );
-            core.setOutput('native', String(bootstrap && nativeRelevant));
+            core.setOutput('native', String(nativeRelevant));
             core.setOutput('skills', skills);
             console.log(`Discovered changed skills with evals: ${skills || 'none'}`);
 
@@ -295,6 +292,7 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+      issues: write
       actions: read
       id-token: write
     steps:
@@ -410,9 +408,37 @@ jobs:
             exit 1
           fi
 
+      - name: Render eval results
+        env:
+          SKILLS_CSV: ${{ needs.discover.outputs.skills }}
+        run: |
+          set -euo pipefail
+          IFS=',' read -ra SKILLS <<< "$SKILLS_CSV"
+          version=$(jq -r '.version' plugins/sdlc-workflow/.claude-plugin/plugin.json)
+
+          for skill in "${SKILLS[@]}"; do
+            workspace="/tmp/${skill}-eval-pr"
+            python3 plugins/sdlc-workflow/skills/run-evals/scripts/aggregate_benchmark.py \
+              --results "$workspace"
+
+            render_args=(
+              --results "$workspace"
+              --skill "$skill"
+              --version "$version"
+            )
+            baseline="evals/${skill}/baselines/latest"
+            if [[ -d "$baseline" ]]; then
+              render_args+=(--baseline "$baseline")
+            fi
+
+            python3 plugins/sdlc-workflow/skills/run-evals/scripts/render_summary.py \
+              "${render_args[@]}"
+            test -s "$workspace/summary.md"
+          done
+
       - *publication-guard
 
-      - name: Post eval results review
+      - name: Post eval results comment
         if: steps.publication.outputs.latest == 'true'
         env:
           SKILLS_CSV: ${{ needs.discover.outputs.skills }}
@@ -426,7 +452,8 @@ jobs:
             const skills = process.env.SKILLS_CSV.split(',').filter(Boolean);
             const prNumber = parseInt(process.env.PR_NUMBER);
 
-            let body = `## Eval Results\n\nSource head: ${process.env.HEAD_SHA}\nMerge: ${process.env.MERGE_SHA}\n\n`;
+            const marker = '<!-- eval-pr-report -->';
+            let body = `${marker}\n## Eval Results\n\nSource head: ${process.env.HEAD_SHA}\nMerge: ${process.env.MERGE_SHA}\n\n`;
             for (const skill of skills) {
               const summaryPath = `/tmp/${skill}-eval-pr/summary.md`;
               if (fs.existsSync(summaryPath)) {
@@ -436,31 +463,38 @@ jobs:
               }
             }
 
-            const reviews = await github.paginate(github.rest.pulls.listReviews, {
+            const comments = await github.paginate(github.rest.issues.listComments, {
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: prNumber
+              issue_number: prNumber,
+              per_page: 100
             });
-            const marker = '## Eval Results';
-            const existing = reviews.find(r =>
-              r.user?.login === 'github-actions[bot]' && r.commit_id === process.env.HEAD_SHA && r.body?.startsWith(marker)
+            const existing = comments.find(comment =>
+              comment.user?.login === 'github-actions[bot]' && comment.body?.startsWith(marker)
             );
 
+            // The sticky comment is shared across heads; a same-head run guard
+            // alone cannot stop an older head from replacing the current report.
+            const { data: current } = await github.rest.pulls.get({
+              ...context.repo, pull_number: prNumber
+            });
+            if (current.state !== 'open' || current.head?.sha !== process.env.HEAD_SHA) {
+              core.info('PR head changed; skipping stale sticky report');
+              return;
+            }
+
             if (existing) {
-              await github.rest.pulls.updateReview({
+              await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                pull_number: prNumber,
-                review_id: existing.id,
+                comment_id: existing.id,
                 body
               });
             } else {
-              await github.rest.pulls.createReview({
+              await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
-                pull_number: prNumber,
-                event: 'COMMENT',
-                commit_id: process.env.HEAD_SHA,
+                issue_number: prNumber,
                 body
               });
             }
@@ -533,8 +567,7 @@ jobs:
             const { data: pr } = await github.rest.pulls.get({
               ...context.repo, pull_number: Number(process.env.PR_NUMBER)
             });
-            if (pr.state !== 'open' || pr.number !== 299 || pr.base?.ref !== 'main' ||
-                pr.head?.ref !== 'verify-pr-fullsend' ||
+            if (pr.state !== 'open' || pr.base?.ref !== 'main' ||
                 pr.head?.sha !== process.env.HEAD_SHA || pr.base?.sha !== process.env.BASE_SHA ||
                 pr.merge_commit_sha !== process.env.MERGE_SHA ||
                 pr.head?.repo?.full_name !== process.env.SOURCE_REPO ||
@@ -612,7 +645,7 @@ jobs:
             if (fs.existsSync('native-report/native-result.json')) {
               const report = JSON.parse(fs.readFileSync('native-report/native-result.json', 'utf8'));
               const counts = {'033-absent': 4, '034-empty': 5, '035-malformed': 5, '036-valid': 7, '037-release': 7};
-              const total = Object.values(counts).reduce((sum,n) => sum+n, 0);
+              const total = Object.values(counts).reduce((sum,n) => sum + n, 0);
               const bound = Object.entries(expected).every(([k,v]) => report.source?.[k] === v);
               const complete = report.complete === true && report.total === total &&
                 Object.keys(report.outcomes || {}).length === Object.keys(counts).length && Object.entries(counts).every(([k,n]) =>

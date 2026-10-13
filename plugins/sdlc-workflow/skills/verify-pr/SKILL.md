@@ -9,6 +9,30 @@ argument-hint: "[jira-issue-id]"
 
 You are an AI verification assistant that orchestrates PR verification through parallel domain sub-agents. You verify a pull request against its Jira task's acceptance criteria and deterministic guardrails. You classify PR review feedback, dispatch domain sub-agents for parallel analysis, aggregate their findings, create tracked Jira sub-tasks for required code fixes, and investigate root causes of implementation mistakes across the full workflow chain. You post findings to both GitHub and Jira, but you do **NOT** modify code and do **NOT** auto-merge.
 
+## Resolving this skill's own files
+
+This skill reads several of its own bundled files (sub-skill instruction files,
+dispatch/finding templates, JSON schemas, the plugin manifest). **Always resolve these
+from `${CLAUDE_PLUGIN_ROOT}`** — never a repo-relative path like `plugins/sdlc-workflow/...`.
+The CWD is **not** always the plugin's repository: when verify-pr reviews a PR against
+`sdlc-plugins` itself, the CWD is the target checkout, so a repo-relative path would read
+that branch's copy and let the PR under review **shadow** the pinned, stable skill actually
+running. `${CLAUDE_PLUGIN_ROOT}` always points at the delivered plugin, in every mode —
+interactive (Claude Code) and sandbox (fullsend).
+
+`${CLAUDE_PLUGIN_ROOT}` is a **textual token** Claude Code substitutes into this skill's
+markdown body (this whole file, including fenced code blocks) before the skill runs — it
+is **not** an OS environment variable. Write the literal token wherever you need the path:
+prose, Read/Glob paths, and inside a `<< 'PYEOF'` heredoc alike — substitution happens
+before execution, so even inside a single-quoted heredoc it is already the absolute path by
+the time Python runs. Do **not** read it at runtime via `os.environ["CLAUDE_PLUGIN_ROOT"]`
+or `$CLAUDE_PLUGIN_ROOT` in a shell — it is not exported to the shell or subprocesses, so
+those resolve to empty / `KeyError`.
+
+Note: path patterns used to **filter the PR diff** (e.g. detecting changes under
+`plugins/sdlc-workflow/skills/run-evals/`) stay repo-relative — those describe files
+inside the PR being reviewed, not files this skill reads.
+
 ## Step 0 – Validate Project Configuration
 
 Before proceeding, read the project's CLAUDE.md and verify that the following sections exist under `# Project Configuration`:
@@ -58,6 +82,153 @@ Before attempting any JIRA operations throughout this skill, determine the acces
 
 Refer to `shared/jira-rest-fallback.md` for complete implementation details.
 
+## Step 0.6 – Sandbox Mode Detection
+
+Detect whether the `FULLSEND_OUTPUT_DIR` environment variable is **present** in the
+environment (exported at all), independently of whether it holds a value. Use
+presence detection (`${VAR+x}`), not a default-value expansion (`${VAR:-...}`): the
+`:-` operator treats an exported-but-empty value the same as unset, which would send
+a runner that exported the gate with an empty value down the credentialed
+interactive path — the opposite of the intended tokenless behavior. An
+exported-but-empty value is a misconfiguration and must fail fast, not silently fall
+back:
+
+```bash
+if [ "${FULLSEND_OUTPUT_DIR+x}" = x ]; then
+  if [ -z "$FULLSEND_OUTPUT_DIR" ]; then
+    echo "ERROR: FULLSEND_OUTPUT_DIR is set but empty" >&2
+    exit 1
+  fi
+  echo "sandbox mode: $FULLSEND_OUTPUT_DIR"
+else
+  echo "interactive mode"
+fi
+```
+
+If **present** (and non-empty), this skill is running inside a fullsend sandbox (no
+Jira or GitHub tokens, no `gh` CLI, no network egress). Switch to **sandbox mode**:
+
+- Do NOT call Jira write APIs (`create_issue`, `add_comment`, `create_issue_link`,
+  `transition_issue`) directly.
+- Do NOT call GitHub read APIs (`gh pr view`/`gh pr diff`/`gh api`) — every PR read
+  is pre-fetched into `verify-pr-input.json` and the PR head is already checked out
+  (GitHub is tier-1; there is no `gh`/`GH_TOKEN` in the sandbox).
+- Do NOT post GitHub PR comments or replies directly.
+- Instead, accumulate every write operation as an action in an in-memory JSON
+  structure, and at the end of execution write the complete result to
+  `$FULLSEND_OUTPUT_DIR/agent-result.json` (see Step 9's **Sandbox Mode Output**).
+
+If **genuinely unset** (absent from the environment), execute in **interactive
+mode** — the current behavior, calling Jira and GitHub APIs directly. Marketplace
+users are unaffected.
+
+Throughout the remaining steps, when you encounter a write operation:
+- **Interactive mode:** execute it directly (existing behavior).
+- **Sandbox mode:** append it to the actions array instead — each step below gives the
+  matching action shape.
+
+Initialize the accumulator as an in-memory JSON structure:
+
+```json
+{
+  "report": {},
+  "actions": []
+}
+```
+
+The `report` object and every action conform to
+`${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-result.schema.json`; the runner's
+`post_script` executes the accumulated actions after the sandbox exits.
+
+## Step 0.7 – Load Pre-Fetched Data (sandbox mode only)
+
+**Skip this step in interactive mode.**
+
+In sandbox mode the `pre_script` fetches all task and PR data on the trusted runner
+(where the tokens live) and mounts it read-only into the sandbox. Validate it against
+`${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-input.schema.json` before using it — a
+valid-JSON but structurally wrong or incomplete prefetch (e.g. missing the `github`
+bundle or `task` fields) must be treated as invalid, not fail deep inside a later step:
+
+```bash
+python3 - << 'PYEOF'
+import json, sys
+from jsonschema import validate, ValidationError
+
+INPUT = "/sandbox/workspace/.pre-script/verify-pr-input.json"
+# ${CLAUDE_PLUGIN_ROOT} below is a Claude Code body-substitution token: it is already
+# the delivered plugin's absolute path by the time this command runs (NOT a shell/env var).
+SCHEMA = "${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-input.schema.json"
+try:
+    with open(INPUT) as f:
+        instance = json.load(f)
+    with open(SCHEMA) as f:
+        schema = json.load(f)
+    validate(instance=instance, schema=schema)
+    print("Pre-fetched data available")
+except FileNotFoundError:
+    print("ERROR: Pre-fetched data missing"); sys.exit(1)
+except json.JSONDecodeError as e:
+    print(f"ERROR: Pre-fetched data is not valid JSON: {e}"); sys.exit(1)
+except ValidationError as e:
+    path = ".".join(str(p) for p in e.path) or "<root>"
+    print(f"ERROR: Pre-fetched data failed schema validation at {path}: {e.message}")
+    sys.exit(1)
+PYEOF
+```
+
+If the file validates against the schema:
+
+- Read `task` (`summary`, `description` in the tracker's native ADF, `status`,
+  `labels`, `issue_links`, `custom_fields`) and `pr_url`. **Skip Step 1 (Fetch and
+  Parse Jira Task) and Step 2 (Identify PR)** — parse the task sections from
+  `task.description` and take the PR URL from `pr_url`.
+- Read the `github` bundle (`pr_repo`, `pr_number`, `headRefName`, `commit_sha`,
+  `diff`, `stat`, `reviews`, `review_comments`, `issue_comments`, `commits`,
+  `check_runs`, `check_run_logs_path`) and use the already-checked-out PR-head
+  tree. **Skip every GitHub read step** — Step 3 (checkout), Step 4a
+  (review/comment fetches), Step 5a (diff/stat/commits), and Step 9's HEAD-SHA
+  retrieval — using the bundle fields instead. `check_runs` carries the head-SHA
+  CI check-run outcomes (name/status/conclusion/details_url); pass it as the
+  Correctness sub-agent's **CI Status** dispatch input so its Check 1 reads real
+  CI data instead of calling `gh` (there is no `gh` CLI or egress in the sandbox).
+  `check_run_logs_path` is the mounted path of the concatenated failed-check logs
+  (empty when no check failed); pass it as the Correctness sub-agent's **CI
+  Failure Logs** input so Check 1b can Read the real failure logs on a FAIL
+  instead of inferring from the diff.
+- Read the `idempotency.related_issues` array (each entry has `key`, `summary`,
+  `labels`, `description`, `issuetype`, `comments`) — the task's existing sub-tasks
+  and linked issues, prefetched on the runner. **Use it for every idempotency read**
+  (Steps 6d, 6f, 7c) instead of calling Jira; the sandbox has no token. The schema
+  **requires** this array, so a prefetch that passes validation always carries it — an
+  empty list (never absent) means the task has no sub-tasks/linked issues yet. Treat
+  present-but-empty as "no known duplicates"; never fall back to a Jira read for dedup.
+
+If the validation above fails (file missing, not valid JSON, or not conforming to the
+schema), the handling depends on the mode:
+
+- **Sandbox mode (`FULLSEND_OUTPUT_DIR` is set):** do **not** fall back to Steps 1–3 or
+  direct Jira/GitHub reads — the sandbox has no tokens, no `gh` CLI, and no network
+  egress, so a credentialed fallback cannot succeed (it would fail obscurely or hang).
+  Fail fast and loud: write a structured failure result and stop the skill without any
+  further step or write operation.
+
+```bash
+cat > "$FULLSEND_OUTPUT_DIR/agent-result.json" << 'RESULT_EOF'
+{
+  "error": "verify-pr aborted: pre-fetched input (/sandbox/workspace/.pre-script/verify-pr-input.json) is missing, unparseable, or does not conform to verify-pr-input.schema.json. The pre_script must produce a valid input bundle before the sandbox runs; no credentialed fallback is possible inside the sandbox."
+}
+RESULT_EOF
+```
+
+  This result intentionally omits the `report`/`actions` keys required by
+  `verify-pr-result.schema.json`, so the runner's output validation rejects it and
+  surfaces the `error` as a hard failure rather than silently attempting the
+  interactive path. **Stop execution here — do not run any subsequent step.**
+
+- **Interactive mode (`FULLSEND_OUTPUT_DIR` is unset):** log a warning and fall back to
+  Steps 1–3 and the direct GitHub reads (existing interactive behavior, unchanged).
+
 ## Inputs
 
 The user will provide a Jira issue ID for a task that has an associated PR.
@@ -68,47 +239,12 @@ Example:
 
 ## Comment Footnote
 
-Every comment posted to Jira by this skill MUST end with the following footnote,
-separated from the main content by a horizontal rule.
-
-Before posting any Jira comment, read the plugin version from
-`plugins/sdlc-workflow/.claude-plugin/plugin.json` and extract the `version` field.
-Use this value as `{version}` in the footer below.
-
-Use ADF `contentFormat` to ensure the rule and text render correctly:
-
-```json
-{
-  "type": "rule"
-},
-{
-  "type": "paragraph",
-  "content": [
-    {
-      "type": "text",
-      "text": "This comment was AI-generated by "
-    },
-    {
-      "type": "text",
-      "text": "sdlc-workflow/verify-pr",
-      "marks": [
-        {
-          "type": "link",
-          "attrs": {
-            "href": "https://github.com/RHEcosystemAppEng/sdlc-plugins"
-          }
-        }
-      ]
-    },
-    {
-      "type": "text",
-      "text": " v{version}."
-    }
-  ]
-}
-```
-
-Append these two nodes at the end of the ADF document's `content` array.
+Every comment posted to Jira by this skill MUST end with the footnote defined in
+`shared/comment-footnote.md`, using skill name `verify-pr`. **Override** that doc's
+version-path instruction: read the plugin version from
+`${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` — never the repo-relative path (see
+"Resolving this skill's own files"). Append the two ADF nodes (rule + paragraph) at the
+end of the comment document's `content` array.
 
 ## Step 1 – Fetch and Parse Jira Task
 
@@ -140,6 +276,10 @@ or not configured, ask the user to provide the PR URL.
 
 Extract the PR number and repository from the URL for use in subsequent `gh` commands.
 
+**Sandbox mode:** skip the custom-field read — take the PR URL from `pr_url` and the
+`owner/repo` + PR number from `github.pr_repo` / `github.pr_number` in the pre-fetched
+data (Step 0.7).
+
 ## Step 3 – Checkout PR Branch
 
 Ensure the PR branch is checked out locally so that subsequent steps inspect the correct code.
@@ -157,17 +297,17 @@ gh pr view <pr-number> --json headRefName -R <owner/repo>
 git branch --show-current
 ```
 
-3. If the branches match, proceed without action — the correct code is already available locally (e.g. the author running self-verification after `/implement-task`).
+3. If the branches match, proceed — the correct code is already local (author self-verification after `/implement-task`; no checkout needed).
 
-4. If they differ, check out the PR branch:
+4. If they differ, check out the PR branch (reviewer/CI audit from an arbitrary branch):
 
 ```
 gh pr checkout <pr-number> -R <owner/repo>
 ```
 
-This step supports two use cases:
-- **Author self-verification** — the contributor already has the PR branch checked out; no checkout needed.
-- **Reviewer/CI audit** — another person or CI job runs `/verify-pr` from an arbitrary branch; the PR branch must be checked out first.
+**Sandbox mode:** skip this step entirely — the runner has already checked out the PR
+head tree (`github.headRefName` at `github.commit_sha`) and there is no `gh` CLI in
+the sandbox. Inspect the working tree directly.
 
 ## Step 4 – Classify Review Feedback
 
@@ -182,6 +322,10 @@ Fetch all reviews and review comments from the PR:
 gh api repos/<owner/repo>/pulls/<pr-number>/reviews
 gh api repos/<owner/repo>/pulls/<pr-number>/comments
 ```
+
+**Sandbox mode:** do not call `gh api` — use `github.reviews`, `github.review_comments`,
+and (for the enumeration below) `github.issue_comments` from the pre-fetched data
+(Step 0.7).
 
 Group inline comments into threads using the `in_reply_to_id` field. Each top-level
 comment (no `in_reply_to_id`) starts a thread; replies are grouped under their parent.
@@ -241,12 +385,10 @@ Log both lists so the run output shows the full enumeration result, making it
 auditable that all items were considered.
 
 > **Why this matters:** Without mandatory enumeration, a re-run can check only for
-> existing classification replies and conclude "nothing to do" — completely missing
-> new items that arrived after the previous run. This caused a real failure where a
-> bot review comment posted after `/implement-task` pushed a fix commit was missed
-> by the subsequent `/verify-pr` re-run. The same gap allowed review body
-> suggestions (e.g., from sourcery-ai) to be silently skipped because only inline
-> comments were enumerated.
+> existing classification replies, conclude "nothing to do", and miss new items that
+> arrived after the previous run — a real failure mode (a bot review comment posted
+> after an `/implement-task` fix commit was missed on re-run; review-body suggestions
+> from sourcery-ai were skipped because only inline comments were enumerated).
 
 ### Step 4a.1 – Detect Eval Result Reviews
 
@@ -276,9 +418,9 @@ inform classification decisions.
    with the absolute path from the Registry (e.g., `<Path>/CONVENTIONS.md`). If present,
    read its contents. This provides explicit, documented project conventions.
 
-2. **Codebase convention cache:** This step does not perform exhaustive codebase analysis
-   yet — that happens in the Style/Conventions sub-agent. The goal here is only to load
-   CONVENTIONS.md once for reuse across comment classification and sub-agent dispatch.
+2. **Scope:** load CONVENTIONS.md once here for reuse across comment classification and
+   sub-agent dispatch; exhaustive codebase analysis happens later in the
+   Style/Conventions sub-agent.
 
 If `CONVENTIONS.md` does not exist, proceed normally — the Style/Conventions sub-agent
 will check for implicit conventions demonstrated by codebase usage patterns.
@@ -308,9 +450,17 @@ change requests before sub-task creation.
 Dispatch four domain sub-agents in parallel for comprehensive PR analysis. Each
 sub-agent performs focused checks and returns structured findings. The orchestrator
 constructs dispatch envelopes following the structure defined in
-`plugins/sdlc-workflow/skills/verify-pr/dispatch-template.md`.
+`${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/dispatch-template.md`.
 
 ### Step 5a – Gather Dispatch Inputs
+
+**Sandbox mode:** do not run the `gh pr diff`/`gh pr view` commands below — the full
+diff, diffstat, and commits are pre-fetched as `github.diff`, `github.stat`, and
+`github.commits` (Step 0.7). Use those values as the corresponding dispatch inputs.
+The sandbox has no `gh` CLI; do NOT substitute a live repository read (e.g.
+`git log`) for any pre-fetched value — for commit traceability in particular,
+`git log --oneline`/`--format=%s` emit subject lines only and will miss a Jira
+ID in a commit body/trailer, producing a false FAIL.
 
 Collect all inputs needed for sub-agent dispatch envelopes:
 
@@ -325,10 +475,16 @@ Collect all inputs needed for sub-agent dispatch envelopes:
    gh pr diff <pr-number> --stat -R <owner/repo>
    ```
 
-3. **PR commits** — for Intent Alignment sub-agent:
+3. **PR commits** — for Intent Alignment sub-agent. Pass each commit's `oid`, its
+   **full** `messageHeadline` and `messageBody` (do NOT truncate the body — a Jira
+   trailer such as `Implements PROJ-231` typically sits at the very end), and, in
+   sandbox mode, the runner-computed `references_task_id` boolean. In interactive
+   mode fetch with:
    ```
    gh pr view <pr-number> --json commits --jq '.commits[] | {oid: .oid, messageHeadline: .messageHeadline, messageBody: .messageBody}' -R <owner/repo>
    ```
+   In sandbox mode use `github.commits` as-is (each item already carries
+   `references_task_id`); never re-slice or subject-only-summarize the bodies.
 
 4. **Task specification sections** — extracted from the Jira task description
    parsed in Step 1:
@@ -361,13 +517,13 @@ Collect all inputs needed for sub-agent dispatch envelopes:
 
 Read the following files to construct dispatch prompts:
 
-1. **Dispatch template:** `plugins/sdlc-workflow/skills/verify-pr/dispatch-template.md`
-2. **Finding template:** `plugins/sdlc-workflow/skills/verify-pr/finding-template.md`
+1. **Dispatch template:** `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/dispatch-template.md`
+2. **Finding template:** `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/finding-template.md`
 3. **Sub-agent skill files:**
-   - `plugins/sdlc-workflow/skills/verify-pr/intent-alignment.md`
-   - `plugins/sdlc-workflow/skills/verify-pr/security.md`
-   - `plugins/sdlc-workflow/skills/verify-pr/correctness.md`
-   - `plugins/sdlc-workflow/skills/verify-pr/style-conventions.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/intent-alignment.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/security.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/correctness.md`
+   - `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/style-conventions.md`
 
 ### Step 5c – Construct and Dispatch
 
@@ -409,7 +565,7 @@ execute side effects (sub-task creation, PR comment replies).
 ### Step 6a – Collect Sub-Agent Results
 
 Parse the structured findings returned by each sub-agent using the format defined
-in `plugins/sdlc-workflow/skills/verify-pr/finding-template.md`:
+in `${CLAUDE_PLUGIN_ROOT}/skills/verify-pr/finding-template.md`:
 
 1. **Extract verdicts** from each sub-agent's Verdicts table. Map sub-agent check
    names to report rows:
@@ -502,6 +658,35 @@ After creating each sub-task, create a "Blocks" issue link from the sub-task to 
 
 jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
+**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`,
+append a `create_subtask` action and a `create_link` action. Use this pattern for **all**
+sub-task categories below (review feedback, CI failure, eval failure):
+
+```json
+{
+  "type": "create_subtask",
+  "ref": "subtask-N",
+  "parent": "<parent-task-id>",
+  "summary": "<summary>",
+  "labels": ["ai-generated-jira", "<category-label>"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Blocks",
+  "inward": "{{subtask-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
+Use incrementing refs (`subtask-1`, `subtask-2`, …). The `{{subtask-N.key}}` (and, in
+replies, `{{subtask-N.url}}`) placeholders are resolved by the `post_script` once the
+sub-task is created. Set `<category-label>` to `review-feedback` for review-feedback and
+CI-failure sub-tasks, or `eval-failure` for eval-failure sub-tasks.
+
 #### CI failure sub-tasks
 
 Process `create-sub-task` actions from the Correctness sub-agent. For each action:
@@ -509,7 +694,9 @@ Process `create-sub-task` actions from the Correctness sub-agent. For each actio
 1. **Idempotency check:** check the parent task's existing sub-tasks (issue links)
    for sub-tasks with labels `["ai-generated-jira", "review-feedback"]` whose
    descriptions reference the same CI check name or failure. If a matching sub-task
-   already exists, skip creation for that failure.
+   already exists, skip creation for that failure. **Sandbox mode:** read the
+   candidate sub-tasks from `idempotency.related_issues` (Step 0.7) — match on
+   `labels` and `description` — instead of a live Jira read.
 
 2. **Create sub-task:** create a Jira sub-task using the action's Title, Relevant
    files, and Root cause fields:
@@ -528,6 +715,9 @@ Process `create-sub-task` actions from the Correctness sub-agent. For each actio
 
 3. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
+
+**Sandbox mode:** use the `create_subtask` + `create_link` pattern from the review
+feedback sandbox-mode block above, with labels `["ai-generated-jira", "review-feedback"]`.
 
 #### Eval failure sub-tasks
 
@@ -553,7 +743,9 @@ and sub-task creation below.
 2. **Idempotency check:** Check the parent task's existing sub-tasks (issue links)
    for sub-tasks with labels `["ai-generated-jira", "eval-failure"]` whose summaries
    reference the same eval ID. If a matching sub-task already exists, skip creation
-   for that eval.
+   for that eval. **Sandbox mode:** read the candidate sub-tasks from
+   `idempotency.related_issues` (Step 0.7) — match on `labels` and `summary` —
+   instead of a live Jira read.
 
 3. **Create sub-task:** For each failing eval, create a Jira sub-task:
 
@@ -573,6 +765,9 @@ and sub-task creation below.
 4. **Create issue link:**
    jira.create_issue_link(type="Blocks", inwardIssue=<sub-task-id>, outwardIssue=<parent-task-id>)
 
+**Sandbox mode:** use the `create_subtask` + `create_link` pattern from the review
+feedback sandbox-mode block above, with labels `["ai-generated-jira", "eval-failure"]`.
+
 ### Step 6e – Reply to Review Comments
 
 Reply to **every** classified review comment thread with the classification label and
@@ -585,74 +780,75 @@ gh api repos/<owner/repo>/pulls/<pr-number>/comments/<comment_id>/replies -f bod
 ```
 
 **For suggestions upgraded to code change requests via convention check (Step 6b):**
-
-Include the convention evidence in the reply so the upgrade reasoning is transparent:
+Include the convention evidence so the upgrade reasoning is transparent (e.g. "…this
+matches project convention: 17 migrations use Index::create for FK columns; CONVENTIONS.md
+§Indexes documents this pattern. Sub-task […] created…"):
 
 ```
 gh api repos/<owner/repo>/pulls/<pr-number>/comments/<comment_id>/replies -f body="[sdlc-workflow/verify-pr] Classified as **code change request** (upgraded from suggestion) — this matches project convention: <evidence>. Sub-task [<SUB-TASK-KEY>](<sub-task-webUrl>) created to address this feedback."
 ```
 
-Example: `"[sdlc-workflow/verify-pr] Classified as **code change request** (upgraded from suggestion) — this matches project convention: 17 migrations use Index::create for FK columns; CONVENTIONS.md §Indexes documents this pattern. Sub-task [PROJ-456](https://redhat.atlassian.net/browse/PROJ-456) created to address this feedback."`
-
-**For all other classifications (suggestion, question, nit):**
-
-Reply with a brief explanation of the classification and why no sub-task was created:
+**For all other classifications (suggestion, question, nit):** reply with a brief
+explanation of the classification and why no sub-task was created (e.g. suggestion → "not
+documented in CONVENTIONS.md and no established codebase pattern"; question → "asks for
+clarification; no code change needed"; nit → "minor style, does not affect correctness"):
 
 ```
 gh api repos/<owner/repo>/pulls/<pr-number>/comments/<comment_id>/replies -f body="[sdlc-workflow/verify-pr] Classified as **<classification>** — <reasoning>. No sub-task created."
 ```
 
-Example replies:
-- `"[sdlc-workflow/verify-pr] Classified as **suggestion** — this proposes an alternative approach that is not documented in CONVENTIONS.md and has no established codebase pattern. No sub-task created."`
-- `"[sdlc-workflow/verify-pr] Classified as **question** — this asks for clarification; no code change needed. No sub-task created."`
-- `"[sdlc-workflow/verify-pr] Classified as **nit** — minor style feedback that does not affect correctness. No sub-task created."`
-
 #### Review body items
 
 Review body items (identified by `review-body-*` synthetic IDs) lack a `comment_id`
-and cannot receive threaded replies. Instead, post a **standalone PR comment** using
-the issues API:
+and cannot receive threaded replies. Post a **standalone PR comment** via the issues
+API instead — use the **same classification body as the matching inline case above**,
+but prefixed with `Re: @<reviewer> review — ` right after the `[sdlc-workflow/verify-pr]`
+tag (code change request → sub-task link; upgraded suggestion → convention evidence +
+sub-task link; suggestion/question/nit → reasoning + "No sub-task created."):
 
 ```
-gh api repos/<owner/repo>/issues/<pr-number>/comments -f body="[sdlc-workflow/verify-pr] Re: @<reviewer> review — Classified as **<classification>** — <reasoning>. <action taken or 'No sub-task created.'>"
-```
-
-**For code change requests that resulted in a sub-task:**
-
-```
-gh api repos/<owner/repo>/issues/<pr-number>/comments -f body="[sdlc-workflow/verify-pr] Re: @<reviewer> review — Classified as **code change request** — sub-task [<SUB-TASK-KEY>](<sub-task-webUrl>) created to address this feedback."
-```
-
-**For suggestions upgraded via convention check (Step 6b):**
-
-```
-gh api repos/<owner/repo>/issues/<pr-number>/comments -f body="[sdlc-workflow/verify-pr] Re: @<reviewer> review — Classified as **code change request** (upgraded from suggestion) — this matches project convention: <evidence>. Sub-task [<SUB-TASK-KEY>](<sub-task-webUrl>) created to address this feedback."
-```
-
-**For all other classifications:**
-
-```
-gh api repos/<owner/repo>/issues/<pr-number>/comments -f body="[sdlc-workflow/verify-pr] Re: @<reviewer> review — Classified as **<classification>** — <reasoning>. No sub-task created."
+gh api repos/<owner/repo>/issues/<pr-number>/comments -f body="[sdlc-workflow/verify-pr] Re: @<reviewer> review — Classified as **<classification>** — <same body as the matching inline case>"
 ```
 
 When a review body contains multiple classified suggestions (sub-identifiers), post
 a single standalone comment that lists all classifications together rather than one
 comment per sub-identifier.
 
+**Sandbox mode:** Instead of calling `gh api`, append one action per reply.
+
+For **inline comment threads** (they have a `comment_id`), use `post_pr_reply`:
+
+```json
+{
+  "type": "post_pr_reply",
+  "repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "comment_id": <comment-id>,
+  "body": "<reply body; use {{subtask-N.key}} / {{subtask-N.url}} placeholders when referencing a created sub-task>"
+}
+```
+
+For **review body items** (no `comment_id`), use `post_pr_comment`:
+
+```json
+{
+  "type": "post_pr_comment",
+  "repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "body": "<standalone comment body>"
+}
+```
+
 ### Step 6f – Idempotency Guarantees
 
-Idempotency is enforced **within** Step 4a's mandatory enumeration, not as a
-separate gate before Steps 6d/6e. The enumeration in Step 4a partitions all
-classifiable items (inline comment threads and review body items) into unclassified
-and already-classified lists — only unclassified items proceed to Steps 4b–4c for
-classification and then to Steps 6c–6e for side effects. This design ensures that:
-
-- Every classifiable item is always discovered (enumeration cannot be bypassed).
-- Already-processed items are filtered out per-item (no duplicate replies or
-  sub-tasks).
-- New items arriving between runs (e.g., from a bot re-analyzing code after a
-  fix commit, or a reviewer adding a new review) are always detected because the
-  enumeration is unconditional.
+Idempotency is enforced **within** Step 4a's mandatory enumeration, not as a separate
+gate before Steps 6d/6e: the enumeration partitions all classifiable items (inline
+comment threads and review body items) into unclassified and already-classified lists —
+only unclassified items proceed to classification (4b–4c) and side effects (6c–6e).
+Every item is always discovered (enumeration is unconditional and cannot be bypassed),
+already-processed items are filtered per-item (no duplicate replies/sub-tasks), and new
+items arriving between runs (a bot re-analyzing after a fix commit, a new review) are
+always detected. Do **not** treat this as a top-level gate that can skip enumeration.
 
 **Idempotency detection per item type:**
 - **Inline comment threads:** a reply containing `"[sdlc-workflow/verify-pr] Classified as"`
@@ -665,10 +861,8 @@ check the parent task's issue links for existing sub-tasks whose descriptions
 reference the same review comment or review body. If a matching sub-task already
 exists, skip creation. This guards against edge cases where a classification reply
 was not posted (e.g., due to a network error) but the sub-task was created.
-
-Do **not** interpret this step as a top-level decision that can skip item
-enumeration. The enumeration in Step 4a is always mandatory; this step only
-documents the idempotency mechanisms embedded within that enumeration.
+**Sandbox mode:** read these existing sub-tasks from `idempotency.related_issues`
+(Step 0.7) — inspect each entry's `description` — instead of a live Jira read.
 
 ### Step 6g – Record Result
 
@@ -711,22 +905,10 @@ The sub-agent receives these inputs:
 3. **Review comments** — the code change requests that triggered sub-tasks in Step 6d
 4. **Relevant code** — the files on the PR branch related to each flagged defect
 5. **Project CONVENTIONS.md** — if it exists in the repository root
-6. **Aggregated domain findings** — findings from all four domain sub-agents,
-   organized by source with clear attribution:
-
-   ```
-   ### From Intent Alignment
-   <Intent Alignment findings from Step 6a>
-
-   ### From Security
-   <Security findings from Step 6a>
-
-   ### From Correctness
-   <Correctness findings from Step 6a>
-
-   ### From Style/Conventions
-   <Style/Conventions findings from Step 6a>
-   ```
+6. **Aggregated domain findings** — findings from all four domain sub-agents, organized
+   by source with clear attribution: one `### From <domain>` section each for Intent
+   Alignment, Security, Correctness, and Style/Conventions, holding that sub-agent's
+   Step 6a findings.
 
 #### Classification gate — universality test
 
@@ -760,15 +942,11 @@ test to determine whether the corrective guidance is a method or a fact:
   in a general-purpose skill. Create a task to document the pattern in
   CONVENTIONS.md (see Step 7b).
 
-> **Examples:**
-> - "Every new public symbol must have a documentation comment" → **method**
->   (applies to any language, no specific API needed) → skill gap
-> - "Use `Vec<_>` for type inference in collect chains" → **fact**
->   (Rust-specific syntax) → convention gap
-> - "Pre-allocate collections with `HashMap::with_capacity(n)`" → **fact**
->   (Rust-specific API) → convention gap
-> - "Assert on specific values, not just collection length" → **method**
->   (applies to any test framework) → skill gap
+> **Examples:** "Every new public symbol must have a documentation comment" and "Assert
+> on specific values, not just collection length" → **method** (any language / test
+> framework, no specific API) → skill gap. "Use `Vec<_>` for type inference in collect
+> chains" or "Pre-allocate with `HashMap::with_capacity(n)`" → **fact** (Rust-specific
+> syntax/API) → convention gap.
 
 #### Convention Check (for repo-specific knowledge)
 
@@ -864,6 +1042,29 @@ Link the root-cause task to the parent task:
 
 jira.create_issue_link(type="Relates", inwardIssue=<root-cause-task-id>, outwardIssue=<parent-task-id>)
 
+**Sandbox mode:** Instead of calling `jira.create_issue` and `jira.create_issue_link`,
+append a `create_root_cause_task` action and a `create_link` action (the schema's
+`link_type` enum uses `Related`, the equivalent of the interactive `Relates`):
+
+```json
+{
+  "type": "create_root_cause_task",
+  "ref": "rc-N",
+  "summary": "Root-cause: <description>",
+  "labels": ["ai-generated-jira", "root-cause"],
+  "description_adf": <pre-rendered ADF object>
+}
+```
+
+```json
+{
+  "type": "create_link",
+  "link_type": "Related",
+  "inward": "{{rc-N.key}}",
+  "outward": "<parent-task-id>"
+}
+```
+
 #### Action 2 – Post the root-cause analysis as a comment
 
 After creating the task, post a Jira comment on the newly created root-cause task
@@ -881,6 +1082,17 @@ The comment must include:
 Include the **Comment Footnote** at the end of the comment (see the Comment Footnote
 section at the top of this skill for the required ADF format).
 
+**Sandbox mode:** Instead of calling `jira.add_comment`, append a `post_comment` action
+targeting the not-yet-created root-cause task by its ref:
+
+```json
+{
+  "type": "post_comment",
+  "issue": "{{rc-N.key}}",
+  "body_adf": <pre-rendered ADF with the root-cause analysis and the Comment Footnote>
+}
+```
+
 ### Step 7c – Idempotency Check
 
 Before creating a root-cause task (Step 7b), check for existing root-cause tasks
@@ -888,6 +1100,11 @@ linked to the parent task. For each linked task with label `root-cause`, fetch i
 comments and search for a comment containing "Root-cause analysis from
 <PARENT-TASK-ID>". If a root-cause task already exists for the same phase and the
 same defect, skip creation.
+
+**Sandbox mode:** do not fetch comments from Jira. Read the linked tasks from
+`idempotency.related_issues` (Step 0.7), filter to entries whose `labels` include
+`root-cause`, and search each entry's `comments` for the "Root-cause analysis from
+<PARENT-TASK-ID>" marker.
 
 Record the Root-Cause Investigation result:
 - **N/A** — no sub-tasks were created in Step 6d (nothing to investigate)
@@ -966,13 +1183,32 @@ gh pr view <pr-number> --json commits --jq '.commits[-1].oid' -R <owner/repo>
 
 Store the full SHA and its short form (first 7 characters) for use in the report.
 
+**Sandbox mode:** do not call `gh pr view` — use `github.commit_sha` from the
+pre-fetched data (Step 0.7) as the full SHA.
+
 ### Post to GitHub PR
 
-Each verification run creates a **new** PR comment (never overwrites previous reports).
-This provides a verification history over time, with each report clearly referencing
-the commit SHA it verified.
+The report comment is **scoped to the commit it verifies**. Posting is idempotent
+per commit: a re-run (or a retry after a partial failure) on the **same commit**
+updates the existing report comment in place, while a **later commit** gets a fresh
+comment. This preserves a **per-commit** verification history — one report comment
+per commit, refreshed on re-runs — rather than a new comment on every run.
 
-Update the report header from Step 8 to include the commit SHA:
+Idempotency uses a commit-scoped marker — an invisible HTML comment (GitHub has
+no native sticky-comment) whose identity is the verified commit:
+
+```
+<!-- sdlc-workflow:verify-pr report commit:<full-sha> -->
+```
+
+The marker is supplied to the native sticky CLI via `--marker`, which prepends it
+to the comment. **Do NOT embed this marker in the report body** — the agent writes
+only the report text, and the runner supplies the marker separately. Embedding it
+would leave a duplicate marker line the CLI does not strip.
+
+Update the report header from Step 8 to include the commit SHA — the
+`(commit <short-sha>)` makes which commit each comment verifies legible in the PR
+timeline:
 
 ```
 ## Verification Report for <JIRA-ID> (commit <short-sha>)
@@ -985,12 +1221,26 @@ Append a markdown footnote at the end of the report body, separated by a horizon
 *This comment was AI-generated by [sdlc-workflow/verify-pr](https://github.com/RHEcosystemAppEng/sdlc-plugins) v{version}.*
 ```
 
-Read the plugin version from `plugins/sdlc-workflow/.claude-plugin/plugin.json` and
+Read the plugin version from `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` and
 substitute `{version}` before posting.
 
+The comment body is the report — commit-scoped header + table + summary + footnote,
+with **no** marker line — posted via the native fullsend sticky-comment CLI (as
+implemented by `post_github_comment_native` ← `execute_post_report` in
+`scripts/execute-actions.py`):
+
 ```
-gh pr comment <pr-number> --body "<report-with-footnote>" -R <owner/repo>
+fullsend issues post-comment --tracker github \
+  --project <owner/repo> --number <pr-number> \
+  --marker "<!-- sdlc-workflow:verify-pr report commit:<full-sha> -->" \
+  --result -   # report body (no marker) on stdin
 ```
+
+The CLI prepends the `--marker` as a hidden HTML comment and, on re-runs, finds the
+comment carrying this commit's marker and edits it in place (collapsing the prior
+body into a `<details>` block) — so a retry on the same commit never duplicates,
+while a later commit gets a fresh comment. GitHub treats a PR as an issue for
+comments, so `--tracker github --number <pr-number>` targets the PR.
 
 ### Post to Jira
 
@@ -1002,6 +1252,54 @@ Include the Comment Footnote at the end of the Jira comment.
 
 **Important:** This skill does NOT merge the PR and does NOT transition the Jira issue.
 The report is informational — a human reviewer decides whether to merge.
+
+### Sandbox Mode Output
+
+**Sandbox mode only:** Instead of posting to GitHub and Jira directly, populate the
+`report` object and append a single `post_report` action. After the sandbox exits,
+the runner's `post_script` posts the GitHub PR comment (from `report_md`) and the
+Jira comment (from `report_adf`) via the native `fullsend issues post-comment`
+sticky CLI — supplying the commit-scoped marker with `--marker` (GitHub) so a re-run
+updates the same per-commit comment in place. `report_md` must contain **no** marker
+line; the runner supplies the marker.
+
+Populate `report` (all fields required by
+`${CLAUDE_PLUGIN_ROOT}/schemas/verify-pr-result.schema.json`):
+
+```json
+{
+  "jira_issue_id": "<JIRA-ID>",
+  "pr_repo": "<owner/repo>",
+  "pr_number": <pr-number>,
+  "commit_sha": "<PR head commit SHA — github.commit_sha; 7–40 hex, canonicalized by the runner>",
+  "overall": "PASS|WARN|FAIL",
+  "table_md": "<the markdown verification table from Step 8>",
+  "report_md": "<full GitHub PR comment body: commit-scoped header + table + summary + markdown footnote — NO marker line; the runner prepends the commit-scoped marker via --marker>",
+  "report_adf": <full Jira comment ADF: report + Comment Footnote>,
+  "plugin_version": "<version from ${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json>"
+}
+```
+
+Append the final action:
+
+```json
+{ "type": "post_report" }
+```
+
+Write the complete accumulated JSON (the `report` object plus every action collected
+across Steps 6–9) to the output file:
+
+```bash
+cat > $FULLSEND_OUTPUT_DIR/agent-result.json << 'RESULT_EOF'
+<the complete { "report": {...}, "actions": [...] } JSON>
+RESULT_EOF
+```
+
+Verify it is valid JSON:
+
+```bash
+python3 -m json.tool $FULLSEND_OUTPUT_DIR/agent-result.json > /dev/null && echo "Output validated"
+```
 
 ## Important Rules
 

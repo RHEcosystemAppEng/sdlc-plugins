@@ -4,7 +4,34 @@ This companion file contains the detailed procedures for Step 2 of the
 triage-security skill. It determines which supported product versions actually
 ship the vulnerable dependency by reading lock files at pinned source commits.
 
+## Fullsend trusted-evidence substitution
+
+When Step 0.6 selected Fullsend mode, this procedure must consume only the
+validated `triage-security-input.json` bundle. Use `configuration.version_streams`
+for stream configuration, `matrix.streams[].rows` for every released-version row and
+its `source_commits`/`retag_of`, `source_evidence.lock_files` for released pinned
+reads, and `source_evidence.development_streams` for development-head reads. The
+bundle's `external_evidence` preserves captured MITRE/OSV fix-threshold evidence and
+lifecycle evidence; `jira_metadata` and `idempotency` preserve the accompanying Jira
+evidence without a Jira read.
+
+The analysis rules do not weaken: enumerate **all** supported matrix rows, use the
+released pinned commits (never a branch tip), preserve retag carry-forward behavior,
+trace the dependency chain from supplied lock/manifest content, and apply the
+cross-validated external fix threshold before the Jira prose fallback. A present but
+empty trusted collection is evidence of no known match; it never authorizes an
+external fallback.
+
+Fullsend makes no local matrix read, Git/GitHub/Jira/WebFetch/cosign/lifecycle call,
+or repository mutation. Matrix fallback, format repair, on-demand population, and
+all local `security-matrix.md` writes are interactive/trusted-runner-only; the
+sandbox must never write security-matrix.md.
+
 ## 2.1 – Load the supportability matrix
+
+**Fullsend mode:** load the aggregated matrix directly from `matrix.streams`, matching
+each entry to `configuration.version_streams`. Treat its rows as trusted, read-only
+evidence; do not open the configured local `security-matrix.md` path.
 
 For each row in the **Version Streams** table in Security Configuration, read the
 `security-matrix.md` file at the path given in the **Security Matrix Path** column,
@@ -23,6 +50,9 @@ Enumerate all rows in the Version Streams table directly — each row already
 identifies a stream, so no chaining is needed.
 
 ### Fallback to Konflux repos
+
+**Fullsend mode:** this fallback is prohibited. The runner must provide the required
+matrix rows in the validated bundle; do not invoke `git show` or save a local copy.
 
 When a local `security-matrix.md` file does not exist at the configured path,
 fall back to reading from the Konflux release repo via `git show`:
@@ -47,6 +77,10 @@ If the Version Streams table in Security Configuration is empty or incomplete, a
 the user which streams to configure before proceeding.
 
 ### 2.1.1 — Validate matrix format
+
+**Fullsend mode:** do not validate, repair, or rewrite a mounted/local matrix. Schema
+validation of the trusted bundle is the entry gate; matrix format validation and its
+interactive warnings remain interactive/trusted-runner-only.
 
 After loading each stream's matrix file (from local path or Konflux fallback),
 validate its structure against the canonical template at
@@ -125,6 +159,10 @@ Aggregate all versions from all streams into a single working matrix.
 
 ### On-demand matrix population
 
+**Fullsend mode:** on-demand population is prohibited. Missing matrix coverage is a
+trusted-input deficiency to report, not a reason to query repositories or write a
+matrix.
+
 If a stream's Supportability Matrix is empty or missing rows (e.g., the template
 was scaffolded but never populated), research and fill it in before proceeding:
 
@@ -143,6 +181,11 @@ repositories are read-only, and Jira is the only other output channel.
 
 ## 2.2 – Detect the development stream
 
+**Fullsend mode:** use `jira_metadata.versions` to identify unreleased versions and
+the matching `configuration.version_streams` entry, then use the matching
+`source_evidence.development_streams` record as the development-head evidence. Do not
+call Jira or inspect a branch directly.
+
 Query Jira for unreleased versions to identify the current development stream:
 
 1. Call `getJiraIssueTypeMetaWithFields` for the Vulnerability issue type in the
@@ -160,6 +203,14 @@ The development stream is checked at **branch HEAD** (not a pinned commit) since
 there is no released version yet.
 
 ## 2.3 – Extract dependency versions
+
+**Fullsend mode:** select the matching `source_evidence.lock_files` record by
+repository, pinned `ref`, and path for each released matrix row, and the matching
+`source_evidence.development_streams` record for the development stream. Parse only
+the captured `content` using its recorded `command`; do not execute that command,
+`git show`, `which cosign`, or an SBOM download in the sandbox. Preserve the existing
+lock-file, RPM-origin, retag, dependency-chain, and fix-threshold decisions using this
+trusted content.
 
 **Environment variable resolution:** Paths in the Version Streams table may contain
 environment variable references (e.g., `${TRUSTIFY_GL_PATH}`) in the **Konflux
@@ -237,6 +288,13 @@ For each version in the aggregated matrix (plus the development stream):
    to the Jira description's affected range.
 
 ### 2.3.5 – Dependency chain context
+
+**Fullsend mode:** derive direct/transitive classification, dependency paths,
+profiles, introduction points, RPM origin, and any supplied SBOM comparison only from
+the matching trusted `source_evidence` content. Do not inspect manifests, Dockerfiles,
+or SBOMs by calling Git, cosign, or the network. If the bundle lacks evidence required
+to classify a chain, record that limitation in the result rather than filling it with
+a sandbox read.
 
 For affected versions (where the vulnerable dependency is in the lock file and
 within the affected range), trace the dependency chain to give the engineer context
@@ -511,6 +569,11 @@ Include the dependency chain context from Step 2.3.5 below the table so the
 engineer can see both the impact and the remediation path at a glance.
 
 ## 2.5 – Upstream fix check
+
+**Fullsend mode:** determine upstream-fix status from the matching captured
+`source_evidence.development_streams` (and released `lock_files` where applicable).
+The trusted runner has already performed the source read; do not run `git -C`, read a
+branch, or otherwise query an upstream repository in the sandbox.
 
 For each affected stream, check whether the upstream source repository has
 already fixed the vulnerability on the branch that feeds that stream. Read the
