@@ -152,12 +152,16 @@ no manual step.
 
 1. **`fullsend github setup`** — provisions the per-repo installation. It writes
    the two-layer config (`.fullsend/config.base.yaml`, the vendor preset base
-   layer, and `.fullsend/config.yaml`, the repo overlay) and installs the vendor
-   shim workflow `.github/workflows/fullsend.yaml`. `install_mode: per-repo`
-   throughout. **verify-pr is registered only in `config.base.yaml`**, never in
-   `config.yaml`: the shim greps `config.yaml` alone for agents, so it never
-   dispatches verify-pr, while `fullsend dispatch` / `fullsend run` still resolve
-   it because `LoadConfig` merges `config.yaml` over `config.base.yaml` (ADR 0069).
+   layer, and `.fullsend/config.yaml`, the repo overlay). `install_mode: per-repo`
+   throughout. **verify-pr is registered only in `config.base.yaml`**;
+   `fullsend dispatch` / `fullsend run` resolve it because `LoadConfig` merges
+   `config.yaml` over `config.base.yaml` (ADR 0069). Setup also scaffolds the
+   vendor shim workflow `.github/workflows/fullsend.yaml` — a
+   `pull_request_target` router for the vendor's standard agents (e.g. its Review
+   stage). This deployment is **verify-pr-only**, so the shim is **deleted**
+   (TC-6909): once on the default branch it fired on every PR and posted the
+   vendor review. If you re-run `fullsend github setup`, delete the re-scaffolded
+   shim again.
 2. **`fullsend inference provision`** — provisions hosted Vertex AI via Workload
    Identity Federation and records the result as the inference override in
    `.fullsend/config.yaml`:
@@ -174,8 +178,8 @@ no manual step.
    org-admin action in GitHub, not a CLI step.
 
 The recurring dispatch is a dedicated workflow,
-`.github/workflows/fullsend-verify-pr.yml` (not the vendor shim) — see
-**Dispatch design** below.
+`.github/workflows/fullsend-verify-pr.yml` — the only fullsend workflow in this
+repo — see **Dispatch design** below.
 
 ### Dispatch design
 
@@ -208,8 +212,11 @@ has no CI-completion event to trigger on, which drives the design:
 
 The dispatch job hands a pre-built single-entry matrix (agent `verify-pr`, role
 `review`) to the vendor reusable workflow
-`fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@v0`, whose
+`fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml`, whose
 `harness-run` job mints the review-role App token via OIDC and runs `fullsend run`.
+The reusable workflow is **pinned by full SHA**
+(`@d5f36921ac754705619f38c637ef692873809fbc # v0 as of 2026-09-30`), not the
+floating `@v0` tag — see **Pinning reusable-dispatch** below.
 
 This `pull_request_target` trigger is the CI-side equivalent of the harness's own
 **CEL trigger**, which drives the `fullsend dispatch` path. The trigger is declared on
@@ -342,6 +349,24 @@ create sandbox`). To bump:
    passes.
 3. Update the local `## Prerequisites` version note to match if the local CLI
    must track CI.
+
+### Pinning reusable-dispatch
+
+The `verify-pr` job's `uses:` pins the vendor reusable workflow to a full commit
+SHA in `.github/workflows/fullsend-verify-pr.yml`:
+
+```yaml
+    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@d5f36921ac754705619f38c637ef692873809fbc # v0 as of 2026-09-30
+```
+
+It previously floated on `@v0`. When `v0` advanced to `c68903c0`, the vendor
+moved GCP setup into the `./.defaults` composite action and stopped exporting
+`GOOGLE_APPLICATION_CREDENTIALS` before `fullsend run`, so every dispatch failed
+harness validation (`host_files[1].src: host variable
+GOOGLE_APPLICATION_CREDENTIALS is not set`). `d5f36921` is the `v0` commit of the
+last green run (2026-09-30). To advance the pin, first adapt the child harness's
+`host_files` credential mounts to the vendor's current credential model, then
+move the SHA and re-validate end to end as for a fullsend version bump.
 
 The fullsend CLI version is independent of both the harness `base:` re-pin and the
 plugin version below.
