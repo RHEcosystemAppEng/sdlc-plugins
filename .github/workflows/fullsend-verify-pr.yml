@@ -59,16 +59,12 @@ on:
   # Why this copy must live on the DEFAULT branch (main): unlike `pull_request`
   # (whose trigger is read from the PR's base branch), GitHub registers and
   # dispatches `pull_request_target` from the workflow file on the repository's
-  # default branch. While this real workflow existed only on `verify-pr-fullsend`
-  # and main carried the placeholder, GitHub saw no `pull_request_target` trigger
-  # and fired NOTHING for any PR (fork or same-repo). Landing it on main
-  # registers the event; the base-branch copy still runs (trusted base context).
-  #
-  # `branches:` covers PRs targeting main and the verify-pr-fullsend feature
-  # branch, so the feature can verify its own deployment before graduation.
+  # default branch. If this real workflow is missing from main, GitHub sees no
+  # `pull_request_target` trigger and fires NOTHING for any PR (fork or
+  # same-repo).
   pull_request_target:
     types: [opened, synchronize, reopened, labeled]
-    branches: [main, verify-pr-fullsend]
+    branches: [main]
 
 # One in-flight verify-pr per PR; a new push cancels the superseded run (both
 # the CI wait and any dispatch already handed off).
