@@ -127,17 +127,21 @@ def test_source_resolution_refuses_stale_or_unrelated_revisions(defect):
 
 
 @pytest.mark.parametrize("number,branch,path,expected", [
-    (299, "verify-pr-fullsend", "evals/fullsend/triage-security/cases/033-absent/input.yaml", "true"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/skills/triage-security/SKILL.md", "true"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/schemas/triage-security-input.schema.json", "true"),
-    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/providers/vertex-ai.yaml", "true"),
+    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/schemas/triage-security-result.schema.json", "true"),
+    (299, "verify-pr-fullsend", "evals/fullsend/triage-security/cases/033-absent/input.yaml", "false"),
+    (299, "verify-pr-fullsend", "evals/triage-security/files/fullsend-release-trusted-input.json", "false"),
+    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/policies/triage-security.yaml", "false"),
+    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/providers/vertex-ai.yaml", "false"),
+    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/scripts/validate-output-schema.sh", "false"),
     (299, "verify-pr-fullsend", ".github/scripts/run-native-fullsend-evals.sh", "false"),
     (299, "verify-pr-fullsend", ".github/scripts/check-native-fullsend-execution.py", "false"),
     (299, "verify-pr-fullsend", ".github/workflows/eval-pr-run.yml", "false"),
     (299, "verify-pr-fullsend", ".github/workflows/eval-pr.yml", "false"),
-    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/scripts/test_native_fullsend_execution.py", "true"),
-    (300, "verify-pr-fullsend", "evals/fullsend/run.py", "true"),
-    (299, "wrong", "evals/fullsend/run.py", "true"),
+    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/scripts/test_native_fullsend_execution.py", "false"),
+    (300, "verify-pr-fullsend", "evals/fullsend/run.py", "false"),
+    (299, "wrong", "evals/fullsend/run.py", "false"),
     (299, "verify-pr-fullsend", "README.md", "false"),
 ])
 def test_native_discovery_runs_for_relevant_prs_after_activation(number, branch, path, expected):
