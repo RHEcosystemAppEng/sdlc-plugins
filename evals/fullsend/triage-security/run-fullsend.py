@@ -18,7 +18,9 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
         raise ValueError("Unknown synthetic gate scenario")
     if os.environ.get("FULLSEND_MINT_URL"):
         raise ValueError("Synthetic suite requires FULLSEND_MINT_URL unset; live forge minting is forbidden")
-    setup = workspace / "native-config"
+    # Stage under the harness-owned .work root: the pinned collector excludes it,
+    # so staged plugin copies are never collected as modified skill files.
+    setup = workspace / ".work" / "native-config"
     target = workspace / "synthetic-target"
     native = output / "native"
     if any(p.exists() for p in [setup, target, native, output / "metrics.json"]):
@@ -32,6 +34,7 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
     if (any(p.is_symlink() for p in [plugin_root, *plugin_root.parents])
             or any(p.is_symlink() for p in plugin_root.rglob("*"))):
         raise ValueError("Tested plugin must contain regular files, not symlinks")
+    setup.parent.mkdir(exist_ok=True)
     plugin_destination = setup / ("tested-plugin" if plugin_root != root / "plugins/sdlc-workflow" else "plugins/sdlc-workflow")
     shutil.copytree(plugin_root, plugin_destination,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))

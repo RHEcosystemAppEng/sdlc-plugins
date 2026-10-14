@@ -12,7 +12,7 @@ def prepare(root, scenario):
         raise ValueError("Unknown synthetic gate scenario")
     fixtures = root / "evals/triage-security/files"
     pre = root / "pre"
-    # This is the case-private native-config root, not Fullsend's output run dir.
+    # This is the case-private .work/native-config root, not Fullsend's output run dir.
     # Native resolution binds the generated mounts here; never reuse old mounts.
     if pre.exists() and any(pre.iterdir()):
         raise ValueError("Refusing stale pre-script fixture files")

@@ -634,6 +634,7 @@ def test_native_cli_rejects_root_and_ancestor_plugin_symlinks(tmp_path, linked_p
     # Then rejection precedes staging and any native launch
     assert result.returncode == 1
     assert "symlink" in result.stderr
+    assert not (workspace / ".work/native-config").exists()
     assert not (workspace / "native-config").exists()
 
 

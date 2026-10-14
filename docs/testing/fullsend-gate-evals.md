@@ -94,7 +94,7 @@ The test harness uses the existing native host-file pattern to upload the
 operator-provided `GOOGLE_APPLICATION_CREDENTIALS` file directly to
 `/tmp/.gcp-credentials.json`, the path referenced by that environment template.
 This mount is required and is not expanded as text. The adapter never reads or
-stages credential contents in `native-config`, the checkout or output. Native
+stages credential contents in `.work/native-config`, the checkout or output. Native
 Fullsend controls the upload into the sandbox; the host judge keeps using the
 original operator-provided path.
 Do not print environment values, place credential files in the checkout/output,
@@ -205,7 +205,9 @@ Skill/tool records and intended plugin binding; narrated outcomes fail.
 
 Each local case copies the unchanged delivered plugin (including script companions),
 test agent/pre-script and the three retained synthetic fixtures into its isolated
-`native-config` directory. Resource paths and fixture/schema references point
+`.work/native-config` directory. The harness collector excludes `.work`, so these
+staged copies are never collected as modified files or rendered into judge
+prompts. Resource paths and fixture/schema references point
 inside that directory, which Fullsend uses as the resolver workspace root through
 `--fullsend-dir`. The separate synthetic target is a fresh local `git init`
 repository, with no remote or commit. Its only project file is the absent case's
@@ -216,7 +218,7 @@ contract; hosted setup still needs its own real WIF run. The target never points
 real repository. No containment check is disabled and external resource symlinks
 are not used.
 
-Generated host mounts resolve to `native-config/pre/`. The test pre-script writes
+Generated host mounts resolve to `.work/native-config/pre/`. The test pre-script writes
 the required exact gate fragment there for every case, and the exact retained
 input for malformed/valid. It uses the known configuration root; Fullsend0.43.0
 does not provide `FULLSEND_RUN_DIR` to pre-scripts or host-file bootstrap (only

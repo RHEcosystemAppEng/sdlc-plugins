@@ -657,6 +657,8 @@ def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypat
     for field in ["policy", "agent", "pre_script"]:
         assert Path(h[field]).is_absolute()
     staged = observed["config_dir"]
+    assert staged == workspace / ".work/native-config"
+    assert not (workspace / "native-config").exists()
     assert h["plugins"] == [str(staged / "plugins/sdlc-workflow")]
     assert h["policy"] == str(staged / production["policy"])
     assert h["providers"] == [str(staged / p) for p in production["providers"]]
@@ -1030,6 +1032,83 @@ def test_upstream_collection_retains_nested_native_bytes(tmp_path):
     assert process.returncode == 0, process.stderr
     assert (output / "cases/036-valid/output/native/agent-synthetic/iteration-1/transcripts/runtime.jsonl").read_bytes() == raw
     assert not list(output.rglob("judge*")) and not list(output.rglob("agent-result.json"))
+
+
+def staged_case_workspace(tmp_path, monkeypatch):
+    """SYNTHETIC TEST DATA — real adapter staging in a Git-baselined case, CLI doubled."""
+    adapter = load_script(SUITE / "run-fullsend.py")
+    workspace = tmp_path / "workspace"
+    case = workspace / "cases/037-release"
+    (case / ".work").mkdir(parents=True)
+    (case / "output").mkdir()
+    # Mirror the pinned harness workspace.py baseline so untracked detection is real.
+    git_env = dict(os.environ, GIT_AUTHOR_NAME="eval-harness", GIT_AUTHOR_EMAIL="eval@harness",
+                   GIT_COMMITTER_NAME="eval-harness", GIT_COMMITTER_EMAIL="eval@harness")
+    subprocess.run(["git", "init", "-q", str(case)], check=True)
+    subprocess.run(["git", "-C", str(case), "add", "-A"], check=True)
+    subprocess.run(["git", "-C", str(case), "-c", "commit.gpgsign=false", "commit", "-q", "-m", "initial",
+                    "--allow-empty"], check=True, env=git_env)
+    raw = b'{"synthetic":"SYNTHETIC TEST DATA \xe2\x80\x94 NOT AGENT EXECUTION"}\n{"partial":'
+    actual_process = subprocess.run
+
+    def fake_process(command, **kwargs):
+        """Stand in for Fullsend only; write unmistakably synthetic native bytes."""
+        if command[0] != "/isolated/fullsend":
+            return actual_process(command, **kwargs)
+        native = Path(command[command.index("--output-dir") + 1]) / "agent-synthetic/iteration-1/transcripts"
+        native.mkdir(parents=True)
+        (native / "runtime.jsonl").write_bytes(raw)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(adapter.subprocess, "run", fake_process)
+    monkeypatch.delenv("FULLSEND_MINT_URL", raising=False)
+    assert adapter.run_case(ROOT, case, case / "output", "release", "unused", "high",
+                            Path("/isolated/fullsend"), Path("/isolated/linux-fullsend")) == 0
+    # A genuine non-setup workspace edit that collection must still report.
+    (case / "control-edit.txt").write_text("SYNTHETIC TEST DATA — genuine workspace edit control\n")
+    return workspace, case, raw
+
+
+def test_native_staging_is_not_reported_as_modified_workspace_files(tmp_path, monkeypatch):
+    """Staged setup lives under the collector's excluded .work root, never native-config/."""
+    # Given a real adapter run in a baselined case workspace
+    _, case, _ = staged_case_workspace(tmp_path, monkeypatch)
+    # When listing untracked files the way the pinned collector does
+    untracked = subprocess.run(["git", "-C", str(case), "ls-files", "--others", "--exclude-standard"],
+                               capture_output=True, text=True, check=True).stdout.splitlines()
+    # Then setup is only under .work; output and the nested target are excluded upstream
+    assert not [p for p in untracked if p.startswith("native-config/")]
+    assert {Path(p).parts[0] for p in untracked} == {".work", "control-edit.txt", "output", "synthetic-target"}
+    assert "synthetic-target/" in untracked, "Nested target repo must stay a directory entry, not files"
+    assert ".work/native-config/config.yaml" in untracked
+    assert ".work/native-config/harness/triage-security-gate.yaml" in untracked
+
+
+def test_pinned_collector_skips_native_staging_and_keeps_genuine_edits(tmp_path, monkeypatch):
+    """The real pinned collector drops staged setup but keeps edits and raw native bytes."""
+    # Given installed pinned tooling and a real adapter-staged case workspace
+    cache = Path(os.environ.get("TC6677_EVAL_CACHE", "/tmp/tc-6677-eval-deps")).resolve()
+    python = cache / "venv/bin/python"
+    if not python.is_file():
+        pytest.skip("Optional dependency contract: run the isolated setup first")
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    common.verify_source(cache / "agent-eval-harness", common.pins()["harness"])
+    workspace, _, raw = staged_case_workspace(tmp_path, monkeypatch)
+    output = tmp_path / "collected"
+    config = tmp_path / "eval.yaml"
+    config.write_text(yaml.safe_dump(common.resolved_config(python, "unused", "unused", "high")))
+    # When the real upstream collector consumes the case workspace
+    process = subprocess.run([str(python), str(cache / "agent-eval-harness/skills/eval-run/scripts/collect.py"),
+                              "--config", str(config), "--workspace", str(workspace), "--output", str(output)],
+                             cwd=ROOT, capture_output=True, text=True, check=False)
+    # Then only the genuine edit is a modified file and native bytes are retained unchanged
+    assert process.returncode == 0, process.stderr
+    modified = output / "cases/037-release/_modified"
+    assert sorted(str(p.relative_to(modified)) for p in modified.rglob("*") if p.is_file()) == ["control-edit.txt"]
+    assert (modified / "control-edit.txt").read_bytes() == (
+        "SYNTHETIC TEST DATA — genuine workspace edit control\n".encode())
+    assert (output / "cases/037-release/output/native/agent-synthetic/iteration-1/transcripts/runtime.jsonl"
+            ).read_bytes() == raw
 
 
 @pytest.mark.parametrize("termination", [signal.SIGTERM, signal.SIGKILL])
