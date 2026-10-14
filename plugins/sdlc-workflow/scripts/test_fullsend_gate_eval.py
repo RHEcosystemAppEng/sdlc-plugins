@@ -847,6 +847,26 @@ def test_native_adapter_rejects_stale_or_live_mint_configuration(tmp_path, monke
                          Path("/no-such-cli"), Path("/no-such-linux-cli"))
 
 
+def test_native_adapter_rejects_symlinked_work_root(tmp_path, monkeypatch):
+    """A symlinked .work must not let staging escape the collector-excluded directory."""
+    # Given a case workspace whose .work points at an external directory
+    adapter = load_script(SUITE / "run-fullsend.py")
+    workspace = tmp_path / "case"
+    workspace.mkdir()
+    external = tmp_path / "external-target"
+    external.mkdir()
+    (external / "marker.txt").write_text("SYNTHETIC TEST DATA — symlink escape target, must stay untouched\n")
+    (workspace / ".work").symlink_to(external, target_is_directory=True)
+    monkeypatch.delenv("FULLSEND_MINT_URL", raising=False)
+    # When preparing a run before any copy or external process could start
+    with pytest.raises(ValueError, match="symlink"):
+        adapter.run_case(ROOT, workspace, workspace / "output", "valid", "model", "high",
+                         Path("/no-such-cli"), Path("/no-such-linux-cli"))
+    # Then nothing was staged through the link or into the workspace
+    assert sorted(p.name for p in external.iterdir()) == ["marker.txt"]
+    assert sorted(p.name for p in workspace.iterdir()) == [".work"]
+
+
 def test_common_entrypoint_resolves_framework_contract(tmp_path):
     """The common entrypoint must resolve CLI placeholders and absolute dataset paths."""
     common = load_script(ROOT / "evals/fullsend/run.py")

@@ -23,6 +23,9 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
     setup = workspace / ".work" / "native-config"
     target = workspace / "synthetic-target"
     native = output / "native"
+    # A symlinked staging root would redirect copies outside the excluded .work.
+    if any(p.is_symlink() for p in [setup.parent, setup]):
+        raise ValueError("Refusing symlinked native staging root; .work must be a real directory")
     if any(p.exists() for p in [setup, target, native, output / "metrics.json"]):
         raise ValueError("Refusing stale native configuration or output")
     suite = root / "evals/fullsend/triage-security"
