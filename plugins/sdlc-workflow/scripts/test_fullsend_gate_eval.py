@@ -20,6 +20,8 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 SUITE = ROOT / "evals/fullsend/triage-security"
 FIXTURES = ROOT / "evals/triage-security/files"
+# Pin of the triage-security Step 0.6/0.7 gate commands that valid_case_tools diagnostics match against.
+GATE_COMMANDS_SHA256 = "ecdc40ce7d89d2c27f06bf4170c859fd9941dc440d7c081bfeca14e4d68d0748"
 
 
 def load_script(path):
@@ -418,6 +420,24 @@ def test_summary_integrity_rejects_missing_invalid_or_duplicate_yaml(tmp_path, r
     with pytest.raises(ValueError, match="summary"):
         common.validate_summary(tmp_path, "synthetic")
     assert path.read_bytes() == raw if raw is not None else not path.exists()
+
+
+def test_gate_commands_match_valid_case_tools_pin():
+    """Tripwire: Step 0.6/0.7 gate command changes are flagged because native evidence uses main's commands."""
+    # Given the gate blocks, parsed exactly like valid_case_tool_observations in evals/fullsend/run.py
+    # (keep this parsing in sync with run.py)
+    skill = (ROOT / "plugins/sdlc-workflow/skills/triage-security/SKILL.md").read_text()
+    blocks = [skill.split(f"### Step {step}", 1)[1].split("```bash\n", 1)[1].split("\n```", 1)[0]
+              for step in ["0.6", "0.7"]]
+
+    # When hashing the blocks
+    digest = hashlib.sha256(json.dumps(blocks).encode()).hexdigest()
+
+    # Then they match the pinned commands
+    assert digest == GATE_COMMANDS_SHA256, (
+        "Step 0.6/0.7 gate commands changed. Native valid_case_tools evidence for this PR compares against "
+        "main's commands, so presence_gate_* / input_validation_* will read unrecognized (false/false). "
+        f"Check the native transcript manually, then update GATE_COMMANDS_SHA256 to {digest} in this PR.")
 
 
 def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
