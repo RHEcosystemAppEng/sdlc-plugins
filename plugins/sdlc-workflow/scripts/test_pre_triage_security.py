@@ -1095,3 +1095,186 @@ def test_validate_bundle_checks_release_decision_family_bindings(decisions):
     # When validating the full bundle, then semantic conflicts fail closed
     with pytest.raises(pre_triage_security.EvidenceError):
         pre_triage_security.validate_bundle(bundle)
+
+
+_DISCOVERY_CLAUDE_MD = """# Project Configuration
+
+## Jira Configuration
+
+- Project key: {project_key}
+
+## Security Configuration
+
+### Product Lifecycle
+
+- Product pages URL: https://example.com/lifecycle
+- Jira version prefix: PRODUCT
+- Vulnerability issue type ID: {issue_type_id}
+- Component label pattern: pscomponent:
+
+### Version Streams
+
+| Stream | Konflux Release Repo | Local Path | Security Matrix Path |
+|---|---|---|---|
+| 1.0.x | release-repo | /repos/release | docs/matrix.md |
+
+### Source Repositories
+
+| Repository | URL | Deployment Context |
+|---|---|---|
+| component | https://github.com/org/component | customer-shipped |
+"""
+
+
+def _discovery_project(tmp_path, monkeypatch, project_key="TC", issue_type_id="10016"):
+    """Write a synthetic target CLAUDE.md and set the runner's Jira server URL."""
+    (tmp_path / "CLAUDE.md").write_text(
+        _DISCOVERY_CLAUDE_MD.format(project_key=project_key, issue_type_id=issue_type_id))
+    monkeypatch.setenv("JIRA_SERVER_URL", "https://jira.example.com/")
+    return tmp_path
+
+
+def _skill_untriaged_query():
+    """Return the Discovery-mode query 1 JQL template from the triage-security SKILL.md."""
+    skill = os.path.join(SCRIPT_DIR, "..", "skills", "triage-security", "SKILL.md")
+    with open(skill) as handle:
+        content = handle.read()
+    section = content.split("**1. Untriaged issues**", 1)[1]
+    return section.split('jql: "', 1)[1].split('"', 1)[0]
+
+
+def test_discover_jql_matches_skill_discovery_query(tmp_path, monkeypatch):
+    """The discover JQL is the SKILL.md untriaged query with the project key quoted and escaped."""
+    # Given a configured project key containing JQL metacharacters
+    root = _discovery_project(tmp_path, monkeypatch, project_key='TC"\\OPS')
+    searched = []
+
+    def jira_client(command, *arguments):
+        """Record the search arguments and return no issues."""
+        searched.append((command, arguments))
+        return {"issues": []}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When discovering untriaged issues
+    pre_triage_security.discover_untriaged(root)
+
+    # Then the JQL equals the skill's query 1 (filter and ordering) after substitution
+    expected = (_skill_untriaged_query()
+                .replace("<project-key>", '"TC\\"\\\\OPS"')
+                .replace("<vulnerability-issue-type-id>", "10016"))
+    assert searched == [("search_jql", (
+        "--jql", expected, "--fields", "key", "--max-results", "20"))]
+
+
+@pytest.mark.parametrize("max_results, paging, expected_keys", [
+    (2, ("--max-results", "2"), ["TC-3", "TC-1"]),
+    (60, ("--all",), ["TC-3", "TC-1", "TC-2"]),
+])
+def test_discover_returns_ordered_keys_and_urls_within_cap(
+        tmp_path, monkeypatch, capsys, max_results, paging, expected_keys):
+    """Search results become an ordered key/url list capped at --max-results."""
+    # Given Jira returns issues in JQL order
+    root = _discovery_project(tmp_path, monkeypatch)
+    calls = []
+
+    def jira_client(_command, *arguments):
+        """Return three issues in the order the JQL sorts them."""
+        calls.append(arguments)
+        return {"issues": [{"key": "TC-3"}, {"key": "TC-1"}, {"key": "TC-2"}]}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When the poller runs the discover command with a cap
+    status = pre_triage_security.main(
+        ["discover", str(root), "--max-results", str(max_results)])
+
+    # Then the output keeps JQL order, honours the cap, and pages only when needed
+    assert status == 0
+    assert calls[0][-len(paging):] == paging
+    assert json.loads(capsys.readouterr().out) == {"issues": [
+        {"key": key, "url": "https://jira.example.com/browse/{}".format(key)}
+        for key in expected_keys
+    ]}
+
+
+@pytest.mark.parametrize("key", ["OTHER-1", "tc-1", "TC-1 OR x", None])
+def test_discover_rejects_unexpected_issue_keys(tmp_path, monkeypatch, capsys, key):
+    """A malformed or foreign-project key fails closed instead of being dispatched."""
+    # Given Jira returns one valid and one unexpected key
+    root = _discovery_project(tmp_path, monkeypatch)
+    monkeypatch.setattr(pre_triage_security, "_jira_client",
+                        lambda *_args: {"issues": [{"key": "TC-1"}, {"key": key}]})
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root)])
+
+    # Then it exits non-zero with an error and prints no issue list
+    captured = capsys.readouterr()
+    assert status == 1
+    assert captured.out == ""
+    assert "ERROR: untriaged issue is outside the configured project" in captured.err
+
+
+def test_discover_reports_jira_client_failure(tmp_path, monkeypatch, capsys):
+    """A failed Jira search exits 1 rather than reporting an empty list."""
+    # Given a Jira client process that fails
+    root = _discovery_project(tmp_path, monkeypatch)
+
+    def failing_client(*_args):
+        """Simulate the existing fail-fast Jira process."""
+        raise subprocess.CalledProcessError(1, ["jira-client"])
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", failing_client)
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root)])
+
+    # Then it exits 1 with a stderr message and no stdout list
+    captured = capsys.readouterr()
+    assert status == 1
+    assert captured.out == ""
+    assert captured.err.startswith("ERROR:")
+
+
+@pytest.mark.parametrize("setup, message", [
+    (lambda root, mp: (root / "CLAUDE.md").unlink(), "target project CLAUDE.md is required"),
+    (lambda root, mp: (root / "CLAUDE.md").write_text("# Project Configuration\n"),
+     "missing Jira Configuration heading"),
+    (lambda root, mp: (root / "CLAUDE.md").write_text(
+        _DISCOVERY_CLAUDE_MD.format(project_key="TC", issue_type_id="10016 OR x")),
+     "Vulnerability issue type ID must be numeric"),
+    (lambda root, mp: mp.delenv("JIRA_SERVER_URL"), "JIRA_SERVER_URL is required"),
+])
+def test_discover_rejects_invalid_configuration(tmp_path, monkeypatch, capsys, setup, message):
+    """Missing or invalid runner configuration fails before any Jira search."""
+    # Given a broken configuration and a Jira client that must never be called
+    root = _discovery_project(tmp_path, monkeypatch)
+    setup(root, monkeypatch)
+    jira = MagicMock()
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira)
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root)])
+
+    # Then it exits 1 with the configuration error and searches nothing
+    captured = capsys.readouterr()
+    assert status == 1
+    assert captured.out == ""
+    assert "ERROR: {}".format(message) in captured.err
+    jira.assert_not_called()
+
+
+@pytest.mark.parametrize("max_results", ["0", "-1"])
+def test_discover_rejects_non_positive_cap(tmp_path, monkeypatch, capsys, max_results):
+    """A non-positive --max-results is rejected instead of returning an empty list."""
+    # Given a valid project and a non-positive cap
+    root = _discovery_project(tmp_path, monkeypatch)
+    monkeypatch.setattr(pre_triage_security, "_jira_client", MagicMock())
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root), "--max-results", max_results])
+
+    # Then it exits 1 with an error
+    assert status == 1
+    assert "ERROR: max_results must be a positive integer" in capsys.readouterr().err

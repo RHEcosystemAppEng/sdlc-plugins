@@ -852,6 +852,47 @@ def collect_bundle(issue_key, project_root, release_decisions=None):
     )
 
 
+def untriaged_jql(configuration):
+    """Build the SKILL.md Discovery-mode "Untriaged issues" query (keep in sync)."""
+    issue_type_id = configuration["vulnerability_issue_type_id"]
+    # The issue type is interpolated unquoted, as in the skill's query, so only
+    # a numeric ID is accepted; anything else could alter the JQL.
+    if not re.fullmatch(r"[0-9]+", issue_type_id):
+        raise EvidenceError("Vulnerability issue type ID must be numeric")
+    return (
+        'project = "{}" AND issuetype = {} AND labels NOT IN (ai-cve-triaged) '
+        'ORDER BY status ASC, created DESC'
+        .format(_jql_escape(configuration["project_key"]), issue_type_id)
+    )
+
+
+def discover_untriaged(project_root, max_results=20):
+    """List untriaged Vulnerability issues for an unattended poller, in JQL order."""
+    if not isinstance(max_results, int) or max_results < 1:
+        raise EvidenceError("max_results must be a positive integer")
+    server_url = os.environ.get("JIRA_SERVER_URL", "").rstrip("/")
+    if not server_url:
+        raise EvidenceError("JIRA_SERVER_URL is required")
+    claude_path = Path(project_root) / "CLAUDE.md"
+    if not claude_path.is_file():
+        raise EvidenceError("target project CLAUDE.md is required")
+    configuration = parse_security_configuration(claude_path.read_text())
+    project = configuration["project_key"]
+    # One search_jql page holds at most 50 issues; page with --all only when the
+    # cap needs more, then trim to the cap so the JQL ordering is preserved.
+    paging = ["--max-results", str(max_results)] if max_results <= 50 else ["--all"]
+    search = _require_mapping(
+        _jira_client("search_jql", "--jql", untriaged_jql(configuration), "--fields", "key", *paging),
+        "untriaged search")
+    issues = []
+    for item in _require_list(search.get("issues"), "untriaged search issues", allow_empty=True)[:max_results]:
+        key = _require_mapping(item, "untriaged issue").get("key")
+        if not isinstance(key, str) or not _ISSUE_KEY_RE.fullmatch(key) or not key.startswith(project + "-"):
+            raise EvidenceError("untriaged issue is outside the configured project")
+        issues.append({"key": key, "url": "{}/browse/{}".format(server_url, key)})
+    return {"issues": issues}
+
+
 def main(argv=None):
     """Run a requested deterministic transform or trusted collection command."""
     parser = argparse.ArgumentParser(prog="pre_triage_security.py")
@@ -859,11 +900,16 @@ def main(argv=None):
     collect = subparsers.add_parser("collect")
     collect.add_argument("issue_key")
     collect.add_argument("project_root")
+    discover = subparsers.add_parser("discover")
+    discover.add_argument("project_root")
+    discover.add_argument("--max-results", type=int, default=20)
     config = subparsers.add_parser("parse-configuration")
     config.add_argument("claude_md")
     args = parser.parse_args(argv)
     try:
-        if args.command == "collect":
+        if args.command == "discover":
+            result = discover_untriaged(args.project_root, args.max_results)
+        elif args.command == "collect":
             # Only the trusted host supplies this optional invocation policy.
             decision_text = os.environ.get("FULLSEND_RELEASE_DECISIONS")
             decisions = json.loads(decision_text) if decision_text is not None else None
