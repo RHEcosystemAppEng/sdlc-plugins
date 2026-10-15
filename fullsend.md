@@ -428,9 +428,19 @@ untouched — the GitHub and GitLab deployments bump independently.
 2. **Review** the range from the current pin to the chosen commit — the release
    notes of every tag in between and the untagged tail:
    ```bash
-   gh api repos/fullsend-ai/fullsend/releases --jq '.[] | "\(.tag_name) \(.published_at)"'
-   gh api repos/fullsend-ai/fullsend/compare/<current-tag-or-sha>...<sha>
+   gh api --paginate 'repos/fullsend-ai/fullsend/releases?per_page=100' \
+     --jq '.[] | "\(.tag_name) \(.published_at)"'
+   gh api --paginate 'repos/fullsend-ai/fullsend/compare/<current-tag-or-sha>...<sha>?per_page=100' \
+     --jq '.commits[] | "\(.sha[0:12]) \(.commit.message | split("\n")[0])"'
    ```
+   Both calls **must** paginate: without `--paginate` the GitHub API returns only
+   the first page (30 items by default), so a range with more releases or commits
+   than that is silently truncated and a pin can move past an unreviewed breaking
+   change. Before moving on, confirm the coverage is complete — the release list
+   reaches back to the current pin's tag, and the number of commits listed equals
+   the compare response's `total_commits` (`gh api
+   'repos/fullsend-ai/fullsend/compare/<current-tag-or-sha>...<sha>' --jq
+   .total_commits`).
    Conventional-commit `!` markers (`feat(...)!:`, `fix(...)!:`) flag breaking
    changes. Check each one against the harnesses (`host_files`, `env.runner`,
    `policy`, `validation_loop`), the scripts, and the dispatch workflow, and adapt
