@@ -185,11 +185,12 @@ If the file validates against the schema:
   `task.description` and take the PR URL from `pr_url`.
 - Read the `github` bundle (`pr_repo`, `pr_number`, `headRefName`, `commit_sha`,
   `diff`, `stat`, `reviews`, `review_comments`, `issue_comments`, `commits`,
-  `check_runs`, `check_run_logs_path`) and use the already-checked-out PR-head
-  tree. **Skip every GitHub read step** — Step 3 (checkout), Step 4a
+  `check_runs`, `check_run_logs_path`, `commit_statuses`) and use the
+  already-checked-out PR-head tree. **Skip every GitHub read step** — Step 3 (checkout), Step 4a
   (review/comment fetches), Step 5a (diff/stat/commits), and Step 9's HEAD-SHA
   retrieval — using the bundle fields instead. `check_runs` carries the head-SHA
-  CI check-run outcomes (name/status/conclusion/details_url); pass it as the
+  CI check-run outcomes (name/status/conclusion/details_url); pass it, with
+  `commit_statuses`, as the
   Correctness sub-agent's **CI Status** dispatch input so its Check 1 reads real
   CI data instead of calling `gh` (there is no `gh` CLI or egress in the sandbox).
   `check_run_logs_path` is the mounted path of the concatenated failed-check logs

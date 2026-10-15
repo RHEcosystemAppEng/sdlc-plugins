@@ -93,7 +93,8 @@ jobs:
       (github.event.action == 'labeled' &&
        github.event.label.name == 'ok-to-test')
     runs-on: ubuntu-latest
-    # Bounds the total wait: a check that never terminates lets this job hit
+    # Bounds the total wait (check-runs in Step 1 AND commit statuses in Step
+    # 1b): a check or status that never terminates lets this job hit
     # timeout-minutes and fail, which skips the dispatch job below (no-checks /
     # hung-check timeout behavior = SKIP). A normal terminal CI outcome — or a
     # PR with no other checks at all — lets the wait succeed and Step 2 proceed.
@@ -120,6 +121,53 @@ jobs:
           checks-discovery-timeout: 60
           fail-on-no-checks: false
           allowed-conclusions: success,failure,neutral,cancelled,skipped,timed_out,action_required,stale,startup_failure
+
+      # Step 1b — wait for every PR-head COMMIT STATUS to leave `pending`
+      # (TC-6978). Step 1 sees the Checks API only, but `Eval PR Run`
+      # (eval-pr-run.yml) runs as a `workflow_run`: its check-runs attach to the
+      # DEFAULT-branch SHA, so on the PR head it reports solely through the
+      # Statuses API (context `Eval PR Run`, pending -> success/failure). Without
+      # this step verify-pr dispatched while the evals were still running.
+      # - failure/error are terminal and release the wait, like Step 1's
+      #   allowed-conclusions: the CI result is data, not a gate.
+      # - Eval PR is path-filtered, so many PRs carry NO status: after a short
+      #   discovery grace (mirroring checks-discovery-timeout: 60) an empty list
+      #   proceeds at once.
+      # - A status that stays pending (e.g. eval-pr-run.yml's "Waiting for
+      #   approval in eval-protected environment" on an unapproved untrusted PR)
+      #   is bounded by the job's timeout-minutes: 45 — the job fails and dispatch
+      #   is skipped (the hung-check behavior described on the job).
+      # The combined-status endpoint returns only the latest status per context.
+      - name: Wait for pending commit statuses
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          discovery_grace=60
+          wait_interval=30
+          start=$(date +%s)
+          while true; do
+            statuses=$(gh api --paginate --slurp "repos/${REPO}/commits/${HEAD_SHA}/status" \
+              | jq -c '[.[].statuses[] | {context, state}]')
+            total=$(jq 'length' <<<"${statuses}")
+            pending=$(jq -r '[.[] | select(.state == "pending") | .context] | join(", ")' <<<"${statuses}")
+            elapsed=$(( $(date +%s) - start ))
+            if [[ "${total}" -eq 0 ]]; then
+              if (( elapsed >= discovery_grace )); then
+                echo "No commit statuses on ${HEAD_SHA} after ${elapsed}s; proceeding."
+                break
+              fi
+              echo "No commit statuses yet (${elapsed}s of ${discovery_grace}s discovery grace)..."
+            elif [[ -z "${pending}" ]]; then
+              echo "All ${total} commit status(es) terminal: $(jq -r 'map("\(.context)=\(.state)") | join(", ")' <<<"${statuses}")"
+              break
+            else
+              echo "Waiting on pending commit status(es): ${pending} (${elapsed}s elapsed)"
+            fi
+            sleep "${wait_interval}"
+          done
 
       # Step 2a — build the single-entry harness matrix for the custom-poller
       # path. Format matches `fullsend dispatch --output-driver gha-matrix`

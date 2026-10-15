@@ -201,7 +201,13 @@ has no CI-completion event to trigger on, which drives the design:
   `synchronize`, `reopened`, `labeled`) and its `wait-for-checks` job blocks on
   [`lewagon/wait-on-check-action`](https://github.com/lewagon/wait-on-check-action)
   (pinned by SHA) until every *other* check on the PR head reaches a terminal
-  state. Only then does the `verify-pr` job dispatch. This inline wait is the only
+  state. A second step then polls the head SHA's combined commit status
+  (`gh api repos/<repo>/commits/<sha>/status`) until no status is `pending`:
+  `Eval PR Run` runs as a `workflow_run`, so its check-runs attach to the
+  default-branch SHA and it reaches the PR head **only** as a commit status,
+  which the check-run wait cannot see (TC-6978). `failure`/`error` release that
+  wait too; a PR with no statuses (Eval PR is path-filtered) proceeds after a
+  60s discovery grace. Only then does the `verify-pr` job dispatch. This inline wait is the only
   reliable "run after CI" trigger (TC-6180 NFRs). The trigger is
   `pull_request_target` (not `pull_request`) so **fork-origin PRs** get the
   upstream vars/secrets/OIDC the mint step needs — see **Fork PRs** below.
@@ -211,7 +217,11 @@ has no CI-completion event to trigger on, which drives the design:
   still releases the wait and verify-pr still runs and reports (recording
   `CI Status = FAIL`).
   `fail-on-no-checks: false` lets a PR with no other checks proceed;
-  `timeout-minutes: 45` bounds a hung check (the dispatch is then skipped).
+  `timeout-minutes: 45` bounds a hung check or a status stuck in `pending` —
+  e.g. `Eval PR Run` awaiting approval in the `eval-protected` environment on an
+  untrusted PR (the dispatch is then skipped). The prefetch likewise embeds the
+  head SHA's commit statuses as `github.commit_statuses`, so CI Status accounts
+  for them.
 - One in-flight run per PR: a `concurrency` group keyed on the PR number with
   `cancel-in-progress: true` supersedes a stale run on a new push.
 

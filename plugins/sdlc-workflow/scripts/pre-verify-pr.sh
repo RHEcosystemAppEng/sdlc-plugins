@@ -189,6 +189,18 @@ gh pr view "${PR_NUM}" -R "${PR_REPO}" --json commits --jq .commits > "${PRE_OUT
 # checks yields an empty array — consistent with the reviews/comments empties.
 gh api --paginate --slurp "repos/${PR_REPO}/commits/${COMMIT_SHA}/check-runs" \
   | jq '[.[].check_runs[] | {name, status, conclusion, details_url}]' > "${PRE_OUTPUT_DIR}/check-runs.json"
+# Commit statuses for the head SHA (TC-6978). The check-runs above miss CI that
+# reports through the Statuses API only — notably `Eval PR Run`
+# (eval-pr-run.yml), a workflow_run whose check-runs attach to the default-branch
+# SHA, so on the PR head it appears solely as a commit status. correctness.md
+# Check 1a maps these alongside check_runs. The combined-status endpoint already
+# returns only the latest status per context; like check-runs it returns an
+# OBJECT per page ({state, statuses:[...]}), so the merge flattens
+# `.[].statuses[]` across pages. Fail-fast like the check-runs fetch (pipefail):
+# unlike the own-check-names enumeration below, this is not best-effort. A head
+# with no statuses (Eval PR is path-filtered) yields an empty array.
+gh api --paginate --slurp "repos/${PR_REPO}/commits/${COMMIT_SHA}/status" \
+  | jq '[.[].statuses[] | {context, state, description, target_url}]' > "${PRE_OUTPUT_DIR}/commit-statuses.json"
 
 # Self-exclusion of verify-pr's OWN workflow check-runs (TC-6343). check-runs.json
 # above lists EVERY check on the head SHA — including this workflow's own runs
