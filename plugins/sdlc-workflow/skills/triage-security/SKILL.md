@@ -522,6 +522,8 @@ jira.search_jql(
 )
 ```
 
+Unattended pollers run this query via `scripts/pre_triage_security.py discover`; keep the two in sync.
+
 **2. Triaged but still New** (stale issues — triaged but never actioned):
 ```
 jira.search_jql(
