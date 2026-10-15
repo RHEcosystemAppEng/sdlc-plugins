@@ -89,7 +89,7 @@ on the runner.
 ## Prerequisites
 
 - [fullsend](https://github.com/fullsend-ai/fullsend) CLI installed (CI pins
-  **v0.43.0** — see **Bumping the fullsend version**; a local run needs a
+  **v0.43.0** — see [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump); a local run needs a
   compatible release).
 - An OpenShell gateway running — fullsend uses OpenShell as its sandbox runtime.
 - GCP credentials for Vertex AI — a service-account key JSON (local) or a WIF
@@ -221,7 +221,7 @@ The dispatch job hands a pre-built single-entry matrix (agent `verify-pr`, role
 `harness-run` job mints the review-role App token via OIDC and runs `fullsend run`.
 The reusable workflow is **pinned by full SHA**
 (`@d5f36921ac754705619f38c637ef692873809fbc # v0 as of 2026-09-30`), not the
-floating `@v0` tag — see **Pinning reusable-dispatch** below.
+floating `@v0` tag — see [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump) below.
 
 This `pull_request_target` trigger is the CI-side equivalent of the harness's own
 **CEL trigger**, which drives the `fullsend dispatch` path. The trigger is declared on
@@ -332,49 +332,163 @@ not enough** — you must re-pin and re-lock in the same change. The full loop:
 > for adopters (below), not for the self-hosted `.fullsend/` model. Here you
 > re-pin by editing the `base:` SHA/hash and re-locking.
 
-### Bumping the fullsend version
+### Updating fullsend (pin-and-bump)
 
-The CI dispatch pins the fullsend CLI to a released tag so it does not float
-(the vendor default floats to `job.workflow_sha`). The pin lives in
-`.github/workflows/fullsend-verify-pr.yml`:
+This repo follows fullsend `main` deliberately: every deployment pins **one
+reviewed fullsend commit** (the *supported commit*) and moves to a newer one only
+through the process below. Nothing floats — not the CLI, not the reusable
+workflow, not the harness content.
 
-```yaml
-      fullsend_version: "v0.43.0"
-```
+#### Supported fullsend commit
 
-The current pin is **v0.43.0** — bumped from v0.37.0 because v0.37.0's bundled
-OpenShell never reached sandbox readiness (`not ready after 2m0s` → `Failed to
-create sandbox`). To bump:
+| | |
+|---|---|
+| Commit | [`9f188578f0d8c94169287594b0c79cd4c4eeaa91`](https://github.com/fullsend-ai/fullsend/commit/9f188578f0d8c94169287594b0c79cd4c4eeaa91) on `fullsend-ai/fullsend` `main` (merge of #8394) |
+| Date | 2026-10-14 (09:26 UTC) |
+| Tag | none — the newest release, `v0.47.1` (`c68903c0`, 2026-10-11), predates #8313 and #8397 |
 
-1. Set `fullsend_version` to the new released tag (v-prefixed, matching the
-   vendor's git tags).
-2. **Re-validate end to end**: open a throwaway qualifying PR and confirm the
-   dispatch reaches sandbox readiness and posts a report (an OpenShell/runtime
-   regression surfaces as `Failed to create sandbox`). Only merge once a live run
-   passes.
-3. Update the local `## Prerequisites` version note to match if the local CLI
-   must track CI.
+**Why this commit:** it is the first reviewed `main` commit carrying all of the
+GitLab support the GitLab triage-security deployment needs — the fail-closed
+GitLab project lease (#8258, released in v0.46.0), the GitLab role
+service-account lifecycle (#8313, merged 2026-10-13) and the GitLab webhook
+Poller hand-off (#8397, merged 2026-10-13) — plus the follow-up GitLab
+variable-scope fixes (#8405, #8407). No release tag contains #8313 and #8397 yet,
+so a reviewed `main` SHA is pinned instead of a tag. It stops before #8426
+(Claude aliases default to 5.5), which was outside the reviewed range; both
+harnesses pin `model:` explicitly, so that change would not alter them anyway.
 
-### Pinning reusable-dispatch
+**Deployments and their current pins** (decoupled timing — each bumps on its own
+schedule, but both target the supported commit):
 
-The `verify-pr` job's `uses:` pins the vendor reusable workflow to a full commit
-SHA in `.github/workflows/fullsend-verify-pr.yml`:
+| Deployment | Pin today | Target |
+|---|---|---|
+| GitHub verify-pr (this repo) | CLI `v0.43.0`, reusable-dispatch `d5f36921ac754705619f38c637ef692873809fbc` | supported commit (after the child-harness credential mounts are adapted — see *Breaking changes* below) |
+| GitLab triage-security (`sdlc-fullsend`) | — (not deployed yet) | supported commit from the first deployment |
 
-```yaml
-    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@d5f36921ac754705619f38c637ef692873809fbc # v0 as of 2026-09-30
-```
+#### Update path from v0.43.0 / d5f36921
 
-It previously floated on `@v0`. When `v0` advanced to `c68903c0`, the vendor
-moved GCP setup into the `./.defaults` composite action and stopped exporting
-`GOOGLE_APPLICATION_CREDENTIALS` before `fullsend run`, so every dispatch failed
-harness validation (`host_files[1].src: host variable
-GOOGLE_APPLICATION_CREDENTIALS is not set`). `d5f36921` is the `v0` commit of the
-last green run (2026-09-30). To advance the pin, first adapt the child harness's
-`host_files` credential mounts to the vendor's current credential model, then
-move the SHA and re-validate end to end as for a fullsend version bump.
+Review range: `v0.43.0` → `9f188578` (releases v0.44.0, v0.45.0, v0.46.0,
+v0.46.1, v0.47.0, v0.47.1, then untagged `main`). The `d5f36921` reusable-dispatch
+pin is the `v0` commit of 2026-09-30, inside the same range. Breaking changes
+that affect this repo:
 
-The fullsend CLI version is independent of both the harness `base:` re-pin and the
-plugin version below.
+- **Runner-owned credential model** (the `v0` advance to `c68903c0` = v0.47.1).
+  The vendor moved GCP setup into the `./.defaults` composite action and
+  reusable-dispatch **no longer exports `GOOGLE_APPLICATION_CREDENTIALS` before
+  `fullsend run`**. `.fullsend/harness/verify-pr.yaml` mounts
+  `src: ${GOOGLE_APPLICATION_CREDENTIALS}` in `host_files`, so every dispatch fails
+  harness validation (`host_files[1].src: host variable
+  GOOGLE_APPLICATION_CREDENTIALS is not set`). This is why reusable-dispatch was
+  pinned off the floating `@v0` to `d5f36921` (the `v0` commit of the last green
+  run). **The child harness's credential mounts must be adapted to the runner-owned
+  model before the GitHub pins move.**
+- **Vertex credential preflight** (#7980, v0.46.0). A harness that mounts
+  `${GOOGLE_APPLICATION_CREDENTIALS}` as its only credential file now fails before
+  the pre_script when the file is missing, instead of failing mid-run — the
+  credential-model change above surfaces earlier, not differently.
+- **`host_files` destination rules** (`fix(run)!`, v0.46.0). A `dest` must be an
+  absolute path under `/sandbox/` or `/tmp/`, without `..`, and must not name a
+  runner-owned path (`/sandbox/workspace/.env`, `/sandbox/workspace/bin/<runtime>`,
+  `/sandbox/workspace/.fullsend`, …). Every current dest
+  (`/tmp/.gcp-credentials.json`, `/sandbox/workspace/.pre-script/…`,
+  `/sandbox/workspace/.env.d/gcp-vertex.env`) already complies; keep new mounts
+  inside those roots.
+- **Jira secrets no longer inherited by host scripts** (#8154, v0.46.0).
+  `JIRA_TOKEN`, `JIRA_USER_EMAIL` and the OTLP header variables are dropped from
+  the pre/post/validation script environment unless the harness declares them in
+  `env.runner`. Both harnesses already map them explicitly
+  (`JIRA_API_TOKEN: "${JIRA_TOKEN}"`, `JIRA_EMAIL: "${JIRA_USER_EMAIL}"`), so no
+  change is needed — but a script must never read the dispatch-provided names
+  ambiently.
+- **`issues post-comment` verifies the comment author** (v0.44.0). The sticky
+  Jira/GitHub comment that `execute-actions.py` posts is edited only when its
+  author is the identity posting now; otherwise a new comment is posted. After a
+  token rotation or App migration, expect one new sticky comment instead of an
+  edit. The command now fails, posting nothing, if it cannot resolve its own
+  identity.
+- **No-op for this repo, but checked:** a failed agent now fails `fullsend run`
+  for a harness without a `validation_loop` (#8305, v0.47.1) and a harness with no
+  `policy` fails before sandbox create (#7849, `main`) — both harnesses declare
+  `validation_loop` and `policy`. The `repos.yaml` / `repos install` /
+  inference-auth changes (v0.44.0–v0.47.1) apply to the managed-repos install
+  path, which this repo does not use.
+
+#### The pin-and-bump process
+
+Each step names every pin point. A deployment that is not being bumped is left
+untouched — the GitHub and GitLab deployments bump independently.
+
+1. **Choose** a commit on fullsend `main` — never a floating ref (`main`, `v0`).
+   Prefer the commit of a release tag when that tag already contains the features
+   you need; otherwise pick a reviewed `main` SHA. Confirm it is on `main`:
+   ```bash
+   gh api repos/fullsend-ai/fullsend/commits/<sha>
+   gh api repos/fullsend-ai/fullsend/compare/<sha>...main --jq .status   # "ahead" or "identical"
+   ```
+2. **Review** the range from the current pin to the chosen commit — the release
+   notes of every tag in between and the untagged tail:
+   ```bash
+   gh api repos/fullsend-ai/fullsend/releases --jq '.[] | "\(.tag_name) \(.published_at)"'
+   gh api repos/fullsend-ai/fullsend/compare/<current-tag-or-sha>...<sha>
+   ```
+   Conventional-commit `!` markers (`feat(...)!:`, `fix(...)!:`) flag breaking
+   changes. Check each one against the harnesses (`host_files`, `env.runner`,
+   `policy`, `validation_loop`), the scripts, and the dispatch workflow, and adapt
+   the affected files **before** moving any pin. Record the new supported commit
+   and the breaking changes above.
+3. **Pin** every pin point of the deployment being bumped:
+   - **GitHub verify-pr** — `.github/workflows/fullsend-verify-pr.yml`:
+     ```yaml
+         uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@<full-sha> # <tag or "main"> as of <date>
+         ...
+           fullsend_version: "<tag>"   # or the same <full-sha> when untagged
+     ```
+     Set both to the same fullsend commit. `fullsend_version` takes the
+     v-prefixed release tag; for an untagged commit use the full SHA (an empty
+     `fullsend_version` falls back to `job.workflow_sha` — the `uses:` SHA — but
+     keep it explicit so the CLI pin is visible in review).
+   - **GitLab triage-security** — the fullsend CLI pin in `.gitlab-ci.yml` of the
+     `sdlc-fullsend` repo.
+   - **Harness content** — if the adaptation in step 2 changed a harness or any
+     pinned plugin file, follow [Releasing an update (this repo)](#releasing-an-update-this-repo):
+     re-pin the `base:` line (commit SHA + `#sha256=`) in each affected
+     `.fullsend/harness/*.yaml` (`verify-pr.yaml`, `triage-security.yaml`).
+     Respect the guard rule below.
+4. **Re-lock** each affected agent so every transitive child is re-resolved:
+   ```bash
+   fullsend lock <agent> --fullsend-dir .fullsend   # verify-pr, triage-security
+   ```
+   `fullsend agent update` does not apply here — both agents are local-path
+   agents (see the note in [Releasing an update](#releasing-an-update-this-repo)).
+   Adopter repositories that register the harness **by URL** (such as
+   `sdlc-fullsend`) re-pin with `fullsend agent update <agent> --fullsend-dir
+   .fullsend` instead — see [Adopting verify-pr](#adopting-verify-pr-external-fullsend-users).
+   Commit the updated `.fullsend/` in the same PR as the pin change.
+5. **Verify end to end** before merging:
+   - **GitHub verify-pr** — open a throwaway qualifying PR and confirm the
+     dispatch reaches sandbox readiness and posts a report. An OpenShell/runtime
+     regression surfaces as `Failed to create sandbox` (v0.37.0's bundled
+     OpenShell never reached readiness: `not ready after 2m0s`); a credential-model
+     mismatch surfaces as a `host_files` validation error. Only merge once a live
+     run passes.
+   - **GitLab triage-security** — run a manual pipeline dispatch on a known
+     Vulnerability issue and confirm it completes and produces its report.
+   - Update the `## Prerequisites` CLI note if the local CLI must track CI.
+
+All [Constraints and gotchas](#constraints-and-gotchas) apply to every bump —
+in particular merge-commit-only merges and the mandatory re-pin + re-lock.
+
+**Guard rule (decoupled timing).** verify-pr must **not** be re-pinned (its
+`base:` moved) to an sdlc-plugins commit that contains plugin files adapted for a
+newer fullsend until the GitHub deployment's CLI (`fullsend_version`) and
+reusable-dispatch (`uses: …@<sha>`) pins have been bumped to that fullsend.
+Otherwise the GitHub runner — still on the old fullsend — executes content written
+for the new one. The GitLab deployment may adopt such content as soon as its own
+CLI pin points at the supported commit; the GitHub `base:` re-pin waits for the
+GitHub bump.
+
+The fullsend pins are independent of the harness `base:` re-pin (which tracks
+sdlc-plugins content) and of the plugin version below.
 
 ### Keeping the two plugin-version files in sync
 
