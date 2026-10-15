@@ -14,8 +14,8 @@ CLI usage (called by pre-verify-pr.sh):
 
 When the --github-* options are supplied, `transform` reads the raw GitHub
 reads from DIR (pr.diff, pr.stat, reviews.json, review-comments.json,
-issue-comments.json, commits.json, check-runs.json, check-run-logs.txt) and
-embeds them under a `github` key. check-run-logs.txt is not inlined — only its
+issue-comments.json, commits.json, check-runs.json, commit-statuses.json,
+check-run-logs.txt) and embeds them under a `github` key. check-run-logs.txt is not inlined — only its
 mounted sandbox path is embedded (empty when no check failed), so the large log
 text stays off the input bundle and off the sub-agent's context until read.
 
@@ -225,7 +225,7 @@ def filter_own_check_runs(check_runs, own_names):
 def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
                         diff, stat, reviews, review_comments,
                         issue_comments, commits, check_runs=None,
-                        check_run_logs_path=""):
+                        check_run_logs_path="", commit_statuses=None):
     """Assemble the GitHub tier-1 read bundle embedded in the input.
 
     diff/stat are raw text; the reviews/review_comments/issue_comments/commits/
@@ -237,8 +237,11 @@ def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
     the mounted sandbox path of the concatenated failed-check logs (correctness.md
     Check 1b reads it only on a FAIL); it is "" when no check failed, so the log
     text never enters the bundle or the sub-agent's context on the green path.
-    Keys mirror the reads the verify-pr skill performs so the sandbox needs no
-    api.github.com egress.
+    ``commit_statuses`` carries the head-SHA commit statuses (Statuses API:
+    context/state/description/target_url) — e.g. `Eval PR Run`, which as a
+    workflow_run reports to the PR head only as a status, never a check-run
+    (TC-6978); it likewise defaults to an empty list. Keys mirror the reads the
+    verify-pr skill performs so the sandbox needs no api.github.com egress.
     """
     return {
         "pr_repo": pr_repo,
@@ -253,6 +256,7 @@ def build_github_bundle(pr_repo, pr_number, head_ref, commit_sha,
         "commits": commits,
         "check_runs": check_runs if check_runs is not None else [],
         "check_run_logs_path": check_run_logs_path,
+        "commit_statuses": commit_statuses if commit_statuses is not None else [],
     }
 
 
@@ -417,6 +421,7 @@ def _github_from_dir(args):
         commits=_read_json(f"{d}/commits.json"),
         check_runs=check_runs,
         check_run_logs_path=_check_run_logs_path(f"{d}/check-run-logs.txt"),
+        commit_statuses=_read_json(f"{d}/commit-statuses.json"),
     )
 
 

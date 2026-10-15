@@ -20,7 +20,9 @@ The orchestrator provides these sections in the Agent-Specific Inputs block
 - **Repository Info** — repository path and Serena instance info for code inspection
 - **CI Status** — in **sandbox mode** the head-SHA CI check-run outcomes are
   pre-fetched on the trusted runner and provided here (from `github.check_runs`,
-  reduced to name/status/conclusion/details_url); read them directly — there is no
+  reduced to name/status/conclusion/details_url), together with the head-SHA
+  commit statuses (from `github.commit_statuses`, reduced to
+  context/state/description/target_url); read them directly — there is no
   `gh` CLI or network egress in the sandbox. When a check failed, the failure logs
   are also pre-fetched into a single file whose path is given as **CI Failure
   Logs** (from `github.check_run_logs_path`); Read that file **only** if Check 1
@@ -61,8 +63,21 @@ genuinely blocked. Map each entry to a status:
 - `conclusion` of `success`/`neutral`/`skipped` → pass
 - `conclusion` of `failure`/`timed_out`/`cancelled`/`action_required` → failed
 - `status` not `completed` (i.e. `queued`/`in_progress`) → pending
-- an empty check-runs list → no checks configured (treat as pass; note it in the
-  evidence)
+
+Also map each **commit status** entry (`context`, `state`, `description`,
+`target_url`). These carry CI that reports to the PR head only through the
+Statuses API — e.g. `Eval PR Run`, a `workflow_run` whose check-runs attach to
+the default-branch SHA and so never appear among the check-runs:
+
+- `state` of `success` → pass
+- `state` of `failure`/`error` → failed (no log is pre-fetched for a status;
+  cite its `target_url` in the evidence)
+- `state` of `pending` → pending
+
+The overall CI Status combines check-runs **and** commit statuses: a pending or
+failed status (e.g. `Eval PR Run`) prevents PASS even when every check-run
+passed. Empty check-runs **and** empty commit-status lists → no checks configured
+(treat as pass; note it in the evidence).
 
 **Interactive mode** (no CI Status input): run
 

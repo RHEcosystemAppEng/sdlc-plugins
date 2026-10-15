@@ -146,6 +146,131 @@ def test_build_github_bundle_check_runs_defaults_to_empty_list():
     assert bundle["check_runs"] == []
 
 
+# --- commit statuses (Statuses API, TC-6978) ---
+
+PENDING_EVAL_STATUS = {
+    "context": "Eval PR Run", "state": "pending",
+    "description": "Eval run in progress...",
+    "target_url": "https://github.com/o/r/actions/runs/1",
+}
+
+
+def _write_raw_github_dir(d, check_runs, commit_statuses):
+    """Write the raw prefetch files pre-verify-pr.sh produces into DIR."""
+    with open(os.path.join(d, "pr.diff"), "w") as f:
+        f.write("d\n")
+    with open(os.path.join(d, "pr.stat"), "w") as f:
+        f.write("s\n")
+    for name, payload in [
+        ("reviews.json", []), ("review-comments.json", []),
+        ("issue-comments.json", []), ("commits.json", []),
+        ("check-runs.json", check_runs),
+        ("commit-statuses.json", commit_statuses),
+    ]:
+        with open(os.path.join(d, name), "w") as f:
+            json.dump(payload, f)
+
+
+def test_github_from_dir_exposes_pending_commit_status_reproduces_tc6978():
+    """Reproducer (TC-6978): a pending `Eval PR Run` commit status reaches the bundle.
+
+    `Eval PR Run` runs as a workflow_run, so on the PR head it reports only via the
+    Statuses API. Before the fix the prefetch read check-runs only, so with every
+    check-run green the bundle carried no trace of the still-pending eval and CI
+    Status reported PASS. The bundle must expose the status for Check 1a to map.
+    """
+    import argparse
+
+    # Given a prefetch dir whose check-runs are all successful but whose head SHA
+    # carries a pending Eval PR Run commit status
+    with tempfile.TemporaryDirectory() as d:
+        _write_raw_github_dir(
+            d,
+            check_runs=[{"name": "pytest", "status": "completed",
+                         "conclusion": "success", "details_url": "https://ci/1"}],
+            commit_statuses=[PENDING_EVAL_STATUS],
+        )
+        args = argparse.Namespace(
+            github_dir=d, pr_repo="o/r", pr_number=9, head_ref="feat/x",
+            commit_sha="abc1234def", own_check_names_file=None,
+        )
+
+        # When the github bundle is built from the raw files
+        bundle = pre_verify_pr._github_from_dir(args)
+
+    # Then the pending commit status is carried verbatim alongside the check-runs
+    assert bundle["commit_statuses"] == [PENDING_EVAL_STATUS]
+    assert bundle["check_runs"] == [{"name": "pytest", "status": "completed",
+                                     "conclusion": "success",
+                                     "details_url": "https://ci/1"}]
+
+
+def test_build_github_bundle_commit_statuses_defaults_to_empty_list():
+    """A PR head with no commit statuses yields commit_statuses=[], never absent.
+
+    The github object is additionalProperties:false with commit_statuses required,
+    so the key must always be present for the prefetch to validate.
+    """
+    # Given a bundle built without an explicit commit_statuses argument
+    bundle = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "b", "deadbee", "d", "s", [], [], [], [],
+    )
+
+    # Then commit_statuses is present and defaults to an empty list
+    assert bundle["commit_statuses"] == []
+
+
+def _validate_input_with_github(github):
+    """Validate a full transform carrying GITHUB against the input schema."""
+    from jsonschema import validate
+
+    issue = {"fields": {"summary": "S", "description": {}, "status": {"name": "Open"},
+                        "labels": [], "issuelinks": []}}
+    result = pre_verify_pr.transform_to_input(
+        issue, "TC-1", "https://github.com/o/r/pull/5", github,
+        pre_verify_pr.build_idempotency_bundle([]))
+    schema_path = os.path.join(
+        script_dir, "..", "schemas", "verify-pr-input.schema.json")
+    with open(schema_path) as f:
+        schema = json.load(f)
+    validate(instance=result, schema=schema)  # raises on failure
+
+
+def test_input_with_commit_statuses_validates_against_schema():
+    """A bundle carrying a pending Eval PR Run status validates (TC-6978)."""
+    # Given a github bundle carrying the head-SHA commit status
+    github = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "feat/x", "deadbee", "diff", "stat", [], [], [], [],
+        commit_statuses=[PENDING_EVAL_STATUS])
+
+    # Then the produced input satisfies verify-pr-input.schema.json
+    _validate_input_with_github(github)
+
+
+def test_input_without_commit_statuses_validates_against_schema():
+    """A head with no commit statuses (Eval PR path-filtered out) validates."""
+    _validate_input_with_github(pre_verify_pr.build_github_bundle(
+        "o/r", 5, "feat/x", "deadbee", "diff", "stat", [], [], [], []))
+
+
+def test_github_missing_commit_statuses_fails_schema_validation():
+    """commit_statuses is required on the strict github object, so it can't be dropped."""
+    from jsonschema.exceptions import ValidationError
+
+    # Given a bundle whose commit_statuses key was removed
+    github = pre_verify_pr.build_github_bundle(
+        "o/r", 5, "feat/x", "deadbee", "diff", "stat", [], [], [], [])
+    del github["commit_statuses"]
+
+    # When validating / Then the schema rejects it
+    try:
+        _validate_input_with_github(github)
+    except ValidationError as e:
+        assert "commit_statuses" in str(e.message), e.message
+    else:
+        raise AssertionError("expected ValidationError for missing commit_statuses")
+
+
 # --- filter_own_check_runs (CI Status self-exclusion, TC-6343) ---
 
 # The head-SHA check-run names verify-pr's own workflow produces (wait-for-checks
@@ -549,6 +674,10 @@ def test_cli_transform_github_dir():
             ("check-runs.json", [{"name": "pytest", "status": "completed",
                                   "conclusion": "success",
                                   "details_url": "https://ci/1"}]),
+            ("commit-statuses.json", [{"context": "Eval PR Run",
+                                       "state": "success",
+                                       "description": "Eval run passed",
+                                       "target_url": "https://ci/2"}]),
         ]:
             with open(os.path.join(d, name), "w") as f:
                 json.dump(payload, f)
@@ -579,6 +708,10 @@ def test_cli_transform_github_dir():
                                  "details_url": "https://ci/1"}]
     # No check-run-logs.txt written (green run) → empty path, nothing to read.
     assert gh["check_run_logs_path"] == ""
+    assert gh["commit_statuses"] == [{"context": "Eval PR Run",
+                                      "state": "success",
+                                      "description": "Eval run passed",
+                                      "target_url": "https://ci/2"}]
 
 
 def test_cli_transform_own_check_names_file_filters_github_check_runs():
@@ -596,7 +729,8 @@ def test_cli_transform_own_check_names_file_filters_github_check_runs():
         with open(os.path.join(d, "pr.stat"), "w") as f:
             f.write("s\n")
         for name in ["reviews.json", "review-comments.json",
-                     "issue-comments.json", "commits.json"]:
+                     "issue-comments.json", "commits.json",
+                     "commit-statuses.json"]:
             with open(os.path.join(d, name), "w") as f:
                 json.dump([], f)
         with open(os.path.join(d, "check-runs.json"), "w") as f:
@@ -639,7 +773,8 @@ def test_cli_transform_without_own_check_names_file_keeps_all_check_runs():
         with open(os.path.join(d, "pr.stat"), "w") as f:
             f.write("s\n")
         for name in ["reviews.json", "review-comments.json",
-                     "issue-comments.json", "commits.json"]:
+                     "issue-comments.json", "commits.json",
+                     "commit-statuses.json"]:
             with open(os.path.join(d, name), "w") as f:
                 json.dump([], f)
         with open(os.path.join(d, "check-runs.json"), "w") as f:
@@ -675,7 +810,8 @@ def test_cli_transform_embeds_check_run_logs_path_when_present():
         with open(os.path.join(d, "pr.stat"), "w") as f:
             f.write("s\n")
         for name in ["reviews.json", "review-comments.json",
-                     "issue-comments.json", "commits.json", "check-runs.json"]:
+                     "issue-comments.json", "commits.json", "check-runs.json",
+                     "commit-statuses.json"]:
             with open(os.path.join(d, name), "w") as f:
                 json.dump([], f)
         # A failed check left log text on the runner.
@@ -703,7 +839,8 @@ def test_cli_transform_empty_check_run_logs_yields_empty_path():
         with open(os.path.join(d, "pr.stat"), "w") as f:
             f.write("s\n")
         for name in ["reviews.json", "review-comments.json",
-                     "issue-comments.json", "commits.json", "check-runs.json"]:
+                     "issue-comments.json", "commits.json", "check-runs.json",
+                     "commit-statuses.json"]:
             with open(os.path.join(d, name), "w") as f:
                 json.dump([], f)
         open(os.path.join(d, "check-run-logs.txt"), "w").close()  # empty
@@ -1059,6 +1196,52 @@ def test_pre_verify_sh_gathers_own_check_names_and_wires_filter():
     # pure Python filter drops them before they reach github.check_runs.
     assert "--own-check-names-file" in body, \
         "transform must receive the own-check-names file"
+
+
+def test_pre_verify_sh_prefetches_head_commit_statuses():
+    """Regression guard (TC-6978): pre-verify-pr.sh fetches the head-SHA combined
+    commit status and writes commit-statuses.json, so Statuses-API-only CI (Eval
+    PR Run) reaches the bundle — not just the Checks API.
+    """
+    # Given the current pre-verify-pr.sh source, comment lines stripped
+    with open(pre_verify_sh) as f:
+        script = f.read()
+    body = "\n".join(
+        line for line in script.splitlines() if not line.lstrip().startswith("#"))
+
+    # Then it fetches the combined status for the head SHA into commit-statuses.json
+    assert "/commits/${COMMIT_SHA}/status\"" in body, \
+        "must fetch repos/<repo>/commits/<sha>/status"
+    assert "commit-statuses.json" in body, "must write commit-statuses.json"
+
+
+def test_verify_pr_workflow_waits_on_pending_commit_statuses():
+    """Regression guard (TC-6978): the wait-for-checks job polls the head-SHA
+    combined commit status for pending entries AFTER the check-run wait, so
+    dispatch cannot outrun a Statuses-API-only check such as Eval PR Run.
+    """
+    # Given the wait-for-checks job of fullsend-verify-pr.yml
+    import yaml
+    workflow_path = os.path.join(
+        script_dir, "..", "..", "..", ".github", "workflows", "fullsend-verify-pr.yml")
+    with open(workflow_path) as f:
+        workflow = yaml.safe_load(f)
+    job = workflow["jobs"]["wait-for-checks"]
+    steps = job["steps"]
+    check_wait = next(i for i, s in enumerate(steps)
+                      if s.get("uses", "").startswith("lewagon/wait-on-check-action"))
+
+    # When locating the step that polls commit statuses
+    status_waits = [i for i, s in enumerate(steps)
+                    if "/status" in s.get("run", "") and "pending" in s.get("run", "")]
+
+    # Then it exists, runs after the check-run wait, and the job stays bounded
+    assert status_waits, "wait-for-checks must poll commits/<sha>/status for pending"
+    assert all(i > check_wait for i in status_waits), \
+        "commit-status wait must follow the check-run wait"
+    assert "commits/${HEAD_SHA}/status" in steps[status_waits[0]]["run"]
+    assert job["timeout-minutes"] == 45
+    assert job["permissions"]["statuses"] == "read"
 
 
 # --- PR-URL-derived Jira gating (pre-verify-pr.sh) ---
