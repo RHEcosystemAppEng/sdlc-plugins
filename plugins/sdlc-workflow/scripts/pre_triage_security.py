@@ -24,6 +24,14 @@ class EvidenceError(ValueError):
     """Raised when runner evidence is incomplete or inconsistent."""
 
 
+def _read_text(path, name):
+    """Read a UTF-8 runner file, reporting read and decode failures as evidence errors."""
+    try:
+        return Path(path).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as error:
+        raise EvidenceError("cannot read {}: {}".format(name, error)) from error
+
+
 def _ref_token(cell):
     """Extract a git ref/branch token from a matrix cell.
 
@@ -741,7 +749,7 @@ def collect_bundle(issue_key, project_root, release_decisions=None):
     if not claude_path.is_file():
         raise EvidenceError("target project CLAUDE.md is required")
     configuration, lifecycle_url, stream_rows, repository_paths = _runner_configuration(
-        claude_path.read_text(), root)
+        _read_text(claude_path, "target project CLAUDE.md"), root)
     issue = _jira_client("get_issue", issue_key, "--fields", "*all")
     cve_id = extract_cve_id(issue)
     escaped_project_key = _jql_escape(configuration["project_key"])
@@ -808,7 +816,7 @@ def collect_bundle(issue_key, project_root, release_decisions=None):
                 "Version Streams table is missing {}".format(error.args[0])) from error
         matrix_file = root / matrix_path
         if matrix_file.is_file():
-            matrix_content = matrix_file.read_text()
+            matrix_content = _read_text(matrix_file, "security matrix {}".format(matrix_path))
         else:
             matrix_content = _git_show(local_release, "main", matrix_path)["content"]
         matrix, mappings = parse_security_matrix(stream_name, matrix_path, matrix_content)
@@ -876,7 +884,7 @@ def discover_untriaged(project_root, max_results=20):
     claude_path = Path(project_root) / "CLAUDE.md"
     if not claude_path.is_file():
         raise EvidenceError("target project CLAUDE.md is required")
-    configuration = parse_security_configuration(claude_path.read_text())
+    configuration = parse_security_configuration(_read_text(claude_path, "target project CLAUDE.md"))
     project = configuration["project_key"]
     # One search_jql page holds at most 50 issues; page with --all only when the
     # cap needs more, then trim to the cap so the JQL ordering is preserved.
@@ -917,7 +925,7 @@ def main(argv=None):
                 _require_list(decisions, "trusted release decisions", allow_empty=True)
             result = collect_bundle(args.issue_key, args.project_root, decisions)
         else:
-            result = parse_security_configuration(Path(args.claude_md).read_text())
+            result = parse_security_configuration(_read_text(args.claude_md, "CLAUDE.md"))
     except (EvidenceError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
         print("ERROR: {}".format(error), file=sys.stderr)
         return 1

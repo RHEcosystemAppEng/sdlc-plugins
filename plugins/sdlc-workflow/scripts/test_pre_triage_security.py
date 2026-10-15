@@ -1265,6 +1265,48 @@ def test_discover_rejects_invalid_configuration(tmp_path, monkeypatch, capsys, s
     jira.assert_not_called()
 
 
+def _make_unreadable(path):
+    """Remove read permission from the file at path."""
+    path.chmod(0)
+
+
+def _make_invalid_utf8(path):
+    """Replace the file at path with bytes that are not valid UTF-8."""
+    path.write_bytes(b"# Project Configuration\n\xff\xfe\n")
+
+
+@pytest.mark.parametrize("command", [
+    lambda root: ["discover", str(root)],
+    lambda root: ["collect", "TC-42", str(root)],
+    lambda root: ["parse-configuration", str(root / "CLAUDE.md")],
+], ids=["discover", "collect", "parse-configuration"])
+@pytest.mark.parametrize("corrupt", [_make_unreadable, _make_invalid_utf8],
+                         ids=["unreadable", "invalid-utf8"])
+def test_claude_md_read_failure_reports_error(tmp_path, monkeypatch, capsys, command, corrupt):
+    """An unreadable or non-UTF-8 CLAUDE.md exits 1 with an ERROR diagnostic, not a traceback."""
+    # Given a target CLAUDE.md that exists but cannot be read or decoded
+    if corrupt is _make_unreadable and hasattr(os, "geteuid") and os.geteuid() == 0:
+        pytest.skip("root bypasses file permission checks")
+    root = _discovery_project(tmp_path, monkeypatch)
+    monkeypatch.delenv("FULLSEND_RELEASE_DECISIONS", raising=False)
+    corrupt(root / "CLAUDE.md")
+    jira = MagicMock()
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira)
+
+    # When the command reads the configuration
+    try:
+        status = pre_triage_security.main(command(root))
+    finally:
+        (root / "CLAUDE.md").chmod(0o644)
+
+    # Then it exits 1 with the read error on stderr, emits no stdout, and searches nothing
+    captured = capsys.readouterr()
+    assert status == 1
+    assert captured.out == ""
+    assert captured.err.startswith("ERROR: cannot read ")
+    jira.assert_not_called()
+
+
 @pytest.mark.parametrize("max_results", ["0", "-1"])
 def test_discover_rejects_non_positive_cap(tmp_path, monkeypatch, capsys, max_results):
     """A non-positive --max-results is rejected instead of returning an empty list."""
