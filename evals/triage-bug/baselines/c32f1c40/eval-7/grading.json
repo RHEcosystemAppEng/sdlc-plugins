@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation traces compute_risk_score() output through create_assessment() to diesel::insert_into(assessments::table) and identifies the persistence boundary at the assessments table, risk_score column (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md lines 79-85 contain an explicit trace: 'compute_risk_score(total_deps, vulnerable_deps) -> returns f64 score -> create_assessment() binds score to assessments::risk_score -> diesel::insert_into(assessments::table).values(risk_score.eq(score)) -> PERSISTENCE BOUNDARY: assessments table, risk_score column'. All three elements (compute_risk_score, create_assessment, diesel::insert_into(assessments::table)) are present, and the persistence boundary is identified at the assessments table, risk_score column."
+    },
+    {
+      "text": "Investigation records that risk_score is written at ingestion time (assessment creation) and is NOT recomputed on read, confirming a data migration is needed (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md lines 93-95 state 'Write timing | **Ingestion time** -- written once when the assessment is first created' and 'Recomputed on read? | **No** -- `get_assessment()` reads directly from DB'. Lines 99-101 confirm: 'Because `risk_score` is written at ingestion time and never recomputed on read, **all existing assessments in the database contain incorrect (inflated) risk scores**. Fixing `compute_risk_score()` alone will only correct **future** assessments. Existing assessments retain the wrong score until a data migration corrects them.'"
+    },
+    {
+      "text": "Task description Files to Create includes a data migration file following the Diesel naming convention discovered in the repository (YYYY-MM-DD-NNNNNN_description/up.sql) (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md line 37: '- `migration/2024-04-01-000004_fix_risk_score_values/up.sql` -- data migration to correct existing `risk_score` values in the `assessments` table'. This follows the YYYY-MM-DD-NNNNNN_description/up.sql Diesel naming convention, consistent with the pattern discovered in investigation.md line 71: 'Latest migration: `2024-03-10-000003_add_severity_column/up.sql`'."
+    },
+    {
+      "text": "Task description Implementation Notes includes migration logic to recompute and update existing risk_score values in the assessments table (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md lines 87-117 under '### Data migration' in Implementation Notes include two SQL approaches: (1) reciprocal inversion: 'UPDATE assessments SET risk_score = CASE WHEN risk_score != 0 THEN 1.0 / risk_score ELSE 0 END;' and (2) join-based recomputation: 'UPDATE assessments a SET risk_score = s.vulnerable_deps::double precision / s.total_deps::double precision FROM sboms s WHERE a.sbom_id = s.id AND s.total_deps > 0;'. Both recompute and update existing risk_score values."
+    },
+    {
+      "text": "Task description Acceptance Criteria includes a criterion that existing assessments with incorrect persisted risk_score values are corrected by the migration (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md line 135: '- [ ] Existing assessment records with incorrect `risk_score` values are corrected by the data migration'."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before the data migration criterion and any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md Acceptance Criteria section (lines 133-137) lists in order: (1) '- [ ] Reproducer test: a test calling `compute_risk_score(100, 5)` asserts the result is `0.05` (fails before fix, passes after)' (2) '- [ ] `compute_risk_score()` returns `vulnerable_deps / total_deps`...' (3) '- [ ] Existing assessment records with incorrect `risk_score` values are corrected by the data migration'. The reproducer test is first."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

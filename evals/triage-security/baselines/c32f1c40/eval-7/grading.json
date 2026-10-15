@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Sibling check correctly classifies TC-8001 as a different-stream companion (stream [rhtpa-2.2] vs current issue's [rhtpa-2.1]), not a same-stream duplicate (Step 4)",
+      "passed": true,
+      "evidence": "sibling-check.md Step 4.1: 'Classification: TC-8001 is a different-stream companion (stream [rhtpa-2.2] vs current issue's [rhtpa-2.1]), not a same-stream duplicate.' Also: 'PSIRT creates one issue per stream intentionally. TC-8001 tracks the same CVE for the 2.2.x stream, while TC-8006 tracks it for the 2.1.x stream.'"
+    },
+    {
+      "text": "Step 4.2 checks the current issue's existing issuelinks before attempting to create a 'Related' link to TC-8001 (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md Step 4.2: 'Before creating a \"Related\" link, the idempotency check requires inspecting the current issue's existing issuelinks array.' Then: 'Checking TC-8006's existing issuelinks for a link to TC-8001'"
+    },
+    {
+      "text": "Step 4.2 detects the pre-existing 'Related' link to TC-8001 and skips link creation — does NOT call jira.create_link (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md: 'Existing link found: Type: Related, Direction: outward (TC-8006 -> TC-8001), Link ID: 1990401' followed by 'Related link to TC-8001 already exists -- skipping. No call to jira.create_link() is made.'"
+    },
+    {
+      "text": "The output includes a log message indicating the link was skipped because it already exists (e.g., 'Related link to TC-8001 already exists — skipping')",
+      "passed": true,
+      "evidence": "sibling-check.md: 'Related link to TC-8001 already exists -- skipping.' triage-outcome.md also repeats: 'Related link to TC-8001 already exists -- skipping.'"
+    },
+    {
+      "text": "The sibling landscape table is still presented to the engineer despite the link already existing — the idempotent check only affects link creation, not the sibling summary",
+      "passed": true,
+      "evidence": "sibling-check.md: 'The following sibling landscape is presented to the engineer for visibility, regardless of whether link creation was needed:' followed by the full table showing TC-8001 and TC-8006. Also states: 'The sibling landscape table is always presented to the engineer to provide full cross-stream visibility. The idempotent link check only affects whether jira.create_link is called -- it does not suppress the sibling summary.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

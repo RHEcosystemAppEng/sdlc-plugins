@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md lines 61-76 ('Assertion style (sibling pattern)' section) explicitly names both files and shows both patterns: '.filter(|a| a.severity == \"Critical\").any(|_| true)' from tests/api/advisory.rs, and '.filter(|s| s.name.contains(\"openssl\")).count()' with 'assert!(matching > 0, ...)' from tests/api/sbom.rs. Line 76 summarizes: 'These patterns verify existence but do NOT verify specific values (counts, exact items, field values).'"
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md lines 80-97, section titled 'CONFLICT 1: Assertion style -- value-based vs existence-only', explicitly identifies this as a conflict. The sibling pattern is described as '.any() and .count() > 0 checks that only verify something exists' and the skill guidance is quoted: 'Prefer value-based assertions over length-only checks: When verifying collections or response data, assert on the actual values -- not just the count.'"
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md line 86 under CONFLICT 1 Resolution: 'Follow the skill guidance. The new tests will use assert_eq! on specific counts and specific license identifiers rather than just checking existence. This deviates from the sibling pattern but produces higher-quality tests.' Lines 131-132 in the adopted conventions list further reinforce this with the phrases 'skill override of sibling pattern' (items 7 and 8), while non-conflicting sibling conventions are adopted (items 10, 11), demonstrating that sibling conventions serve as defaults that are overridden only where skill guidance conflicts."
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md uses assert_eq! with specific values throughout: Test 1 (lines 42-50) uses 'assert_eq!(summary.permissive.count, 2)' and 'assert_eq!(summary.permissive.licenses, vec![\"Apache-2.0\", \"MIT\"])'; Test 3 (lines 95-99) uses 'assert_eq!(summary.permissive.count, 0)' and 'assert_eq!(summary.permissive.licenses, Vec::<String>::new())'; Test 4 (lines 129-130) uses 'assert_eq!(summary.permissive.count, 1)' and 'assert_eq!(summary.permissive.licenses, vec![\"MIT\"])'. No .any() or .count() > 0 patterns are used. Line 54 explicitly states the rationale: 'Uses assert_eq! on exact counts and exact license lists (sorted), not .any() or .count() > 0.'"
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md follows sibling conventions for: (1) test organization — file placed in tests/api/package_license.rs matching sibling location tests/api/sbom.rs and tests/api/advisory.rs (line 5); (2) test approach — integration tests against real PostgreSQL test database following sibling infrastructure (lines 9-10); (3) naming — descriptive test function names like 'test_license_summary_with_known_licenses' (line 27); (4) parameterized tests — explicitly not introduced because siblings don't use them (lines 145-148); (5) status assertions — uses 'assert_eq!(resp.status(), StatusCode::OK)' matching sibling pattern (lines 37, 89, 123). The Assertion Philosophy section (lines 13-16) explicitly limits the override to assertion style only: 'Sibling tests use existence-only checks... but the new tests will use value-based assertions.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

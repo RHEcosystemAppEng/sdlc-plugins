@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md Step 9 states: 'The version_filter parameter removal from SbomService::list IS the dead parameter detection outcome.' parameter-cleanup.md Phase 1 explicitly shows the intermediate state after removing filter logic with the comment 'version_filter: &str,  // <-- DEAD: no longer referenced' and states: 'we do NOT prefix the parameter with an underscore (_version_filter) to silence the warning. Instead, we remove the parameter entirely from the signature and update all call sites.'"
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 1 shows both the current signature with 'version_filter: &str' and the target signature without it: 'pub async fn list(&self, search: Query, paginated: Paginated, tx: &Transactional<'_>) -> Result<PaginatedResults<SbomSummary>, AppError>'. parameter-cleanup.md Phase 2 explicitly says 'Remove version_filter: &str from the method signature' and shows the updated code."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md 'Call site analysis' section lists all 3: (1) modules/fundamental/src/sbom/endpoints/list.rs, (2) modules/search/src/service/mod.rs, (3) tests/api/sbom.rs. Step 6 provides detailed changes for each. parameter-cleanup.md Phase 3 covers all three call sites with before/after code for each: Call site 1 (list.rs endpoint handler), Call site 2 (search/service/mod.rs), Call site 3 (tests/api/sbom.rs)."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md 'Correct fix: removal, not renaming' section states: 'we do NOT prefix the parameter with an underscore (_version_filter) to silence the warning.' It explains the compiler warning aspect: 'The Rust compiler (rustc) would emit a warning: unused variable: version_filter.' The Key Principle section states: 'The correct response is always full removal of the parameter and updating all callers -- never renaming with an underscore prefix, which merely hides the problem' and explains the API surface concern: 'removing code from a function body does not leave behind orphaned parameters that silently accept arguments no caller needs to provide.'"
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md Step 7 states: 'Run cargo test -p trustify-fundamental (or equivalent crate name) to confirm.' Step 9 states: 'Would run any CI check commands from CONVENTIONS.md, plus cargo test -p <crate-name> for each affected crate.' parameter-cleanup.md Phase 4 includes: 'Run cargo check to verify all call sites compile without the parameter' and 'Run cargo test -p <crate-name> for each affected crate' with specific crate names listed."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

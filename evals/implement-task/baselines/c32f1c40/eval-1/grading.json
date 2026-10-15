@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "conventions.md explicitly states 'Sibling analysis was performed on the trustify-backend repository structure... focusing on the modules/fundamental/src/advisory/ module' and references 'AppError enum defined in common/src/error.rs' (file 4). file-2-description.md references 'Follows get.rs pattern: uses the same extractor pattern (Path<Id>, State, Transactional) as the existing get.rs handler'. file-5-description.md references 'follows the pattern of existing fetch and list methods' in advisory.rs. conventions.md names 'get.rs, list.rs' under Naming Conventions and 'summary.rs, details.rs' under Files. At least 3 of the 4 listed files are referenced for analysis: get.rs, advisory.rs, and common/src/error.rs."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md lists exactly 3 files to create (severity_summary.rs model, severity_summary.rs endpoint, advisory_summary.rs test) and 3 files to modify (advisory/model/mod.rs, advisory/service/advisory.rs, advisory/endpoints/mod.rs). The plan explicitly notes 'Files Not Modified: server/src/main.rs — no changes needed'. No unrelated files appear in any of the 6 file descriptions (file-1 through file-6). All files are within the advisory module or tests/api directory."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md Files to Create table lists: (1) modules/fundamental/src/advisory/model/severity_summary.rs — 'SeveritySummary response struct', (2) modules/fundamental/src/advisory/endpoints/severity_summary.rs — 'GET handler for /api/v2/sbom/{id}/advisory-summary', (3) tests/api/advisory_summary.rs — 'Integration tests for the new endpoint'. All three files have corresponding file descriptions (file-1-description.md, file-2-description.md, file-3-description.md) with Action: CREATE."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md Files to Modify table lists: (4) modules/fundamental/src/advisory/model/mod.rs — 'Add pub mod severity_summary;', (5) modules/fundamental/src/advisory/service/advisory.rs — 'Add severity_summary method to AdvisoryService', (6) modules/fundamental/src/advisory/endpoints/mod.rs — 'Register the new route'. All three have corresponding file descriptions (file-4-description.md, file-5-description.md, file-6-description.md) with Action: MODIFY."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Commit Message section contains: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' (Conventional Commits format with type 'feat', scope 'advisory', and description). The footer includes 'Implements TC-9201', referencing the ticket ID."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": false,
+      "evidence": "No mention of --trailer, 'Assisted-by', or 'Claude Code' trailer appears anywhere in the plan.md commit message section or in any of the 8 output files. The commit message in plan.md ends with 'Implements TC-9201' and contains no trailer directive."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Branch section shows: 'git checkout main / git pull / git checkout -b TC-9201'. This creates branch 'TC-9201' (matching constraint 3.1) and checks out from 'main' (the target branch value). The branch creation commands explicitly reference both the branch name and the base branch."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md Error Handling section: 'All endpoint handlers return Result<T, AppError>' and 'Errors wrapped with .context() for descriptive messages' and 'AppError enum defined in common/src/error.rs and implements IntoResponse'. conventions.md Module Structure section: 'Every domain module follows the model/ + service/ + endpoints/ tri-partition'. Both patterns are explicitly identified with specific details."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md Branch section begins with 'git checkout main' followed by 'git pull' and 'git checkout -b TC-9201', identifying 'main' as the base/target branch. The plan demonstrates awareness of the target branch by basing the new feature branch on main."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": false,
+      "evidence": "No mention of 'description digest', 'digest comment', 'digest protocol', 'backward compatibility', or 'Step 1.5' related to digest checking appears in any of the 8 output files. The plan.md and conventions.md contain no references to the description-digest-protocol.md or any digest verification step."
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": false,
+      "evidence": "plan.md Verification Steps section says 'Run cargo test -p trustify-fundamental to verify module compiles and unit tests pass' but does not describe how the crate name 'trustify-fundamental' was resolved. There is no mention of 'cargo metadata', '--no-deps', '--format-version', or any crate name resolution strategy in any of the 8 output files. The crate name appears to be assumed or hardcoded rather than dynamically resolved."
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 3,
+    "total": 11,
+    "pass_rate": 0.7272727272727273
+  }
+}

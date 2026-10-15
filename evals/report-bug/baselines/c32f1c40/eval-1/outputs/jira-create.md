@@ -1,0 +1,5 @@
+- **Project key**: TC
+- **Summary**: Advisory upload fails with 500 when filename contains spaces
+- **Issue type ID**: 10300
+- **Description**: *(content from preview.md)*
+- **Labels**: ai-generated-jira
