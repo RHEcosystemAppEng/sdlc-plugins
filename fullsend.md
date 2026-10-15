@@ -425,6 +425,19 @@ untouched — the GitHub and GitLab deployments bump independently.
    gh api repos/fullsend-ai/fullsend/commits/<sha>
    gh api repos/fullsend-ai/fullsend/compare/<sha>...main --jq .status   # "ahead" or "identical"
    ```
+   **Regression guard — the proposed pin must be ahead of the deployed pin.**
+   Compare the deployment's *current* pin (the `uses:` SHA / `fullsend_version` in
+   `.github/workflows/fullsend-verify-pr.yml` on `main`, or the CLI pin in
+   `sdlc-fullsend`'s `.gitlab-ci.yml`) with the proposed commit:
+   ```bash
+   gh api repos/fullsend-ai/fullsend/compare/<deployed-tag-or-sha>...<sha> --jq .status   # must be "ahead"
+   ```
+   Anything other than `ahead` (`behind`, `diverged`, `identical`) means the bump
+   would regress or not advance the deployment — reject it, or re-review it
+   against the newer pin. **Run the check again immediately before merging**,
+   against the pin on `main` at that moment: when two bumps are prepared from the
+   same deployed pin and the newer one merges first, the older one would
+   otherwise merge afterwards and overwrite the pins with its stale commit.
 2. **Review** the range from the current pin to the chosen commit — the release
    notes of every tag in between and the untagged tail:
    ```bash
@@ -484,6 +497,9 @@ untouched — the GitHub and GitLab deployments bump independently.
    - **GitLab triage-security** — run a manual pipeline dispatch on a known
      Vulnerability issue and confirm it completes and produces its report.
    - Update the `## Prerequisites` CLI note if the local CLI must track CI.
+   - Re-run the step 1 **regression guard** against the pin currently on `main`
+     right before merging; if another bump landed meanwhile and the guard no
+     longer returns `ahead`, do not merge.
 
 All [Constraints and gotchas](#constraints-and-gotchas) apply to every bump —
 in particular merge-commit-only merges and the mandatory re-pin + re-lock.
