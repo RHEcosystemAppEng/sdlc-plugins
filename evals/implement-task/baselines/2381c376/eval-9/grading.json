@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md lines 163-168: 'After removing the VersionMatches filter logic from SbomService::list, the version_filter parameter becomes dead (zero references in the method body). Per Step 9 guidance: remove the parameter entirely (do not rename with underscore prefix).' parameter-cleanup.md lines 9-11: 'After removing that logic, the version_filter: &str parameter has zero references in the method body -- it is a dead parameter.' The plan explicitly identifies the parameter as unused/dead and rejects renaming with underscore."
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md lines 83-85: 'Remove the version_filter: &str parameter from the list method signature.' Shows before/after signature (lines 96-102) with version_filter removed. parameter-cleanup.md lines 28-53 explicitly shows the signature change from including 'version_filter: &str' to excluding it, with the heading 'Step 1: Remove the parameter from the function signature'."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md lines 43-46 identifies all 3 call sites: 'modules/fundamental/src/sbom/endpoints/list.rs (REST handler)', 'modules/search/src/service/mod.rs (search service)', 'tests/api/sbom.rs (integration tests)'. parameter-cleanup.md lines 60-66 lists all 3 in a table. parameter-cleanup.md provides detailed update instructions for each: call site 1 (list.rs, lines 70-89), call site 2 (search/service/mod.rs, lines 92-109), call site 3 (tests/api/sbom.rs, lines 112-139). The commit message in plan.md line 196 confirms: 'Update all 3 call sites (endpoint handler, search service, tests)'."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md lines 9-11: 'Prefixing with underscore (_version_filter) silences the compiler warning but leaves a misleading parameter in the public API. The parameter must be removed from the signature, and all call sites must be updated to stop passing the corresponding argument.' The 'Why Not Underscore-Prefix' section (lines 142-153) provides four detailed reasons: (1) 'A parameter in a public method signature signals to callers that the value matters. An unused parameter is misleading.' (2) 'Every caller must construct and pass a value that is silently ignored.' (3) 'An underscore-prefixed parameter invites confusion.' (4) 'Removing the parameter ensures the compiler catches any caller that was relying on the old signature.'"
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md lines 143-146 (Step 7 -- Tests): 'Verify remaining SBOM list tests compile and pass with the updated list signature. Run: cargo test -p trustify-fundamental and cargo test -p trustify-tests'. plan.md lines 175-179 (Step 9 -- CI checks): 'Run CI commands from CONVENTIONS.md (formatting, linting, clippy, compilation). Run cargo test -p <crate> for each modified crate.' parameter-cleanup.md lines 130-138 (Step 4: Verify compilation and tests): 'cargo check -p trustify-fundamental / cargo check -p trustify-search / cargo test -p trustify-fundamental / cargo test -p trustify-tests -- All must pass with zero warnings about unused parameters.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

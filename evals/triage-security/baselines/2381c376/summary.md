@@ -1,0 +1,76 @@
+## Eval Results: triage-security
+
+| Eval | Passed | Failed | Pass Rate |
+|------|--------|--------|-----------|
+| eval-1 | 13/13 | 0 | 100% |
+| eval-10 | 5/5 | 0 | 100% |
+| eval-11 | 5/5 | 0 | 100% |
+| eval-12 | 5/5 | 0 | 100% |
+| eval-13 | 5/5 | 0 | 100% |
+| eval-14 | 4/5 | 1 | 80% |
+| eval-15 | 5/5 | 0 | 100% |
+| eval-16 | 7/7 | 0 | 100% |
+| eval-17 | 4/5 | 1 | 80% |
+| eval-18 | 5/5 | 0 | 100% |
+| eval-19 | 5/5 | 0 | 100% |
+| eval-2 | 5/5 | 0 | 100% |
+| eval-20 | 4/4 | 0 | 100% |
+| eval-21 | 4/4 | 0 | 100% |
+| eval-22 | 4/4 | 0 | 100% |
+| eval-23 | 4/4 | 0 | 100% |
+| eval-24 | 4/4 | 0 | 100% |
+| eval-25 | 4/4 | 0 | 100% |
+| eval-26 | 5/5 | 0 | 100% |
+| eval-27 | 5/5 | 0 | 100% |
+| eval-28 | 5/5 | 0 | 100% |
+| eval-29 | 5/5 | 0 | 100% |
+| eval-3 | 5/5 | 0 | 100% |
+| eval-30 | 4/4 | 0 | 100% |
+| eval-31 | 4/4 | 0 | 100% |
+| eval-32 | 4/4 | 0 | 100% |
+| eval-4 | 5/5 | 0 | 100% |
+| eval-5 | 6/6 | 0 | 100% |
+| eval-6 | 6/6 | 0 | 100% |
+| eval-7 | 5/5 | 0 | 100% |
+| eval-8 | 5/8 | 3 | 62% |
+| eval-9 | 5/5 | 0 | 100% |
+
+### Failed Assertions
+
+<details>
+<summary>eval-14: 1 failing assertion</summary>
+
+- **Assertion:** "The rpms.lock.yaml classification remains the primary signal — the SBOM result supplements but does not override it (Step 2.3.5 non-MVP enhancement)"
+  **Evidence:** "The output marks the origin as 'DISPUTED' for all affected versions (e.g., 'Origin: DISPUTED -- rpms.lock.yaml indicates explicit install, but SBOM comparison indicates base image inheritance. Investigate manually.'). This elevates the SBOM result to equal standing with rpms.lock.yaml rather than treating it as supplementary. The remediation path section further states 'the engineer must investigate the actual package provenance before selecting the remediation approach,' meaning the SBOM result effectively blocks the rpms.lock.yaml classification from being authoritative. If rpms.lock.yaml were the primary signal, the origin would remain 'explicit install' with a supplementary SBOM note, not 'DISPUTED' requiring manual investigation."
+
+</details>
+
+<details>
+<summary>eval-17: 1 failing assertion</summary>
+
+- **Assertion:** "The embargo warning gate does NOT trigger for Low or Moderate severity CVEs (CVSS &lt; 7.0) — it is skipped silently when severity is below threshold (§1.70)"
+  **Evidence:** "embargo-check.md defines the trigger threshold as 'CVSS &gt;= 7.0' (line 14), which implicitly means CVSS &lt; 7.0 would not trigger. However, the output never explicitly addresses sub-threshold behavior. There is no statement that the gate is 'skipped silently' for Low or Moderate severity CVEs. The threshold definition alone is implicit evidence; the outputs contain no explicit specification of what happens when severity is below 7.0 (e.g., no log message, no silent skip documented). Burden of proof is on PASS, and the sub-threshold behavior is not demonstrated."
+
+</details>
+
+<details>
+<summary>eval-8: 3 failing assertions</summary>
+
+- **Assertion:** "Step 4.3 creates a Related link between the current CVE (TC-8010) and the related CVE (TC-8008) with an idempotency check on existing issuelinks before creating"
+  **Evidence:** "overlap-check.md lines 74-83 show the idempotency check was performed ('Check TC-8010 existing issuelinks for a Related link to TC-8008. No existing links found.') and the correct link is specified. However, triage-outcome.md lines 16-17 explicitly state: 'The following actions are proposed but **not executed** (presented for engineer confirmation)'. The link was proposed but not created."
+
+- **Assertion:** "Step 4.3 creates a Depend link from the covering remediation task (TC-8009) to the current CVE (TC-8010) with an idempotency check on existing issuelinks before creating"
+  **Evidence:** "overlap-check.md lines 87-96 show the idempotency check was performed ('Check TC-8010 existing issuelinks for a Depend link to TC-8009. No existing links found.') and the correct link is specified. However, triage-outcome.md lines 16-17 explicitly state: 'The following actions are proposed but **not executed** (presented for engineer confirmation)'. The link was proposed but not created."
+
+- **Assertion:** "A comment is posted on the current CVE documenting the cross-CVE overlap finding -- including the related CVE key (TC-8008), covering task key (TC-8009), library (axios), bump version (1.9.0), and fix threshold (1.8.2)"
+  **Evidence:** "overlap-check.md lines 98-111 and triage-outcome.md lines 42-53 and 65-82 contain proposed comments that include all required elements: TC-8008, TC-8009, axios, 1.9.0, and 1.8.2. However, triage-outcome.md lines 16-17 explicitly state: 'The following actions are proposed but **not executed** (presented for engineer confirmation)'. The comment was drafted but not posted."
+
+</details>
+
+**Pass rate:** 98% · **Tokens:** 73,272 · **Duration:** 134s
+
+**Baseline** (`27ad1c49`): 98% · 68,770 tokens · 133s
+
+---
+*Generated by [sdlc-workflow/run-evals](https://github.com/RHEcosystemAppEng/sdlc-plugins) v0.13.10*
+

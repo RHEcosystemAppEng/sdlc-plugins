@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md lines 20-27 describe four search methods: (1) Grep for SEVERITY_ORDER across modules/fundamental/src/, (2) Grep case-insensitive for severity_order, (3) Grep for value pattern \"critical\", \"high\", \"medium\", \"low\", \"none\", (4) Serena find_symbol on SEVERITY_ORDER within the modules/fundamental crate. All searches were performed before making any declaration decision."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md line 31 in the Search Results table: \"SEVERITY_ORDER by name | modules/fundamental/src/advisory/service/advisory.rs | Constant definition: SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]\". Lines 37-40 reiterate: \"File: modules/fundamental/src/advisory/service/advisory.rs\", \"Symbol: SEVERITY_ORDER\", \"Type: &[&str]\", \"Value: &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]\"."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md lines 57-59 under section 2 (sbom.rs changes): \"Add import for the SEVERITY_ORDER constant: use crate::advisory::service::advisory::SEVERITY_ORDER;\". The plan summary on lines 28-30 also states: \"Found the existing definition in modules/fundamental/src/advisory/service/advisory.rs\" and \"Decision: Import and reuse via use crate::advisory::service::advisory::SEVERITY_ORDER\"."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "plan.md does not contain any new SEVERITY_ORDER constant declaration. The only change to SEVERITY_ORDER in advisory.rs is adding the pub keyword (lines 41-46). The sbom.rs section (lines 52-118) only adds an import statement (line 59: \"use crate::advisory::service::advisory::SEVERITY_ORDER\") and uses the imported constant in sort_by_key (lines 107-112). symbol-search.md line 45 explicitly states: \"Decision: Import and reuse the existing SEVERITY_ORDER constant from the advisory module. Do NOT redeclare it.\""
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md lines 20-21: \"Used a broad search across the entire modules/fundamental/ directory tree (not just the file being edited) to ensure thorough coverage.\" The search strategy on lines 22-25 confirms all greps target \"modules/fundamental/src/\" (the whole package), not just the sbom file. Line 9 identifies the target package as \"modules/fundamental\" and explains both sbom and advisory modules are within it."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
