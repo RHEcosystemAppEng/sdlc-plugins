@@ -9,12 +9,33 @@
 # harness-fields.md). Absolute host_files declared directly in this local child
 # are NOT URL-sourced, so they are accepted.
 #
-# ONE child serves BOTH environments — the mounts are env-expanded and the OIDC
-# token is optional:
-#   GOOGLE_APPLICATION_CREDENTIALS  local: service-account key JSON
-#                                   CI:    WIF external_account config
-#   GCP_OIDC_TOKEN_FILE             local: unset → optional mount skipped
-#                                   CI:    runner-refreshed OIDC token file
+# Credentials follow fullsend's RUNNER-OWNED model: the harness never creates a
+# credential, it only mounts the two files the runner exports under fixed names.
+# The two GCP mounts below are byte-identical to the vendor's own Vertex mounts
+# (fullsend internal/agentnew/render.go vertexHostFiles) and to the
+# triage-security child (.fullsend/harness/triage-security.yaml) — keep all three
+# in parity. ONE child serves every environment — the mounts are env-expanded
+# and the OIDC token is optional:
+#   GOOGLE_APPLICATION_CREDENTIALS  local:     service-account key JSON
+#                                   GitHub CI: WIF external_account config
+#                                   GitLab CI: WIF external_account config
+#   GCP_OIDC_TOKEN_FILE             local:     unset → optional mount skipped
+#                                   GitHub CI: runner-refreshed OIDC token file
+#                                   GitLab CI: job id_token (FULLSEND_ID_TOKEN)
+# Who exports them in CI depends on the fullsend version, not on this file:
+#   - CLI <= v0.43.0 (reusable-dispatch d5f36921): the dispatch's setup-gcp step
+#     (prepare-sandbox-credentials.sh) exports both before `fullsend run`.
+#   - CLI at the supported commit (fullsend.md "Supported fullsend commit"):
+#     `fullsend run` itself exchanges the job's OIDC token
+#     (FULLSEND_GCP_WIF_PROVIDER / FULLSEND_GCP_PROJECT_ID) and exports both
+#     before host_files expansion; the dispatch no longer runs setup-gcp.
+#   - GitLab: the scaffold's run-agent-job.sh exports both from FULLSEND_ID_TOKEN.
+# So reusable-dispatch `uses:@` and `fullsend_version` must move TOGETHER: the
+# new dispatch with the old CLI leaves GOOGLE_APPLICATION_CREDENTIALS unset
+# (`host variable GOOGLE_APPLICATION_CREDENTIALS is not set`). The credential
+# mount stays required (not the vendor scaffold's `optional: true`) so a missing
+# credential fails the run up front on EVERY pinned CLI — v0.43.0 has no Vertex
+# preflight and would silently skip an optional mount, failing only at inference.
 # Only the runtime environment differs — fullsend's sanctioned "same harness,
 # different runtime env" model (ADR-0055; running-agents-locally.md).
 #
