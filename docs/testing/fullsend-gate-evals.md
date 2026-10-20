@@ -220,9 +220,13 @@ are not used.
 
 Generated host mounts resolve to `.work/native-config/pre/`. The test pre-script writes
 the required exact gate fragment there for every case, and the exact retained
-input for malformed/valid. It uses the known configuration root; Fullsend0.43.0
-does not provide `FULLSEND_RUN_DIR` to pre-scripts or host-file bootstrap (only
-host validation commands receive it). Both generated mounts are optional during
+input for malformed/valid. It uses the known configuration root because
+Fullsend does not provide `FULLSEND_RUN_DIR` to pre-scripts or host-file
+bootstrap (only host validation commands receive Fullsend's own run directory
+under that name). In production, `FULLSEND_RUN_DIR` is a caller contract: the
+caller exports a fresh per-run directory that the pre-script, the `host_files`
+mount and the post-script share (fullsend.md, "Adopting triage-security").
+Both generated mounts are optional during
 early environment/file validation because preparation has not run yet. A failed
 or stale preparation returns nonzero and Fullsend aborts before sandbox creation;
 optional mounting does not turn that failure into success. The unchanged strict

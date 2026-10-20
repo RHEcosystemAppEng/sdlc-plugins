@@ -594,6 +594,67 @@ pin does not already provide. The **merge-commit-only** rule above applies to
 adopters too — a squash/rebase on any hop to `main` breaks the pinned URL the
 adopter fetched.
 
+## Adopting triage-security (external fullsend users)
+
+Register `harness/triage-security.yaml` by URL the same way as verify-pr
+(`fullsend agent add …/harness/triage-security.yaml`, then `fullsend lock`). The
+harness reads nothing from the target repository: the pre-script validates its
+bundle against the pinned plugin schema, and Fullsend validates the result
+against the pinned `validation_loop.schema`. The caller supplies the rest.
+
+**Caller contract** — Fullsend sets none of these; export them before every
+`fullsend run triage-security`:
+
+- `FULLSEND_RUN_DIR` — a **fresh, per-run** directory (for example
+  `mktemp -d`). The pre-script writes `pre/triage-security-input.json` there,
+  `host_files` mounts it into the sandbox, and the post-script reads it back.
+  Never reuse it across runs or share it between concurrent runs.
+- `FULLSEND_WORK_ITEM_URL` — the Jira Vulnerability URL
+  (`https://<site>/browse/<KEY>`).
+- The product's `CLAUDE.md`: start `fullsend run` in the directory that holds it,
+  or set `FULLSEND_PROJECT_ROOT` to that directory. Produce it with
+  `/sdlc-workflow:setup`, using **relative** Repository Registry paths and
+  Version Streams `Local Path` values, with the security matrices committed.
+- Source-repository clones referenced by that `CLAUDE.md` need full commit
+  history (matrix refs are read with `git show`); `git clone --filter=blob:none`
+  is enough, a shallow clone is not.
+- The runner needs `jsonschema[format]` for the pre-script's bundle validation.
+- Jira credentials stay runner-only (`JIRA_BASE_URL`, `JIRA_USER_EMAIL`,
+  `JIRA_TOKEN`, mapped in `env.runner`).
+
+**Adopter child.** Fullsend rejects an absolute `host_files` source inherited
+from a URL-sourced base, so the adopter's local child re-declares the runner
+mounts — the bundle and the Vertex credentials (same shape as this repo's
+`.fullsend/harness/triage-security.yaml`):
+
+```yaml
+base: https://raw.githubusercontent.com/RHEcosystemAppEng/sdlc-plugins/<sha>/harness/triage-security.yaml#sha256=<hash>
+
+host_files:
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/.gcp-credentials.json
+  - src: ${GCP_OIDC_TOKEN_FILE}
+    dest: /sandbox/workspace/.gcp-oidc-token
+    optional: true
+  - src: ${FULLSEND_RUN_DIR}/pre/triage-security-input.json
+    dest: /sandbox/workspace/.pre-script/triage-security-input.json
+    optional: true
+```
+
+```bash
+cd /path/to/product            # holds CLAUDE.md and the committed matrices
+export FULLSEND_RUN_DIR="$(mktemp -d)"
+export FULLSEND_WORK_ITEM_URL=https://<site>/browse/<KEY>
+fullsend run triage-security --fullsend-dir .fullsend \
+  --target-repo /path/to/any-checkout --env-file secrets.env
+```
+
+The post-script runs in Fullsend's own run directory and executes the result
+Fullsend names in `FULLSEND_VALIDATED_ITERATION_DIR` (falling back to the last
+`iteration-*/output` there); it refuses a result outside that directory and a
+bundle outside `FULLSEND_RUN_DIR`. Production prefetch is report-only
+(`mutation_authorized: false`), so a default run writes nothing to Jira.
+
 ## File inventory
 
 All plugin paths are relative to `plugins/sdlc-workflow/`.
