@@ -1,12 +1,33 @@
 # Local composing child for the triage-security harness.
 #
 # The URL-pinned base supplies the tokenless triage contract. This local child
-# supplies the runner-local pre-script output because Fullsend rejects an
-# absolute host-file source inherited from a URL-sourced harness. The child
-# mapping wins for this destination during composition.
+# supplies the runner-local mounts because Fullsend rejects an absolute
+# host-file source inherited from a URL-sourced harness. host_files are
+# concatenated base+child, deduplicated by dest with the child winning
+# (ADR-0045).
+#
+# Vertex credentials follow fullsend's RUNNER-OWNED model, in parity with the
+# verify-pr child (.fullsend/harness/verify-pr.yaml — see its header for which
+# component exports the variables per fullsend version). The base's
+# env/gcp-vertex.env points the sandbox's GOOGLE_APPLICATION_CREDENTIALS at
+# /tmp/.gcp-credentials.json; these two mounts deliver that file and the OIDC
+# token its external_account config reads:
+#   GOOGLE_APPLICATION_CREDENTIALS  local:     service-account key JSON
+#                                   GitHub CI: WIF config exported by the runner
+#                                   GitLab CI: WIF config from run-agent-job.sh
+#   GCP_OIDC_TOKEN_FILE             local:     unset → optional mount skipped
+#                                   CI:        runner-provided OIDC token file
+# The credential mount stays required so a missing credential fails up front on
+# every pinned CLI. This is the sole sandbox credential (inference only); Jira
+# credentials stay runner-only in env.runner.
 base: https://raw.githubusercontent.com/RHEcosystemAppEng/sdlc-plugins/c4891346bd0aedaed9a96b77a3f8a1cbe4f0604f/harness/triage-security.yaml#sha256=110fb33d880caf1add20e73c8017451378966eeef52ef34aa988e41c35fc1b02
 
 host_files:
+  - src: ${GOOGLE_APPLICATION_CREDENTIALS}
+    dest: /tmp/.gcp-credentials.json
+  - src: ${GCP_OIDC_TOKEN_FILE}
+    dest: /sandbox/workspace/.gcp-oidc-token
+    optional: true
   - src: ${FULLSEND_RUN_DIR}/pre/triage-security-input.json
     dest: /sandbox/workspace/.pre-script/triage-security-input.json
     optional: true
