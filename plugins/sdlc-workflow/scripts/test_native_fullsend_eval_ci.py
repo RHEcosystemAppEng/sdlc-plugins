@@ -128,7 +128,7 @@ def test_source_resolution_refuses_stale_or_unrelated_revisions(defect):
 
 @pytest.mark.parametrize("number,branch,path,expected", [
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/skills/triage-security/SKILL.md", "true"),
-    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/schemas/triage-security-input.schema.json", "true"),
+    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/scripts/triage-security-input.schema.json", "true"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/schemas/triage-security-result.schema.json", "true"),
     (299, "verify-pr-fullsend", "evals/fullsend/triage-security/cases/033-absent/input.yaml", "false"),
     (299, "verify-pr-fullsend", "evals/triage-security/files/fullsend-release-trusted-input.json", "false"),

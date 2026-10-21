@@ -16,7 +16,10 @@ from jsonschema import FormatChecker, ValidationError, validate
 
 
 _ISSUE_KEY_RE = re.compile(r"^[A-Z][A-Z0-9]+-[0-9]+$")
-_SCHEMA_PATH = Path(__file__).parent.parent / "schemas" / "triage-security-input.schema.json"
+# Co-located with this script: Fullsend fetches a URL-pinned pre_script together
+# with its own directory only, so a sibling schemas/ directory is not available
+# on the runner. The sandbox skill reads the same file from the pinned plugin.
+_SCHEMA_PATH = Path(__file__).parent / "triage-security-input.schema.json"
 _EVIDENCE_USER_AGENT = "Mozilla/5.0 (compatible; sdlc-triage-security/1.0)"
 
 
@@ -417,7 +420,7 @@ def _format_checker():
 
 def validate_bundle(bundle, schema_path=None):
     """Validate a completed bundle against the sandbox's exact JSON schema."""
-    path = Path(schema_path or os.environ.get("FULLSEND_INPUT_SCHEMA", _SCHEMA_PATH))
+    path = Path(schema_path or _SCHEMA_PATH)
     format_checker = _format_checker()
     try:
         with path.open() as schema_file:

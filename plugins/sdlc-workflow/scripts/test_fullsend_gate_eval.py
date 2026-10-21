@@ -21,7 +21,7 @@ ROOT = Path(__file__).resolve().parents[3]
 SUITE = ROOT / "evals/fullsend/triage-security"
 FIXTURES = ROOT / "evals/triage-security/files"
 # Pin of the triage-security Step 0.6/0.7 gate commands that valid_case_tools diagnostics match against.
-GATE_COMMANDS_SHA256 = "ecdc40ce7d89d2c27f06bf4170c859fd9941dc440d7c081bfeca14e4d68d0748"
+GATE_COMMANDS_SHA256 = "5ba54375e463039e4a969e88a5c40af48e2a607b41b6c411b68b27a01f8711b1"
 
 
 def load_script(path):

@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 
 import pytest
@@ -880,6 +881,43 @@ def test_post_script_rejects_a_missing_bundle(tmp_path):
     # Then it reports the missing input
     assert result.returncode != 0
     assert "trusted triage-security input is missing" in result.stderr
+
+
+def test_executor_validates_against_the_schema_fullsend_provides(tmp_path, monkeypatch):
+    """FULLSEND_OUTPUT_SCHEMA, the pinned validation_loop.schema, is the schema the executor enforces."""
+    # Given a provided schema that rejects every result, and an otherwise valid plan
+    rejecting_schema = tmp_path / "result.schema.json"
+    rejecting_schema.write_text(json.dumps({"not": {}}))
+    monkeypatch.setenv("FULLSEND_OUTPUT_SCHEMA", str(rejecting_schema))
+    plan = _plan([{"type": "report-only", "marker": "triage-security:report"}], "report-only")
+
+    # When the executor validates the plan
+    # Then the provided schema, not the plugin checkout copy, decides
+    with pytest.raises(executor.ActionError, match="result schema validation failed"):
+        executor.execute_plan(plan, _trusted_input(False))
+
+
+def test_post_script_runs_from_the_scripts_only_layout_fullsend_caches(tmp_path):
+    """The post-script completes from a scripts/-only copy when Fullsend provides FULLSEND_OUTPUT_SCHEMA."""
+    # Given only the scripts/ directory, as Fullsend fetches it for a URL-pinned post_script
+    cached_scripts = tmp_path / "cache" / "scripts"
+    shutil.copytree(SCRIPT_DIR, cached_scripts, ignore=shutil.ignore_patterns("__pycache__"))
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    validated = _write_iteration(fullsend_run, 1, _report_only_plan_json())
+    result_schema = os.path.join(SCRIPT_DIR, "..", "schemas", "triage-security-result.schema.json")
+
+    # When Fullsend runs the cached post-script with its pinned result schema
+    result = subprocess.run(
+        ["bash", str(cached_scripts / "post-triage-security.sh")], cwd=fullsend_run,
+        env={"PATH": os.environ["PATH"], "PYTHONDONTWRITEBYTECODE": "1",
+             "FULLSEND_RUN_DIR": str(caller_run), "FULLSEND_VALIDATED_ITERATION_DIR": str(validated),
+             "FULLSEND_OUTPUT_SCHEMA": result_schema},
+        capture_output=True, text=True,
+    )
+
+    # Then the report-only plan completes without the plugin's schemas/ directory
+    assert result.returncode == 0, result.stderr
+    assert "completed successfully" in result.stdout
 
 
 # SYNTHETIC TEST DATA — release issues and decisions are fictional host evidence.

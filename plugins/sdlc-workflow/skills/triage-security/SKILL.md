@@ -91,7 +91,7 @@ never write `security-matrix.md`.
 Skip this step in interactive mode. In Fullsend mode, read **only**
 `/sandbox/workspace/.pre-script/triage-security-input.json` and validate it before
 any analysis against
-`${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-input.schema.json`:
+`${CLAUDE_PLUGIN_ROOT}/scripts/triage-security-input.schema.json`:
 
 ```bash
 if ! python3 - << 'PYEOF'
@@ -99,7 +99,7 @@ import json, sys
 from jsonschema import validate, ValidationError
 
 INPUT = "/sandbox/workspace/.pre-script/triage-security-input.json"
-SCHEMA = "${CLAUDE_PLUGIN_ROOT}/schemas/triage-security-input.schema.json"
+SCHEMA = "${CLAUDE_PLUGIN_ROOT}/scripts/triage-security-input.schema.json"
 try:
     with open(INPUT) as f:
         bundle = json.load(f)

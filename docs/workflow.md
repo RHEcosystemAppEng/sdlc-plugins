@@ -361,7 +361,7 @@ The branch-independent execution flow is split across trust boundaries:
    `scripts/execute-triage-security-actions.py`. Only this trusted executor can
    perform authorized Jira actions.
 
-The input bundle must satisfy `schemas/triage-security-input.schema.json`. Missing,
+The input bundle must satisfy `scripts/triage-security-input.schema.json`. Missing,
 malformed, or contradictory required evidence fails before mutation. The result must
 satisfy `schemas/triage-security-result.schema.json` and use either `report-only` or
 `mutation-authorized` mode. A report-only result contains only a `report-only`

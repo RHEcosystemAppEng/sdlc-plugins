@@ -4,6 +4,7 @@
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -480,7 +481,7 @@ def _complete_bundle():
     )
 
     # Then the exact sandbox contract accepts the resulting bundle
-    with open(os.path.join(SCRIPT_DIR, "..", "schemas", "triage-security-input.schema.json")) as schema_file:
+    with open(os.path.join(SCRIPT_DIR, "triage-security-input.schema.json")) as schema_file:
         schema = json.load(schema_file)
     validate(instance=bundle, schema=schema)
     assert bundle["issue"]["key"] == "TC-42"
@@ -533,6 +534,30 @@ def test_validate_bundle_fails_closed_without_format_extra(monkeypatch):
     # Then it fails closed, naming the missing extra, rather than validating silently
     with pytest.raises(pre_triage_security.EvidenceError, match=r"jsonschema\[format\]"):
         pre_triage_security.validate_bundle({"any": "bundle"})
+
+
+@requires_format_extra
+def test_validate_bundle_uses_the_schema_fetched_with_the_script(tmp_path):
+    """Validation works from a scripts/-only copy, the layout Fullsend caches for a URL-pinned pre_script."""
+    # Given only the scripts/ directory, as Fullsend fetches it, and a complete bundle
+    cached_scripts = tmp_path / "cache" / "scripts"
+    shutil.copytree(SCRIPT_DIR, cached_scripts, ignore=shutil.ignore_patterns("__pycache__"))
+    bundle_path = tmp_path / "bundle.json"
+    bundle_path.write_text(json.dumps(_complete_bundle()))
+
+    # When the cached copy validates the bundle
+    result = subprocess.run(
+        [sys.executable, "-c",
+         "import json, sys; import pre_triage_security as p; "
+         "p.validate_bundle(json.load(open(sys.argv[1]))); print(p._SCHEMA_PATH)",
+         str(bundle_path)],
+        cwd=cached_scripts, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        capture_output=True, text=True,
+    )
+
+    # Then it validates against the schema inside that same directory
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(cached_scripts / "triage-security-input.schema.json")
 
 
 def _http_error_opener(status, body=b'{"message": "gone"}'):
