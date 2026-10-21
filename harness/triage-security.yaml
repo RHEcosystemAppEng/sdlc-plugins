@@ -2,12 +2,23 @@
 #
 # The trusted runner gathers every Jira, CVE, lifecycle, and source-repository
 # input before sandbox creation. The sandbox receives only the mounted evidence
-# bundle and returns a validated action plan; TC-6209 is the only component that
-# may execute that plan against Jira.
+# bundle and returns a validated action plan; only the trusted post-script may
+# execute that plan against Jira.
 #
-# TC-6208 creates pre-triage-security.sh and its bundle producer. TC-6209 creates
-# post-triage-security.sh and its action executor. This contract task declares
-# their integration points but deliberately does not implement either script.
+# Caller contract (Fullsend does not set these; see fullsend.md "Adopting
+# triage-security"):
+#   FULLSEND_RUN_DIR       a fresh, per-run directory exported by the caller.
+#                          The pre-script writes pre/triage-security-input.json
+#                          there, host_files mounts it, and the post-script
+#                          reads it back. Never share it between runs.
+#   FULLSEND_WORK_ITEM_URL the Jira Vulnerability to triage.
+#   FULLSEND_PROJECT_ROOT  optional; the directory holding the product's
+#                          CLAUDE.md (defaults to the fullsend run CWD).
+# Schemas resolve from pinned content, never from the target repo: the
+# pre-script validates against the input schema co-located in its scripts/
+# directory (the only directory Fullsend fetches with it); Fullsend validates the
+# result against validation_loop.schema and hands that cached path to the
+# post-script as FULLSEND_OUTPUT_SCHEMA.
 
 role: triage
 agent: plugins/sdlc-workflow/agents/triage-security.md
@@ -58,8 +69,6 @@ env:
     JIRA_EMAIL: "${JIRA_USER_EMAIL}"
     JIRA_API_TOKEN: "${JIRA_TOKEN}"
     JIRA_PROJECT_KEY: "TC"
-    FULLSEND_INPUT_SCHEMA: "${TARGET_REPO_DIR}/plugins/sdlc-workflow/schemas/triage-security-input.schema.json"
-    FULLSEND_OUTPUT_SCHEMA: "${TARGET_REPO_DIR}/plugins/sdlc-workflow/schemas/triage-security-result.schema.json"
     FULLSEND_OUTPUT_FILE: "agent-result.json"
   sandbox:
     # Display-only context; the sandbox has no Jira egress or credential.

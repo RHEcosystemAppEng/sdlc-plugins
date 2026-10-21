@@ -6,6 +6,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import shutil
 import subprocess
 
 import pytest
@@ -748,51 +749,189 @@ def test_main_returns_nonzero_for_executor_failures(tmp_path, monkeypatch, capsy
     assert "Jira unavailable" in capsys.readouterr().err
 
 
-def test_post_script_rejects_an_iteration_result_outside_its_run_directory(tmp_path):
-    """The trusted post-script refuses a symlinked result that escapes the run directory."""
-    # Given a runner directory whose selected iteration result resolves elsewhere
-    script = os.path.join(SCRIPT_DIR, "post-triage-security.sh")
-    run_directory = tmp_path / "run"
-    (run_directory / "pre").mkdir(parents=True)
-    (run_directory / "pre" / "triage-security-input.json").write_text(json.dumps(_trusted_input(False)))
-    iteration_output = run_directory / "iteration-1" / "output"
-    iteration_output.mkdir(parents=True)
-    outside_result = tmp_path / "outside-result.json"
-    outside_result.write_text(json.dumps(_plan([{"type": "report-only", "marker": "triage-security:report"}], "report-only")))
-    (iteration_output / "agent-result.json").symlink_to(outside_result)
+POST_SCRIPT = os.path.join(SCRIPT_DIR, "post-triage-security.sh")
+
+
+def _report_only_plan_json():
+    """Serialize a report-only plan the executor completes without Jira."""
+    return json.dumps(_plan([{"type": "report-only", "marker": "triage-security:report"}], "report-only"))
+
+
+def _post_script_roots(tmp_path):
+    """Create Fullsend's run directory and the caller's FULLSEND_RUN_DIR with its bundle."""
+    fullsend_run = tmp_path / "fullsend-run"
+    fullsend_run.mkdir()
+    caller_run = tmp_path / "caller-run"
+    (caller_run / "pre").mkdir(parents=True)
+    (caller_run / "pre" / "triage-security-input.json").write_text(json.dumps(_trusted_input(False)))
+    return fullsend_run, caller_run
+
+
+def _write_iteration(run_directory, number, content):
+    """Write an agent result into a Fullsend iteration output directory."""
+    output = run_directory / f"iteration-{number}" / "output"
+    output.mkdir(parents=True)
+    (output / "agent-result.json").write_text(content)
+    return output
+
+
+def _run_post_script(cwd, caller_run, validated=None):
+    """Run the post-script the way Fullsend does: CWD is Fullsend's run directory."""
+    env = {"PATH": os.environ["PATH"], "FULLSEND_RUN_DIR": str(caller_run)}
+    if validated is not None:
+        env["FULLSEND_VALIDATED_ITERATION_DIR"] = str(validated)
+    return subprocess.run(["bash", POST_SCRIPT], cwd=cwd, env=env, capture_output=True, text=True)
+
+
+def test_post_script_selects_the_validated_iteration_over_a_later_one(tmp_path):
+    """FULLSEND_VALIDATED_ITERATION_DIR wins over a later iteration that failed validation."""
+    # Given a validated first iteration and a later, unusable iteration
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    validated = _write_iteration(fullsend_run, 1, _report_only_plan_json())
+    _write_iteration(fullsend_run, 2, "not json")
+
+    # When Fullsend names the validated iteration
+    result = _run_post_script(fullsend_run, caller_run, validated)
+
+    # Then the validated result is executed, not the last iteration
+    assert result.returncode == 0, result.stderr
+    assert "completed successfully" in result.stdout
+
+
+def test_post_script_does_not_scan_when_the_validated_iteration_has_no_result(tmp_path):
+    """A named validated iteration without a result fails instead of falling back to a scan."""
+    # Given an empty validated directory and another iteration holding a result
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    validated = fullsend_run / "iteration-2" / "output"
+    validated.mkdir(parents=True)
+    _write_iteration(fullsend_run, 1, _report_only_plan_json())
+
+    # When Fullsend names the empty validated iteration
+    result = _run_post_script(fullsend_run, caller_run, validated)
+
+    # Then the script fails loudly
+    assert result.returncode != 0
+    assert "no validated triage-security result" in result.stderr
+
+
+def test_post_script_falls_back_to_the_last_iteration_under_its_working_directory(tmp_path):
+    """Without FULLSEND_VALIDATED_ITERATION_DIR, the last iteration under the CWD is selected."""
+    # Given an unusable first iteration and a usable last one (sorted numerically)
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    _write_iteration(fullsend_run, 9, "not json")
+    _write_iteration(fullsend_run, 10, _report_only_plan_json())
+
+    # When the post-script runs with no validated iteration named
+    result = _run_post_script(fullsend_run, caller_run)
+
+    # Then it selects iteration-10 from its working directory, not FULLSEND_RUN_DIR
+    assert result.returncode == 0, result.stderr
+    assert "completed successfully" in result.stdout
+
+
+def test_post_script_fallback_fails_when_the_last_iteration_has_no_result(tmp_path):
+    """The fallback never executes an earlier iteration's result when the last iteration has none."""
+    # Given a usable first iteration and a last iteration without a result
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    _write_iteration(fullsend_run, 1, _report_only_plan_json())
+    (fullsend_run / "iteration-2" / "output").mkdir(parents=True)
+
+    # When the post-script runs with no validated iteration named
+    result = _run_post_script(fullsend_run, caller_run)
+
+    # Then it fails loudly instead of executing iteration-1
+    assert result.returncode != 0
+    assert "the last iteration output has no triage-security result" in result.stderr
+    assert "completed successfully" not in result.stdout
+
+
+@pytest.mark.parametrize("validated", ["symlink", "outside", None])
+def test_post_script_rejects_a_result_outside_the_run_directory(tmp_path, validated):
+    """A result resolving outside Fullsend's run directory is refused on every selection path."""
+    # Given a result that resolves outside the working directory
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    outside_result = tmp_path / "outside" / "agent-result.json"
+    outside_result.parent.mkdir()
+    outside_result.write_text(_report_only_plan_json())
+    output = fullsend_run / "iteration-1" / "output"
+    output.mkdir(parents=True)
+    (output / "agent-result.json").symlink_to(outside_result)
+    validated_dir = {"symlink": output, "outside": outside_result.parent, None: None}[validated]
 
     # When the runner attempts to select the post-validation result
-    result = subprocess.run(
-        ["bash", script], cwd=run_directory,
-        env={"PATH": os.environ["PATH"], "FULLSEND_RUN_DIR": str(run_directory)},
-        capture_output=True, text=True,
-    )
+    result = _run_post_script(fullsend_run, caller_run, validated_dir)
 
     # Then it fails before handing an untrusted path to the executor
     assert result.returncode != 0
-    assert "escapes" in result.stderr
+    assert "selected result path escapes the Fullsend run directory" in result.stderr
 
 
-def test_post_script_selects_an_in_run_result_from_a_different_working_directory(tmp_path):
-    """The post-script resolves validated output from FULLSEND_RUN_DIR, not its CWD."""
-    # Given the validated output and matching pre-script authorization in one run
-    script = os.path.join(SCRIPT_DIR, "post-triage-security.sh")
-    run_directory = tmp_path / "run"
-    (run_directory / "pre").mkdir(parents=True)
-    (run_directory / "pre" / "triage-security-input.json").write_text(json.dumps(_trusted_input(False)))
-    iteration_output = run_directory / "iteration-1" / "output"
-    iteration_output.mkdir(parents=True)
-    (iteration_output / "agent-result.json").write_text(
-        json.dumps(_plan([{"type": "report-only", "marker": "triage-security:report"}], "report-only")))
+def test_post_script_rejects_a_bundle_outside_fullsend_run_dir(tmp_path):
+    """A trusted bundle symlinked outside FULLSEND_RUN_DIR is refused."""
+    # Given a valid result and a bundle that resolves outside the caller's run directory
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    validated = _write_iteration(fullsend_run, 1, _report_only_plan_json())
+    bundle = caller_run / "pre" / "triage-security-input.json"
+    outside_bundle = tmp_path / "outside-input.json"
+    bundle.rename(outside_bundle)
+    bundle.symlink_to(outside_bundle)
 
-    # When the trusted post-script runs outside its Fullsend run directory
+    # When the post-script resolves the bundle
+    result = _run_post_script(fullsend_run, caller_run, validated)
+
+    # Then it fails before the executor reads it
+    assert result.returncode != 0
+    assert "trusted input path escapes FULLSEND_RUN_DIR" in result.stderr
+
+
+def test_post_script_rejects_a_missing_bundle(tmp_path):
+    """The post-script fails fast when the pre-script bundle is absent."""
+    # Given a valid result but no bundle under FULLSEND_RUN_DIR
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    validated = _write_iteration(fullsend_run, 1, _report_only_plan_json())
+    (caller_run / "pre" / "triage-security-input.json").unlink()
+
+    # When the post-script looks for the trusted bundle
+    result = _run_post_script(fullsend_run, caller_run, validated)
+
+    # Then it reports the missing input
+    assert result.returncode != 0
+    assert "trusted triage-security input is missing" in result.stderr
+
+
+def test_executor_validates_against_the_schema_fullsend_provides(tmp_path, monkeypatch):
+    """FULLSEND_OUTPUT_SCHEMA, the pinned validation_loop.schema, is the schema the executor enforces."""
+    # Given a provided schema that rejects every result, and an otherwise valid plan
+    rejecting_schema = tmp_path / "result.schema.json"
+    rejecting_schema.write_text(json.dumps({"not": {}}))
+    monkeypatch.setenv("FULLSEND_OUTPUT_SCHEMA", str(rejecting_schema))
+    plan = _plan([{"type": "report-only", "marker": "triage-security:report"}], "report-only")
+
+    # When the executor validates the plan
+    # Then the provided schema, not the plugin checkout copy, decides
+    with pytest.raises(executor.ActionError, match="result schema validation failed"):
+        executor.execute_plan(plan, _trusted_input(False))
+
+
+def test_post_script_runs_from_the_scripts_only_layout_fullsend_caches(tmp_path):
+    """The post-script completes from a scripts/-only copy when Fullsend provides FULLSEND_OUTPUT_SCHEMA."""
+    # Given only the scripts/ directory, as Fullsend fetches it for a URL-pinned post_script
+    cached_scripts = tmp_path / "cache" / "scripts"
+    shutil.copytree(SCRIPT_DIR, cached_scripts, ignore=shutil.ignore_patterns("__pycache__"))
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    validated = _write_iteration(fullsend_run, 1, _report_only_plan_json())
+    result_schema = os.path.join(SCRIPT_DIR, "..", "schemas", "triage-security-result.schema.json")
+
+    # When Fullsend runs the cached post-script with its pinned result schema
     result = subprocess.run(
-        ["bash", script], cwd=tmp_path,
-        env={"PATH": os.environ["PATH"], "FULLSEND_RUN_DIR": str(run_directory)},
+        ["bash", str(cached_scripts / "post-triage-security.sh")], cwd=fullsend_run,
+        env={"PATH": os.environ["PATH"], "PYTHONDONTWRITEBYTECODE": "1",
+             "FULLSEND_RUN_DIR": str(caller_run), "FULLSEND_VALIDATED_ITERATION_DIR": str(validated),
+             "FULLSEND_OUTPUT_SCHEMA": result_schema},
         capture_output=True, text=True,
     )
 
-    # Then it completes without needing Jira credentials or performing a mutation
+    # Then the report-only plan completes without the plugin's schemas/ directory
     assert result.returncode == 0, result.stderr
     assert "completed successfully" in result.stdout
 

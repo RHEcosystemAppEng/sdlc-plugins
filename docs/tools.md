@@ -143,11 +143,11 @@ prefetched evidence, and only the trusted runner can execute Jira mutations.
 |---|---|
 | `.fullsend/harness/triage-security.yaml` (repo root) | Defines the branch-independent Fullsend harness and its trusted pre/post phases. |
 | `scripts/pre-triage-security.sh` / `scripts/pre_triage_security.py` | Fetch, normalize, and validate trusted Jira, remote-link, configuration, external, matrix/source, metadata, and idempotency evidence into `triage-security-input.json`; the shipped collector sets `authorization.mutation_authorized` to `false`. |
-| `schemas/triage-security-input.schema.json` | Requires issue data, remote links, configuration, external evidence, matrix/source evidence, Jira metadata, idempotency context, and authorization. |
+| `scripts/triage-security-input.schema.json` | Requires issue data, remote links, configuration, external evidence, matrix/source evidence, Jira metadata, idempotency context, and authorization. |
 | `agents/triage-security.md` | Constrains the sandbox to mounted evidence and directs it to write `agent-result.json` to `FULLSEND_OUTPUT_DIR`. |
 | `schemas/triage-security-result.schema.json` | Defines `report-only` and `mutation-authorized` results and the supported action schema. |
 | `policies/triage-security.yaml` | Supplies the runner policy used by the harness. |
-| `scripts/post-triage-security.sh` | Locates a sandbox result under `FULLSEND_RUN_DIR`, verifies its path and JSON, and invokes the executor. |
+| `scripts/post-triage-security.sh` | Selects the result Fullsend validated (`FULLSEND_VALIDATED_ITERATION_DIR`, else the last iteration in its working directory) and the bundle under `FULLSEND_RUN_DIR`, verifies their paths and JSON, and invokes the executor. |
 | `scripts/execute-triage-security-actions.py` | Independently validates authorization, resolves references, deduplicates retry actions, and performs trusted Jira writes. |
 
 The sandbox uses the mounted `triage-security-input.json` plus the delivered

@@ -22,6 +22,15 @@ _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 _RESULT_SCHEMA_PATH = os.path.join(_SCRIPT_DIR, "..", "schemas", "triage-security-result.schema.json")
 
 
+def _result_schema_path() -> str:
+    """Return the pinned result schema Fullsend hands the post-script, else the plugin copy.
+
+    Fullsend sets FULLSEND_OUTPUT_SCHEMA to its cached validation_loop.schema; the
+    sibling schemas/ path exists only in a plugin checkout (local runs, tests).
+    """
+    return os.environ.get("FULLSEND_OUTPUT_SCHEMA") or _RESULT_SCHEMA_PATH
+
+
 def _load_module(name: str, filename: str):
     """Load a sibling script without making its hyphenated filename importable."""
     spec = importlib.util.spec_from_file_location(name, os.path.join(_SCRIPT_DIR, filename))
@@ -90,7 +99,7 @@ def _validate_action(action: Any) -> None:
 def _validate_result(result: Any) -> None:
     """Fail closed unless sandbox output satisfies the trusted result schema."""
     try:
-        with open(_RESULT_SCHEMA_PATH, encoding="utf-8") as schema_file:
+        with open(_result_schema_path(), encoding="utf-8") as schema_file:
             schema = json.load(schema_file)
         validate(instance=result, schema=schema)
     except (OSError, json.JSONDecodeError, SchemaError, ValidationError) as error:

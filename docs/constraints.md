@@ -205,7 +205,7 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/skills/triage-bug/SKILL.md` — Guardrails (§1.53–1.54), Step 1 Parse bug description (§1.88), Step 4 Post root cause comment (§1.56), Step 4.5 Affects Version Resolution (§1.89, §1.90, §1.91), Step 5 Front-load reproducer test (§1.55), Step 6 Decomposition Guard (§1.57)
 - `plugins/sdlc-workflow/skills/triage-security/SKILL.md` — Guardrails (§1.37, §1.38, §1.47, §1.94), Step 0 (§1.49, §1.68), Step 0.3 Matrix Staleness (§1.99), Steps 0.6–0.7 Fullsend mode and trusted input (§1.92–§1.95, §1.99), Fullsend action serialization (§1.95, §1.97, §1.98), Step 0 Deployment Context (§1.77, §1.78), Step 1 Ecosystem detection (§1.48), Step 1 Data Extraction (§1.49), Step 1.5 External CVE Data Enrichment (§1.62), Step 1.7 Embargo Check (§1.70, §1.71), Discovery mode (§1.69), Step 2.1 (§1.47), Step 2.2 (§1.42), Step 2.3 (§1.48), Step 2.4 (§1.44), Step 8 (§1.43), Step 8 Case B (§1.61), Post-Triage Summary (§1.67), Important Rules (§1.38–§1.43, §1.45, §1.46), Remediation Task Creation (§1.46, §1.66)
 - `plugins/sdlc-workflow/agents/triage-security.md` — Sandbox constraints (§1.99)
-- `plugins/sdlc-workflow/schemas/triage-security-input.schema.json` — Trusted input contract (§1.93)
+- `plugins/sdlc-workflow/scripts/triage-security-input.schema.json` — Trusted input contract (§1.93)
 - `plugins/sdlc-workflow/schemas/triage-security-result.schema.json` — Result modes and actions (§1.95)
 - `plugins/sdlc-workflow/scripts/post-triage-security.sh` — Trusted result handoff (§1.96)
 - `plugins/sdlc-workflow/scripts/execute-triage-security-actions.py` — Authorization, reference resolution, and idempotent execution (§1.96–§1.98)

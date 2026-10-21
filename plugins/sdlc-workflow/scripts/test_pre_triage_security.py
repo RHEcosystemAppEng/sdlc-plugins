@@ -4,6 +4,7 @@
 import io
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -185,6 +186,60 @@ def test_pre_triage_script_rejects_missing_runner_credentials():
     # Then no collection runs without the credential required by jira-client.py
     assert result.returncode != 0
     assert "JIRA_API_TOKEN" in result.stderr
+
+
+def _run_dir_guard_environment(tmp_path, run_directory):
+    """Build a pre-script environment with a stub collector for FULLSEND_RUN_DIR guard tests."""
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+    (project_root / "CLAUDE.md").write_text("# Project Configuration\n")
+    fake_bin = tmp_path / "bin"
+    fake_bin.mkdir()
+    collector = fake_bin / "python3"
+    collector.write_text("#!/usr/bin/env bash\nprintf '{\"issue\":\"%s\"}\\n' \"$3\"\n")
+    collector.chmod(0o755)
+    return {
+        "PATH": "{}{}{}".format(fake_bin, os.pathsep, os.environ["PATH"]),
+        "FULLSEND_WORK_ITEM_URL": "https://jira.example.com/browse/TC-42",
+        "FULLSEND_PROJECT_ROOT": str(project_root),
+        "FULLSEND_RUN_DIR": str(run_directory),
+        "JIRA_SERVER_URL": "https://jira.example.com",
+        "JIRA_EMAIL": "runner@example.com",
+        "JIRA_API_TOKEN": "token",
+    }
+
+
+def test_pre_triage_script_rejects_a_relative_fullsend_run_dir(tmp_path):
+    """A relative FULLSEND_RUN_DIR is rejected before any bundle or pre/ directory is created."""
+    # Given a relative FULLSEND_RUN_DIR resolved from the pre-script's working directory
+    script = os.path.join(SCRIPT_DIR, "pre-triage-security.sh")
+    environment = _run_dir_guard_environment(tmp_path, "relative-run")
+
+    # When the trusted pre-script starts
+    result = subprocess.run(["bash", script], cwd=tmp_path, env=environment, capture_output=True, text=True)
+
+    # Then it fails loudly, naming the value, without writing anything
+    assert result.returncode != 0
+    assert "FULLSEND_RUN_DIR must be an absolute path, got: relative-run" in result.stderr
+    assert not (tmp_path / "relative-run").exists()
+
+
+def test_pre_triage_script_accepts_an_absolute_fullsend_run_dir(tmp_path):
+    """An absolute FULLSEND_RUN_DIR passes the guard and receives the bundle."""
+    # Given an absolute FULLSEND_RUN_DIR outside the pre-script's working directory
+    script = os.path.join(SCRIPT_DIR, "pre-triage-security.sh")
+    run_directory = tmp_path / "run"
+    environment = _run_dir_guard_environment(tmp_path, run_directory)
+    working_directory = tmp_path / "elsewhere"
+    working_directory.mkdir()
+
+    # When the trusted pre-script runs
+    result = subprocess.run(["bash", script], cwd=working_directory, env=environment, capture_output=True, text=True)
+
+    # Then the bundle lands under the absolute run directory
+    assert result.returncode == 0, result.stderr
+    bundle = run_directory / "pre" / "triage-security-input.json"
+    assert json.loads(bundle.read_text()) == {"issue": "TC-42"}
 
 
 def test_pre_triage_script_isolates_bundles_per_fullsend_run(tmp_path, request):
@@ -480,7 +535,7 @@ def _complete_bundle():
     )
 
     # Then the exact sandbox contract accepts the resulting bundle
-    with open(os.path.join(SCRIPT_DIR, "..", "schemas", "triage-security-input.schema.json")) as schema_file:
+    with open(os.path.join(SCRIPT_DIR, "triage-security-input.schema.json")) as schema_file:
         schema = json.load(schema_file)
     validate(instance=bundle, schema=schema)
     assert bundle["issue"]["key"] == "TC-42"
@@ -533,6 +588,30 @@ def test_validate_bundle_fails_closed_without_format_extra(monkeypatch):
     # Then it fails closed, naming the missing extra, rather than validating silently
     with pytest.raises(pre_triage_security.EvidenceError, match=r"jsonschema\[format\]"):
         pre_triage_security.validate_bundle({"any": "bundle"})
+
+
+@requires_format_extra
+def test_validate_bundle_uses_the_schema_fetched_with_the_script(tmp_path):
+    """Validation works from a scripts/-only copy, the layout Fullsend caches for a URL-pinned pre_script."""
+    # Given only the scripts/ directory, as Fullsend fetches it, and a complete bundle
+    cached_scripts = tmp_path / "cache" / "scripts"
+    shutil.copytree(SCRIPT_DIR, cached_scripts, ignore=shutil.ignore_patterns("__pycache__"))
+    bundle_path = tmp_path / "bundle.json"
+    bundle_path.write_text(json.dumps(_complete_bundle()))
+
+    # When the cached copy validates the bundle
+    result = subprocess.run(
+        [sys.executable, "-c",
+         "import json, sys; import pre_triage_security as p; "
+         "p.validate_bundle(json.load(open(sys.argv[1]))); print(p._SCHEMA_PATH)",
+         str(bundle_path)],
+        cwd=cached_scripts, env={**os.environ, "PYTHONDONTWRITEBYTECODE": "1"},
+        capture_output=True, text=True,
+    )
+
+    # Then it validates against the schema inside that same directory
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == str(cached_scripts / "triage-security-input.schema.json")
 
 
 def _http_error_opener(status, body=b'{"message": "gone"}'):
