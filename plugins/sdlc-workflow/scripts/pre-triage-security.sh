@@ -26,6 +26,13 @@ if [[ ! -f "${PROJECT_ROOT}/CLAUDE.md" ]]; then
 fi
 
 : "${FULLSEND_RUN_DIR:?FULLSEND_RUN_DIR is required}"
+# The post-script runs in Fullsend's run directory, not this script's working
+# directory, so a relative value would resolve elsewhere there and fail only
+# after inference. Reject it before any work.
+if [[ "${FULLSEND_RUN_DIR}" != /* ]]; then
+  echo "ERROR: FULLSEND_RUN_DIR must be an absolute path, got: ${FULLSEND_RUN_DIR}" >&2
+  exit 1
+fi
 PRE_OUTPUT_DIR="${FULLSEND_RUN_DIR}/pre"
 mkdir -p "${PRE_OUTPUT_DIR}"
 OUTPUT_FILE="${PRE_OUTPUT_DIR}/triage-security-input.json"

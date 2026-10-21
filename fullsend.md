@@ -605,10 +605,12 @@ against the pinned `validation_loop.schema`. The caller supplies the rest.
 **Caller contract** — Fullsend sets none of these; export them before every
 `fullsend run triage-security`:
 
-- `FULLSEND_RUN_DIR` — a **fresh, per-run** directory (for example
-  `mktemp -d`). The pre-script writes `pre/triage-security-input.json` there,
-  `host_files` mounts it into the sandbox, and the post-script reads it back.
-  Never reuse it across runs or share it between concurrent runs.
+- `FULLSEND_RUN_DIR` — a **fresh, per-run**, **absolute** directory path (for
+  example `mktemp -d`). The pre-script writes `pre/triage-security-input.json`
+  there, `host_files` mounts it into the sandbox, and the post-script reads it
+  back. Never reuse it across runs or share it between concurrent runs. The
+  pre-script rejects a relative path: the post-script runs in Fullsend's run
+  directory, where a relative path would resolve elsewhere.
 - `FULLSEND_WORK_ITEM_URL` — the Jira Vulnerability URL
   (`https://<site>/browse/<KEY>`).
 - The product's `CLAUDE.md`: start `fullsend run` in the directory that holds it,
