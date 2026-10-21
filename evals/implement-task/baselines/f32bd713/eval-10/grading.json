@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md lines 47-63 contain a section 'CONFLICT: Assertion style -- existence checks vs. value-based assertions' that explicitly identifies both patterns with code examples: 'Pattern 1: .filter().any() -- existence check' and 'Pattern 2: .filter().count() > 0 -- existence check', sourced from 'tests/api/advisory.rs and tests/api/sbom.rs' (line 49)."
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md lines 47-79 contain a dedicated conflict section titled 'CONFLICT: Assertion style -- existence checks vs. value-based assertions'. It quotes the skill guidance (lines 70-75): 'Prefer value-based assertions over length-only checks' and 'Assert on the actual values -- not just the count.' The conflict between the sibling patterns and skill guidance is explicitly flagged."
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md lines 77-79: 'Resolution: Skill guidance takes PRECEDENCE over sibling patterns. The skill explicitly states in both Step 4 and Step 7 that its built-in quality guidance overrides conflicting sibling conventions. Sibling conventions are defaults, not overrides.'"
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md uses assert_eq! throughout all four tests. Test 1 (lines 39-47): assert_eq!(summary.permissive.count, 2), assert_eq!(summary.permissive.licenses, vec![\"Apache-2.0\", \"MIT\"]), assert_eq!(summary.copyleft.licenses, vec![\"GPL-3.0-only\"]). Test 3 (lines 84-93): assert_eq!(summary.permissive.count, 0) and assert_eq!(summary.permissive.licenses, Vec::<String>::new()). Test 4 (lines 113-114): assert_eq!(summary.permissive.count, 2) and assert_eq!(summary.permissive.licenses, vec![\"Apache-2.0\", \"MIT\"]). No .any() or .count() > 0 patterns appear anywhere in the test plan."
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md lines 139-143 explicitly state: 'The sibling patterns are followed for all non-conflicting aspects: file naming (package_license.rs in tests/api/), test setup and teardown patterns, HTTP client usage, and status code assertion style (assert_eq!(resp.status(), StatusCode::OK)).' Tests use test_ prefix with descriptive snake_case names (e.g., test_license_summary_returns_correct_categorized_counts) matching the sibling naming convention identified in conventions.md line 21. Tests use shared database setup and HTTP client patterns per sibling conventions (test-plan.md lines 25-27). Only assertion style is overridden."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

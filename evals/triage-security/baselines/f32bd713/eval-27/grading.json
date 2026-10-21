@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 2.3.5 dependency chain context identifies rustls as a feature-gated optional dependency behind the non-default 'tls-rustls' feature flag",
+      "passed": true,
+      "evidence": "version-impact.md lines 25-41 'Dependency Chain Context (Step 2.3.5)': 'backend (workspace) -> rustls (direct optional dependency) / Type: direct dependency (optional) / Profile: feature-gated (optional = true, behind non-default feature \"tls-rustls\") / Default features do NOT include \"tls-rustls\" -- the product ships with the \"tls-native\" feature enabled by default'. Lines 45-53 confirm: 'rustls is a feature-gated optional dependency: Declared in [dependencies] with optional = true / Gated behind the tls-rustls feature flag / The tls-rustls feature is NOT in the default feature list'."
+    },
+    {
+      "text": "The dependency scope decision tree presents a VEX justification prompt to the user with two options: skip remediation or proceed with standard remediation",
+      "passed": true,
+      "evidence": "feature-gate-prompt.md lines 16-20: 'Options: 1. Skip remediation -- apply VEX justification and close as not affected / 2. Proceed with remediation -- create tasks despite the feature gate / Choose (1/2):'. Two clear options presented to the user."
+    },
+    {
+      "text": "The VEX justification prompt recommends 'Vulnerable Code not in Execute Path' as the justification for skipping remediation",
+      "passed": true,
+      "evidence": "feature-gate-prompt.md line 14: 'Recommended VEX justification: **Vulnerable Code not in Execute Path**.' Also lines 22-27 elaborate: 'This matches the VEX justification category Vulnerable Code not in Execute Path: the package is present in the lock file...but the vulnerable code path is not included in the default product build and is never invoked at runtime unless a user explicitly opts in via the tls-rustls feature flag.'"
+    },
+    {
+      "text": "The VEX justification prompt includes the library name (rustls) and the feature flag name (tls-rustls) so the user has context for the decision",
+      "passed": true,
+      "evidence": "feature-gate-prompt.md line 8: '**Library**: rustls'. Line 11: '**Feature flag**: `tls-rustls`'. Line 14: 'The vulnerable dependency `rustls` is gated behind the `tls-rustls` feature'. Both the library name and feature flag name are explicitly included in the prompt context."
+    },
+    {
+      "text": "If the user chooses to skip remediation, the version is closed as not affected with the VEX justification — no remediation tasks are created for that version",
+      "passed": true,
+      "evidence": "feature-gate-prompt.md lines 30-35 'Option 1: Skip remediation (VEX justification)': 'Set VEX Justification custom field (customfield_12345) to: Vulnerable Code not in Execute Path / Close the Vulnerability issue TC-8051 with resolution \"Not a Bug\" / Add comment documenting the feature-gate analysis and VEX rationale / No remediation tasks created for the 2.2.x stream'. The issue is closed with VEX justification applied and no remediation tasks are created."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

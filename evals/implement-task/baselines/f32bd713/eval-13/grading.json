@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md explicitly identifies all three fields: Field 1 'cves: Option<Vec<String>>' (line 27), Field 2 'affected_packages: Option<Vec<AffectedPackage>>' (line 63), Field 3 'severity_counts: Option<HashMap<String, u32>>' (line 101). Each is given its own detailed section with type, guard pattern, and rationale."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md lines 83-87 use as_ref().cloned().unwrap_or_default() for cves; lines 92-95 use as_ref().map(|pkgs| pkgs.len() as u32).unwrap_or(0) for affected_packages; lines 98-102 use as_ref().cloned().unwrap_or_default() for severity_counts. The plan explicitly states on line 122: 'No .unwrap() calls anywhere -- all Option access goes through safe combinators.'"
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "In plan.md, all three Option fields are accessed through safe combinator chains: cves via as_ref().cloned().unwrap_or_default() (lines 83-87), affected_packages via as_ref().map().unwrap_or(0) (lines 92-95), severity_counts via as_ref().cloned().unwrap_or_default() (lines 98-102). .len() is only called on cve_list after unwrap_or_default() has produced a Vec<String> (line 88), never on the raw Option. null-guards.md also confirms in its 'Patterns NOT Used' table that direct .len()/.join()/.iter() on Option<T> is avoided."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md lines 5-9: 'The AdvisoryIngestResult struct is produced by the ingestor module (modules/ingestor/src/service/mod.rs) and consumed by the fundamental module... This data crosses a module boundary -- the producer and consumer are in separate crates with independent evolution cycles.' Lines 11-16: 'The producer's schema uses Option<T> for all three aggregate fields, meaning: 1. The producer explicitly allows None in its contract. 2. The producer may return None for valid real-world reasons...'"
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md lines 171-189 contain test_extract_summary_all_none_fields() which constructs AdvisoryIngestResult with cves: None, affected_packages: None, severity_counts: None, and asserts cve_count==0, cve_list.is_empty(), affected_package_count==0, severity_breakdown.is_empty(). null-guards.md lines 159-176 also reproduce this test. The plan states on line 254: 'The all-None test is the critical case for verifying null guards work.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

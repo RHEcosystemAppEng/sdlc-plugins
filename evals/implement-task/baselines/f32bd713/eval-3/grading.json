@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md lines 48-55: 'Apply the license filter using `apply_filter` from `common/src/db/query.rs`. Call `apply_filter` with the `license` parameter value... `apply_filter` already handles: Splitting comma-separated values (e.g., \"MIT,Apache-2.0\" becomes [\"MIT\", \"Apache-2.0\"])... so no new parsing or SQL generation code is needed.' Also plan.md line 36: 'No new query parameter parsing utilities are needed.' reuse-analysis.md lines 30-32: 'No new parsing function is written to split comma-separated values. No new SQL generation helper is created.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md lines 22-24: 'Following the pattern established in `modules/fundamental/src/advisory/endpoints/list.rs` (the severity filter), add an `Option<String>` field named `license` to the existing query parameter extraction struct. This matches the advisory list endpoint’s approach of using an optional string field on the Query struct for filter parameters.' reuse-analysis.md lines 36-66 details this as Reuse Candidate 2, with specific structural parallels (Query struct pattern, handler-to-service plumbing, error handling)."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md lines 58-60: 'Join through the `package_license` entity. Use the SeaORM entity defined in `entity/src/package_license.rs` to join the `package` table to the `package_license` table. This entity already maps the package-license relationship, so no raw SQL or new entity definitions are needed.' Also plan.md line 69: '`package_license` entity from `entity/src/package_license.rs` -- used for the JOIN, not replaced with raw SQL.' reuse-analysis.md lines 94-95: 'Writing raw SQL (`JOIN package_license ON ...`) would bypass SeaORM’s type safety and relationship management.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md covers three distinct candidates with 'What it provides' and 'How it is reused' sections: (1) 'Reuse Candidate 1: common/src/db/query.rs::apply_filter' (lines 8-33), (2) 'Reuse Candidate 2: modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)' (lines 36-66), (3) 'Reuse Candidate 3: entity/src/package_license.rs (package_license entity)' (lines 70-100). Summary table at lines 112-115 maps each to reuse type and location used."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md Scope Containment table (lines 136-139) lists exactly three files: 'modules/fundamental/src/package/endpoints/list.rs' (Modify), 'modules/fundamental/src/package/service/mod.rs' (Modify), 'tests/api/package_license_filter.rs' (Create). Plan explicitly states at line 141: 'No out-of-scope files are modified. The common/src/db/query.rs file and entity/src/package_license.rs file are used (imported) but not modified -- they provide existing functionality that is reused as-is.'"
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md line 36: 'No new query parameter parsing utilities are needed.' plan.md line 55: 'so no new parsing or SQL generation code is needed.' plan.md line 68: '`apply_filter` from `common/src/db/query.rs` -- reused directly, not reimplemented.' reuse-analysis.md lines 30-32: 'No new parsing function is written to split comma-separated values. No new SQL generation helper is created. No duplicate of `apply_filter` is introduced in the package module.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

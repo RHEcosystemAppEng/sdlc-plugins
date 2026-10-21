@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "In idempotency-check.md, Section 5 (lines 39-43): TC-8100 'already exists and is linked to TC-8001 via Depend', Decision: 'SKIP -- remediation task already exists with correct link type (Depend)'. Section 6 (lines 46-53): TC-8101 'already exists and is linked to TC-8001 via Depend', Decision: 'SKIP -- remediation task already exists'. triage-outcome.md confirms: 'The skill detects the existing Depend links on TC-8001 and skips task creation.'"
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "In idempotency-check.md, Section 1 (lines 7-9): 'Current state: Label ai-cve-triaged is already present in the issue’s label set: [CVE-2026-31812, pscomponent:org/rhtpa-server, ai-cve-triaged].' Decision: 'SKIP -- label already applied. No field-edit mutation needed.' Also confirmed in data-extraction.md line 48: 'Labels: CVE-2026-31812, pscomponent:org/rhtpa-server, ai-cve-triaged (triage marker already present)'."
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "In idempotency-check.md, Section 2 (lines 13-15): 'Current state: Issue status is already In Progress, which is past both Assigned and New.' Decision: 'SKIP -- issue is already in a later workflow state. No status-transition mutation needed. Per Step 0.8: \"If the issue is already in Assigned or any later status, skip the transition silently.\"'"
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "In idempotency-check.md, Section 7 (lines 57-61): 'Current state: Comment #1 is a description digest comment: [sdlc-workflow] Description digest: sha256-md:a1b2c3d4e5f6...' Decision: 'SKIP -- description digest comment already exists. No comment mutation needed.'"
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "In idempotency-check.md, Section 8 (lines 65-72): 'Current state: Comment #2 is the post-triage summary comment documenting: Version impact for RHTPA 2.2.0 and 2.2.1, Actions taken..., Comment Footnote included.' Decision: 'SKIP -- post-triage summary comment already exists. Posting a duplicate summary would create noise. No comment mutation needed.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

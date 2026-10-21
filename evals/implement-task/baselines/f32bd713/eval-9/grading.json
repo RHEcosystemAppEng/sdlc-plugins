@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md lines 8-14: 'Removing the filter logic from the method body leaves the `version_filter` parameter dead (unreferenced in the function body). Per the SKILL.md dead parameter detection guidance (Step 9), the correct fix is to **remove the parameter entirely** from the function signature -- not to underscore-prefix it as `_version_filter`.' The plan explicitly identifies the parameter as dead after filter logic removal and rejects underscore-prefixing."
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md line 25: 'Remove the `version_filter: &str` parameter from the `list` method signature.' Lines 28-46 show before/after signatures with the parameter removed. Lines 104-115 describe the two-phase approach: Phase 1 removes filter logic from body, Phase 2 removes the dead parameter from the signature."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md lines 108-113: 'update all 3 call sites: - `modules/fundamental/src/sbom/endpoints/list.rs` (endpoint handler) - `modules/search/src/service/mod.rs` (search service) - `tests/api/sbom.rs` (integration tests)'. Each call site has a dedicated section (sections 2, 3, 4) with before/after code showing the argument removal."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md lines 7-9: 'a common quick fix is to prefix with an underscore (`_version_filter`) to silence the warning. **This is the wrong approach.**' Lines 11-12: 'The correct fix is to **remove the parameter entirely** from the function signature and update all call sites.' Lines 17-19: 'Every caller must construct and pass the argument even though it has no effect. This adds noise to call sites and makes future refactoring harder.' Lines 25-27: '`_version_filter` silences the warning but leaves the dead parameter in place.'"
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md lines 121-128: 'Run tests: Run `cargo test -p <crate-name>` for each affected crate: - The crate containing `modules/fundamental/` (for the service and endpoint changes) - The crate containing `modules/search/` (for the search service change) - The integration test crate in `tests/`'. Also parameter-cleanup.md lines 147-155 describe running the test suite for every affected crate to verify nothing is broken."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

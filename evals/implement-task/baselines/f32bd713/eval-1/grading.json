@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4 line 71: 'get_symbols_overview on modules/fundamental/src/advisory/service/advisory.rs'; line 74: 'modules/fundamental/src/advisory/model/summary.rs -- understand AdvisorySummary struct and its severity field'. file-2-description.md also references 'advisory/endpoints/get.rs' for handler pattern inspection. conventions.md line 27: 'AppError enum defined in common/src/error.rs'. At least 3 of the 4 listed files are explicitly mentioned for inspection."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md Files Summary (lines 197-205) lists exactly 6 files: 3 creates (severity_summary.rs model, severity_summary.rs endpoint, advisory_summary.rs test) and 3 modifies (advisory.rs service, endpoints/mod.rs, model/mod.rs). The git add command (lines 142-147) stages only these 6 files. Step 9 line 116 includes scope containment: 'git diff --name-only must show only the 6 files (3 modified, 3 created). Flag any out-of-scope files.' No unrelated files are planned for modification."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md Files Summary: file 1 'modules/fundamental/src/advisory/model/severity_summary.rs | Create', file 2 'modules/fundamental/src/advisory/endpoints/severity_summary.rs | Create', file 3 'tests/api/advisory_summary.rs | Create'. Each has a corresponding detailed file description (file-1-description.md, file-2-description.md, file-3-description.md) with Action: Create."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md Files Summary: file 4 'modules/fundamental/src/advisory/service/advisory.rs | Modify', file 5 'modules/fundamental/src/advisory/endpoints/mod.rs | Modify', file 6 'modules/fundamental/src/advisory/model/mod.rs | Modify'. Each has a corresponding detailed file description (file-4-description.md, file-5-description.md, file-6-description.md) with Action: Modify."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md lines 149 and 183-193 show the commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' (Conventional Commits format with type 'feat', scope 'advisory'). Footer contains 'Implements TC-9201' referencing the Jira ticket."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md line 149: 'git commit --trailer=\"Assisted-by: Claude Code\" -m \"feat(advisory): add severity aggregation endpoint for SBOM advisories'. The commit message section (line 193) also shows 'Assisted-by: Claude Code' as a trailer in the final commit message."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Step 5 lines 104-108: 'git checkout main / git pull / git checkout -b TC-9201'. Line 208: 'TC-9201 (branched from main)'. Target Branch identified in line 8: 'Target Branch: main'. PR creation line 162: '--base main'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md lines 25-27: 'All handlers return Result<T, AppError> / Errors wrapped with .context() for descriptive messages / AppError enum defined in common/src/error.rs'. Lines 19-22: 'Each domain module follows the model/ + service/ + endpoints/ tripartite structure'. Both patterns are explicitly identified from sibling analysis."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md line 8: 'Target Branch: main'. Step 1 line 35: 'Target Branch: main' listed as a parsed section from TC-9201. Step 5 line 105: 'git checkout main'. Line 208: 'TC-9201 (branched from main)'. PR creation line 162: '--base main'."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "plan.md Step 1.5 lines 47-54: 'Would fetch issue comments via jira.get_issue_comments(TC-9201) and search for comments starting with [sdlc-workflow] Description digest:'. Line 54: 'If no digest comment found, log warning and proceed (backward compatibility).'"
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": true,
+      "evidence": "plan.md Step 9 line 123: 'Run cargo metadata --no-deps --format-version 1 from workspace root, resolve the package name for each modified crate (do NOT derive from nearest Cargo.toml -- use the name field from cargo metadata), then run cargo test -p <crate-name> for each affected crate.'"
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "pass_rate": 1.0
+  }
+}

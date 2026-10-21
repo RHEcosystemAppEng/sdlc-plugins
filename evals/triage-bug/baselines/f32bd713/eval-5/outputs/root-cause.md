@@ -1,0 +1,164 @@
+# Step 4 -- Root Cause Analysis: ACME-511
+
+## Root Cause Determination
+
+### What is broken
+
+The dark mode toggle in the Settings > Appearance panel updates the application's in-memory theme state but does not persist the user's preference to any durable storage mechanism. When the browser is closed and reopened, the in-memory state is lost and the application defaults to light mode.
+
+### Why it is broken
+
+The toggle click handler dispatches a theme state change (e.g., updating a React context or state store) but lacks a corresponding call to write the preference to persistent storage (such as `localStorage.setItem`). Additionally, the application initialization logic does not attempt to read a stored preference -- it unconditionally defaults to `"light"` mode.
+
+Two pieces are missing:
+1. **Write path**: persisting the preference when the user toggles dark mode
+2. **Read path**: restoring the preference from storage when the application loads
+
+### Where it is broken
+
+- **Settings/Appearance component** -- the toggle handler needs to persist the preference to `localStorage` (or equivalent) after updating in-memory state.
+- **App initialization / theme provider** -- the bootstrap logic needs to check `localStorage` for a stored preference and use it instead of the hardcoded `"light"` default.
+
+### How to verify the fix (reproducer strategy)
+
+A reproducer test should:
+1. Simulate toggling dark mode to ON
+2. Verify the preference is written to persistent storage (e.g., `localStorage`)
+3. Simulate an app reload (reinitialize the theme provider)
+4. Assert that the application loads in dark mode, reading the stored preference
+5. The test should fail before the fix (preference not persisted, app defaults to light) and pass after the fix
+
+## Root Cause Comment (for Jira)
+
+The following comment would be posted to ACME-511:
+
+```json
+{
+  "type": "doc",
+  "version": 1,
+  "content": [
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "content": [{ "type": "text", "text": "Root Cause" }]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "The dark mode toggle updates in-memory theme state but does not persist the preference to durable storage (e.g., localStorage). On browser restart, the in-memory state is lost and the application defaults to light mode. Both the write path (saving on toggle) and the read path (restoring on load) are missing."
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "content": [{ "type": "text", "text": "Affected Files" }]
+    },
+    {
+      "type": "bulletList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Settings/Appearance component -- toggle handler lacks persistence call" }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "App initialization / theme provider -- does not read stored preference, defaults to light mode" }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "content": [{ "type": "text", "text": "Suggested Approach" }]
+    },
+    {
+      "type": "orderedList",
+      "content": [
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Add a localStorage write in the toggle handler to persist the preference when the user changes it." }
+              ]
+            }
+          ]
+        },
+        {
+          "type": "listItem",
+          "content": [
+            {
+              "type": "paragraph",
+              "content": [
+                { "type": "text", "text": "Update the theme provider initialization to read from localStorage and use the stored value instead of the hardcoded default." }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "type": "heading",
+      "attrs": { "level": 3 },
+      "content": [{ "type": "text", "text": "Reproducer Strategy" }]
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "Write a test that toggles dark mode ON, verifies the preference is written to localStorage, simulates an app reload (re-initializes the theme provider), and asserts the application loads in dark mode. This test fails before the fix (no persistence, defaults to light) and passes after."
+        }
+      ]
+    },
+    {
+      "type": "rule"
+    },
+    {
+      "type": "paragraph",
+      "content": [
+        {
+          "type": "text",
+          "text": "This comment was AI-generated by "
+        },
+        {
+          "type": "text",
+          "text": "sdlc-workflow/triage-bug",
+          "marks": [
+            {
+              "type": "link",
+              "attrs": {
+                "href": "https://github.com/RHEcosystemAppEng/sdlc-plugins"
+              }
+            }
+          ]
+        },
+        {
+          "type": "text",
+          "text": " v0.13.10."
+        }
+      ]
+    }
+  ]
+}
+```
+
+**Action:** `jira.add_comment(ACME-511, <above ADF content>)`

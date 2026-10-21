@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md lines 29-37 explicitly state: 'modules/ingestor/src/graph/sbom/mod.rs' contains 'fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>' and 'fn suppliers(sbom: &Sbom) -> Vec<SupplierInfo>' as private functions, with changes to 'Change fn describing_packages(...) to pub fn describing_packages(...)' and 'Change fn suppliers(...) to pub fn suppliers(...)'. reuse-decision.md lines 9-13 also identifies them as 'Two private helper functions in modules/ingestor/src/graph/sbom/mod.rs'."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md lines 40-44: 'The migration crate already depends on trustify-module-ingestor in its Cargo.toml' with the toml snippet showing 'trustify-module-ingestor = { path = \"../modules/ingestor\" }'. reuse-decision.md lines 19-27 has an explicit 'Step 1: Check Dependency Relationship' section that verifies 'The migration crate's Cargo.toml already declares a dependency on the ingestor crate' before proceeding to the reuse decision."
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md line 5: 'Make the functions public (pub fn) and import them. Do not duplicate or inline the function bodies.' Lines 30-34 detail Option A (chosen): 'Change fn describing_packages(...) to pub fn describing_packages(...)' and 'Change fn suppliers(...) to pub fn suppliers(...)'. Lines 26-27: 'The dependency relationship already exists. No new cross-crate coupling would be introduced by importing these functions.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md lines 36-38: 'Option B -- Duplicate the function bodies (rejected): Copy the implementation of both functions into the migration crate -- Maintain two copies of the same logic in parallel'. Line 5 also states: 'Do not duplicate or inline the function bodies.' plan.md proposes importing from the ingestor crate (line 54-56) rather than copying."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md lines 52-58: Section titled 'DRY Principle (Don't Repeat Yourself)' explicitly states: 'Bug fixes would need to be applied in two places' as a reason for rejecting duplication. Also plan.md line 44: 'This follows the DRY principle (Don't Repeat Yourself) and maintains a single source of truth for the extraction logic.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
