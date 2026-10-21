@@ -829,6 +829,22 @@ def test_post_script_falls_back_to_the_last_iteration_under_its_working_director
     assert "completed successfully" in result.stdout
 
 
+def test_post_script_fallback_fails_when_the_last_iteration_has_no_result(tmp_path):
+    """The fallback never executes an earlier iteration's result when the last iteration has none."""
+    # Given a usable first iteration and a last iteration without a result
+    fullsend_run, caller_run = _post_script_roots(tmp_path)
+    _write_iteration(fullsend_run, 1, _report_only_plan_json())
+    (fullsend_run / "iteration-2" / "output").mkdir(parents=True)
+
+    # When the post-script runs with no validated iteration named
+    result = _run_post_script(fullsend_run, caller_run)
+
+    # Then it fails loudly instead of executing iteration-1
+    assert result.returncode != 0
+    assert "the last iteration output has no triage-security result" in result.stderr
+    assert "completed successfully" not in result.stdout
+
+
 @pytest.mark.parametrize("validated", ["symlink", "outside", None])
 def test_post_script_rejects_a_result_outside_the_run_directory(tmp_path, validated):
     """A result resolving outside Fullsend's run directory is refused on every selection path."""

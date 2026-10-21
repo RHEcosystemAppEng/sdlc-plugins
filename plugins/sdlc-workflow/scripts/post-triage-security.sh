@@ -40,12 +40,19 @@ if [[ -n "${FULLSEND_VALIDATED_ITERATION_DIR:-}" ]]; then
   # Never fall back here: a scan could pick up output that failed validation.
   RESULT_FILE="$(result_in "${FULLSEND_VALIDATED_ITERATION_DIR}")"
 else
-  # Harnesses without a validation loop: take the last iteration's result.
+  # Harnesses without a validation loop: only the last iteration counts. Never
+  # fall back to an earlier iteration when the last one produced no result.
+  LAST_ITERATION=""
   while IFS= read -r iteration_dir; do
-    [[ -d "${RUN_DIR}/${iteration_dir}" ]] || continue
-    candidate="$(result_in "${RUN_DIR}/${iteration_dir}")"
-    [[ -n "${candidate}" ]] && RESULT_FILE="${candidate}"
+    [[ -d "${RUN_DIR}/${iteration_dir}" ]] && LAST_ITERATION="${RUN_DIR}/${iteration_dir}"
   done < <(cd "${RUN_DIR}" && printf '%s\n' iteration-*/output | sort -V)
+  if [[ -n "${LAST_ITERATION}" ]]; then
+    RESULT_FILE="$(result_in "${LAST_ITERATION}")"
+    if [[ -z "${RESULT_FILE}" ]]; then
+      echo "ERROR: the last iteration output has no triage-security result: ${LAST_ITERATION}" >&2
+      exit 1
+    fi
+  fi
 fi
 
 if [[ -z "${RESULT_FILE}" ]]; then
