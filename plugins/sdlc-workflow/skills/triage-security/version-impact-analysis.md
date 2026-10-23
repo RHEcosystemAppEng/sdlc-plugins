@@ -608,3 +608,5 @@ This determines the remediation path for each stream:
   remediation task.
 
 Wait for the engineer to review and confirm the table before proceeding to Step 3.
+
+<!-- TC-7141 native eval CI proof (fullsend v0.47.1 / OpenShell 0.1.2). Draft PR, do not merge. -->
