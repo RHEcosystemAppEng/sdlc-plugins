@@ -17,7 +17,7 @@ Static tests and preflight do not establish hosted credentials, infrastructure o
 ## Versions and prerequisites
 
 Use Python3.12, Git and curl on macOS or Linux (amd64/arm64). `setup` installs
-only into the chosen cache. It verifies Fullsendv0.43.0 release archives against
+only into the chosen cache. It verifies Fullsend v0.47.1 release archives against
 the SHA256 values in [dependencies.json](../../evals/fullsend/dependencies.json),
 and fetches canonical agent-eval-harness1.22.0 at immutable commit
 `4b540c652f5ed325e18abf6b4bd0eb4414a4bb3c`. Python runtime/Vertex/build
@@ -28,14 +28,16 @@ bytes are not claimed reproducible. OpenShell, Podman, the host OS, service
 configuration and the delivered model runtime inside the production image are
 outside the Python lock.
 
-The operator must provide installed **OpenShell CLI and gateway0.0.116**, Podman,
+The operator must provide installed **OpenShell CLI and gateway 0.1.2**, Podman,
 an approved running gateway and container-driver configuration, and an accessible
-production sandbox image. The pin is Fullsendv0.43.0's
-[OpenShell pin file](https://github.com/fullsend-ai/fullsend/blob/d5f36921ac754705619f38c637ef692873809fbc/.github/scripts/openshell-version.sh).
-The agents `LOCAL.md` copy mentions older0.0.83; do not use that version.
-The inspected0.0.116 CLI has `gateway add/select/list`, **no `gateway start`**;
-provision/run `openshell-gateway` using your existing approved authenticated
-configuration. The Python entrypoint does not install or start host services, create
+production sandbox image. The pin is Fullsend v0.47.1's
+[OpenShell pin file](https://github.com/fullsend-ai/fullsend/blob/c68903c0373e2216af03f5412642d4aa4019057f/.github/scripts/openshell-version.sh)
+(identical to the supported commit `9f188578`'s). OpenShell 0.1 needs a **schema
+v2 `gateway.toml`** (`[openshell] version = 2`, `compute_driver = "podman"`,
+`[openshell.drivers.podman] supervisor_image`) and cannot read 0.0.x gateway
+state; follow the pinned local guide's upgrade steps when replacing a 0.0.x
+install. Provision/run `openshell-gateway` using your existing approved
+authenticated configuration. The Python entrypoint does not install or start host services, create
 credentials, change gateway/TLS configuration, or relax sandbox policy.
 
 Platform differences:
@@ -50,12 +52,12 @@ Platform differences:
   normally `${XDG_RUNTIME_DIR}/podman/podman.sock`. Provision these through the
   runner's approved host setup, along with OpenShell's authenticated gateway and
   required supervisor image. The existing Fullsend
-  [functional CI source](https://github.com/fullsend-ai/fullsend/blob/d5f36921ac754705619f38c637ef692873809fbc/.github/workflows/functional-tests.yml)
+  [functional CI source](https://github.com/fullsend-ai/fullsend/blob/c68903c0373e2216af03f5412642d4aa4019057f/.github/workflows/functional-tests.yml)
   documents this host dependency. The trusted CI wrapper reuses the pinned upstream
   installers and rootless Podman setup; Python `setup` remains dependency-only.
 
 For further platform context, consult the pinned
-[Fullsend local guide](https://github.com/fullsend-ai/fullsend/blob/d5f36921ac754705619f38c637ef692873809fbc/docs/guides/user/running-agents-locally.md).
+[Fullsend local guide](https://github.com/fullsend-ai/fullsend/blob/c68903c0373e2216af03f5412642d4aa4019057f/docs/guides/user/running-agents-locally.md).
 Use the actual installed OpenShell CLI/help and approved gateway configuration
 where older guide commands differ.
 
@@ -89,7 +91,7 @@ and host judge credentials through these environment variables:
 | `GOOGLE_CLOUD_PROJECT` | GCP project used by the production Vertex environment mount |
 | `CLOUD_ML_REGION` | Vertex region supporting both selected models |
 
-The production credential provider/profile/environment mount is reused unchanged.
+The production built-in `vertex-ai` provider and environment mount are reused unchanged.
 The test harness uses the existing native host-file pattern to upload the
 operator-provided `GOOGLE_APPLICATION_CREDENTIALS` file directly to
 `/tmp/.gcp-credentials.json`, the path referenced by that environment template.
@@ -149,8 +151,9 @@ Pinned upstream Fullsend source supplies OpenShell/Podman setup and sandbox WIF
 preparation. Original host ADC stays with Vertex judging; separate prepared
 sandbox ADC plus native OIDC token/refresh inputs go to Fullsend. No long-lived
 key, GitHub App, Jira token, forge mint or production pre/post hook is added.
-Trusted suite resources supply the pre-script, policy/profile/provider and host
-schema validator. Only the selected PR plugin is sandbox test content.
+Trusted suite resources supply the pre-script, policy and host schema validator;
+the Vertex provider and its egress profile are the ones built into the pinned
+Fullsend release (bare `vertex-ai`). Only the selected PR plugin is sandbox test content.
 
 Cases033–036 retain all21 original assertion texts. Case037 adds seven release
 assertions, for28 total. Missing, null, skipped applicable judgments, errors or
@@ -190,7 +193,7 @@ Native verify-pr and production pre/post mutation coverage remain separate.
 The input mount is `/sandbox/workspace/.pre-script/triage-security-input.json`.
 The native output directory is `/sandbox/workspace/output`, **not `/sandbox/output`**.
 Negative gate injection uses a mounted test-only `.env.d` fragment sourced before
-model launch, as supported by Fullsendv0.43.0 `bootstrapEnv` and Claude runtime
+model launch, as supported by Fullsend v0.47.1 `bootstrapEnv` and Claude runtime
 `buildRunCommand`. It is deliberate negative configuration, not a normal Fullsend
 configuration. Source support does not establish runtime propagation.
 
@@ -212,7 +215,7 @@ inside that directory, which Fullsend uses as the resolver workspace root throug
 `--fullsend-dir`. The separate synthetic target is a fresh local `git init`
 repository, with no remote or commit. Its only project file is the absent case's
 `CLAUDE.md`; the other cases have no project configuration or input content.
-Pinned Fullsend0.43.0 `UploadDir` includes `.git`, and read-only setup requires
+Pinned Fullsend v0.47.1 `UploadDir` includes `.git`, and read-only setup requires
 that metadata directory; neither operation requires a commit. The fresh local 21/21 run exercised this source
 contract; hosted setup still needs its own real WIF run. The target never points at the
 real repository. No containment check is disabled and external resource symlinks
@@ -326,7 +329,7 @@ The fresh local run proves the four paths locally; hosted WIF acceptance remains
 pending until the bootstrap is merged and PR299 runs successfully.
 
 An optional no-inference resolver regression uses actual Fullsend APIs from a
-temporary snapshot of pinned source `d5f36921ac754705619f38c637ef692873809fbc`.
+temporary snapshot of pinned source `c68903c0373e2216af03f5412642d4aa4019057f`.
 It needs Go1.26.5 or newer and already cached module dependencies (downloads and
 automatic toolchain installation are disabled). It proves resource resolution and
 early environment validation without a generated run-directory variable, confirms
