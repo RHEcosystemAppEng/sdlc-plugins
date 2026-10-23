@@ -70,7 +70,7 @@ Append these two nodes at the end of the ADF document's `content` array.
 
 ## Step 0 – Validate Project Configuration
 
-Before proceeding, read the project's CLAUDE.md and verify that the following sections exist under `# Project Configuration`:
+Before proceeding, read the project's project configuration file and verify that the following sections exist under `# Project Configuration`:
 
 1. `## Repository Registry` — must contain a table with at least one entry
 2. `## Jira Configuration` — must contain at minimum: Project key, Cloud ID, Feature issue type ID
@@ -78,7 +78,7 @@ Before proceeding, read the project's CLAUDE.md and verify that the following se
 
 If any of these sections are missing or incomplete, inform the user:
 
-> "This skill requires Project Configuration in your CLAUDE.md. Please run `/setup` first to configure your project, then re-run this skill."
+> "This skill requires Project Configuration in your project configuration file. Please run `/setup` first to configure your project, then re-run this skill."
 
 **Stop execution immediately.** Do not attempt to gather the missing information or proceed without it.
 
@@ -102,7 +102,7 @@ Before attempting any JIRA operations (Steps 1, 1.5, 2.5, 4, 6), determine the a
    Choose (1/2/3):
    ```
    
-3. **If "1. Yes":** Check CLAUDE.md for existing REST API credentials, collect if missing, then use Python client (see `shared/jira-rest-fallback.md`)
+3. **If "1. Yes":** Check project configuration file for existing REST API credentials, collect if missing, then use Python client (see `shared/jira-rest-fallback.md`)
 4. **If "2. No":** Skip the JIRA operation and inform user
 5. **If "3. Retry":** Retry MCP once
 
@@ -368,7 +368,7 @@ jira.get_project_issue_types(cloudId, projectKey)
 ```
 
 The `cloudId` and project key come from the project's `## Jira Configuration` in
-CLAUDE.md (already read in Step 0).
+project configuration file (already read in Step 0).
 
 ### Map types to hierarchy roles
 
@@ -415,7 +415,7 @@ This mapping is used in Steps 5 and 6 when creating Jira issues.
 
 ### Hierarchy Configuration override
 
-If CLAUDE.md has a `## Hierarchy Configuration` section (from the setup skill),
+If project configuration file has a `## Hierarchy Configuration` section (from the setup skill),
 read the stored default grouping strategy and apply it. If not present, skip
 silently — hierarchy preferences are optional.
 
@@ -426,7 +426,7 @@ Analyze relevant repositories to identify impacted modules, APIs, and tests.
 ### Serena-first workflow
 
 Each target repository has a dedicated Serena MCP server instance, as specified in
-the **Repository Registry** section of the project's CLAUDE.md. Look up the Serena
+the **Repository Registry** section of the project's project configuration file. Look up the Serena
 Instance column to determine the correct instance name for each repository.
 
 Use the instance matching the repository you are analyzing. Tools are called as
@@ -444,7 +444,7 @@ For each target repository with a Serena instance:
 4. **Non-symbolic search**: use `search_for_pattern` for string literals, configuration keys,
    route definitions, or anything not captured as a symbol.
 
-> **Note:** Check the **Code Intelligence** section of the project's CLAUDE.md for
+> **Note:** Check the **Code Intelligence** section of the project's project configuration file for
 > per-instance limitations (e.g., some language servers may not support certain operations).
 > Adapt your tool usage accordingly.
 
@@ -463,7 +463,7 @@ use Explore agents with Glob, Grep, and Read tools.
 
 ### CONVENTIONS.md lookup
 
-For each target repository, look up its **Path** in the **Repository Registry** (CLAUDE.md)
+For each target repository, look up its **Path** in the **Repository Registry** (project configuration file)
 to locate the repository root. Check for a `CONVENTIONS.md` file at that root using the
 Serena instance for the repository (`list_dir`). If no Serena instance is available, use
 Glob or Read with the absolute path from the Registry (e.g., `<Path>/CONVENTIONS.md`).
@@ -489,7 +489,7 @@ Use Glob, `list_dir`, or `search_for_pattern` to locate these files. Record them
 For each target repository, check for a testing readiness template at the
 conventional path `docs/testing-readiness.md`:
 
-1. Determine the repository root path from the **Repository Registry** in CLAUDE.md.
+1. Determine the repository root path from the **Repository Registry** in project configuration file.
 2. Check for `docs/testing-readiness.md` at the repository root using Glob or Read
    (Serena's `list_dir` if available).
 3. If found, read and parse the template. The template format uses `## <Category Name>`
@@ -508,7 +508,7 @@ perform explicit backend API discovery to prevent path and shape mismatches.
    determine which backend endpoints the frontend will need to call. Look for data-fetching
    requirements, form submissions, and CRUD operations implied by the UI design.
 2. **Look up the backend Serena instance**: consult the **Repository Registry** in the
-   project's CLAUDE.md to find the Serena Instance for the backend repository. Tools are
+   project's project configuration file to find the Serena Instance for the backend repository. Tools are
    called as `mcp__<serena-instance>__<tool>`.
 3. **Discover actual endpoints**: use `search_for_pattern` or `find_symbol` on the backend
    repo to locate route definitions, controller methods, or handler functions for the
@@ -645,7 +645,7 @@ section entirely — generate tasks as before (Feature → Task hierarchy).
 
 #### Determine grouping strategy
 
-Check if CLAUDE.md `## Hierarchy Configuration` has a `Default epic grouping strategy`
+Check if project configuration file `## Hierarchy Configuration` has a `Default epic grouping strategy`
 setting:
 
 - If set to a valid strategy (`by-repository`, `by-sub-feature`, or `trivial`), use it.
@@ -1090,7 +1090,7 @@ additional_fields: {
 - **`priority`**: include only if the Feature has a priority set (not `"Undefined"` — see Step 1). If the Feature's priority is unset, omit the `priority` key entirely from `additional_fields`.
 - **`fixVersions`**: include only if **both** conditions are met:
   1. The Feature has a non-empty `fixVersions` array (see Step 1).
-  2. The `fixVersion scope` setting in `### Jira Field Defaults` (under `## Jira Configuration` in CLAUDE.md) includes task-level propagation. Specifically:
+  2. The `fixVersion scope` setting in `### Jira Field Defaults` (under `## Jira Configuration` in project configuration file) includes task-level propagation. Specifically:
      - If `fixVersion scope` is `"task"` or `"both"`: propagate fixVersions to tasks.
      - If `fixVersion scope` is `"feature"`: do NOT propagate fixVersions to tasks.
      - If `### Jira Field Defaults` does not exist or `fixVersion scope` is absent: default to `"both"` (propagate to tasks).
@@ -1233,7 +1233,7 @@ Include:
 
 ## Important Rules
 
-- Do not guess repository structure — use the Serena instance specified in the project's **Repository Registry** (CLAUDE.md) for the target repo, with tools like `get_symbols_overview`, `find_symbol`, `find_referencing_symbols`, `search_for_pattern`. Check the **Code Intelligence** section for per-instance limitations. Fall back to Glob/Grep/Read for repos without a Serena instance.
+- Do not guess repository structure — use the Serena instance specified in the project's **Repository Registry** (project configuration file) for the target repo, with tools like `get_symbols_overview`, `find_symbol`, `find_referencing_symbols`, `search_for_pattern`. Check the **Code Intelligence** section for per-instance limitations. Fall back to Glob/Grep/Read for repos without a Serena instance.
 - Prefer inspecting real code before planning.
 - Ensure every task has clear implementation notes.
 - Ensure tasks remain small enough for a single engineer.

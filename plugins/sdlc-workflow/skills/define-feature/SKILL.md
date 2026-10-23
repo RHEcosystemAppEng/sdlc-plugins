@@ -70,7 +70,7 @@ Append these two nodes at the end of the ADF document's `content` array.
 
 ## Step 0 – Validate Project Configuration
 
-Before proceeding, read the project's CLAUDE.md and verify that the following sections exist under `# Project Configuration`:
+Before proceeding, read the project's project configuration file and verify that the following sections exist under `# Project Configuration`:
 
 1. `## Repository Registry` — must contain a table with at least one entry
 2. `## Jira Configuration` — must contain at minimum: Project key, Cloud ID, Feature issue type ID
@@ -78,7 +78,7 @@ Before proceeding, read the project's CLAUDE.md and verify that the following se
 
 If any of these sections are missing or incomplete, inform the user:
 
-> "This skill requires Project Configuration in your CLAUDE.md. Please run `/setup` first to configure your project, then re-run this skill."
+> "This skill requires Project Configuration in your project configuration file. Please run `/setup` first to configure your project, then re-run this skill."
 
 **Stop execution immediately.** Do not attempt to gather the missing information or proceed without it.
 
@@ -93,7 +93,7 @@ Before attempting JIRA operations, determine the access method. This initializat
 
 1. **Attempt MCP first** (preferred method)
 2. **If MCP fails:**
-   - **Always prompt user** (even if REST API credentials exist in CLAUDE.md):
+   - **Always prompt user** (even if REST API credentials exist in project configuration file):
      ```
      ❌ Atlassian MCP failed: {error_message}
      
@@ -108,7 +108,7 @@ Before attempting JIRA operations, determine the access method. This initializat
      ```
    
    - **If user chooses "1. Yes - Use REST API":**
-     - Check `CLAUDE.md` → `## Jira Configuration` → `### REST API Credentials (MCP Fallback)`
+     - Check `project configuration file` → `## Jira Configuration` → `### REST API Credentials (MCP Fallback)`
      - If credentials exist:
        - Read Server URL, Email, and API Token (or `$JIRA_API_TOKEN` env var reference)
        - Set environment variables: `JIRA_SERVER_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`
@@ -118,7 +118,7 @@ Before attempting JIRA operations, determine the access method. This initializat
        - Collect: Server URL, Email, API Token
        - Validate with: `python3 scripts/jira-client.py get_user_info`
        - On success: Display "✅ Authentication successful! Logged in as: {displayName}"
-       - Ask storage preference (all in CLAUDE.md / URL+email with env var / don't store)
+       - Ask storage preference (all in project configuration file / URL+email with env var / don't store)
        - Store if requested
        - Use REST API for this operation
    
@@ -289,7 +289,7 @@ the assignee step. Both fields are optional and skippable.
 
 ### Step 3.5.1 – Read Jira Field Defaults
 
-Check the project's CLAUDE.md for a `### Jira Field Defaults` subsection under
+Check the project's project configuration file for a `### Jira Field Defaults` subsection under
 `## Jira Configuration`. If present, extract:
 
 - **Default priority** — the priority name to pre-select (or empty/none for no default)
@@ -569,5 +569,5 @@ Suggest the next step:
 - **Never fabricate content.** All description content must come from user input. Rephrasing for clarity is acceptable; inventing requirements, goals, or use cases is not.
 - **Never create without preview.** The user must see and approve the full description before the issue is created in Jira.
 - **Never modify the filesystem.** This skill only creates Jira issues and comments.
-- Read the project key and Feature issue type ID from CLAUDE.md Jira Configuration — do not hardcode values.
+- Read the project key and Feature issue type ID from project configuration file Jira Configuration — do not hardcode values.
 - If the user provides ambiguous input for a section, ask for clarification rather than guessing.

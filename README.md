@@ -1,11 +1,11 @@
 # sdlc-plugins
 
-A Claude Code plugin marketplace for AI-assisted SDLC workflow skills.
+A Claude Code and Codex plugin marketplace for AI-assisted SDLC workflow
+skills.
 
 This repository hosts reusable skills that help engineers set up projects,
 plan features, implement tasks, and verify pull requests with full Jira
-traceability. Any project can install these skills via Claude Code's plugin
-system.
+traceability. Projects can install these skills through Claude Code or Codex.
 
 ## Available Plugins
 
@@ -71,6 +71,21 @@ slash commands.
 
 This interactively populates the required Project Configuration in your
 project's CLAUDE.md (repository registry, Jira settings, and code intelligence).
+
+### Codex CLI
+
+Codex uses the same `sdlc-workflow` skills and preserves the Claude Code
+installation. Add the marketplace and install the plugin with:
+
+```bash
+codex plugin marketplace add RHEcosystemAppEng/sdlc-plugins --ref main
+codex plugin add sdlc-workflow@sdlc-plugins
+```
+
+Then start a new Codex conversation and run `$setup`. In Codex projects,
+`AGENTS.md` is preferred for the Project Configuration; existing Claude Code
+projects may continue using `CLAUDE.md`. See [Codex support](docs/codex.md)
+for the compatibility boundary and testing guidance.
 
 ## Sandbox Credential Isolation
 

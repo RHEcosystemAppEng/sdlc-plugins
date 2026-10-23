@@ -1,12 +1,17 @@
 ---
 name: setup
 description: |
-  Set up or update the Project Configuration in your CLAUDE.md for use with sdlc-workflow skills.
+  Set up or update the Project Configuration in AGENTS.md or CLAUDE.md for use with sdlc-workflow skills.
 ---
 
 # setup skill
 
-You are an AI setup assistant. You configure a project's CLAUDE.md with the required Project Configuration sections for sdlc-workflow skills.
+You are an AI setup assistant. You configure a project's project-configuration file with the required Project Configuration sections for sdlc-workflow skills.
+
+Use `AGENTS.md` when running in Codex. Use `CLAUDE.md` when running in Claude
+Code. If both files exist, inspect both and update the file used by the current
+client; keep the shared `# Project Configuration` content synchronized when
+the user explicitly asks to support both clients.
 
 ## Behavior
 
@@ -28,7 +33,8 @@ Read the file `project-config.template.md` in this skill's directory. Use it as 
 
 ## Step 1 – Read Existing Configuration
 
-Read the project's CLAUDE.md file. If it exists, parse it for:
+Read the current project's configuration file (`AGENTS.md` in Codex or
+`CLAUDE.md` in Claude Code). If it exists, parse it for:
 - `# Project Configuration` heading
 - `## Repository Registry` table — record each Repository name already listed
 - `## Jira Configuration` list — record which fields already have values
@@ -72,7 +78,7 @@ Otherwise, determine which fields are missing and gather them:
 
 ### Step 3.2 – Handle MCP Failure (REST API Fallback)
 
-If any MCP operation fails, **always prompt the user** (even if REST API credentials exist in CLAUDE.md):
+If any MCP operation fails, **always prompt the user** (even if REST API credentials exist in the selected project configuration file):
 
 ```
 ❌ Atlassian MCP failed: {error_message}
@@ -89,7 +95,7 @@ Choose (1/2/3):
 
 **If user chooses "1. Yes - Use REST API":**
 
-1. Check `CLAUDE.md` for existing REST API credentials under `### REST API Credentials (MCP Fallback)`
+1. Check `the selected project configuration file` for existing REST API credentials under `### REST API Credentials (MCP Fallback)`
 2. If credentials exist:
    - Read Server URL, Email, and API Token (or `$JIRA_API_TOKEN` env var reference)
    - Set environment variables: `JIRA_SERVER_URL`, `JIRA_EMAIL`, `JIRA_API_TOKEN`
@@ -99,7 +105,7 @@ Choose (1/2/3):
    - Collect: Server URL, Email, API Token
    - Validate with: `python3 scripts/jira-client.py get_user_info`
    - On success: Display "✅ Authentication successful! Logged in as: {displayName}"
-   - Ask storage preference (all in CLAUDE.md / URL+email with env var / don't store)
+   - Ask storage preference (all in the selected project configuration file / URL+email with env var / don't store)
    - Store if requested under `### REST API Credentials (MCP Fallback)` in `## Jira Configuration`
    - Proceed to Step 3.3 (use REST API)
 
@@ -152,7 +158,7 @@ Proceed to Step 3.5 with the provided fields.
 
 ## Step 3.5 – Hierarchy Preferences
 
-Check if `## Hierarchy Configuration` already exists in CLAUDE.md with all fields
+Check if `## Hierarchy Configuration` already exists in the selected project configuration file with all fields
 populated (no `{{placeholder}}` markers).
 
 - **If it exists and is fully populated**: Report "Hierarchy Configuration is up to date"
@@ -204,7 +210,7 @@ available. Hierarchy Configuration will not be created." Then skip to Step 4.
 
 ### Step 3.5.3 – Write Hierarchy Configuration
 
-Write the `## Hierarchy Configuration` section to CLAUDE.md with the gathered
+Write the `## Hierarchy Configuration` section to the selected project configuration file with the gathered
 values. Follow the template structure from `project-config.template.md`. Present
 the planned changes to the user for review before writing.
 
@@ -297,11 +303,11 @@ If the section exists but new Serena instances were added in Step 2, ask the use
 
 Compose the updated `# Project Configuration` section with its subsections.
 
-**If CLAUDE.md doesn't exist**: Create the file with the Project Configuration section.
+**If the selected project configuration file doesn't exist**: Create the file with the Project Configuration section.
 
-**If CLAUDE.md exists but has no `# Project Configuration`**: Append the section at the end of the file.
+**If the selected project configuration file exists but has no `# Project Configuration`**: Append the section at the end of the file.
 
-**If CLAUDE.md exists with `# Project Configuration`**: Update only the subsections that changed, preserving all other content in the file and within each subsection.
+**If the selected project configuration file exists with `# Project Configuration`**: Update only the subsections that changed, preserving all other content in the file and within each subsection.
 
 Present the planned changes to the user for review before writing. Clearly show what will be added or modified. If no changes are needed (everything is already configured), report "Project Configuration is up to date — no changes needed" and stop.
 
@@ -366,7 +372,7 @@ Present the populated `CONVENTIONS.md` to the user for review before writing. Cl
 
 ## Step 9 – Scaffold Bug Configuration
 
-Check if `## Bug Configuration` already exists in CLAUDE.md with all three required
+Check if `## Bug Configuration` already exists in the selected project configuration file with all three required
 fields populated (Bug issue type ID, Bug template, Bug-to-Task link type) and none
 contain `{{placeholder}}` markers.
 
@@ -418,7 +424,7 @@ target project.
 
 ### Step 9.5 – Write Bug Configuration
 
-Write the `## Bug Configuration` section to CLAUDE.md with the gathered values.
+Write the `## Bug Configuration` section to the selected project configuration file with the gathered values.
 Follow the template structure from `project-config.template.md`. Present the planned
 changes to the user for review before writing.
 
@@ -427,7 +433,7 @@ content, preserving any surrounding text.
 
 ## Step 10 – Security Configuration (Optional)
 
-Check if `## Security Configuration` already exists in CLAUDE.md with all required
+Check if `## Security Configuration` already exists in the selected project configuration file with all required
 fields populated (no `{{placeholder}}` markers remaining).
 
 - **If it exists and is fully populated**: Report "Security Configuration is up to date"
@@ -552,7 +558,7 @@ for CVE analysis. For each repository, collect:
 Read `security-config.template.md` from this skill's directory and replace the
 `{{placeholder}}` markers with the values gathered above.
 
-If the `## Security Configuration` section does not yet exist in CLAUDE.md, append it
+If the `## Security Configuration` section does not yet exist in the selected project configuration file, append it
 after the `## Code Intelligence` section. If the section exists but has placeholders,
 replace only the placeholder content, preserving any surrounding text.
 
@@ -596,7 +602,7 @@ If the user accepts, for each Version Stream:
 
 ## Step 11 – Validate
 
-After writing, read the CLAUDE.md back and verify:
+After writing, read the selected project configuration file back and verify:
 - `# Project Configuration` heading exists
 - `## Repository Registry` contains a table with columns: Repository, Role, Serena Instance, Path
 - `## Jira Configuration` contains at minimum: Project key, Cloud ID, Feature issue type ID
@@ -617,6 +623,6 @@ Report the validation results to the user.
 
 - **Never remove** existing configuration entries — only add new ones.
 - **Never overwrite** user-customized values — if a field already has a value, preserve it.
-- **Always present changes** to the user for review before writing to CLAUDE.md.
+- **Always present changes** to the user for review before writing to the selected project configuration file.
 - **Ask only for what is missing** — do not re-ask for information that is already configured.
 - If no changes are needed, report it clearly and stop.
