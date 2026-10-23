@@ -37,7 +37,7 @@
     {
       "id": 3,
       "prompt": "Set up the Project Configuration for this project. The existing CLAUDE.md is in claude-md-empty.md (it has no Project Configuration section). The available MCP tools are listed in mcp-tools-no-serena.md — there are NO Serena tools and NO Atlassian MCP tools available. Simulate tool discovery using the tool listing — do NOT call any actual MCP tools. Assume the user chooses to continue without code intelligence when prompted. For Jira Configuration, assume the user chooses manual entry and provides: Project key=MYPROJ, Cloud ID=abc123, Feature issue type ID=10001. No Git Pull Request or GitHub Issue custom fields. For Bug Configuration (Step 8), assume the user provides Bug issue type ID=10001 manually, accepts the default bug template path (docs/bug-template.md), and accepts the default Bug-to-Task link type (Blocks). Skip the bug template file copy since this is a simulation. For Security Configuration (Step 9), assume the user declines when asked whether to enable security triage. Write the generated Project Configuration section to outputs/claude-md-result.md. Write a discovery log to outputs/discovery-log.md. Write a changes log to outputs/changes-log.md. Do NOT modify any actual files, do NOT call MCP tools, do NOT run Bash commands — only write to outputs/.",
-      "expected_output": "A Project Configuration with an empty Repository Registry (headers only, no data rows), manually-entered Jira Configuration with 3 fields, and a Code Intelligence section noting that no Serena instances are configured. Security Configuration should not appear since the user declined. The discovery log should note that no Serena instances were found and the user chose to continue without code intelligence. The user should be prompted about continuing without code intelligence before proceeding.",
+      "expected_output": "A Project Configuration with an empty Repository Registry (headers only, no data rows), manually-entered Jira Configuration with 3 fields, and a Code Intelligence section noting that no Serena instances are configured. Security Configuration should not appear since the user declined. The discovery log should record that no Serena instances were found and the simulated user chose to continue without code intelligence.",
       "files": ["files/claude-md-empty.md", "files/mcp-tools-no-serena.md"],
       "assertions": [
         "outputs/claude-md-result.md contains a '## Repository Registry' section with the table headers (Repository, Role, Serena Instance, Path) but no data rows, or explicitly notes that no repositories are configured",
@@ -45,7 +45,7 @@
         "outputs/claude-md-result.md contains a '## Code Intelligence' section that indicates no Serena instances are configured",
         "outputs/discovery-log.md documents that no Serena MCP tools were discovered among the available tools",
         "outputs/discovery-log.md documents that no Atlassian MCP tools were discovered and Jira fields were provided via manual entry",
-        "The output or discovery log mentions prompting the user about continuing without code intelligence (the skill should ask whether to continue or set up Serena first)",
+        "outputs/discovery-log.md records the simulated user's choice to continue without code intelligence rather than set up Serena, after no Serena tools were found",
         "outputs/claude-md-result.md contains a '## Bug Configuration' section with three fields: Bug issue type ID (10001), Bug template (docs/bug-template.md), Bug-to-Task link type (Blocks)",
         "The skill offers Security Configuration opt-in and respects the user's decline — outputs/claude-md-result.md does NOT contain a '## Security Configuration' section"
       ]
@@ -109,6 +109,7 @@
         "The review or changes log identifies docs/templates/security-matrix.template.md as the sole canonical scaffold and does not use docs/templates/security-matrix.md as a template or fallback",
         "outputs/security-matrix-review.md contains a Container Images table keyed by both Product Version and Component, with separate 2.1.0 api-rhel9 and api-rhel10 rows",
         "The proposed Supportability Matrix uses the configured dynamic source-repository columns backend and frontend-ui, with the supplied version/build/date/source-pin rows",
+        "The expanded Supportability Matrix header, separator, and data rows have the same number of cells for both configured source repositories",
         "The proposed Source Pinning Method section has one entry per configured repository and uses the supplied artifacts.lock.yaml and Git submodule methods",
         "The proposed matrix preserves the supplied Ecosystem Mappings rows for Cargo/backend and npm/frontend-ui rather than replacing or omitting that section",
         "The valid image rows preserve Konflux release tag v0.3.12 and resolved full commit SHA 0123456789abcdef0123456789abcdef01234567 as separate values",

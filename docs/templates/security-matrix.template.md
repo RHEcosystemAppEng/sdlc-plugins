@@ -15,12 +15,12 @@ This Konflux release repo covers the **{stream}** product version stream.
 ## Supportability Matrix
 
 <!-- One row per product version built from this release stream. Expand
-     {source-repo-name} into one column for every repository in the project's
-     Security Configuration > Source Repositories table. Each source column
-     contains that repository's tag or commit hash pinned in the Konflux build. -->
+     {source-repo-name} and its matching separator/value cells in lockstep into
+     one column per repository in Security Configuration > Source Repositories.
+     Each source column contains that repository's tag or commit pinned in Konflux. -->
 
 | RHTPA Version | Build | Build Date | {source-repo-name} | Notes |
-|---|---|---|---|---|---|
+|---|---|---|---|---|
 | {version} | {build} | {build-date} | `{source-ref}` | |
 
 #### Container Images
