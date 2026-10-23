@@ -140,10 +140,11 @@ managed settings, or the `--settings` CLI flag — not from project-level
 
 ## Project Configuration
 
-For the skills to work with your project, your project's CLAUDE.md must
-implement the [Project Configuration Contract](docs/project-config-contract.md).
+For the skills to work with your project, your project's `AGENTS.md` (Codex)
+or `CLAUDE.md` (Claude Code) must implement the
+[Project Configuration Contract](docs/project-config-contract.md).
 
-The contract requires three sections in your CLAUDE.md:
+The contract requires three sections in the applicable project configuration file:
 
 1. **Repository Registry** — maps repos to Serena instances and local paths
 2. **Jira Configuration** — project key, cloud ID, issue type IDs
