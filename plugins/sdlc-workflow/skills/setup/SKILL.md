@@ -565,10 +565,10 @@ For each configured Version Stream, check the configured `security-matrix.md` pa
 - **If it exists**: Report "security-matrix.md already exists at <path> — skipping."
 - **If missing**: Scaffold only from the plugin-root
   `docs/templates/security-matrix.template.md`; `docs/templates/security-matrix.md` is a
-  worked example. Expand `{source-repo-name}` / `{source-ref}` into one column and one
-  Source Pinning Method entry per configured Source Repositories entry. Retain fixed
-  columns and Ecosystem Mappings. Offer to write the scaffold to the configured path and
-  get confirmation for each file.
+  worked example. Expand `{source-repo-name}` / `{source-ref}` and matching separator
+  cells in lockstep into one column and one Source Pinning Method entry per configured
+  Source Repositories entry. Retain fixed columns and Ecosystem Mappings. Offer to write
+  the scaffold to the configured path and get confirmation for each file.
 
 ### Step 10.6 – Populate supportability and image identity (Optional)
 
