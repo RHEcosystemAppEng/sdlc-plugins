@@ -560,39 +560,44 @@ Present the planned Security Configuration section to the user for review before
 
 ### Step 10.5 – Scaffold security-matrix.md
 
-For each Version Stream configured above, check if a `security-matrix.md` file exists
-at the specified path within the project working directory.
+For each configured Version Stream, check the configured `security-matrix.md` path.
 
-- **If it does NOT exist**: Read `security-matrix.md` from `docs/templates/` and offer
-  to write it to the configured path in the project directory. The user must confirm each file.
-- **If it DOES exist**: Report "security-matrix.md already exists at <path> — skipping."
+- **If it exists**: Report "security-matrix.md already exists at <path> — skipping."
+- **If missing**: Scaffold only from the plugin-root
+  `docs/templates/security-matrix.template.md`; `docs/templates/security-matrix.md` is a
+  worked example. Expand `{source-repo-name}` / `{source-ref}` into one column and one
+  Source Pinning Method entry per configured Source Repositories entry. Retain fixed
+  columns and Ecosystem Mappings. Offer to write the scaffold to the configured path and
+  get confirmation for each file.
 
-### Step 10.6 – Populate supportability matrix (Optional)
+### Step 10.6 – Populate supportability and image identity (Optional)
 
-After scaffolding or confirming security-matrix.md files exist, ask the user:
+After scaffolding or confirming matrix files exist, ask:
 
-> "Would you like me to populate the supportability matrix now? I'll query the Konflux
-> release repo's git history to discover versions, image digests, build dates, and
-> source commits."
+> "Would you like me to populate the Supportability Matrix and Container Images table
+> from release history and published-image evidence?"
 
 If the user declines, skip to Step 11. The matrix can be populated later on demand
 by `/triage-security` during CVE investigation.
 
 If the user accepts, for each Version Stream:
 
-1. Read the Konflux release repo's git log or tag history to discover released versions
-2. For each version, extract:
-   - **Image digest** — from the container image reference in the repo
-   - **Build date** — from image metadata or build-date labels
-   - **Source commits** — one per source repository, from the pinned references in the repo
-   - **Retag status** — whether this version shares the same source commits as another
-3. Write the discovered rows into the Supportability Matrix table in the stream's
-   `security-matrix.md`
-4. Write or update the `<!-- Last-Updated: <ISO-8601-timestamp> -->` HTML comment at
-   the very first line of the file. Use the current UTC timestamp in ISO 8601 format
-   (e.g., `<!-- Last-Updated: 2026-06-29T14:30:00Z -->`). This timestamp is consumed
-   by triage-security's Step 0.3 staleness check.
-5. Present the populated matrix to the user for review before writing
+1. Read release tags/history; collect product versions, builds/dates, source commits,
+   source pinning methods, and retag status from release evidence.
+2. Add one Container Images row per unique **Product Version** / **Component** pair.
+   Keep the Konflux release tag, full SHA resolved from that tag, image reference,
+   immutable image digest, and CPE as distinct values.
+3. Compare each published image's `org.opencontainers.image.revision` label with its
+   resolved full SHA. A missing value or mismatch is unresolved: ask for corrected
+   evidence and leave the matrix unchanged until verified.
+4. Populate each named Source Pinning Method entry from release evidence. Preserve one
+   supportability source column per repository and Ecosystem Mappings; ask rather than
+   infer missing source, pinning, or mapping data.
+5. Present the complete proposed matrix and revision checks for review before writing.
+   Only after confirmation and verification, write it and set the first-line
+   `<!-- Last-Updated: <ISO-8601-timestamp> -->` to the current UTC time. This timestamp
+   is consumed by triage-security's Step 0.3 staleness check. A declined review leaves
+   the matrix unchanged.
 
 ## Step 11 – Validate
 
