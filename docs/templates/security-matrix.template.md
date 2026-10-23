@@ -14,28 +14,45 @@ This Konflux release repo covers the **{stream}** product version stream.
 
 ## Supportability Matrix
 
-<!-- One row per product version built from this release stream.
-     trustify and trustify-ui columns contain the tag or commit hash
-     pinned in the Konflux build. -->
+<!-- One row per product version built from this release stream. Expand
+     {source-repo-name} into one column for every repository in the project's
+     Security Configuration > Source Repositories table. Each source column
+     contains that repository's tag or commit hash pinned in the Konflux build. -->
 
-| RHTPA Version | Build | Build Date | trustify | trustify-ui | Notes |
+| RHTPA Version | Build | Build Date | {source-repo-name} | Notes |
 |---|---|---|---|---|---|
-| {version} | {build} | {build-date} | `{trustify-ref}` | `{trustify-ui-ref}` | |
+| {version} | {build} | {build-date} | `{source-ref}` | |
+
+#### Container Images
+
+<!-- Add one row for every unique product-version/component pair. Keep the
+     Konflux release tag, the full commit SHA resolved from that tag, the
+     published image reference, and the immutable OCI image digest distinct.
+     The published image's org.opencontainers.image.revision label must equal
+     the resolved release commit SHA. Do not mark an image row verified when
+     evidence is missing or those values do not match. -->
+
+| Product Version | Component | Konflux Release Tag | Resolved Release Commit SHA | Image Reference | Image Digest | CPE |
+|---|---|---|---|---|---|---|
+| {version} | {component} | `{release-tag}` | `{release-commit-sha}` | `{image-reference}` | `sha256:{image-digest}` | `{cpe}` |
 
 ### Source Pinning Method
 
-<!-- How each source repository's commit or tag is pinned in the Konflux
-     release repo. Common methods: git submodule, artifacts.lock.yaml,
-     or tag reference in a build config file. -->
+<!-- Repeat one entry per configured Source Repositories row, using the same
+     repository short name. Describe how its commit or tag is pinned in Konflux;
+     common methods include git submodules, artifacts.lock.yaml, or build-config tags. -->
 
-- **trustify**: {trustify-pinning-method}
-- **trustify-ui**: {trustify-ui-pinning-method}
+- **{source-repo-name}**: {source-pinning-method}
 
 ## Ecosystem Mappings
 
-<!-- Maps each dependency ecosystem to its lock file and inspection command.
-     Used by triage-security to check whether a specific package version
-     is present in a given product build. -->
+<!-- One row per tracked ecosystem:
+     - Repository: configured short name, or — when not applicable
+     - Lock File: file name within that repository, blank when none exists
+     - Check Command: inspect a dependency at the pinned ref (e.g., git show
+       <commit>:<lock-file>)
+     - Upstream Branch: branch used to check whether a fix is available upstream
+     triage-security uses these mappings for released-version and fix checks. -->
 
 | Ecosystem | Repository | Lock File | Check Command | Upstream Branch |
 |---|---|---|---|---|
