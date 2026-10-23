@@ -244,7 +244,33 @@ for CVE analysis.
 At least one row is required. Each source repository generates a
 corresponding commit column in the Supportability Matrix within
 `security-matrix.md` — the column names are dynamic, matching the
-repository names listed here.
+repository names listed here. The canonical template expands its source-column
+and Source Pinning Method placeholders once per configured repository, using the
+same short name for both. The Ecosystem Mappings table remains alongside them.
+
+#### Container Images table
+
+The canonical security-matrix template contains a Container Images table
+alongside the Supportability Matrix. It complements the per-version
+supportability rows with one image row for each unique **(Product Version,
+Component)** pair. This key keeps platform-specific images, such as RHEL 9
+and RHEL 10 builds, distinct even when they share a product version.
+
+| Column | Contract | Example |
+|---|---|---|
+| Product Version | Version matching a row in the Supportability Matrix | `2.2.4` |
+| Component | Exact image component/platform identifier | `backend-rhel9` |
+| Konflux Release Tag | Release-repo tag associated with the product build | `v0.4.12` |
+| Resolved Release Commit SHA | Full Git commit SHA resolved from the release tag; distinct from the tag and image digest | `1234567890abcdef1234567890abcdef12345678` |
+| Image Reference | Published OCI registry/repository reference | `registry.example.test/rhtpa/backend:2.2.4-rhel9` |
+| Image Digest | Immutable digest of that published image, not its tag or Git commit | `sha256:<64-hex-digest>` |
+| CPE | CPE identifying the image component | `cpe:2.3:a:example:rhtpa_backend_rhel9:2.2.4:*:*:*:*:*:*:*` |
+
+Before Setup treats an image row as verified, the published image's
+`org.opencontainers.image.revision` label must equal the resolved release
+commit SHA. Setup presents the proposed Supportability Matrix and Container
+Images table for review before writing; missing or mismatched image evidence
+leaves the matrix unchanged until corrected.
 
 #### Structure
 
