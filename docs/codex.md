@@ -21,6 +21,26 @@ codex plugin list
 
 Start a new Codex conversation after installation so the skills are loaded.
 
+## Set up Serena MCP
+
+Serena provides code intelligence for the repository registry and workflow
+skills. Install and initialize Serena with `uv`:
+
+```bash
+uv tool install -p 3.13 serena-agent
+serena init
+```
+
+Register Serena with Codex using Serena's automated setup command:
+
+```bash
+serena setup codex
+```
+
+After setup, restart Codex and confirm that the Serena MCP tools are available.
+The `setup` skill can then discover the configured Serena instances and add
+them to the project's `AGENTS.md` Project Configuration.
+
 ## Project configuration
 
 The `setup` skill accepts either project configuration file:
