@@ -17,12 +17,10 @@
 # sandbox receives read-only context only (JIRA_BASE_URL for display links) and
 # reads the Jira task + PR URL from the pre_script's verify-pr-input.json.
 #
-# Several referenced children are authored by later tasks in this epic and do not
-# exist yet — providers/vertex-ai.yaml (TC-5808), policies/verify-pr.yaml
-# (TC-5809), profiles/fullsend-vertex-ai.yaml + schemas/verify-pr-result.schema.json
-# + scripts/pre-verify-pr.sh (TC-5810), scripts/post-verify-pr.sh (TC-5811). This
-# task validates the harness syntactically only; full fullsend resolution is
-# deferred to TC-5810/TC-5811.
+# The Vertex provider and its egress profile are fullsend's built-ins, declared by
+# bare name below (TC-7141); the repo copies (providers/vertex-ai.yaml,
+# profiles/fullsend-vertex-ai.yaml) were deleted because fullsend reserves both
+# names and OpenShell 0.1.x rejects the copy's placeholder credential.
 
 role: review
 
@@ -79,12 +77,10 @@ plugins:
 policy: plugins/sdlc-workflow/policies/verify-pr.yaml
 
 # Vertex only — GitHub is tier-1 and needs no provider.
+# Bare name: the vertex-ai provider and fullsend-vertex-ai egress profile built
+# into fullsend (requires fullsend >= v0.45.0; see fullsend.md "Credential delivery").
 providers:
-  - plugins/sdlc-workflow/providers/vertex-ai.yaml
-
-openshell:
-  profiles:
-    - plugins/sdlc-workflow/profiles/fullsend-vertex-ai.yaml
+  - vertex-ai
 
 # URL-pinned base: only repo-relative host_files may live here. When this harness
 # is consumed via a pinned raw URL (config.yaml / a child's `base:`), fullsend

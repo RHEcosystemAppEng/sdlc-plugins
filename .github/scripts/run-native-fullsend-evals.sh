@@ -4,7 +4,7 @@ set -euo pipefail
 
 cache="${RUNNER_TEMP:?}/tc6726-deps"
 upstream="${GITHUB_WORKSPACE:?}/upstream-fullsend"
-test "$(git -C "$upstream" rev-parse HEAD)" = d5f36921ac754705619f38c637ef692873809fbc
+test "$(git -C "$upstream" rev-parse HEAD)" = c68903c0373e2216af03f5412642d4aa4019057f
 
 reviewed="${GITHUB_WORKSPACE}/native-eval-source"
 : "${NATIVE_EVAL_SOURCE_SHA:?Reviewed eval source pin is required}"
@@ -20,11 +20,17 @@ case "${1:?setup or run}" in
     source "$upstream/.github/scripts/openshell-version.sh"
     mkdir -p "$HOME/.config/openshell"
     echo 'OPENSHELL_BIND_ADDRESS=0.0.0.0' > "$HOME/.config/openshell/gateway.env"
+    # OpenShell 0.1 reads only the schema v2 gateway config (upstream functional CI).
     cat > "$HOME/.config/openshell/gateway.toml" <<EOF
 [openshell]
-version = 1
+version = 2
+
 [openshell.gateway]
+compute_driver = "podman"
+
+[openshell.drivers.podman]
 supervisor_image = "ghcr.io/nvidia/openshell/supervisor:${OPENSHELL_VERSION}"
+health_check_interval_secs = 10
 EOF
     bash "$upstream/.github/scripts/install-podman.sh"
     whoami_user="$(whoami)"
@@ -32,16 +38,18 @@ EOF
       sudo usermod --add-subuids 100000-165535 --add-subgids 100000-165535 "$whoami_user"
     fi
     podman system migrate
+    # The OpenShell 0.1 gateway is a systemd user service pinned to the podman
+    # driver; it needs the socket-activated API (upstream functional CI), not a
+    # backgrounded `podman system service`.
+    systemctl --user start podman.socket
     socket_path="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock"
-    mkdir -p "$(dirname "$socket_path")"
-    podman system service --time=0 "unix://${socket_path}" > "$RUNNER_TEMP/tc6726-podman.log" 2>&1 &
     for _i in $(seq 1 30); do
-      if [ -S "$socket_path" ] && podman --url "unix://${socket_path}" info >/dev/null 2>&1; then
+      if podman --url "unix://${socket_path}" info >/dev/null 2>&1; then
         break
       fi
       sleep 1
     done
-    test -S "$socket_path"
+    podman --url "unix://${socket_path}" info >/dev/null
     bash "$upstream/.github/scripts/install-openshell.sh"
     export PATH="$cache/venv/bin:$PATH"
     python3.12 "$runner" preflight --cache "$cache"

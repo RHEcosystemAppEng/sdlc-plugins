@@ -74,23 +74,40 @@ never place a credential in the sandbox at all.
 | **GitHub** | 1 | No | The pre_script prefetches the read bundle (`gh pr diff` / `gh pr view` → diff, diffstat, reviews, comments, commits), the head-SHA **CI check-run outcomes** (`github.check_runs` — name/status/conclusion/details_url), and the **concatenated `--log-failed` output of every failed check-run** (written to `check-run-logs.txt`, mounted separately; only its path rides in the bundle so the large log text stays off the agent's context until Correctness Check 1b reads it on a FAIL), and records the PR head ref name and head commit SHA in it; the post_script writes via `fullsend issues post-comment --tracker github` and `gh` (PR reviews/replies via `gh api`). The token stays in runner env only. The PR-head working tree is the `--target-repo` clone, checked out at the head SHA before the run (see below) — the pre_script does not check out. |
 | **Vertex AI** | 4 (fullsend-mandated) | **Yes** | The in-sandbox runtime does the model inference and reads `GOOGLE_APPLICATION_CREDENTIALS` from a file (`/tmp/.gcp-credentials.json`). Vertex auth requires local JWT signing, so tier 4 (file on the sandbox filesystem) is unavoidable. This is the one credential set in the sandbox. |
 
-Because Vertex is the only in-sandbox credential, the sandbox's **only network
-egress is `*.googleapis.com`** (declared in
-`plugins/sdlc-workflow/profiles/fullsend-vertex-ai.yaml`). There is no
-atlassian, github, or anthropic egress from the sandbox — those are all handled
-on the runner.
+Because Vertex is the only in-sandbox credential, the sandbox's only network
+egress is the inference egress of fullsend's **built-in `fullsend-vertex-ai`
+profile**: `*.googleapis.com:443` and `api.anthropic.com:443`, for the
+`claude`, `claude.exe`, `node` and `pi` binaries. There is no atlassian or
+github egress from the sandbox — those are handled on the runner.
 
 > GitHub is a **tier-1** service — it needs no OpenShell provider. There is no
-> Jira provider and no `github-ro` provider. The only provider is
-> `plugins/sdlc-workflow/providers/vertex-ai.yaml`, which selects the Vertex
-> egress profile (its credential still arrives via the host-file mount, not a
-> proxied placeholder).
+> Jira provider and no `github-ro` provider. The only provider is fullsend's
+> built-in `vertex-ai`, declared by bare name (`providers: [vertex-ai]`, no
+> `openshell.profiles`). It selects the built-in egress profile and declares no
+> credential; the Vertex credential still arrives via the host-file mount, not a
+> proxied placeholder. Both harnesses therefore require **fullsend ≥ v0.45.0**
+> (the release that reserves the built-in provider names; CI runs v0.47.1).
+>
+> **Egress decision (TC-7141).** Before TC-7141 the harnesses shipped their own
+> copies, `providers/vertex-ai.yaml` and `profiles/fullsend-vertex-ai.yaml`
+> (`*.googleapis.com` only, plus a `_NOOP_VERTEX_AI` credential that worked
+> around NVIDIA/OpenShell#1978). OpenShell 0.1.x rejects that credential
+> because the profile does not declare it, and fullsend reserves both names for
+> its built-ins and will reject copies in a future release. The copies were
+> deleted per fullsend's *Upgrading agents generated before built-in providers*
+> guide, and the extra `api.anthropic.com:443` / `**/claude.exe` egress of the
+> built-in profile is **accepted**: the sandbox holds no Anthropic credential,
+> and the built-in profile keeps receiving vendor fixes. A narrower renamed
+> custom profile was rejected to stay on the vendor path.
 
 ## Prerequisites
 
-- [fullsend](https://github.com/fullsend-ai/fullsend) CLI installed (CI pins
-  **v0.43.0** — see [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump); a local run needs a
-  compatible release).
+- [fullsend](https://github.com/fullsend-ai/fullsend) CLI installed — **≥ v0.45.0**
+  for the built-in `vertex-ai` provider the harnesses declare (the live
+  verify-pr dispatch still pins **v0.43.0** against an older locked harness — see
+  [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump)).
+- OpenShell **0.1.x** (the version the chosen fullsend release pins in
+  `.github/scripts/openshell-version.sh`; 0.1.2 for v0.47.1 and `9f188578`).
 - An OpenShell gateway running — fullsend uses OpenShell as its sandbox runtime.
 - GCP credentials for Vertex AI — a service-account key JSON (local) or a WIF
   external-account config (CI). Referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
@@ -374,6 +391,7 @@ schedule, but both target the supported commit):
 |---|---|---|
 | GitHub verify-pr (this repo) | CLI `v0.43.0`, reusable-dispatch `d5f36921ac754705619f38c637ef692873809fbc` | supported commit (after the child-harness credential mounts are adapted — see *Breaking changes* below) |
 | GitLab triage-security (`sdlc-fullsend`) | — (not deployed yet) | supported commit from the first deployment |
+| Native Fullsend eval CI (`eval-pr-run.yml`) | CLI release `v0.47.1` (`c68903c0373e2216af03f5412642d4aa4019057f`), OpenShell `0.1.2` | stays on a tagged release: the eval CI installs the CLI only from digest-checked release archives, and `9f188578` is untagged. v0.47.1 is the newest release before the supported commit; its built-in Vertex provider/profile, OpenShell pin and CI install scripts are identical to `9f188578`'s (TC-7141) |
 
 #### Update path from v0.43.0 / d5f36921
 
@@ -416,6 +434,13 @@ that affect this repo:
   token rotation or App migration, expect one new sticky comment instead of an
   edit. The command now fails, posting nothing, if it cannot resolve its own
   identity.
+- **Built-in providers replace the harness copies** (reserved names since
+  v0.45.0; TC-7141). `harness/verify-pr.yaml` and `harness/triage-security.yaml`
+  now declare the bare provider `vertex-ai` and no `openshell.profiles`, and
+  `providers/vertex-ai.yaml` / `profiles/fullsend-vertex-ai.yaml` are deleted.
+  The live GitHub deployment keeps working on CLI `v0.43.0` only because
+  `.fullsend/lock.yaml` still pins an older harness commit; **re-pinning the
+  verify-pr base past TC-7141 requires the CLI bump in the same step.**
 - **No-op for this repo, but checked:** a failed agent now fails `fullsend run`
   for a harness without a `validation_loop` (#8305, v0.47.1) and a harness with no
   `policy` fails before sandbox create (#7849, `main`) — both harnesses declare
@@ -663,15 +688,13 @@ All plugin paths are relative to `plugins/sdlc-workflow/`.
 
 | File | Purpose |
 |---|---|
-| `harness/verify-pr.yaml` (repo root) | Standalone harness — stock digest-pinned image, in-place plugin, policy, provider, profile, env mount, pre/post scripts, validation loop, split-trust env. |
+| `harness/verify-pr.yaml` (repo root) | Standalone harness — stock digest-pinned image, in-place plugin, policy, built-in `vertex-ai` provider (bare name; its `fullsend-vertex-ai` egress profile is built into fullsend), env mount, pre/post scripts, validation loop, split-trust env. |
 | `.fullsend/config.base.yaml` | Vendor preset base layer — registers the `verify-pr` and `triage-security` agents (local sources `harness/verify-pr.yaml` / `harness/triage-security.yaml`) and the single allowed remote-resource prefix. |
 | `.fullsend/config.yaml` | Repo overlay — the hosted Vertex AI inference override (WIF); registers no agents. Merged over `config.base.yaml` (ADR 0069). |
 | `.fullsend/harness/verify-pr.yaml` | Local composing child — pins the root harness by raw URL (`base:` + `#sha256=`) and adds the runner-local absolute mounts. |
 | `.fullsend/lock.yaml` | Generated by `fullsend lock` — freezes every transitive dependency URL + SHA256. Do not edit by hand. |
 | `agents/verify-pr.md` | Agent prompt (YAML frontmatter). fullsend launches Claude Code with this as the system prompt; it reads `task_id` from the pre-fetched `verify-pr-input.json` and invokes the skill. |
 | `policies/verify-pr.yaml` | Sandbox network/filesystem policy. |
-| `profiles/fullsend-vertex-ai.yaml` | OpenShell egress profile — `*.googleapis.com:443` only. |
-| `providers/vertex-ai.yaml` | Selects the Vertex egress profile (no proxied credential). |
 | `env/gcp-vertex.env` | Vertex env template, expanded from the secrets file (`expand: true`); points `GOOGLE_APPLICATION_CREDENTIALS` at `/tmp/.gcp-credentials.json`. |
 | `schemas/verify-pr-result.schema.json` | JSON Schema for the agent's structured output; enforced by `validation_loop`. |
 | `scripts/pre-verify-pr.sh` | Pre_script — validates inputs, prefetches the Jira issue and the GitHub read bundle, and records the PR head ref name + head commit SHA in the bundle (it does **not** check out — the PR-head working tree comes from `--target-repo`). Delegates to `pre_verify_pr.py`. |

@@ -133,7 +133,7 @@ def test_source_resolution_refuses_stale_or_unrelated_revisions(defect):
     (299, "verify-pr-fullsend", "evals/fullsend/triage-security/cases/033-absent/input.yaml", "false"),
     (299, "verify-pr-fullsend", "evals/triage-security/files/fullsend-release-trusted-input.json", "false"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/policies/triage-security.yaml", "false"),
-    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/providers/vertex-ai.yaml", "false"),
+    (299, "verify-pr-fullsend", "plugins/sdlc-workflow/env/gcp-vertex.env", "false"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/scripts/validate-output-schema.sh", "false"),
     (299, "verify-pr-fullsend", ".github/scripts/run-native-fullsend-evals.sh", "false"),
     (299, "verify-pr-fullsend", ".github/scripts/check-native-fullsend-execution.py", "false"),
@@ -165,7 +165,7 @@ def test_native_execution_uses_trusted_setup_and_readonly_github_permissions():
     assert jobs["gate"]["environment"] == "eval-protected"
     checkouts = [s for s in native["steps"] if s.get("uses", "").startswith("actions/checkout@")]
     assert [s["with"]["ref"] for s in checkouts] == ["${{ github.sha }}", "${{ needs.discover.outputs.merge_sha }}",
-        "${{ env.NATIVE_EVAL_SOURCE_SHA }}", "d5f36921ac754705619f38c637ef692873809fbc"]
+        "${{ env.NATIVE_EVAL_SOURCE_SHA }}", "c68903c0373e2216af03f5412642d4aa4019057f"]
     assert all(s["with"]["persist-credentials"] is False for s in checkouts)
     assert next(s for s in native["steps"] if s.get("id") == "revision")["name"] == "Recheck approved revision before WIF"
     auth = next(s for s in native["steps"] if s.get("uses", "").startswith("google-github-actions/auth@"))
@@ -281,7 +281,7 @@ def test_wrapper_rejects_different_reviewed_suite_before_credentials(tmp_path):
     tools = tmp_path / "tools"
     tools.mkdir()
     git = tools / "git"
-    git.write_text("#!/bin/sh\ncase \"$2\" in *upstream-fullsend) echo d5f36921ac754705619f38c637ef692873809fbc;; *) echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;; esac\n")
+    git.write_text("#!/bin/sh\ncase \"$2\" in *upstream-fullsend) echo c68903c0373e2216af03f5412642d4aa4019057f;; *) echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;; esac\n")
     git.chmod(0o755)
     environment = dict(os.environ, GITHUB_WORKSPACE=str(tmp_path), RUNNER_TEMP=str(tmp_path),
                        NATIVE_EVAL_SOURCE_SHA="b" * 40, PATH=str(tools) + os.pathsep + os.environ["PATH"])
@@ -436,7 +436,7 @@ def run_credential_wrapper(tmp_path, output, passed=28, broken_execution=False):
     (scripts / "prepare-sandbox-credentials.sh").write_text(
         '#!/bin/sh\n# SYNTHETIC TEST DATA — emit the test environment file\ncat "$TC6742_FIXTURE" >> "$GITHUB_ENV"\n')
     doubles = {
-        "git": '#!/bin/sh\n# SYNTHETIC TEST DATA — immutable checkout identities\ncase "$2" in *upstream-fullsend) echo d5f36921ac754705619f38c637ef692873809fbc;; *) echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;; esac\n',
+        "git": '#!/bin/sh\n# SYNTHETIC TEST DATA — immutable checkout identities\ncase "$2" in *upstream-fullsend) echo c68903c0373e2216af03f5412642d4aa4019057f;; *) echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;; esac\n',
         "jq": '#!/bin/sh\n# SYNTHETIC TEST DATA — host ADC type\necho external_account\n',
         "python3.12": '#!/usr/bin/env python3\n# SYNTHETIC TEST DATA — double inference only; execute the actual checker\nimport json, os, sys\nfrom pathlib import Path\nif sys.argv[1].endswith("check-native-fullsend-execution.py"):\n    os.execv(sys.executable, [sys.executable, *sys.argv[1:]])\nPath(os.environ["TC6742_CAPTURE"]).with_suffix(".argv.json").write_text(json.dumps(sys.argv[1:]))\nPath(os.environ["TC6742_CAPTURE"]).write_text(json.dumps({k: os.environ.get(k) for k in ["GOOGLE_APPLICATION_CREDENTIALS", "TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]}))\nsys.exit(int(os.environ["TC6809_RUNNER_EXIT"]))\n',
     }

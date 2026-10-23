@@ -648,8 +648,8 @@ def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypat
     production = {
         "image": "ghcr.io/fullsend-ai/fullsend-code@sha256:9743bc7b6e451e0bcea25ae4a67e0c040c296f1fee04c08988ae80c53fafcfe6",
         "policy": "plugins/sdlc-workflow/policies/triage-security.yaml",
-        "providers": ["plugins/sdlc-workflow/providers/vertex-ai.yaml"],
-        "openshell": {"profiles": ["plugins/sdlc-workflow/profiles/fullsend-vertex-ai.yaml"]},
+        # Built-in Fullsend provider by bare name; its egress profile is built in too (TC-7141).
+        "providers": ["vertex-ai"],
         "validation_loop": {"script": "plugins/sdlc-workflow/scripts/validate-output-schema.sh",
                             "schema": "plugins/sdlc-workflow/schemas/triage-security-result.schema.json"},
     }
@@ -661,8 +661,8 @@ def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypat
     assert not (workspace / "native-config").exists()
     assert h["plugins"] == [str(staged / "plugins/sdlc-workflow")]
     assert h["policy"] == str(staged / production["policy"])
-    assert h["providers"] == [str(staged / p) for p in production["providers"]]
-    assert h["openshell"]["profiles"] == [str(staged / p) for p in production["openshell"]["profiles"]]
+    assert h["providers"] == production["providers"]
+    assert "openshell" not in h
     assert h["validation_loop"]["script"] == str(staged / production["validation_loop"]["script"])
     assert h["validation_loop"]["schema"] == str(staged / production["validation_loop"]["schema"])
     assert h["host_files"][0]["src"] == str(staged / "plugins/sdlc-workflow/env/gcp-vertex.env")
@@ -724,7 +724,7 @@ def test_staged_layout_with_actual_pinned_fullsend_resolver(tmp_path, monkeypatc
     source = os.environ.get("TC6677_FULLSEND_SOURCE")
     if not source or not shutil.which("go"):
         pytest.skip("Native resolver contract needs TC6677_FULLSEND_SOURCE and Go with cached dependencies")
-    pin = "d5f36921ac754705619f38c637ef692873809fbc"
+    pin = "c68903c0373e2216af03f5412642d4aa4019057f"
     archive = subprocess.check_output(["git", "-C", source, "archive", pin])
     snapshot = tmp_path / "pinned-source"
     snapshot.mkdir()
@@ -753,7 +753,8 @@ func main() {
     if err == nil { err = h.ResolveRelativeTo(root) }
     var result resolve.ResolveResult
     if err == nil { result, err = resolve.ResolveHarness(context.Background(), h, resolve.ResolveOpts{WorkspaceRoot: root}) }
-    if err == nil && (len(result.Profiles) != 1 || len(result.Providers) != 1) { err = fmt.Errorf("expected native profile/provider records") }
+    // A bare built-in provider name stays in h.Providers for the embedded definition.
+    if err == nil && (len(result.Profiles) != 0 || len(result.Providers) != 0 || len(h.Providers) != 1 || h.Providers[0] != "vertex-ai") { err = fmt.Errorf("expected only the bare built-in vertex-ai provider") }
     // Actual early validation: no native-generated host variable exists yet.
     if err == nil { err = h.ValidateRunnerEnvWith(os.LookupEnv) }
     if err == nil { err = h.ValidateFilesExist() }
@@ -794,7 +795,7 @@ func main() {
         missing_adc.pop("GOOGLE_APPLICATION_CREDENTIALS")
         rejected = subprocess.run([str(binary), str(setup)], env=missing_adc,
                                   capture_output=True, text=True, check=False)
-        assert rejected.returncode == 1 and "host variable GOOGLE_APPLICATION_CREDENTIALS is not set" in rejected.stderr
+        assert rejected.returncode == 1 and "GOOGLE_APPLICATION_CREDENTIALS is not set" in rejected.stderr
         # The staged pre-script must consume the staged exact fixtures successfully.
         h = yaml.safe_load((setup / "harness/triage-security-gate.yaml").read_text())
         fixture_env = dict(environment, TC6677_REPO_ROOT=str(setup), TC6677_SCENARIO="valid")
@@ -817,11 +818,12 @@ func main() {
     setup = observed["setup"]
     path = setup / "harness/triage-security-gate.yaml"
     h = yaml.safe_load(path.read_text())
-    external = ROOT / "plugins/sdlc-workflow/profiles/fullsend-vertex-ai.yaml"
+    external = tmp_path / "external-profile.yaml"
+    external.write_text("# SYNTHETIC TEST DATA — profile outside the workspace root\nid: synthetic-external\n")
     for profile in [external, setup / "escaping-profile.yaml"]:
         if profile != external:
             profile.symlink_to(external)
-        h["openshell"]["profiles"] = [str(profile)]
+        h["openshell"] = {"profiles": [str(profile)]}
         path.write_text(yaml.safe_dump(h))
         rejected = subprocess.run([str(binary), str(setup)], env=environment,
                                   capture_output=True, text=True, check=False)

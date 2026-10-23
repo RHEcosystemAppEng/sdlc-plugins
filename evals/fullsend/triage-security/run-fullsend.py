@@ -31,7 +31,8 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
     suite = root / "evals/fullsend/triage-security"
     h = yaml.safe_load((suite / "harness.yaml").read_text())
     # PR content is only uploaded as a sandbox plugin. Trusted host executables,
-    # policy, providers and schema remain independent even if the PR replaces them.
+    # policy and schema remain independent even if the PR replaces them; the Vertex
+    # provider and its egress profile are built into the pinned Fullsend release.
     plugin_root = plugin_root or root / "plugins/sdlc-workflow"
     plugin_root = plugin_root.absolute()
     if (any(p.is_symlink() for p in [plugin_root, *plugin_root.parents])
@@ -42,8 +43,7 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
     shutil.copytree(plugin_root, plugin_destination,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     if plugin_destination == setup / "tested-plugin":
-        for name in ["policies/triage-security.yaml", "providers/vertex-ai.yaml", "profiles/fullsend-vertex-ai.yaml",
-                     "env/gcp-vertex.env", "schemas/triage-security-result.schema.json",
+        for name in ["policies/triage-security.yaml", "env/gcp-vertex.env", "schemas/triage-security-result.schema.json",
                      "scripts/validate-output-schema.sh", "scripts/strip_extra_properties.py"]:
             destination = setup / "plugins/sdlc-workflow" / name
             destination.parent.mkdir(parents=True, exist_ok=True)
@@ -63,9 +63,6 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
     for field in ["agent", "policy", "pre_script"]:
         h[field] = str(setup / h[field])
     h["plugins"] = [str(plugin_destination)]
-    for field in ["providers"]:
-        h[field] = [str(setup / p) for p in h[field]]
-    h["openshell"]["profiles"] = [str(setup / p) for p in h["openshell"]["profiles"]]
     for field in ["script", "schema"]:
         h["validation_loop"][field] = str(setup / h["validation_loop"][field])
     h["host_files"][0]["src"] = str(setup / h["host_files"][0]["src"])
