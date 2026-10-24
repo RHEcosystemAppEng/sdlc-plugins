@@ -13,12 +13,13 @@
 
 ## Version Management
 
-The plugin version must be kept in sync in two files:
+The plugin version must be kept in sync in three files:
 
 - [`plugins/sdlc-workflow/.claude-plugin/plugin.json`](plugins/sdlc-workflow/.claude-plugin/plugin.json) — the plugin manifest (required by CI validation)
+- [`plugins/sdlc-workflow/.codex-plugin/plugin.json`](plugins/sdlc-workflow/.codex-plugin/plugin.json) — the Codex compatibility manifest
 - [`.claude-plugin/marketplace.json`](.claude-plugin/marketplace.json) — the marketplace registry (required for relative-path plugins per Claude Code docs)
 
-When bumping the version, update both files together.
+When bumping the version, update all three files together.
 
 # Project Configuration
 

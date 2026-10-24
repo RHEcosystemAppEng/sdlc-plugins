@@ -35,7 +35,7 @@ inside the PR being reviewed, not files this skill reads.
 
 ## Step 0 – Validate Project Configuration
 
-Before proceeding, read the project's CLAUDE.md and verify that the following sections exist under `# Project Configuration`:
+Before proceeding, read the project's project configuration file and verify that the following sections exist under `# Project Configuration`:
 
 1. `## Repository Registry` — must contain a table with at least one entry
 2. `## Jira Configuration` — must contain at minimum: Project key, Cloud ID, Feature issue type ID
@@ -43,7 +43,7 @@ Before proceeding, read the project's CLAUDE.md and verify that the following se
 
 If any of these sections are missing or incomplete, inform the user:
 
-> "This skill requires Project Configuration in your CLAUDE.md. Please run `/setup` first to configure your project, then re-run this skill."
+> "This skill requires Project Configuration in your project configuration file. Please run `/setup` first to configure your project, then re-run this skill."
 
 **Stop execution immediately.** Do not attempt to gather the missing information or proceed without it.
 
@@ -67,7 +67,7 @@ Before attempting any JIRA operations throughout this skill, determine the acces
    Choose (1/2/3):
    ```
    
-3. **If "1. Yes":** Check CLAUDE.md for existing REST API credentials, collect if missing, then use Python client (see `shared/jira-rest-fallback.md`)
+3. **If "1. Yes":** Check project configuration file for existing REST API credentials, collect if missing, then use Python client (see `shared/jira-rest-fallback.md`)
 4. **If "2. No":** Skip the JIRA operation and inform user
 5. **If "3. Retry":** Retry MCP once
 
@@ -270,7 +270,7 @@ If any required section is missing or the description doesn't follow the templat
 ## Step 2 – Identify PR
 
 Look up the **Git Pull Request custom field** ID from the project's **Jira Configuration**
-section in CLAUDE.md (the field is listed as `Git Pull Request custom field: <field-id>`).
+section in project configuration file (the field is listed as `Git Pull Request custom field: <field-id>`).
 
 If the custom field is configured, read its value from the Jira issue. If the field is empty
 or not configured, ask the user to provide the PR URL.
@@ -413,7 +413,7 @@ Before classifying feedback, load the project's established conventions so they 
 inform classification decisions.
 
 1. **CONVENTIONS.md:** Look up the task's target repository in the **Repository Registry**
-   (CLAUDE.md) and use the **Path** column to locate the repository root. Check for a
+   (project configuration file) and use the **Path** column to locate the repository root. Check for a
    `CONVENTIONS.md` file at that root using the Serena instance for the repository
    (`search_for_pattern`). If no Serena instance is available, use Grep, Glob, or Read
    with the absolute path from the Registry (e.g., `<Path>/CONVENTIONS.md`). If present,
@@ -499,7 +499,7 @@ Collect all inputs needed for sub-agent dispatch envelopes:
    only modified and deleted test files (for Style/Conventions sub-agent).
 
 7. **Repository info** — repository path and Serena instance name from the
-   **Repository Registry** in CLAUDE.md (for Correctness sub-agent)
+   **Repository Registry** in project configuration file (for Correctness sub-agent)
 
 8. **Branch names** — the PR branch and base branch names (for Style/Conventions
    sub-agent's test change classification)
@@ -621,7 +621,7 @@ in the code change request processing pipeline.
 
 For each code change request (including suggestions upgraded in Step 6b),
 inspect the relevant code on the PR branch to understand the required fix. Use the
-Serena instance for the task's repository (from the **Repository Registry** in CLAUDE.md)
+Serena instance for the task's repository (from the **Repository Registry** in project configuration file)
 or fall back to Read/Grep/Glob.
 
 Determine:
@@ -1311,7 +1311,7 @@ python3 -m json.tool $FULLSEND_OUTPUT_DIR/agent-result.json > /dev/null && echo 
 - The root-cause investigation **MUST** receive aggregated findings from all domain sub-agents with source attribution (From Intent Alignment, From Security, From Correctness, From Style/Conventions sections).
 - Domain sub-agents **MUST NOT** perform Jira mutations, post PR comments, or modify code — these are orchestrator-only responsibilities.
 - All classified review comments are sent to ALL sub-agents — no routing heuristic.
-- Use the Serena instance specified in the project's **Repository Registry** (CLAUDE.md) for the target repo, with tools like `find_symbol`, `find_referencing_symbols`, `search_for_pattern`. Check the **Code Intelligence** section for per-instance limitations. Fall back to Read/Grep/Glob for repos without a Serena instance.
+- Use the Serena instance specified in the project's **Repository Registry** (project configuration file) for the target repo, with tools like `find_symbol`, `find_referencing_symbols`, `search_for_pattern`. Check the **Code Intelligence** section for per-instance limitations. Fall back to Read/Grep/Glob for repos without a Serena instance.
 - Use `gh` CLI for all GitHub interactions.
 - Include the Comment Footnote on all Jira comments.
 - Sub-tasks created from review feedback or CI failures use labels `["ai-generated-jira", "review-feedback"]` and "Blocks" issue links.

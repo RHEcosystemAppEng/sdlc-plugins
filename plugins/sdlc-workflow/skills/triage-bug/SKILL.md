@@ -17,21 +17,21 @@ the first acceptance criterion, ensuring the bug is verified fixed before the PR
 ## When to Use
 
 - **Jira Bug issues** — bugs filed against a project with Bug Configuration in
-  CLAUDE.md that need investigation and a structured fix task.
+  project configuration file that need investigation and a structured fix task.
 - **Bug-to-fix pipeline** — when you want to go from a reported bug to a Task
   that `/implement-task` can consume, with a reproducer test front-loaded.
 
 Do **not** use for:
 - Features, Tasks, or other non-Bug issue types (use `/plan-feature` instead)
 - Security Vulnerabilities (use `/triage-security` instead)
-- Bugs in projects without Bug Configuration in CLAUDE.md
+- Bugs in projects without Bug Configuration in project configuration file
 - Bugs that already have a linked fix Task
 
 ## Quick Reference
 
 | Step | Name | Input | Output |
 |------|------|-------|--------|
-| 0 | Validate Configuration | CLAUDE.md | Project key, Cloud ID, Bug Config |
+| 0 | Validate Configuration | project configuration file | Project key, Cloud ID, Bug Config |
 | 0.5 | Jira Access | -- | MCP or REST API connection |
 | 1 | Fetch Bug | Bug issue key | Parsed description sections, metadata |
 | 2 | Reproduce/Trace | Steps to Reproduce | Reproduction outcome or trace findings |
@@ -115,7 +115,7 @@ Example:
 
 ## Step 0 – Validate Project Configuration
 
-Before proceeding, read the project's CLAUDE.md and verify that the following sections
+Before proceeding, read the project's project configuration file and verify that the following sections
 exist under `# Project Configuration`:
 
 1. `## Repository Registry` — must contain a table with at least one entry
@@ -130,7 +130,7 @@ exist under `# Project Configuration`:
 
 If any of these sections are missing or incomplete, inform the user:
 
-> "This skill requires Bug Configuration in your CLAUDE.md. Please run `/setup`
+> "This skill requires Bug Configuration in your project configuration file. Please run `/setup`
 > first to configure your project, then re-run this skill."
 
 **Stop execution immediately.** Do not attempt to gather the missing information or
@@ -164,7 +164,7 @@ Before attempting any JIRA operations (Steps 1, 4, 5, 5b, 5c), determine the acc
    Choose (1/2/3):
    ```
    
-3. **If "1. Yes":** Check CLAUDE.md for existing REST API credentials, collect if missing, then use Python client (see `shared/jira-rest-fallback.md`)
+3. **If "1. Yes":** Check project configuration file for existing REST API credentials, collect if missing, then use Python client (see `shared/jira-rest-fallback.md`)
 4. **If "2. No":** Skip the JIRA operation and inform user
 5. **If "3. Retry":** Retry MCP once
 
@@ -275,7 +275,7 @@ Determine which repository the bug affects based on:
 - The code paths referenced in Steps to Reproduce
 - The file paths or symbols mentioned in the bug description
 
-Look up the target repository in the **Repository Registry** (CLAUDE.md) to find
+Look up the target repository in the **Repository Registry** (project configuration file) to find
 its Serena Instance and Path.
 
 ### Serena-first workflow
@@ -293,7 +293,7 @@ from the Repository Registry.
 4. **Non-symbolic search**: use `search_for_pattern` for configuration, string
    literals, or patterns not captured as symbols.
 
-> **Note:** Check the **Code Intelligence** section of the project's CLAUDE.md for
+> **Note:** Check the **Code Intelligence** section of the project's project configuration file for
 > per-instance limitations. Adapt your tool usage accordingly.
 
 ### Fallback for repositories without Serena
@@ -695,7 +695,7 @@ Present the outcome to the user:
 
 ## Important Rules
 
-- Do not guess — use the Serena instance specified in the project's **Repository Registry** (CLAUDE.md) for the target repo, with tools like `get_symbols_overview`, `find_symbol`, `find_referencing_symbols`, `search_for_pattern` to inspect code. Check the **Code Intelligence** section for per-instance limitations. Fall back to Read/Grep/Glob for repos without a Serena instance.
+- Do not guess — use the Serena instance specified in the project's **Repository Registry** (project configuration file) for the target repo, with tools like `get_symbols_overview`, `find_symbol`, `find_referencing_symbols`, `search_for_pattern` to inspect code. Check the **Code Intelligence** section for per-instance limitations. Fall back to Read/Grep/Glob for repos without a Serena instance.
 - Do not modify any source code — this skill is read-only + Jira.
 - If the Bug description is incomplete (missing required sections), stop and inform the user — do not attempt to investigate without structured input.
 - Keep the generated Task scoped to a single fix — use the Decomposition Guard (Step 6) when multiple independent fixes are needed.

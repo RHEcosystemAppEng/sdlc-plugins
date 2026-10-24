@@ -11,7 +11,7 @@ You are an AI implementation assistant. You take a Jira task with a structured d
 
 ## Step 0 – Validate Project Configuration
 
-Before proceeding, read the project's CLAUDE.md and verify that the following sections exist under `# Project Configuration`:
+Before proceeding, read the project's project configuration file and verify that the following sections exist under `# Project Configuration`:
 
 1. `## Repository Registry` — must contain a table with at least one entry
 2. `## Jira Configuration` — must contain at minimum: Project key, Cloud ID, Feature issue type ID
@@ -19,7 +19,7 @@ Before proceeding, read the project's CLAUDE.md and verify that the following se
 
 If any of these sections are missing or incomplete, inform the user:
 
-> "This skill requires Project Configuration in your CLAUDE.md. Please run `/setup` first to configure your project, then re-run this skill."
+> "This skill requires Project Configuration in your project configuration file. Please run `/setup` first to configure your project, then re-run this skill."
 
 **Stop execution immediately.** Do not attempt to gather the missing information or proceed without it.
 
@@ -43,7 +43,7 @@ Before attempting any JIRA operations (Steps 1, 1.5, 2, 3, 11), determine the ac
    Choose (1/2/3):
    ```
    
-3. **If "1. Yes":** Check CLAUDE.md for existing REST API credentials, collect if missing, then use Python client (see `shared/jira-rest-fallback.md`)
+3. **If "1. Yes":** Check project configuration file for existing REST API credentials, collect if missing, then use Python client (see `shared/jira-rest-fallback.md`)
 4. **If "2. No":** Skip the JIRA operation and inform user
 5. **If "3. Retry":** Retry MCP once
 
@@ -130,7 +130,7 @@ provides the missing information.
 ### GitHub Issue extraction
 
 Look up the **GitHub Issue custom field** ID from the project's **Jira Configuration**
-section in CLAUDE.md (the field is listed as `GitHub Issue custom field: <field-id>`).
+section in project configuration file (the field is listed as `GitHub Issue custom field: <field-id>`).
 
 - **If configured**, read the custom field value from the fetched issue's fields.
   The value may be a plain URL string or an ADF document containing a URL — extract
@@ -229,7 +229,7 @@ This ensures both ownership and status are reflected in Jira as soon as implemen
 
 Inspect the files listed in Files to Modify and Files to Create locations using
 the dedicated Serena instance for the task's repository. Look up the correct
-Serena Instance name in the **Repository Registry** section of the project's CLAUDE.md.
+Serena Instance name in the **Repository Registry** section of the project's project configuration file.
 
 Tools are called as `mcp__<serena-instance>__<tool>`, where `<serena-instance>` is
 the instance name from the Repository Registry.
@@ -247,7 +247,7 @@ the instance name from the Repository Registry.
    `get_symbols_overview` on 2–3 siblings to understand their structure and patterns, or
    Read/Glob if Serena is unavailable.
 
-> **Note:** Check the **Code Intelligence** section of the project's CLAUDE.md for
+> **Note:** Check the **Code Intelligence** section of the project's project configuration file for
 > per-instance limitations (e.g., some language servers may not support certain operations).
 > Adapt your tool usage accordingly.
 
@@ -275,7 +275,7 @@ Goals:
 
 ### CONVENTIONS.md lookup
 
-Look up the task's target repository in the **Repository Registry** (CLAUDE.md) and use
+Look up the task's target repository in the **Repository Registry** (project configuration file) and use
 the **Path** column to locate the repository root. Check for a `CONVENTIONS.md` file at
 that root using the Serena instance for the repository (`list_dir`, `search_for_pattern`).
 If no Serena instance is available, use Read or Glob with the absolute path from the
@@ -919,7 +919,7 @@ implemented on the feature branch.
 **Default flow (no Target PR):**
 
 Look up the **Git Pull Request custom field** ID from the project's **Jira Configuration**
-section in CLAUDE.md (the field is listed as `Git Pull Request custom field: <field-id>`).
+section in project configuration file (the field is listed as `Git Pull Request custom field: <field-id>`).
 
 - **If configured**, update that custom field on the Jira issue with the PR URL.
   The field requires ADF (Atlassian Document Format), not a plain string:
@@ -977,7 +977,7 @@ When Bookend Type is `merge-branch`:
 
 ## Important Rules
 
-- Do not guess — use the Serena instance specified in the project's **Repository Registry** (CLAUDE.md) for the target repo, with tools like `get_symbols_overview`, `find_symbol`, `find_referencing_symbols` to inspect code before modifying it. Check the **Code Intelligence** section for per-instance limitations. Fall back to Read/Grep/Glob for repos without a Serena instance.
+- Do not guess — use the Serena instance specified in the project's **Repository Registry** (project configuration file) for the target repo, with tools like `get_symbols_overview`, `find_symbol`, `find_referencing_symbols` to inspect code before modifying it. Check the **Code Intelligence** section for per-instance limitations. Fall back to Read/Grep/Glob for repos without a Serena instance.
 - Follow the Implementation Notes closely — they reference real code patterns.
 - If the structured description is incomplete, ask the user for clarification and **stop execution**. Do not draft an implementation plan, create branches, or proceed with any subsequent steps until the user provides the missing information.
 - Keep changes strictly within **Files to Modify** and **Files to Create** — do not add, plan, or propose modifications to files outside these sections. If an out-of-scope file needs changes, flag it in Step 9's scope containment check for user approval.

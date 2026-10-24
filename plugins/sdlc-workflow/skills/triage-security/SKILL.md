@@ -28,13 +28,13 @@ structured remediation Tasks consumable by `/implement-task`.
 Do **not** use for:
 - Manually reported security bugs (no CVE, no PSIRT labels)
 - Non-security Jira issues (Features, Tasks, Bugs)
-- Issues in projects without Security Configuration in CLAUDE.md
+- Issues in projects without Security Configuration in project configuration file
 
 ## Quick Reference
 
 | Step | Name | Input | Output |
 |------|------|-------|--------|
-| 0 | Validate Configuration | CLAUDE.md | Project key, Cloud ID, Security Config |
+| 0 | Validate Configuration | project configuration file | Project key, Cloud ID, Security Config |
 | 0.3 | Matrix Staleness Check | security-matrix.md timestamps | Staleness warning or proceed |
 | 0.5 | Jira Access | -- | MCP or REST API connection |
 | 0.6 | Fullsend Mode Detection | `FULLSEND_OUTPUT_DIR` presence | Sandbox or interactive mode |
@@ -317,13 +317,13 @@ Follow the format in `shared/comment-footnote.md`, using skill name `triage-secu
 
 ## Step 0 – Validate Project Configuration
 
-**Fullsend mode:** do not read `CLAUDE.md`. Use the validated bundle's
+**Fullsend mode:** do not read `project configuration file`. Use the validated bundle's
 `configuration` member as the complete Security Configuration input. Its required
 version streams and source repositories replace the interactive configuration read;
 an optional configuration member that is absent remains absent rather than triggering
 a local or external lookup.
 
-Before proceeding, read the project's CLAUDE.md and verify that the following sections
+Before proceeding, read the project's project configuration file and verify that the following sections
 exist under `# Project Configuration`:
 
 1. `## Repository Registry` — must contain a table with at least one entry
@@ -337,7 +337,7 @@ exist under `# Project Configuration`:
 
 If any of these sections are missing or incomplete, inform the user:
 
-> "This skill requires Security Configuration in your CLAUDE.md. Please run `/setup`
+> "This skill requires Security Configuration in your project configuration file. Please run `/setup`
 > first to configure your project, then re-run this skill."
 
 **Stop execution immediately.** Do not attempt to gather the missing information or
