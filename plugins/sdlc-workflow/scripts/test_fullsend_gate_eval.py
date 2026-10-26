@@ -445,13 +445,20 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     # Given the manifests consumed by the existing hosted run-evals
     triage = json.loads((ROOT / "evals/triage-security/evals.json").read_text())["evals"]
     verify = json.loads((ROOT / "evals/verify-pr/evals.json").read_text())["evals"]
-    # Then native cases are separate and every retained object is unchanged
-    assert [c["id"] for c in triage] == list(range(1, 33))
-    assert sum(len(c["assertions"]) for c in triage) == 166
+    # Then native cases remain separate, existing ordinary cases are unchanged,
+    # and only the two interactive on-demand image-population evals are appended.
+    assert [c["id"] for c in triage] == list(range(1, 35))
+    assert sum(len(c["assertions"]) for c in triage) == 181
+    new_cases = triage[32:]
+    assert [c["id"] for c in new_cases] == [33, 34]
+    assert [len(c["assertions"]) for c in new_cases] == [8, 7]
+    assert all("on-demand" in c["prompt"].lower() for c in new_cases)
+    assert all("FULLSEND_OUTPUT_DIR" not in c["prompt"] and "agent-result.json" not in c["prompt"]
+               for c in new_cases)
     assert len(verify) == 6 and sum(len(c["assertions"]) for c in verify) == 68
     # TC-6820 appends exactly two release assertions and one prompt suffix to case1.
-    # Hash the retained prefix and all other cases against the original baseline.
-    baseline = json.loads(json.dumps(triage))
+    # Hash the retained 1–32 prefix and all other original cases against the baseline.
+    baseline = json.loads(json.dumps(triage[:32]))
     suffix = ' In outputs/remediation.md also explain the Step 7.5 release orchestration confirmations and dedup decision before proposing remediation; retain all existing outputs and do not claim any Jira operation was performed.'
     assert baseline[0]["prompt"].endswith(suffix)
     assert len(baseline[0]["assertions"]) == 13

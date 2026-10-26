@@ -112,6 +112,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.100 | `setup` Step 10.5 MUST scaffold security matrices only from `docs/templates/security-matrix.template.md`; `docs/templates/security-matrix.md` is a worked example, not a scaffold source. | `setup/SKILL.md` — Step 10.5 |
 | 1.101 | `setup` Step 10.6 MUST record one Container Images row per `(Product Version, Component)` with separate release tag, resolved full commit SHA, image reference, immutable image digest, and CPE; the published `org.opencontainers.image.revision` label MUST match the resolved release commit SHA before the row is verified. | `setup/SKILL.md` — Step 10.6 |
 | 1.102 | `setup` MUST preserve one Supportability Matrix source-commit column and one Source Pinning Method entry per configured Source Repositories entry, and preserve Ecosystem Mappings; it MUST present the complete proposed matrix for review before writing and leave it unchanged while image evidence is missing or mismatched. | `setup/SKILL.md` — Steps 10.5–10.6 |
+| 1.103 | Interactive `triage-security` on-demand matrix population MUST add Container Images rows keyed by `(Product Version, Component)`, keep release tag, resolved full SHA, image reference, immutable digest, and CPE distinct, and verify the published revision label against the resolved SHA. Missing or mismatched evidence MUST leave the matrix and `Last-Updated` unchanged; existing supportability rows, Source Pinning Method, Ecosystem Mappings, and Forward Pointer MUST be preserved, and the complete proposal MUST be shown for confirmation before any write. | `triage-security/version-impact-analysis.md` — On-demand matrix population |
 
 ### Prior Art — Cross-phase integrity (§1.33–1.35)
 
@@ -213,7 +214,7 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/schemas/triage-security-result.schema.json` — Result modes and actions (§1.95)
 - `plugins/sdlc-workflow/scripts/post-triage-security.sh` — Trusted result handoff (§1.96)
 - `plugins/sdlc-workflow/scripts/execute-triage-security-actions.py` — Authorization, reference resolution, and idempotent execution (§1.96–§1.98)
-- `plugins/sdlc-workflow/skills/triage-security/version-impact-analysis.md` — Step 2.3 enriched fix threshold (§1.62)
+- `plugins/sdlc-workflow/skills/triage-security/version-impact-analysis.md` — Step 2.3 enriched fix threshold (§1.62); On-demand matrix population (§1.103)
 - `plugins/sdlc-workflow/skills/triage-security/remediation-templates.md` — Jira Issue Creation digest comment (§1.66)
 - `plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md` — Step 3 ProdSec @mention (§1.68), Step 4.2 Idempotent sibling linking (§1.58), Step 4.3 Cross-CVE overlap detection (§1.59), Step 4.3 ProdSec @mention (§1.68), Step 4.4 Proactive reconciliation (§1.61)
 - `docs/methodology.md` — Core Principles (§2.1, §3.2, §5.5)
