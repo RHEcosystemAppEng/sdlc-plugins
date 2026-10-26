@@ -599,6 +599,25 @@ has a single assertion with no distinct setup phase.
 > The doc comment convention varies by language — use `///` for Rust, `/** */` for
 > Java/TypeScript, `"""docstring"""` for Python, `//` doc comments for Go, etc.
 
+### Eval assertion/fixture consistency
+
+When adding or changing eval cases, verify every assertion against both:
+
+1. **Explicit requirements** — use the task's Description and Acceptance Criteria, plus
+   any authoritative contract, to establish what behavior is required.
+2. **Fixture semantics** — inspect supplied fixture values and relationships to confirm
+   the assertion describes them correctly.
+
+Assertions must not add constraints that the contract does not state. In particular,
+requiring a value on every row does not imply that values must be unique across rows.
+Repeated fixture values are valid unless the applicable requirement explicitly requires
+uniqueness.
+
+If an assertion conflicts with the stated requirements or supplied fixture, do not
+silently change the fixture or contract to make the assertion pass. Correct the assertion
+to match the authoritative requirement and fixture, or ask the user when the source of
+truth is unclear.
+
 Run tests to verify:
 
 cargo test (for Rust)
