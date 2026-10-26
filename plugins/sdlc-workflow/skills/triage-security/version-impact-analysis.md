@@ -189,12 +189,20 @@ research and prepare a complete update before proceeding:
    rows and one Container Images row per `(Product Version, Component)` using the
    canonical template's fields. Do not replace existing rows or mappings with partial
    release data.
-6. Present the complete proposed matrix, Container Images table, and revision-label
-   comparisons for engineer review. If any image evidence is unresolved, keep the
-   current matrix and its `Last-Updated` timestamp unchanged, label any displayed
-   proposal **NOT WRITTEN**, and ask for corrected evidence. Do not write any part of
-   the proposal while an image row is unresolved. If all image rows are verified, write
-   only after the engineer confirms the complete proposal, then update `Last-Updated`.
+6. Retain the exact matrix contents read as the proposal's source snapshot. Present the
+   complete proposed matrix, Container Images table, and revision-label comparisons for
+   engineer review. If any image evidence is unresolved, keep the current matrix and its
+   `Last-Updated` timestamp unchanged, label any displayed proposal **NOT WRITTEN**, and
+   ask for corrected evidence. Do not write any part of the proposal while an image row
+   is unresolved. If all image rows are verified, write only after the engineer confirms
+   the complete proposal. Immediately before writing, re-read the target and compare it
+   with the source snapshot. If it changed, preserve the current file, then safely merge
+   and re-present the complete result for fresh confirmation or abort and ask the
+   engineer how to proceed; never overwrite a stale snapshot. If the current file's full
+   contents or required merge data are unavailable, abort and ask the engineer to
+   provide them — do not use placeholders or call an incomplete merge complete. If the
+   target was absent, use create-if-absent semantics and abort if another run created it.
+   After a confirmed write with a final unchanged-target check, update `Last-Updated`.
 
 This is the **only** local file the triage-security skill writes to — source code
 repositories are read-only, and Jira is the only other output channel.
