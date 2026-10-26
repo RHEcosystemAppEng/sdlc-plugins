@@ -71,7 +71,29 @@ future use:
 > "Local matrix file `<Security Matrix Path>` not found. Read from Konflux repo
 > instead. Would you like me to save it locally for future triages?"
 
-If the user confirms, write the file to the local path using the Write tool.
+If the user confirms, save the fallback copy only under **Local matrix write safety**
+below. Do not write directly from the fallback branch.
+
+### Local matrix write safety (all interactive writes)
+
+This procedure applies to every local `security-matrix.md` write: saving a Konflux
+fallback copy, applying Step 2.1.1 format auto-repairs, and on-demand population.
+
+1. Keep the exact source contents used to prepare the write as a snapshot. For an
+   initially absent local target, record that it was absent.
+2. Immediately before each write, re-read the local target and compare its complete
+   contents with the snapshot. Do not treat a previous read or user confirmation as
+   current after time has passed.
+3. If the target was absent and remains absent, create it with **create-if-absent**
+   semantics. If another run created it, preserve it and abort the write.
+4. If the target existed and changed, preserve the current file. Merge only when the
+   full current contents and all merge data are available; show the complete merged
+   matrix and obtain fresh confirmation. Otherwise abort and ask the engineer for the
+   full current file. Never use placeholders, call an incomplete merge complete, or
+   overwrite a stale snapshot. If the Write tool cannot guarantee create-if-absent
+   behavior, abort.
+5. Update `Last-Updated` only after a permitted write succeeds. A declined or aborted
+   write leaves the current file and timestamp unchanged.
 
 If the Version Streams table in Security Configuration is empty or incomplete, ask
 the user which streams to configure before proceeding.
@@ -110,14 +132,19 @@ validate its structure against the canonical template at
    Ecosystem Mappings tables have valid Markdown table syntax: a header row,
    a separator row (containing `---`), and at least one data row.
 
-**Auto-repair** (safe fixes applied in place):
+**Auto-repair proposals** (prepared in memory; writes use Local matrix write safety):
 
 - **Missing `## Forward Pointer` section**: append the section to the end of
-  the matrix file with content `None`. Log: "Auto-repaired: appended missing
+  the proposed matrix with content `None`. Log: "Auto-repaired: appended missing
   Forward Pointer section to `<path>`."
 - **Extra whitespace in column headers**: normalize by trimming leading and
-  trailing whitespace from each column name in table header rows. Log:
+  trailing whitespace from each column name in the proposed table header rows. Log:
   "Auto-repaired: normalized whitespace in column headers in `<path>`."
+
+Never modify a matrix in place while validating it. Before writing an auto-repair,
+apply Local matrix write safety: re-read and compare the target; if it changed, preserve
+it and ask for renewed review or abort. A Repaired result proceeds without a prompt
+only when the final comparison is unchanged and the repair write is permitted.
 
 **Warnings** (cannot auto-fix — require user decision):
 
@@ -163,9 +190,11 @@ Aggregate all versions from all streams into a single working matrix.
 trusted-input deficiency to report, not a reason to query repositories or write a
 matrix.
 
-If a stream's Supportability Matrix is empty, missing released-version rows, or lacks
-the Container Images section (e.g., the template was scaffolded but never populated),
-research and prepare a complete update before proceeding:
+For each released product version, compare the required `(Product Version, Component)`
+pairs from release/image evidence with the existing Container Images rows. If a stream's
+Supportability Matrix is empty, missing released-version rows, lacks the Container Images
+section, or is missing any required component pair—even when the section and other rows
+already exist—research and prepare a complete update before proceeding:
 
 1. Query the Konflux release repo's git history (tags, release branches) to discover
    released versions and collect their build dates, source commits, source pinning
@@ -195,14 +224,10 @@ research and prepare a complete update before proceeding:
    `Last-Updated` timestamp unchanged, label any displayed proposal **NOT WRITTEN**, and
    ask for corrected evidence. Do not write any part of the proposal while an image row
    is unresolved. If all image rows are verified, write only after the engineer confirms
-   the complete proposal. Immediately before writing, re-read the target and compare it
-   with the source snapshot. If it changed, preserve the current file, then safely merge
-   and re-present the complete result for fresh confirmation or abort and ask the
-   engineer how to proceed; never overwrite a stale snapshot. If the current file's full
-   contents or required merge data are unavailable, abort and ask the engineer to
-   provide them — do not use placeholders or call an incomplete merge complete. If the
-   target was absent, use create-if-absent semantics and abort if another run created it.
-   After a confirmed write with a final unchanged-target check, update `Last-Updated`.
+   the complete proposal and only by following **Local matrix write safety** above. That
+   shared procedure performs the final re-read/compare, create-if-absent check, and
+   merge-or-abort decision for this write path as well as fallback saves and repairs.
+   After a permitted write succeeds, update `Last-Updated`.
 
 This is the **only** local file the triage-security skill writes to — source code
 repositories are read-only, and Jira is the only other output channel.
