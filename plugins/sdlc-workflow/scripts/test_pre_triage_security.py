@@ -1094,14 +1094,17 @@ def test_release_decisions_are_supplied_by_the_trusted_runner(monkeypatch, capsy
     # Given explicit decisions on the host that invokes the collector
     decisions = [{"family": "3.1", "skip": True}]
     monkeypatch.setenv("FULLSEND_RELEASE_DECISIONS", json.dumps(decisions))
+    monkeypatch.delenv("FULLSEND_TRIAGE_MUTATION_AUTHORIZED", raising=False)
     monkeypatch.setattr(pre_triage_security, "collect_bundle",
-                        lambda issue, root, choices: {"issue": issue, "decisions": choices})
+                        lambda issue, root, choices, mutation_authorized: {
+                            "issue": issue, "decisions": choices, "authorized": mutation_authorized})
 
     # When the normal pre-script collection command runs
     assert pre_triage_security.main(["collect", "TC-42", "/project"]) == 0
 
     # Then host decisions reach the collector unchanged without authorizing writes
-    assert json.loads(capsys.readouterr().out) == {"issue": "TC-42", "decisions": decisions}
+    assert json.loads(capsys.readouterr().out) == {
+        "issue": "TC-42", "decisions": decisions, "authorized": False}
 
 
 @pytest.mark.parametrize("decision_text", ["{", "null", "{}", '"unexpected"'])
@@ -1118,6 +1121,61 @@ def test_release_decisions_invalid_json_stops_collection(monkeypatch, capsys, de
     # Then no request is made and the command reports its configuration failure
     collector.assert_not_called()
     assert "ERROR:" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("value, expected", [(None, False), ("false", False), ("true", True)],
+                         ids=["unset", "false", "true"])
+def test_mutation_authorization_opt_in_reaches_collector(monkeypatch, capsys, value, expected):
+    """Only the runner's exact opt-in authorizes mutations; unset or false stays report-only."""
+    # Given the runner opt-in in the given state and a recording collector
+    if value is None:
+        monkeypatch.delenv("FULLSEND_TRIAGE_MUTATION_AUTHORIZED", raising=False)
+    else:
+        monkeypatch.setenv("FULLSEND_TRIAGE_MUTATION_AUTHORIZED", value)
+    monkeypatch.delenv("FULLSEND_RELEASE_DECISIONS", raising=False)
+    collector = MagicMock(return_value={"collected": True})
+    monkeypatch.setattr(pre_triage_security, "collect_bundle", collector)
+
+    # When the normal collection command runs
+    assert pre_triage_security.main(["collect", "TC-42", "/project"]) == 0
+
+    # Then the collector receives exactly the expected authorization
+    collector.assert_called_once_with("TC-42", "/project", None, mutation_authorized=expected)
+    assert json.loads(capsys.readouterr().out) == {"collected": True}
+
+
+@pytest.mark.parametrize("value", ["TRUE", "True", "1", "yes", "", " true", "true\n"])
+def test_invalid_mutation_authorization_fails_closed(monkeypatch, capsys, value):
+    """A malformed opt-in exits 1 before any evidence request and writes no bundle."""
+    # Given a malformed opt-in and a collector that must never be called
+    monkeypatch.setenv("FULLSEND_TRIAGE_MUTATION_AUTHORIZED", value)
+    monkeypatch.delenv("FULLSEND_RELEASE_DECISIONS", raising=False)
+    collector = MagicMock(return_value={})
+    monkeypatch.setattr(pre_triage_security, "collect_bundle", collector)
+
+    # When the normal collection command starts
+    status = pre_triage_security.main(["collect", "TC-42", "/project"])
+
+    # Then the command fails with a diagnostic and emits no bundle on stdout
+    output = capsys.readouterr()
+    assert status == 1
+    collector.assert_not_called()
+    assert output.out == ""
+    assert "ERROR: FULLSEND_TRIAGE_MUTATION_AUTHORIZED must be exactly 'true' or 'false'" in output.err
+
+
+@requires_format_extra
+def test_authorized_bundle_satisfies_input_contract():
+    """An authorized bundle records mutation_authorized true and still validates."""
+    # Given a complete bundle whose runner opted in to mutations
+    bundle = _complete_bundle()
+    bundle["authorization"]["mutation_authorized"] = True
+
+    # When the trusted input contract is validated
+    pre_triage_security.validate_bundle(bundle)
+
+    # Then the authorization reaches the executor-facing field unchanged
+    assert bundle["authorization"] == {"mutation_authorized": True}
 
 
 @requires_format_extra

@@ -740,8 +740,12 @@ def _jql_escape(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
-def collect_bundle(issue_key, project_root, release_decisions=None):
-    """Collect all credentialed evidence for one poller-dispatched security issue."""
+def collect_bundle(issue_key, project_root, release_decisions=None, mutation_authorized=False):
+    """Collect all credentialed evidence for one poller-dispatched security issue.
+
+    ``mutation_authorized`` is the trusted runner's opt-in; it is recorded in the
+    bundle so the executor can accept a ``mutation-authorized`` result.
+    """
     # Validate the key before it is interpolated into any JQL. A conforming key
     # carries no JQL metacharacters, so this is a self-contained injection defense
     # that does not rely on the pre-triage-security.sh regex gate upstream of us.
@@ -858,7 +862,7 @@ def collect_bundle(issue_key, project_root, release_decisions=None):
             "action_markers": _action_markers(issue),
             "existing_remediation": related,
         },
-        mutation_authorized=False,
+        mutation_authorized=mutation_authorized,
         **({"release_decisions": release_decisions} if release_decisions is not None else {}),
     )
 
@@ -904,6 +908,20 @@ def discover_untriaged(project_root, max_results=20):
     return {"issues": issues}
 
 
+def parse_mutation_authorization(value):
+    """Map the runner's FULLSEND_TRIAGE_MUTATION_AUTHORIZED value to a bool, failing closed.
+
+    Only the exact string ``true`` authorizes Jira mutations; unset or ``false``
+    keeps the run report-only, and anything else is rejected so a typo never
+    silently changes mode.
+    """
+    if value is None or value == "false":
+        return False
+    if value == "true":
+        return True
+    raise EvidenceError("FULLSEND_TRIAGE_MUTATION_AUTHORIZED must be exactly 'true' or 'false'")
+
+
 def main(argv=None):
     """Run a requested deterministic transform or trusted collection command."""
     parser = argparse.ArgumentParser(prog="pre_triage_security.py")
@@ -921,12 +939,15 @@ def main(argv=None):
         if args.command == "discover":
             result = discover_untriaged(args.project_root, args.max_results)
         elif args.command == "collect":
-            # Only the trusted host supplies this optional invocation policy.
+            # Only the trusted host supplies these optional invocation policies.
+            authorized = parse_mutation_authorization(
+                os.environ.get("FULLSEND_TRIAGE_MUTATION_AUTHORIZED"))
             decision_text = os.environ.get("FULLSEND_RELEASE_DECISIONS")
             decisions = json.loads(decision_text) if decision_text is not None else None
             if decision_text is not None:
                 _require_list(decisions, "trusted release decisions", allow_empty=True)
-            result = collect_bundle(args.issue_key, args.project_root, decisions)
+            result = collect_bundle(args.issue_key, args.project_root, decisions,
+                                    mutation_authorized=authorized)
         else:
             result = parse_security_configuration(_read_text(args.claude_md, "CLAUDE.md"))
     except (EvidenceError, json.JSONDecodeError, subprocess.CalledProcessError) as error:
