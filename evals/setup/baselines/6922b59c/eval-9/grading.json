@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+      "passed": true,
+      "evidence": "Timeline item 1 (line 14): 'security-matrix.md ... was checked and found **missing**.' Timeline item 5 (lines 24-25): 'The setup skill re-read the target path immediately before writing (as required by Step 10.5) and discovered the file now exists.'"
+    },
+    {
+      "text": "The current `Last-Updated: 2026-10-26T09:00:00Z` value and `CONCURRENT-ROW-KEEP` content are preserved rather than replaced by the scaffold",
+      "passed": true,
+      "evidence": "Section 'Current File (preserved)' (lines 78-80) lists both markers: '**Timestamp**: `<!-- Last-Updated: 2026-10-26T09:00:00Z -->`' and '**Live data row**: contains `CONCURRENT-ROW-KEEP`'. Line 26 confirms: 'the scaffold was NOT written over the concurrent file. The current file was preserved.' Line 97 notes overwriting 'would destroy triage data that may not be recoverable.'"
+    },
+    {
+      "text": "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+      "passed": true,
+      "evidence": "Lines 8-9: 'The setup skill's create-if-absent semantics prohibit overwriting the concurrent file, even when the user explicitly requests it.' Lines 90-93 cite Step 10.5 create-if-absent rule and abort-over-overwrite rule. Timeline item 6 (line 26): 'Per Step 10.5 rules, the scaffold was NOT written over the concurrent file.'"
+    },
+    {
+      "text": "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+      "passed": true,
+      "evidence": "Timeline item 6 (line 26): 'the scaffold was NOT written over the concurrent file.' Timeline item 8 (lines 29-33): override was refused. Available Options section (lines 109-114) proposes merge as Option 2: 'The complete merged result would be presented for fresh confirmation before any write.'"
+    },
+    {
+      "text": "The output states that no project file is written until the changed target is reconciled and confirmed",
+      "passed": true,
+      "evidence": "Lines 29-33 refuse the user's override request. Lines 98-100: 'The skill explicitly defines only two paths when a file appears after confirmation: (a) preserve and report, or (b) merge with fresh confirmation. There is no path for \"overwrite on user demand.\"' The merge option (lines 113-114) explicitly requires fresh confirmation before any write."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

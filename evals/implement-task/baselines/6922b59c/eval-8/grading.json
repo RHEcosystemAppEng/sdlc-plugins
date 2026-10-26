@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md lines 13-16 explicitly state: 'Change `fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>` to `pub fn describing_packages(...)` and `fn suppliers(sbom: &Sbom) -> Vec<SupplierInfo>` to `pub fn suppliers(...)`' under the heading 'modules/ingestor/src/graph/sbom/mod.rs'. reuse-decision.md lines 10-12 also identifies both as currently private in that file: 'Both are currently private (no `pub` modifier)'."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md line 22: 'The migration crate already depends on `trustify-module-ingestor` in its `Cargo.toml`.' reuse-decision.md lines 24-29 shows the actual Cargo.toml dependency entry ('trustify-module-ingestor = { path = \"../modules/ingestor\" }') and states 'The dependency already exists. No new cross-package coupling is introduced by using it.' This verification occurs before the reuse recommendation."
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md line 5: 'Make the functions public (`pub fn`) and import them rather than duplicating them in the migration crate.' Lines 33-35: 'Since `trustify-module-ingestor` is already a dependency of the migration crate, the skill guidance is clear: make the functions public and import them rather than duplicating the code.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md lines 48-55 has a dedicated 'Why not duplicate' section that explicitly rejects duplication: 'Duplicating would be acceptable only if adding a new dependency were required... Since the dependency already exists, duplication would: Violate DRY unnecessarily, Create a maintenance burden..., Risk subtle divergence...' plan.md line 22-23 also says 'Rather than duplicating the extraction logic, we make these functions public'. The plan proposes importing via `use trustify_module_ingestor::graph::sbom::{describing_packages, suppliers};` (plan.md line 33), not copying function bodies."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md line 38-39: 'DRY principle: The extraction logic lives in one place. If a bug is found or the SBOM format evolves, the fix applies everywhere automatically.' Also line 52: 'Violate DRY unnecessarily' listed as a reason against duplication, and line 53-54: 'future changes to extraction logic would need to be applied in two places'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

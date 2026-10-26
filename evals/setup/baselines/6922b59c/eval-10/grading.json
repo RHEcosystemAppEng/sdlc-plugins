@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "Step 4 (lines 114-138) titled 'Pre-Write Re-Read and Comparison' explicitly states: 'Per Step 10.6 item 5: re-read the target immediately before writing and compare it with that snapshot.' A comparison table shows Source Snapshot vs Current File values for Last-Updated and Container Images."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "Step 4's 'Changes detected' table (lines 125-128) identifies: Last-Updated changed from '2026-06-28T10:00:00Z' to '2026-10-26T09:15:00Z', and Container Images now 'Contains a CONCURRENT-ROW-KEEP entry for 2.1.0/api-rhel10'."
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "Step 5 (line 175-177): 'The stale proposal is NOT written. Writing the confirmed proposal without merging would overwrite the concurrent triage-security update, violating the rule: Never write a stale proposal over a concurrent update.' Step 6 (line 183): 'No write has occurred. The security matrix file is unchanged.' The plan in Step 6 explicitly preserves 'the CONCURRENT-ROW-KEEP entry for 2.1.0/api-rhel10, the newer Last-Updated: 2026-10-26T09:15:00Z timestamp'."
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Step 5 (lines 159-168): 'Decision: ABORT — merge data unavailable. The concurrent triage-security run added a CONCURRENT-ROW-KEEP entry... However, the complete column values of this concurrent row (Konflux Release Tag, Resolved Release Commit SHA, Image Reference, Image Digest, CPE) are not available.' Quotes the skill constraint: 'If the current file's full contents or required merge data are unavailable, abort and ask the user to provide them — never use placeholders or call an incomplete merge complete.' Step 6 asks: 'please provide the current full contents of security-matrix.md (including the complete CONCURRENT-ROW-KEEP row values and the updated Last-Updated timestamp)'."
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "Lines 199-200 state verbatim: 'No write occurs until the concurrent change is reconciled and the final merged proposal is confirmed by the user.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

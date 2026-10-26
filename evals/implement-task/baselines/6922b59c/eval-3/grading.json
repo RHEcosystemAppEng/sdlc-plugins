@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md line 137-138: 'Call `apply_filter` from `common/src/db/query.rs` to parse the comma-separated value and generate the SQL IN clause'. Line 144: 'Use `apply_filter` from `common/src/db/query.rs` for comma-separated parsing'. Line 265: '`apply_filter` parses comma-separated values into `Vec<String>`'. reuse-analysis.md lines 9-23 detail direct reuse of apply_filter for comma-separated parsing, stating 'No modification to `apply_filter` itself is needed. It already supports the exact use case: take a comma-separated string, split it, and produce a database filter condition. This avoids writing custom comma-splitting and SQL generation logic in the package endpoint.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md line 128: 'Following the advisory `list.rs` pattern where the `severity` field is an `Option<String>`'. Line 143: 'Follow the exact pattern from `modules/fundamental/src/advisory/endpoints/list.rs` for the Query struct field and handler filter extraction'. Lines 87-88 list it as 'sibling list endpoint with severity filter (primary pattern source)'. reuse-analysis.md lines 29-43 describe it as 'A structurally identical filter implementation' and 'the reference implementation that defines the project's standard approach to list endpoint filtering.'"
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md lines 152-154: 'Join the `package_license` entity table (`entity::package_license`) to the package query'. Line 222: 'No raw SQL -- use SeaORM entities and `apply_filter` throughout'. reuse-analysis.md lines 47-59: 'import and use this entity in the `PackageService::list` method to construct the JOIN query for license filtering... No raw SQL is needed. The entity's SeaORM `Column` enum provides type-safe column references'. Reuse type stated as 'Direct import and use (no modification, no duplication).'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md covers all three candidates with dedicated sections: (1) 'common/src/db/query.rs::apply_filter' (lines 9-23) with 'How it would be reused' and 'Where in the implementation' subsections, (2) 'modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)' (lines 27-43) with detailed structural pattern replication explanation, and (3) 'entity/src/package_license.rs' (lines 47-59) explaining direct import for JOIN query construction. Each section includes reuse type classification and specifies which implementation files use the candidate."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": false,
+      "evidence": "The task's scope (from plan.md lines 27-31) defines Files to Modify as: modules/fundamental/src/package/endpoints/list.rs and modules/fundamental/src/package/service/mod.rs; Files to Create as: tests/api/package_license_filter.rs. However, the plan proposes modifying two additional files outside this scope: (1) Step 6.4 (line 212): 'Add `mod package_license_filter;` to `tests/api/mod.rs`' and (2) Step 6.5 (line 215): 'Update `docs/api.md` to document the new `license` query parameter'. Neither tests/api/mod.rs nor docs/api.md is listed in the task's Files to Modify or Files to Create sections."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "The plan consistently references direct use of apply_filter rather than creating new utilities. plan.md line 137: 'Call `apply_filter` from `common/src/db/query.rs`'. Line 222: 'No raw SQL -- use SeaORM entities and `apply_filter` throughout'. reuse-analysis.md line 93: 'No new shared utilities need to be created. All required functionality exists in the codebase.' No section of the plan proposes creating parsing, splitting, or filter-generation functions that would overlap with apply_filter's functionality."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.8333333333333334
+  }
+}

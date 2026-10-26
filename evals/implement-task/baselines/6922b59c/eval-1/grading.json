@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4 'Understand the Code' references: (1) advisory/service/advisory.rs (line 69), (2) endpoints/get.rs (line 85: 'Endpoints: read endpoints/get.rs'), (3) model/summary.rs (line 86: 'Models: read model/summary.rs'). conventions.md also lists these files as analyzed siblings (lines 9, 14, 18). file-2-description.md pre-implementation inspection references advisory.rs and model/summary.rs. At least 3 of the 4 listed files are referenced for inspection."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "The plan formally lists exactly 6 files: Files to Modify (File 1: advisory/model/mod.rs, File 2: advisory/service/advisory.rs, File 3: advisory/endpoints/mod.rs) and Files to Create (File 4: advisory/model/severity_summary.rs, File 5: advisory/endpoints/severity_summary.rs, File 6: tests/api/advisory_summary.rs). All are within the task's Files to Modify and Files to Create sections. The plan's Step 9 scope containment check (line 177-178) explicitly states: 'git diff --name-only would list exactly 6 files (3 modified, 3 created). All are within Files to Modify and Files to Create. No out-of-scope files.' Note: docs/api.md is mentioned conditionally in the verification section and tests/api/mod.rs in file-6 notes, but both are flagged as potential out-of-scope considerations requiring approval, not formal plan targets."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md lines 142-153 list three Files to Create: File 4: 'modules/fundamental/src/advisory/model/severity_summary.rs' (SeveritySummary response struct), File 5: 'modules/fundamental/src/advisory/endpoints/severity_summary.rs' (GET handler), File 6: 'tests/api/advisory_summary.rs' (Integration tests). Each has a corresponding detailed description file (file-4-description.md, file-5-description.md, file-6-description.md)."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md lines 128-139 list three Files to Modify: File 1: 'modules/fundamental/src/advisory/model/mod.rs' (register new model module), File 2: 'modules/fundamental/src/advisory/service/advisory.rs' (add severity_summary method), File 3: 'modules/fundamental/src/advisory/endpoints/mod.rs' (register new route). Each has a corresponding detailed description file (file-1-description.md, file-2-description.md, file-3-description.md)."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10 (lines 222-230) shows the commit message: 'feat(advisory): add severity aggregation endpoint' as the subject line, which follows Conventional Commits format (type=feat, scope=advisory, description). The footer contains 'Implements TC-9201' referencing the Jira ticket."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md line 233 explicitly states: 'With `--trailer=\"Assisted-by: Claude Code\"`.' directly after the commit message."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Step 5 (lines 119-126) shows: 'git checkout main', 'git pull', 'git checkout -b TC-9201'. Branch is named TC-9201 matching the Jira key. Target branch 'main' is referenced in Step 1 (line 8: 'Target Branch: main'), Step 5 (line 121: 'git checkout main'), and Step 10 (line 246: 'gh pr create --base main')."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md explicitly identifies both patterns: (1) Error Handling (lines 42-46): 'All handlers return Result<T, AppError>', 'Errors wrapped with .context(\"descriptive message\") using anyhow-style context', 'AppError enum defined in common/src/error.rs'. (2) Module structure is documented throughout: Source Files Analyzed section (lines 7-28) shows endpoints/, model/, service/ organization; Naming Conventions (line 39): 'Modules: Registered in parent mod.rs with pub mod <name>;'; Route Registration (lines 61-65) describes the endpoints module pattern."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md line 8: '**Target Branch:** main' in the Task Summary. Line 28 in Step 1: '**Target Branch:** main' in the parsed sections. Line 121 uses 'git checkout main' to branch from it. Line 246 uses 'gh pr create --base main' to target it for the PR."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "plan.md Step 1.5 'Verify Description Integrity' (lines 39-49): Describes fetching comments via jira.get_issue_comments and searching for '[sdlc-workflow] Description digest:' marker. Line 49 explicitly states: 'If no digest comment found, log warning and proceed (backward compatibility).'"
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": true,
+      "evidence": "plan.md line 95 in Step 4: 'Cargo metadata for crate resolution: Run `cargo metadata --no-deps --format-version 1` from workspace root to resolve package names for modified files.' Step 9 (lines 207-211): 'Run `cargo metadata --no-deps --format-version 1` to resolve the crate name for modules/fundamental/. The package name from Cargo.toml (likely trustify-module-fundamental or similar) is used: cargo test -p <resolved-crate-name>'. file-6-description.md line 131 also references: 'Would run cargo metadata --no-deps --format-version 1 to resolve the test crate name.'"
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "pass_rate": 1.0
+  }
+}

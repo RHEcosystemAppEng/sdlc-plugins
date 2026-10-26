@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md lines 31-33: 'After removing the filtering logic, the `version_filter` parameter has zero references in the method body. Per Step 9 dead parameter detection, the correct fix is removal -- not renaming to `_version_filter`.' Also plan.md lines 106-108: 'Remove the parameter entirely from the function signature. Do NOT rename it to `_version_filter` -- that would suppress the compiler warning but leave a dead parameter in the API, confusing future maintainers about whether the parameter is intended for future use.'"
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md lines 32-42 explicitly state 'Remove the `version_filter` parameter from the function signature' and show the updated signature without version_filter: 'pub async fn list(&self, search: Query, paginated: Paginated, tx: &Transactional<'_>) -> Result<PaginatedResults<SbomSummary>, AppError>'. The plan separates step 1 (remove filter logic from body) from step 2 (remove the parameter from the signature)."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md lines 110-113 explicitly lists all 3 call sites: '- `modules/fundamental/src/sbom/endpoints/list.rs` -- remove the version argument from the `list()` call', '- `modules/search/src/service/mod.rs` -- remove the empty string `\"\"` argument from the `list()` call', '- `tests/api/sbom.rs` -- remove the version argument from all `list()` calls in tests'. Each call site has a dedicated section in the plan (sections 2, 3 under Files to Modify) and the search service is called out under 'Call site updates' and the Scope Containment Note."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md lines 22-29: 'The Rust compiler's suggestion to prefix with `_` suppresses the warning but does not fix the problem. A dead parameter in a public API: - Misleads future developers into thinking the parameter is reserved for future use or needed by trait constraints. - Forces all callers to construct and pass a value that is never used, adding unnecessary code and cognitive overhead. - Violates the principle that function signatures should reflect actual behavior. - Creates maintenance burden: every new call site must pass a meaningless argument.' Line 29: 'The correct fix is complete removal of the parameter from the signature and all call sites.'"
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md lines 117-124 contain a 'Verification Steps' section: '1. `cargo check` -- confirm the project compiles without the `version_filter` parameter', '2. `cargo test -p trustify-fundamental` -- confirm fundamental module tests pass', '3. `cargo test -p trustify-search` -- confirm search module tests pass (since it calls `SbomService::list`)', '4. `cargo test -p trustify-tests` (or equivalent for integration tests) -- confirm API integration tests pass'. Also parameter-cleanup.md line 127: 'Run tests (`cargo test -p trustify-fundamental`, `cargo test -p trustify-search`, and integration tests) to confirm nothing broke.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
