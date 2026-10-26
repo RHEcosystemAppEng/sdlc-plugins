@@ -900,8 +900,21 @@ export FULLSEND_RELEASE_DECISIONS='[{"family":"2.3","version":"2.3.1","create_ep
 The exact version and each creation Boolean are separate decisions. An explicit
 skip is `[{"family":"2.3","skip":true}]`. Missing decisions never imply approval
 or an inferred patch bump. This variable does **not** grant general mutation
-permission: production prefetch remains `mutation_authorized: false`. A trusted
-operator must separately authorize mutations before the host executor may write.
+permission. A trusted operator must separately authorize mutations before the
+host executor may write, through the runner-only opt-in read by the pre-script:
+
+```bash
+export FULLSEND_TRIAGE_MUTATION_AUTHORIZED=true
+```
+
+Only the exact string `true` sets the bundle's
+`authorization.mutation_authorized` to `true`; unset or `false` keeps the default
+report-only `false`, and any other value fails the prefetch (exit 1, no bundle
+written) so a typo never silently changes mode. The variable belongs to the
+runner process only — it is never listed under the harness `env.sandbox` and is
+never visible to the sandbox. The executor accepts a `mutation-authorized` result
+only from a bundle authorized this way. Enabling the opt-in in GitLab CI is gated
+on a Jira service identity (TC-6191); until then CI runs stay report-only.
 The tokenless sandbox only emits the action plan, with no Jira calls or prompts.
 
 For authorized missing structures, order `release-epic`, then `release-task` with
