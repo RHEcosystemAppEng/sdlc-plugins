@@ -114,6 +114,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.102 | `setup` MUST preserve one Supportability Matrix source-commit column and one Source Pinning Method entry per configured Source Repositories entry, and preserve Ecosystem Mappings; it MUST present the complete proposed matrix for review before writing and leave it unchanged while image evidence is missing or mismatched. | `setup/SKILL.md` — Steps 10.5–10.6 |
 | 1.103 | Interactive `triage-security` on-demand matrix population MUST add Container Images rows keyed by `(Product Version, Component)`, keep release tag, resolved full SHA, image reference, immutable digest, and CPE distinct, and verify the published revision label against the resolved SHA. Missing or mismatched evidence MUST leave the matrix and `Last-Updated` unchanged; existing supportability rows, Source Pinning Method, Ecosystem Mappings, and Forward Pointer MUST be preserved, and the complete proposal MUST be shown for confirmation before any write. | `triage-security/version-impact-analysis.md` — On-demand matrix population |
 | 1.104 | The canonical security-matrix template MUST use a product-neutral Supportability Matrix version header; it MUST NOT hard-code `RHTPA Version` for projects configured with another product prefix. | `setup/SKILL.md` — Step 10.5; `docs/templates/security-matrix.template.md` |
+| 1.105 | Setup and interactive `triage-security` MUST re-read and compare a matrix immediately before a delayed write. Scaffolds MUST use create-if-absent semantics; if the target changed after the proposal was prepared or confirmed, the workflow MUST preserve current contents and safely merge with renewed confirmation or abort without writing a stale proposal. | `setup/SKILL.md` — Steps 10.5–10.6; `triage-security/version-impact-analysis.md` — On-demand matrix population |
 
 ### Prior Art — Cross-phase integrity (§1.33–1.35)
 
@@ -197,7 +198,7 @@ Each constraint above references its source. The full source files are:
 
 - `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Step 1 Priority/fixVersion extraction (§1.74, §1.76), Step 1.5 Parent linking (§1.82), Step 2.5 Discover Project Issue Types (§1.62–1.64), Step 4.5 Determine Workflow Mode (§1.27), Step 5 Epic grouping (§1.79, §1.81), Step 5 Convention-aware task enrichment (§4.11, §4.13), Step 5 Target Branch assignment (§4.12), Step 5 Bookend task generation (§3.4), Step 5 Documentation task generation (§1.83, §1.84), Step 5 Testing task generation (§1.85–1.87), Step 6 sub-step 6a.0 Epic creation (§1.79), Step 6 graceful degradation (§1.80), Step 6 Priority/fixVersion inheritance (§1.74, §1.75, §1.76), Step 6a Digest posting (§1.33), Task Description Template (§4.1–4.10)
 - `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Important Rules (§1.4–1.6, §5.1–5.3), Step 1 (§1.6), Step 1.5 Digest verification (§1.34, §1.35), Step 4/6/9 (§5.4), Step 5 (§1.15, §3.1, §3.4), Step 7 (§5.9–5.13), Step 9 (§2.1–2.3, §5.6–5.8), Step 10 (§3.2, §3.3)
-- `plugins/sdlc-workflow/skills/setup/SKILL.md` — Steps 10.5–10.6 (§1.100–1.102, §1.104)
+- `plugins/sdlc-workflow/skills/setup/SKILL.md` — Steps 10.5–10.6 (§1.100–1.102, §1.104–1.105)
 - `plugins/sdlc-workflow/shared/task-description-template.md` — Rules (§4.12)
 - `plugins/sdlc-workflow/shared/description-digest-protocol.md` — Digest format and verification procedure (§1.33, §1.34, §1.35)
 - `plugins/sdlc-workflow/shared/convention-applicability-rules.md` — File-type applicability matching logic (§1.36, §4.13)
@@ -215,7 +216,7 @@ Each constraint above references its source. The full source files are:
 - `plugins/sdlc-workflow/schemas/triage-security-result.schema.json` — Result modes and actions (§1.95)
 - `plugins/sdlc-workflow/scripts/post-triage-security.sh` — Trusted result handoff (§1.96)
 - `plugins/sdlc-workflow/scripts/execute-triage-security-actions.py` — Authorization, reference resolution, and idempotent execution (§1.96–§1.98)
-- `plugins/sdlc-workflow/skills/triage-security/version-impact-analysis.md` — Step 2.3 enriched fix threshold (§1.62); On-demand matrix population (§1.103)
+- `plugins/sdlc-workflow/skills/triage-security/version-impact-analysis.md` — Step 2.3 enriched fix threshold (§1.62); On-demand matrix population (§1.103, §1.105)
 - `plugins/sdlc-workflow/skills/triage-security/remediation-templates.md` — Jira Issue Creation digest comment (§1.66)
 - `plugins/sdlc-workflow/skills/triage-security/jira-triage-operations.md` — Step 3 ProdSec @mention (§1.68), Step 4.2 Idempotent sibling linking (§1.58), Step 4.3 Cross-CVE overlap detection (§1.59), Step 4.3 ProdSec @mention (§1.68), Step 4.4 Proactive reconciliation (§1.61)
 - `docs/methodology.md` — Core Principles (§2.1, §3.2, §5.5)

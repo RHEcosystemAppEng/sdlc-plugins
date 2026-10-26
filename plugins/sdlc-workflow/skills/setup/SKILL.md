@@ -570,6 +570,13 @@ For each configured Version Stream, check the configured `security-matrix.md` pa
   Source Repositories entry. Retain fixed columns and Ecosystem Mappings. Offer to write
   the scaffold to the configured path and get confirmation for each file.
 
+For a confirmed scaffold, re-read the configured path immediately before writing and
+create it with **create-if-absent** semantics. If the file appeared after the initial
+existence check, preserve the current file and report that it now exists — do not write
+the scaffold over it. If the user wants a merge, build a proposal from the current file,
+show the complete merged result, and get fresh confirmation before any write. If the
+Write tool cannot guarantee create-if-absent behavior, abort rather than overwrite.
+
 ### Step 10.6 – Populate supportability and image identity (Optional)
 
 After scaffolding or confirming matrix files exist, ask:
@@ -593,8 +600,18 @@ If the user accepts, for each Version Stream:
 4. Populate each named Source Pinning Method entry from release evidence. Preserve one
    supportability source column per repository and Ecosystem Mappings; ask rather than
    infer missing source, pinning, or mapping data.
-5. Present the complete proposed matrix and revision checks for review before writing.
-   Only after confirmation and verification, write it and set the first-line
+5. Retain the exact contents of each matrix read as the proposal's source snapshot.
+   Present the complete proposed matrix and revision checks for review. After the user
+   confirms, re-read the target immediately before writing and compare it with that
+   snapshot. If the target changed, preserve its current contents and timestamp; merge
+   safely and present the complete merged proposal for fresh confirmation, or abort and
+   ask the user how to proceed. If the current file's full contents or required merge
+   data are unavailable, abort and ask the user to provide them — never use placeholders
+   or call an incomplete merge complete. Never write a stale proposal over a concurrent
+   update.
+   If the target was absent, create it with create-if-absent semantics; if it appeared,
+   do not overwrite it. Only write after confirmation, verified evidence, and a final
+   unchanged-target check, then set the first-line
    `<!-- Last-Updated: <ISO-8601-timestamp> -->` to the current UTC time. This timestamp
    is consumed by triage-security's Step 0.3 staleness check. A declined review leaves
    the matrix unchanged.

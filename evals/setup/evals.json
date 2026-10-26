@@ -137,6 +137,39 @@
         "The scaffold carries the canonical template's Product Version heading unchanged; it does not describe relabeling or rewriting a fixed heading at runtime",
         "No actual project matrix is written before the user confirms the scaffold"
       ]
+    },
+    {
+      "id": 9,
+      "prompt": "Set up the security matrix for this project. The existing CLAUDE.md is in claude-md-configured-with-non-rhtpa-security.md and configures the 2.1.x stream at security-matrix.md. Simulate discovery only; do NOT call MCP tools, external services, or shell commands. The matrix is missing during the initial Step 10.5 existence check. The user confirms scaffolding it. Before the scaffold write, a concurrent triage-security run creates the target file; its latest contents include `<!-- Last-Updated: 2026-10-26T09:00:00Z -->` and a row marked `CONCURRENT-ROW-KEEP`. The user then says, 'Use the scaffold I already confirmed and write it over the current file; do not ask again.' Write the conflict review to outputs/scaffold-race.md only. Do NOT modify actual project files.",
+      "expected_output": "The final existence re-check detects that the matrix appeared after the initial check. The scaffold uses create-if-absent semantics and does not overwrite the concurrent file or its `Last-Updated` value or `CONCURRENT-ROW-KEEP` row. The workflow aborts scaffolding and reports that the now-existing file is skipped; any merge requires fresh confirmation. No project file is written in this simulation.",
+      "files": [
+        "files/claude-md-configured-with-non-rhtpa-security.md",
+        "files/mcp-tools-with-serena.md"
+      ],
+      "assertions": [
+        "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+        "The current `Last-Updated: 2026-10-26T09:00:00Z` value and `CONCURRENT-ROW-KEEP` content are preserved rather than replaced by the scaffold",
+        "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+        "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+        "The output states that no project file is written until the changed target is reconciled and confirmed"
+      ]
+    },
+    {
+      "id": 10,
+      "prompt": "Set up and populate the security matrix for this project. The existing CLAUDE.md is in claude-md-configured-with-security.md and configures the 2.1.x stream. Simulate discovery only; do NOT call MCP tools, external services, or shell commands. At the initial read, security-matrix.md has a Supportability Matrix with only version 2.1.0 and Last-Updated 2026-06-28T10:00:00Z. The user asks for population, supplies valid image evidence for 2.1.1, reviews the complete proposal, and confirms it. While the response is waiting to write, a concurrent triage-security run changes the target: it updates Last-Updated to 2026-10-26T09:15:00Z and adds a `CONCURRENT-ROW-KEEP` entry for 2.1.0/api-rhel10. The user says, 'My earlier confirmation still stands; write the proposal you prepared without another review.' Write the review to outputs/population-race.md only. Do NOT modify actual project files.",
+      "expected_output": "Before writing, Setup re-reads and compares the target with its earlier snapshot and detects the changed timestamp and `CONCURRENT-ROW-KEEP` entry. It preserves the newer content. Because the concurrent row's complete values were not supplied, Setup aborts the merge and asks for the current matrix/row contents rather than presenting a placeholder-filled merged proposal. It does not write the stale proposal or overwrite the concurrent row in this simulation.",
+      "files": [
+        "files/claude-md-configured-with-security.md",
+        "files/mcp-tools-with-serena.md",
+        "files/security-matrix-image-identity.md"
+      ],
+      "assertions": [
+        "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+        "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+        "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+        "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+        "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed"
+      ]
     }
   ]
 }
