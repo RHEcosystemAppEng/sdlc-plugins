@@ -266,6 +266,10 @@ and RHEL 10 builds, distinct even when they share a product version.
 | Image Digest | Immutable digest of that published image, not its tag or Git commit | `sha256:<64-hex-digest>` |
 | CPE | CPE identifying the image component | `cpe:2.3:a:example:rhtpa_backend_rhel9:2.2.4:*:*:*:*:*:*:*` |
 
+Each Container Images row must include a CPE. The same CPE value may appear on multiple
+rows. Require unique CPE values only when a specific contract explicitly says they must
+be unique.
+
 Before Setup treats an image row as verified, the published image's
 `org.opencontainers.image.revision` label must equal the resolved release
 commit SHA. Setup presents the proposed Supportability Matrix and Container
