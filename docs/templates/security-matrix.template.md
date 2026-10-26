@@ -19,7 +19,7 @@ This Konflux release repo covers the **{stream}** product version stream.
      one column per repository in Security Configuration > Source Repositories.
      Each source column contains that repository's tag or commit pinned in Konflux. -->
 
-| RHTPA Version | Build | Build Date | {source-repo-name} | Notes |
+| Product Version | Build | Build Date | {source-repo-name} | Notes |
 |---|---|---|---|---|
 | {version} | {build} | {build-date} | `{source-ref}` | |
 
