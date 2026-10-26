@@ -26,6 +26,10 @@ None.
 
 N/A.
 
+## Implementation Notes
+
+- Follow the existing Setup eval case structure and use the supplied fixture values.
+
 ## Acceptance Criteria
 
 - Every image row includes a non-empty CPE value.
@@ -40,3 +44,7 @@ N/A.
 |---|---|---|
 | 2.1.0 | api-rhel9 | `cpe:2.3:a:example:trustify_api:2.1.0:*:*:*:*:*:*:*` |
 | 2.1.0 | api-rhel10 | `cpe:2.3:a:example:trustify_api:2.1.0:*:*:*:*:*:*:*` |
+
+## Dependencies
+
+- Depends on: None.
