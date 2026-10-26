@@ -163,18 +163,38 @@ Aggregate all versions from all streams into a single working matrix.
 trusted-input deficiency to report, not a reason to query repositories or write a
 matrix.
 
-If a stream's Supportability Matrix is empty or missing rows (e.g., the template
-was scaffolded but never populated), research and fill it in before proceeding:
+If a stream's Supportability Matrix is empty, missing released-version rows, or lacks
+the Container Images section (e.g., the template was scaffolded but never populated),
+research and prepare a complete update before proceeding:
 
 1. Query the Konflux release repo's git history (tags, release branches) to discover
-   released versions
-2. For each version, extract image digest, build date, and source commits per
-   repository from the repo's build metadata
-3. Identify retags (versions with identical source commits)
-4. Write the discovered rows into the local `security-matrix.md` file at the
-   **Security Matrix Path** from the Version Streams table (relative to the
-   project working directory)
-5. Present the populated matrix to the user for confirmation before writing
+   released versions and collect their build dates, source commits, source pinning
+   methods, and retag relationships.
+2. For each released version, identify every shipped image component. Key each image
+   record by the exact `(Product Version, Component)` pair so platform-specific images
+   remain separate.
+3. For each image record, collect the Konflux release tag, the full commit SHA resolved
+   from that tag, the published image reference, its immutable image digest, and its
+   CPE. Keep these values distinct. Compare the published image's
+   `org.opencontainers.image.revision` label with the resolved full release SHA; report
+   the comparison separately from the Container Images table, whose fields are defined
+   by `docs/templates/security-matrix.template.md`.
+4. Treat a missing release-tag resolution, image reference, digest, CPE, or revision
+   label — and any revision-label mismatch — as unresolved evidence. Mark the affected
+   image record **UNRESOLVED — NOT VERIFIED**, state which evidence is missing or
+   conflicts, and ask the engineer for corrected evidence. Never infer or substitute
+   either SHA, and never mark an unresolved image as verified.
+5. Preserve existing Supportability Matrix source columns, Source Pinning Method
+   entries, Ecosystem Mappings, and Forward Pointer. Add discovered supportability
+   rows and one Container Images row per `(Product Version, Component)` using the
+   canonical template's fields. Do not replace existing rows or mappings with partial
+   release data.
+6. Present the complete proposed matrix, Container Images table, and revision-label
+   comparisons for engineer review. If any image evidence is unresolved, keep the
+   current matrix and its `Last-Updated` timestamp unchanged, label any displayed
+   proposal **NOT WRITTEN**, and ask for corrected evidence. Do not write any part of
+   the proposal while an image row is unresolved. If all image rows are verified, write
+   only after the engineer confirms the complete proposal, then update `Last-Updated`.
 
 This is the **only** local file the triage-security skill writes to — source code
 repositories are read-only, and Jira is the only other output channel.

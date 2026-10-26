@@ -548,6 +548,43 @@
         "Step 2.1.1 logs the auto-repair action including the matrix file path",
         "The validation result is Repaired (not Warning) — the triage proceeds without prompting the user since only auto-fixable issues were found"
       ]
+    },
+    {
+      "id": 33,
+      "prompt": "Triage Vulnerability issue TC-8001. The project CLAUDE.md is in claude-md-security-config.md, and the starting security matrix is in security-matrix-mock.md. The configured 2.1.x matrix lacks the newly released 2.1.2 Container Images rows, so triage-security's interactive on-demand population path is requested. Use only this supplied synthetic release/image evidence; do NOT call Jira MCP, git show, registry APIs, or other external tools. Product version 2.1.2 is build 0.3.14 dated 2026-06-25, with backend source pin v0.3.14. The v0.3.14 release tag resolves to full SHA 0123456789abcdef0123456789abcdef01234567. Published image api-rhel9 has reference registry.example.test/trustify/api:2.1.2-rhel9, digest sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa, CPE cpe:2.3:a:example:trustify_api:2.1.2:*:*:*:*:*:*:*, and revision label 0123456789abcdef0123456789abcdef01234567. Published image api-rhel10 has reference registry.example.test/trustify/api:2.1.2-rhel10, digest sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb, CPE cpe:2.3:a:example:trustify_api:2.1.2:*:*:*:*:*:*:*, and the same matching revision label. The user confirms the complete proposal after reviewing it. Write the complete proposed matrix and write decision to outputs/matrix-population.md only. Do NOT modify actual project files or call tools.",
+      "expected_output": "The proposed on-demand update preserves all existing supportability rows and ecosystem/source-pinning data, adds the 2.1.2 supportability row, and adds separate Container Images rows for 2.1.2/api-rhel9 and 2.1.2/api-rhel10. Each row keeps release tag v0.3.14 separate from the full resolved SHA, image reference, immutable digest, and CPE. Both revision labels are compared with the resolved SHA and marked matching/verified. The complete proposal is presented for review and writing occurs only after the user's confirmation.",
+      "files": [
+        "files/security-matrix-mock.md",
+        "files/claude-md-security-config.md"
+      ],
+      "assertions": [
+        "The on-demand proposal adds separate Container Images rows keyed by Product Version and Component for 2.1.2/api-rhel9 and 2.1.2/api-rhel10",
+        "The Container Images table has separate columns for release tag, resolved full SHA, image reference, immutable digest, and CPE; revision-label comparisons are shown separately from the stored row fields",
+        "Both valid image rows preserve v0.3.14 and the full resolved SHA 0123456789abcdef0123456789abcdef01234567 as distinct values",
+        "Both rows preserve the supplied distinct image references, immutable sha256 digests, and a CPE value",
+        "Each OCI revision label is compared with the resolved release SHA and both matching rows are marked verified",
+        "The Supportability Matrix includes the supplied 2.1.2/build 0.3.14/date 2026-06-25/backend source-pin row",
+        "The proposal preserves the existing Source Pinning Method and Ecosystem Mappings from security-matrix-mock.md",
+        "The complete proposed matrix is shown for user review and the output states that writing occurs only after confirmation"
+      ]
+    },
+    {
+      "id": 34,
+      "prompt": "Triage Vulnerability issue TC-8001. The project CLAUDE.md is in claude-md-security-config.md, and the starting security matrix is in security-matrix-mock.md. The configured 2.1.x matrix is incomplete for newly released 2.1.3 and on-demand population is requested. Use only this supplied synthetic release/image evidence; do NOT call Jira MCP, git show, registry APIs, or other external tools. Product version 2.1.3 is build 0.3.15 dated 2026-07-01, with backend source pin v0.3.15. The v0.3.15 release tag resolves to full SHA abcdef0123456789abcdef0123456789abcdef01. The published api-rhel10 image reference is registry.example.test/trustify/api:2.1.3-rhel10, digest sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc, CPE cpe:2.3:a:example:trustify_api:2.1.3:*:*:*:*:*:*:*, but its org.opencontainers.image.revision label is fedcba9876543210fedcba9876543210fedcba98. Write the proposed matrix review and decision to outputs/matrix-population.md only. Do NOT modify actual project files or call tools.",
+      "expected_output": "The on-demand review includes a complete proposed matrix with a Container Images table containing separate release-tag, resolved-SHA, image-reference, digest, and CPE fields, plus a separate revision-label comparison for the 2.1.3/api-rhel10 evidence. It explicitly marks that row unresolved/not verified because the revision label differs from the resolved release SHA, requests corrected evidence, and states that the existing matrix remains unchanged with no write while the mismatch remains unresolved. Any draft is clearly labeled not written; it must preserve existing supportability and ecosystem mapping data and must not treat the conflicting pin as authoritative.",
+      "files": [
+        "files/security-matrix-mock.md",
+        "files/claude-md-security-config.md"
+      ],
+      "assertions": [
+        "The proposed Container Images table includes a 2.1.3/api-rhel10 row with separate fields for release tag, resolved full SHA, image reference, immutable digest, and CPE",
+        "A separate revision-label comparison connects the row's resolved full SHA to the supplied OCI revision label",
+        "The output compares the v0.3.15 resolved full SHA abcdef0123456789abcdef0123456789abcdef01 with the supplied revision label fedcba9876543210fedcba9876543210fedcba98 and identifies the mismatch",
+        "The api-rhel10 image row is explicitly unresolved/not verified and is not used as authoritative version-impact evidence",
+        "The output asks for corrected release/image evidence rather than guessing or substituting either SHA",
+        "The existing matrix is explicitly left unchanged and no write occurs while the mismatch remains unresolved; a draft, if shown, is clearly labeled not written",
+        "Any proposed matrix preserves existing supportability and ecosystem mapping data"
+      ]
     }
   ]
 }
