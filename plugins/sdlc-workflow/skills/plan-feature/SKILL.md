@@ -531,6 +531,16 @@ on the backend repo to locate route definitions and type definitions.
 > - `POST /api/v2/sbom` — accepts multipart upload, returns `IngestResult` (see `upload` handler in `modules/fundamental/src/sbom/endpoints/mod.rs`)
 > - `GET /api/v2/sbom/{id}` — returns `SbomDetails` (see `get` handler)
 
+### Shared-artifact producer and consumer analysis
+
+When a Feature acceptance criterion depends on the contents or behavior of a shared artifact (for example, a shared record, manifest, index, registry, cache, or generated document), trace that criterion through the artifact's full lifecycle before building the Repository Impact Map:
+
+1. Identify the artifact and every workflow that creates, updates, replaces, imports, restores, or otherwise populates it. Include primary, scheduled/background, fallback/recovery, and on-demand/manual/API paths.
+2. Identify every consumer that reads or presents the artifact, and the validation or test coverage associated with each producer and consumer.
+3. Record the concrete source and test paths for each affected path. Use repository evidence; do not infer that an alternate path is irrelevant because the Feature emphasizes a primary workflow.
+
+If the requested scope excludes a path needed to satisfy an acceptance criterion, record the exact path and coverage gap in the impact map and ask the user to resolve the scope conflict before treating the criterion as covered. Do not claim that a shared-artifact criterion is satisfied by the primary writer alone.
+
 ### Goals
 
 - Identify modules related to the feature
@@ -636,6 +646,12 @@ Before generating task descriptions, read `docs/constraints.md` from the project
 - For all tasks: include the skill scope rules (§1) that apply to the skill executing the task.
 
 Create implementation tasks for each unit of work. Each task description MUST follow the template defined in [`shared/task-description-template.md`](../../shared/task-description-template.md) exactly — read the template and rules from that file before generating tasks.
+
+### Shared-artifact coverage in task decomposition
+
+Before finalizing implementation tasks, reconcile them against the shared-artifact path map from Step 3. Every affected producer, writer, and consumer must be represented by its relevant Files to Modify or Files to Create, path-specific validation, and Test Requirements. Include fallback/recovery and on-demand/manual/API paths when repository evidence shows they populate the same artifact. When an applicable eval suite exists, propagate coverage to its eval cases using the eval coverage propagation rules below.
+
+If a stakeholder scope instruction excludes a path required by an acceptance criterion, keep the criterion visibly unresolved in the impact map and request clarification before finalizing tasks. A task set that covers only the primary workflow must not be presented as satisfying a criterion that applies to the shared artifact across population paths.
 
 ### Epic grouping (when available)
 
