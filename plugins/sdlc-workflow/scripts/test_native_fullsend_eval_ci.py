@@ -66,7 +66,7 @@ const data = JSON.parse(process.argv[1]);
 const outputs = {}, statuses = [], errors = [], reviews = [], updates = [];
 const storedReviews = data.existingReviews || [];
 const comments = [], storedComments = data.existingComments || [];
-let prReads = 0;
+let prReads = 0, commitReads = 0, refReads = 0;
 const delays = [];
 const setTimeout = (fn,ms)=>{delays.push(ms);fn();};
 const require = name => {if (name !== 'fs') throw Error('unexpected module');
@@ -93,7 +93,12 @@ const github = {paginate:async (fn,args)=>{const response=await fn(args);return 
  updateReview:async r=>{updates.push(r);storedReviews.find(s=>s.id===r.review_id).body=r.body;},
  createReview:async r=>{reviews.push(r);storedReviews.push({...r,id:storedReviews.length+1,user:{login:'github-actions[bot]'}});},
  listFiles:async()=> (data.paths||[]).map(filename=>({filename}))},
- git:{getCommit:async()=>({data:{parents:(data.parents||['b'.repeat(40),'a'.repeat(40)]).map(sha=>({sha}))}})},
+ git:{getCommit:async()=>{
+   const parents=data.parentsSeq ? data.parentsSeq[Math.min(commitReads++,data.parentsSeq.length-1)] : data.parents;
+   return {data:{parents:(parents||['b'.repeat(40),'a'.repeat(40)]).map(sha=>({sha}))}};},
+ getRef:async()=>{if(data.refError) throw Error('ref unavailable');
+   const tip=data.mainTips ? data.mainTips[Math.min(refReads++,data.mainTips.length-1)] : data.mainTip;
+   return {data:{object:{sha:tip || 'b'.repeat(40)}}};}},
  issues:{listComments:async()=>({data:storedComments}),
  updateComment:async r=>{updates.push(r);storedComments.find(s=>s.id===r.comment_id).body=r.body;},
  createComment:async r=>{comments.push(r);storedComments.push({...r,id:storedComments.length+1,user:{login:'github-actions[bot]'}});}},
@@ -124,6 +129,68 @@ def test_source_resolution_refuses_stale_or_unrelated_revisions(defect):
     result = run_js(script_step("discover", "Resolve PR identity and check trust")["with"]["script"], defect)
     assert result["errors"]
     assert not result["outputs"].get("merge_sha")
+
+
+def test_source_resolution_binds_merge_to_live_main_tip_despite_stale_base():
+    """TC-7207 reproducer: main advanced after the PR's last sync, so base.sha is stale."""
+    # Given a stale PR base.sha and a merge commit GitHub rebuilt on the live main tip
+    data = {"parents": ["e" * 40, "a" * 40], "mainTip": "e" * 40}
+    # When resolving the event-associated PR in the real workflow script
+    result = run_js(script_step("discover", "Resolve PR identity and check trust")["with"]["script"], data)
+    # Then the verified merge is emitted with the live tip as its base
+    assert result["errors"] == []
+    assert {key: result["outputs"].get(key) for key in ["head_sha", "merge_sha", "base_sha"]} == {
+        "head_sha": "a" * 40, "merge_sha": "c" * 40, "base_sha": "e" * 40}
+
+
+@pytest.mark.parametrize("defect,reads,delays", [
+    ({"parents": ["b" * 40, "a" * 40], "mainTip": "e" * 40}, 3, [2000, 2000]),
+    ({"parents": ["f" * 40, "a" * 40], "mainTip": "e" * 40}, 3, [2000, 2000]),
+    ({"parents": ["e" * 40, "d" * 40], "mainTip": "e" * 40}, 1, []),
+    ({"parents": ["e" * 40], "mainTip": "e" * 40}, 1, []),
+    ({"parents": ["e" * 40, "a" * 40, "f" * 40], "mainTip": "e" * 40}, 1, []),
+    ({"parents": ["e" * 40, "a" * 40], "refError": True}, 1, []),
+    ({"parents": ["e" * 40, "a" * 40], "mainTip": "not-a-sha"}, 1, []),
+])
+def test_source_resolution_refuses_merge_not_on_live_main_tip(defect, reads, delays):
+    """Older main commits, unrelated parents, head mismatches and unreadable tips fail closed."""
+    # Given a merge source that is not exactly [live main tip, event head]
+    # When resolving the event-associated PR in the real workflow script
+    result = run_js(script_step("discover", "Resolve PR identity and check trust")["with"]["script"], defect)
+    # Then no source is emitted, and only a parent[0]/tip mismatch is re-read (bounded)
+    assert result["errors"] == ["Merge source is not the event-associated head/base"]
+    assert not result["outputs"].get("merge_sha")
+    assert not result["outputs"].get("base_sha")
+    assert result["prReads"] == reads
+    assert result["delays"] == delays
+
+
+def test_source_resolution_rereads_when_main_advances_during_check():
+    """A merge computed just before main advanced recovers once GitHub recomputes it."""
+    # Given a first merge on the previous tip and a recomputed merge on the new tip
+    data = {"parentsSeq": [["b" * 40, "a" * 40], ["e" * 40, "a" * 40]], "mainTips": ["e" * 40, "e" * 40]}
+    # When resolving the event-associated PR in the real workflow script
+    result = run_js(script_step("discover", "Resolve PR identity and check trust")["with"]["script"], data)
+    # Then one bounded re-read binds the recomputed merge to the live tip
+    assert result["errors"] == []
+    assert {key: result["outputs"].get(key) for key in ["merge_sha", "base_sha"]} == {
+        "merge_sha": "c" * 40, "base_sha": "e" * 40}
+    assert result["prReads"] == 2
+    assert result["delays"] == [2000]
+
+
+def test_source_resolution_reread_preserves_identity_checks():
+    """A head change observed during the tip re-read fails closed instead of retrying."""
+    # Given a parent[0]/tip mismatch followed by a PR whose head moved
+    data = {"parents": ["b" * 40, "a" * 40], "mainTip": "e" * 40,
+            "revisions": [{}, {"head": {"sha": "d" * 40, "ref": "verify-pr-fullsend",
+                                        "repo": {"full_name": "mrizzi/sdlc-plugins"}}}]}
+    # When resolving the event-associated PR in the real workflow script
+    result = run_js(script_step("discover", "Resolve PR identity and check trust")["with"]["script"], data)
+    # Then the re-read identity check refuses the source
+    assert result["errors"] == ["PR identity/revision changed or merge source unavailable"]
+    assert not result["outputs"].get("merge_sha")
+    assert result["prReads"] == 2
 
 
 @pytest.mark.parametrize("number,branch,path,expected", [
@@ -179,14 +246,19 @@ def test_native_execution_uses_trusted_setup_and_readonly_github_permissions():
     assert "pr-head/" not in wrapper.replace("pr-head/plugins/sdlc-workflow", "")
 
 
-@pytest.mark.parametrize("head", ["a" * 40, "d" * 40])
-def test_revision_rechecked_after_approval_before_wif(head):
-    """An approval waiting on an older revision must fail before authentication."""
+@pytest.mark.parametrize("data,failed", [
+    ({"head": "a" * 40}, False),
+    ({"head": "d" * 40}, True),
+    ({"revisions": [{"base": {"sha": "f" * 40, "ref": "main"}}]}, False),
+    ({"revisions": [{"merge_commit_sha": "f" * 40}]}, True),
+    ({"branch": "other-branch"}, True),
+])
+def test_revision_rechecked_after_approval_before_wif(data, failed):
+    """An approval waiting on an older revision must fail before authentication; a stale base.sha does not."""
     result = run_js(script_step("run-native-evals", "Recheck approved revision before WIF")["with"]["script"],
-                    {"head": head}, {"PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
-                                     "BASE_SHA": "b" * 40, "SOURCE_REPO": "mrizzi/sdlc-plugins",
-                                     "SOURCE_BRANCH": "verify-pr-fullsend"})
-    assert bool(result["errors"]) == (head != "a" * 40)
+                    data, {"PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
+                           "SOURCE_REPO": "mrizzi/sdlc-plugins", "SOURCE_BRANCH": "verify-pr-fullsend"})
+    assert bool(result["errors"]) == failed
 
 
 @pytest.mark.parametrize("ordinary,native,requested,expected", [
