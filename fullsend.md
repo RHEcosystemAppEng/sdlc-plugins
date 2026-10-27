@@ -103,9 +103,11 @@ github egress from the sandbox — those are handled on the runner.
 ## Prerequisites
 
 - [fullsend](https://github.com/fullsend-ai/fullsend) CLI installed — **≥ v0.45.0**
-  for the built-in `vertex-ai` provider the harnesses declare (the live
-  verify-pr dispatch still pins **v0.43.0** against an older locked harness — see
-  [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump)).
+  for the built-in `vertex-ai` provider the harnesses declare. To match CI
+  exactly, use the supported commit the GitHub verify-pr dispatch pins
+  (`9f188578`, untagged — build it from source with
+  `go build -o fullsend ./cmd/fullsend` in a fullsend checkout at that commit);
+  see [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump).
 - OpenShell **0.1.x** (the version the chosen fullsend release pins in
   `.github/scripts/openshell-version.sh`; 0.1.2 for v0.47.1 and `9f188578`).
 - An OpenShell gateway running — fullsend uses OpenShell as its sandbox runtime.
@@ -246,8 +248,9 @@ The dispatch job hands a pre-built single-entry matrix (agent `verify-pr`, role
 `review`) to the vendor reusable workflow
 `fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml`, whose
 `harness-run` job mints the review-role App token via OIDC and runs `fullsend run`.
-The reusable workflow is **pinned by full SHA**
-(`@d5f36921ac754705619f38c637ef692873809fbc # v0 as of 2026-09-30`), not the
+The reusable workflow and the CLI (`fullsend_version`) are **both pinned by full
+SHA to the supported fullsend commit**
+(`@9f188578f0d8c94169287594b0c79cd4c4eeaa91 # main as of 2026-10-14`), never the
 floating `@v0` tag — see [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump) below.
 
 This `pull_request_target` trigger is the CI-side equivalent of the harness's own
@@ -389,7 +392,7 @@ schedule, but both target the supported commit):
 
 | Deployment | Pin today | Target |
 |---|---|---|
-| GitHub verify-pr (this repo) | CLI `v0.43.0`, reusable-dispatch `d5f36921ac754705619f38c637ef692873809fbc` | supported commit (after the child-harness credential mounts are adapted — see *Breaking changes* below) |
+| GitHub verify-pr (this repo) | CLI and reusable-dispatch both at the supported commit `9f188578f0d8c94169287594b0c79cd4c4eeaa91` (TC-6936; previously CLI `v0.43.0` + reusable-dispatch `d5f36921`) | supported commit — **reached** |
 | GitLab triage-security (`sdlc-fullsend`) | — (not deployed yet) | supported commit from the first deployment |
 | Native Fullsend eval CI (`eval-pr-run.yml`) | CLI release `v0.47.1` (`c68903c0373e2216af03f5412642d4aa4019057f`), OpenShell `0.1.2` | stays on a tagged release: the eval CI installs the CLI only from digest-checked release archives, and `9f188578` is untagged. v0.47.1 is the newest release before the supported commit; its built-in Vertex provider/profile, OpenShell pin and CI install scripts are identical to `9f188578`'s (TC-7141) |
 
@@ -408,8 +411,10 @@ that affect this repo:
   harness validation (`host_files[1].src: host variable
   GOOGLE_APPLICATION_CREDENTIALS is not set`). This is why reusable-dispatch was
   pinned off the floating `@v0` to `d5f36921` (the `v0` commit of the last green
-  run). **The child harness's credential mounts must be adapted to the runner-owned
-  model before the GitHub pins move.**
+  run). **Resolved:** the child harness credential mounts follow the runner-owned
+  model (TC-6933) — at the supported commit `fullsend run` itself exports
+  `GOOGLE_APPLICATION_CREDENTIALS` / `GCP_OIDC_TOKEN_FILE` — and the GitHub pins
+  moved together to the supported commit (TC-6936).
 - **Vertex credential preflight** (#7980, v0.46.0). A harness that mounts
   `${GOOGLE_APPLICATION_CREDENTIALS}` as its only credential file now fails before
   the pre_script when the file is missing, instead of failing mid-run — the
@@ -438,9 +443,12 @@ that affect this repo:
   v0.45.0; TC-7141). `harness/verify-pr.yaml` and `harness/triage-security.yaml`
   now declare the bare provider `vertex-ai` and no `openshell.profiles`, and
   `providers/vertex-ai.yaml` / `profiles/fullsend-vertex-ai.yaml` are deleted.
-  The live GitHub deployment keeps working on CLI `v0.43.0` only because
-  `.fullsend/lock.yaml` still pins an older harness commit; **re-pinning the
-  verify-pr base past TC-7141 requires the CLI bump in the same step.**
+  The GitHub deployment stayed on CLI `v0.43.0` only while `.fullsend/lock.yaml`
+  pinned a pre-TC-7141 harness commit; TC-6936 re-pinned the verify-pr base past
+  TC-7141 in the same change as the CLI bump.
+- **`install_mode` input ignored** (reusable-dispatch, `main`). Installations are
+  always per-repo; the input is kept only for compatibility, so the dispatch
+  workflow no longer passes it. The nested-job permission union is unchanged.
 - **No-op for this repo, but checked:** a failed agent now fails `fullsend run`
   for a harness without a `validation_loop` (#8305, v0.47.1) and a harness with no
   `policy` fails before sandbox create (#7849, `main`) — both harnesses declare
@@ -504,7 +512,18 @@ untouched — the GitHub and GitLab deployments bump independently.
      Set both to the same fullsend commit. `fullsend_version` takes the
      v-prefixed release tag; for an untagged commit use the full SHA (an empty
      `fullsend_version` falls back to `job.workflow_sha` — the `uses:` SHA — but
-     keep it explicit so the CLI pin is visible in review).
+     keep it explicit so the CLI pin is visible in review). The vendor action
+     resolves a 40-char SHA to its release tag when one exists and otherwise
+     **builds the CLI from source** (adds a Go build to every dispatch).
+     Re-check the vendor workflow's `inputs:` / `secrets:` and the nested-job
+     `permissions:` union against the caller's `with:` / `secrets:` /
+     `permissions:` — GitHub validates caller permissions statically against
+     every nested job:
+     ```bash
+     gh api "repos/fullsend-ai/fullsend/contents/.github/workflows/reusable-dispatch.yml?ref=<old>" --jq .content | base64 -d > old.yml
+     gh api "repos/fullsend-ai/fullsend/contents/.github/workflows/reusable-dispatch.yml?ref=<new>" --jq .content | base64 -d > new.yml
+     diff old.yml new.yml
+     ```
    - **GitLab triage-security** — the fullsend CLI pin in `.gitlab-ci.yml` of the
      `sdlc-fullsend` repo.
    - **Harness content** — if the adaptation in step 2 changed a harness or any
@@ -516,6 +535,11 @@ untouched — the GitHub and GitLab deployments bump independently.
    ```bash
    fullsend lock <agent> --fullsend-dir .fullsend   # verify-pr, triage-security
    ```
+   Lock with a CLI **at the new supported commit**, not an older local install —
+   an older CLI may reject harness content written for the newer one. For an
+   untagged commit, build it from a fullsend checkout
+   (`git worktree add --detach <dir> <sha> && cd <dir> && go build -o <bin> ./cmd/fullsend`).
+   Run the lock twice; the second run must leave `lock.yaml` unchanged.
    `fullsend agent update` does not apply here — both agents are local-path
    agents (see the note in [Releasing an update](#releasing-an-update-this-repo)).
    Adopter repositories that register the harness **by URL** (such as
@@ -523,12 +547,28 @@ untouched — the GitHub and GitLab deployments bump independently.
    .fullsend` instead — see [Adopting verify-pr](#adopting-verify-pr-external-fullsend-users).
    Commit the updated `.fullsend/` in the same PR as the pin change.
 5. **Verify end to end** before merging:
-   - **GitHub verify-pr** — open a throwaway qualifying PR and confirm the
-     dispatch reaches sandbox readiness and posts a report. An OpenShell/runtime
-     regression surfaces as `Failed to create sandbox` (v0.37.0's bundled
-     OpenShell never reached readiness: `not ready after 2m0s`); a credential-model
-     mismatch surfaces as a `host_files` validation error. Only merge once a live
-     run passes.
+   - **GitHub verify-pr** — confirm a live dispatch on a qualifying PR reaches
+     sandbox readiness and posts a report on GitHub and Jira. An
+     OpenShell/runtime regression surfaces as `Failed to create sandbox` (v0.37.0's
+     bundled OpenShell never reached readiness: `not ready after 2m0s`); a
+     credential-model mismatch surfaces as a `host_files` validation error. Only
+     merge once a live run passes. Because `pull_request_target` always runs the
+     workflow copy on `main` (see **Fork PRs**), the bump PR itself still
+     dispatches on the **old** pins. To prove the new pins before merging, push
+     the bump branch to `RHEcosystemAppEng` (same-repo) and add a **temporary
+     commit** with a copy of the workflow triggered on `pull_request`
+     (types `opened`/`synchronize`/`reopened`, `branches: [main]`), with its own
+     `name:` and `concurrency` group and without the `ok-to-test` /
+     `remove-ok-to-test` logic. On a same-repo `pull_request` the
+     dispatch checks out the PR merge ref (`github.sha`), so the new `.fullsend/`
+     pins run against the bump PR itself once its Jira issue is in Review. Record
+     the run, then drop the temporary commit (force-push) before merging. The
+     `main` copy also starts on the old pins, but its agent job is cancelled:
+     reusable-dispatch's `harness-run` job has its own `concurrency` group
+     (agent + repo + PR number, `cancel-in-progress: true`) shared by both
+     copies, so only one verify-pr report is posted. Confirm in the run log that
+     the surviving `harness-run` is the temporary copy's (`fullsend version`
+     prints the new commit).
    - **GitLab triage-security** — run a manual pipeline dispatch on a known
      Vulnerability issue and confirm it completes and produces its report.
    - Update the `## Prerequisites` CLI note if the local CLI must track CI.
@@ -547,6 +587,11 @@ Otherwise the GitHub runner — still on the old fullsend — executes content w
 for the new one. The GitLab deployment may adopt such content as soon as its own
 CLI pin points at the supported commit; the GitHub `base:` re-pin waits for the
 GitHub bump.
+
+**Guard rule status: satisfied for `9f188578`** (TC-6936). The GitHub CLI and
+reusable-dispatch pins are at the supported commit, so verify-pr may be re-pinned
+to sdlc-plugins content adapted for it. The rule applies again from the next
+supported-commit change.
 
 The fullsend pins are independent of the harness `base:` re-pin (which tracks
 sdlc-plugins content) and of the plugin version below.
