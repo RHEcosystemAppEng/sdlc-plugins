@@ -563,7 +563,12 @@ untouched — the GitHub and GitLab deployments bump independently.
      dispatch checks out the PR merge ref (`github.sha`), so the new `.fullsend/`
      pins run against the bump PR itself once its Jira issue is in Review. Record
      the run, then drop the temporary commit (force-push) before merging. The
-     `main` copy also runs on the old pins and posts its own report — expected.
+     `main` copy also starts on the old pins, but its agent job is cancelled:
+     reusable-dispatch's `harness-run` job has its own `concurrency` group
+     (agent + repo + PR number, `cancel-in-progress: true`) shared by both
+     copies, so only one verify-pr report is posted. Confirm in the run log that
+     the surviving `harness-run` is the temporary copy's (`fullsend version`
+     prints the new commit).
    - **GitLab triage-security** — run a manual pipeline dispatch on a known
      Vulnerability issue and confirm it completes and produces its report.
    - Update the `## Prerequisites` CLI note if the local CLI must track CI.
