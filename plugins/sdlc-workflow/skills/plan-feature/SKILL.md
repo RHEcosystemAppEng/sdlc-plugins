@@ -649,7 +649,7 @@ Create implementation tasks for each unit of work. Each task description MUST fo
 
 ### Shared-artifact coverage in task decomposition
 
-Before finalizing implementation tasks, reconcile them against the shared-artifact path map from Step 3. Every affected producer, writer, and consumer must be represented by its relevant Files to Modify or Files to Create, path-specific validation, and Test Requirements. Include fallback/recovery and on-demand/manual/API paths when repository evidence shows they populate the same artifact. When an applicable eval suite exists, propagate coverage to its eval cases using the eval coverage propagation rules below.
+Before finalizing implementation tasks, reconcile them against the shared-artifact path map from Step 3. Every affected producer, writer, and consumer must be represented by its relevant Files to Modify or Files to Create, path-specific validation, and Test Requirements. Include tests for Feature acceptance criteria that preserve existing behavior, such as stable identifiers or update semantics. Include fallback/recovery and on-demand/manual/API paths when repository evidence shows they populate the same artifact. When an applicable eval suite exists, propagate coverage to its eval cases using the eval coverage propagation rules below.
 
 If a stakeholder scope instruction excludes a path required by an acceptance criterion, keep the criterion visibly unresolved in the impact map and request clarification before finalizing tasks. A task set that covers only the primary workflow must not be presented as satisfying a criterion that applies to the shared artifact across population paths.
 
