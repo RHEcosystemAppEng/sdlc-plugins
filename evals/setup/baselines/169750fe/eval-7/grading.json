@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review or changes log identifies docs/templates/security-matrix.template.md as the sole canonical scaffold and does not use docs/templates/security-matrix.md as a template or fallback",
+      "passed": true,
+      "evidence": "changes-log.md line 18: 'Canonical scaffold template identified: `docs/templates/security-matrix.template.md`' and line 19: '`docs/templates/security-matrix.md` is the worked EXAMPLE only -- it was NOT used as a template or fallback.' security-matrix-review.md line 5: 'Canonical scaffold template: `docs/templates/security-matrix.template.md`' and lines 7-8: '`docs/templates/security-matrix.md` is a worked example only and was NOT used as a template or fallback for this scaffold.'"
+    },
+    {
+      "text": "outputs/security-matrix-review.md contains a Container Images table keyed by both Product Version and Component, with separate 2.1.0 api-rhel9 and api-rhel10 rows",
+      "passed": true,
+      "evidence": "security-matrix-review.md line 39: header '| Product Version | Component | Konflux Release Tag | Resolved Release Commit SHA | Image Reference | Image Digest | CPE |'; line 41: '| 2.1.0 | api-rhel9 | `v0.3.12` | ...' and line 42: '| 2.1.0 | api-rhel10 | `v0.3.12` | ...' -- two separate rows keyed by both Product Version and Component."
+    },
+    {
+      "text": "The proposed Supportability Matrix uses the configured dynamic source-repository columns backend and frontend-ui, with the supplied version/build/date/source-pin rows",
+      "passed": true,
+      "evidence": "security-matrix-review.md line 26: '| Product Version | Build | Build Date | backend | frontend-ui | Notes |'; line 28: '| 2.1.0 | 0.3.12 | 2026-06-15 | `v0.3.12` | `bb447eeb` | |'; line 29: '| 2.1.1 | 0.3.13 | 2026-06-20 | `v0.3.13` | `deadbeef` | |' -- dynamic columns backend and frontend-ui present with version/build/date/source-pin data."
+    },
+    {
+      "text": "The expanded Supportability Matrix header, separator, and data rows have the same number of cells for both configured source repositories",
+      "passed": true,
+      "evidence": "security-matrix-review.md: header (line 26) has 6 pipe-delimited cells; separator (line 27) has 6 cells; data row 1 (line 28) has 6 cells; data row 2 (line 29) has 6 cells. All rows are consistent at 6 columns. Also confirmed in changes-log.md line 29: '6 columns: Product Version, Build, Build Date, backend, frontend-ui, Notes'."
+    },
+    {
+      "text": "The proposed Source Pinning Method section has one entry per configured repository and uses the supplied artifacts.lock.yaml and Git submodule methods",
+      "passed": true,
+      "evidence": "security-matrix-review.md lines 71-72: '- **backend**: `artifacts.lock.yaml` download URL contains the release tag' and '- **frontend-ui**: Git submodule at `components/frontend-ui`' -- one entry per configured repository with the specified methods."
+    },
+    {
+      "text": "The proposed matrix preserves the supplied Ecosystem Mappings rows for Cargo/backend and npm/frontend-ui rather than replacing or omitting that section",
+      "passed": true,
+      "evidence": "security-matrix-review.md lines 76-79: '| Cargo | backend | `Cargo.lock` | `git show <tag>:Cargo.lock` | `release/0.3.z` |' and '| npm | frontend-ui | `package-lock.json` | `git show <commit>:package-lock.json` | `release/0.3.z` |' -- both Ecosystem Mappings rows preserved with correct ecosystem/repository/lock-file/check-command/upstream-branch values."
+    },
+    {
+      "text": "The valid image rows preserve Konflux release tag v0.3.12 and resolved full commit SHA 0123456789abcdef0123456789abcdef01234567 as separate values",
+      "passed": true,
+      "evidence": "security-matrix-review.md lines 41-42: both api-rhel9 and api-rhel10 rows have 'Konflux Release Tag' column with `v0.3.12` and separate 'Resolved Release Commit SHA' column with `0123456789abcdef0123456789abcdef01234567` -- tag and SHA are kept as distinct column values."
+    },
+    {
+      "text": "The valid rows preserve distinct image references and immutable sha256 digests, retain the fixture's trustify_api:2.1.0 CPE on both api-rhel9 and api-rhel10 rows without requiring CPE uniqueness across platforms, and show the OCI revision label matching the resolved release commit SHA",
+      "passed": true,
+      "evidence": "security-matrix-review.md line 41: api-rhel9 has Image Reference `registry.example.test/trustify/api:2.1.0-rhel9`, Digest `sha256:aaaa...`, CPE `cpe:2.3:a:example:trustify_api:2.1.0:*:*:*:*:*:*:*`. Line 42: api-rhel10 has distinct Image Reference `registry.example.test/trustify/api:2.1.0-rhel10`, distinct Digest `sha256:bbbb...`, same CPE. Lines 47-49: OCI revision label verification shows both rows VERIFIED with label matching SHA `0123456789abcdef0123456789abcdef01234567`. changes-log.md lines 55-56 explicitly confirms: 'Both 2.1.0 rows carry the same CPE...which is correct -- the same CPE applies across platform variants'."
+    },
+    {
+      "text": "The 2.1.1 api-rhel10 mapping is flagged because its OCI revision label fedcba9876543210fedcba9876543210fedcba98 does not match the SHA resolved from v0.3.13, and it is not presented as verified data",
+      "passed": true,
+      "evidence": "security-matrix-review.md lines 53-63: 'MISMATCH DETECTED -- 2.1.1 / api-rhel10'; 'OCI revision label: `fedcba9876543210fedcba9876543210fedcba98`'; 'Resolved release commit SHA (from tag `v0.3.13`): `89abcdef0123456789abcdef0123456789abcdef`'; 'This row is **FLAGGED** and is excluded from the Container Images table above. It MUST NOT be presented as verified data.' Line 67 shows the row with Status **MISMATCH**."
+    },
+    {
+      "text": "The output presents the completed matrix for user review before writing and states that no matrix is written while the mismatch remains unresolved",
+      "passed": true,
+      "evidence": "security-matrix-review.md presents the full proposed matrix content (lines 18-83) for review. Lines 89-99: '**The matrix CANNOT be written in its current state.**' and 'The matrix file will not be written while this mismatch remains unresolved.' changes-log.md lines 82-85: '**Matrix NOT written.** The 2.1.1 / api-rhel10 image has an unresolved OCI revision label mismatch...the matrix file remains unchanged until corrected evidence is provided and the mismatch is resolved. The complete proposed matrix has been presented for review in `outputs/security-matrix-review.md`.'"
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

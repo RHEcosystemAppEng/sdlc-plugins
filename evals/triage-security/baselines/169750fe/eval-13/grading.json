@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The remediation output describes the digest protocol for the upstream backport task: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "Task 3 (Upstream Backport, 2.1.x Preemptive) has a full 'Description Digest Protocol' section (lines 305-332) that describes: (1) re-fetching the description from Jira via get_issue after create_issue (step 1, line 309-311), and (2) computing the SHA-256 digest using 'python3 scripts/sha256-digest.py /tmp/task-desc.md' (step 3, lines 317-320). The Sequencing Summary also confirms this for Task 3 at lines 464-468."
+    },
+    {
+      "text": "The remediation output describes the digest protocol for the downstream propagation subtask: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "Task 2 (Downstream Propagation, 2.2.x) has a full digest protocol section (lines 193-221) describing re-fetching via get_issue (step 1, line 199) and computing SHA-256 using scripts/sha256-digest.py (step 3, line 209). Task 4 (Downstream Propagation, 2.1.x Preemptive) also has its own digest protocol section (lines 405-431) with the same steps. Both downstream tasks explicitly describe the full protocol."
+    },
+    {
+      "text": "The remediation output includes the digest comment marker '[sdlc-workflow] Description digest:' in the described steps for each remediation task — both upstream and downstream (§1.66)",
+      "passed": true,
+      "evidence": "The marker '[sdlc-workflow] Description digest:' appears in the digest protocol steps for all four tasks: Task 1 (line 124), Task 2 (line 217), Task 3 (line 329), Task 4 (line 425). It also appears in the Sequencing Summary for each task (lines 452, 460, 468, 475). Line 489 also explicitly restates: 'The digest comment marker is exactly: [sdlc-workflow] Description digest:'"
+    },
+    {
+      "text": "The remediation output sequences digest comments BEFORE issue links (Depend, Blocks) or other comments in the described procedure for each task (§1.66, shared/description-digest-protocol.md Rules)",
+      "passed": true,
+      "evidence": "Each task's digest protocol section explicitly states 'BEFORE creating any issue links or other comments' (lines 102, 195, 306, 407). In each protocol, step 4 posts the digest comment and step 5 creates issue links. The Sequencing Summary (lines 436-476) confirms for every task: add_comment (digest) at step 4 precedes create_link at step 5. Line 489: 'The digest comment must be posted **before** any issue links (Depend, Blocks, Related) or other comments on the task.'"
+    },
+    {
+      "text": "The remediation output specifies that the digest is computed from the re-fetched description (via Jira API after create_issue), not from the description string passed to create_issue (shared/description-digest-protocol.md Hashing)",
+      "passed": true,
+      "evidence": "Each task's digest protocol step 1 says 'Re-fetch the description from Jira to get the Jira-normalized content' using get_issue. Line 486 explicitly states: 'The digest is computed from the **re-fetched** description (after Jira normalization), NOT from the input string passed to create_issue'. The Sequencing Summary also shows the sequence: create_issue -> get_issue (re-fetch) -> sha256-digest.py -> add_comment, confirming the digest is computed from the re-fetched data."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

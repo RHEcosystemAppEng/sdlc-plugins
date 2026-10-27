@@ -1,0 +1,49 @@
+# Step 1 -- Data Extraction
+
+## Parsed CVE Data
+
+| Field | Value |
+|-------|-------|
+| Jira Issue Key | TC-8011 |
+| CVE ID | CVE-2026-45678 |
+| Affected Component (PS Component) | pscomponent:org/rhtpa-ui |
+| Product Version (PSIRT-claimed) | rhtpa-2.2 (from summary suffix `[rhtpa-2.2]`) |
+| Affects Versions (Jira field) | RHTPA 2.2.0 |
+| Vulnerable Library | webpack |
+| Affected Version Range | versions before 5.98.0 |
+| Fixed Version (fix threshold) | 5.98.0 |
+| CVSS Score | 7.8 (High) |
+| Advisory URL | https://github.com/advisories/GHSA-2026-wk55-m3rr |
+| CVE Record URL | https://www.cve.org/CVERecord?id=CVE-2026-45678 |
+| Due Date | 2026-08-15 |
+| Status | New |
+| Assignee | Unassigned |
+| Existing Issue Links | None |
+| Existing Comments | None |
+
+## Custom Fields
+
+| Custom Field | Field ID | Value |
+|---|---|---|
+| Upstream Affected Component | customfield_10632 | webpack |
+| PS Component | customfield_10669 | pscomponent:org/rhtpa-ui |
+| Stream | customfield_10832 | rhtpa-2.2 |
+
+## Stream Scope Resolution
+
+- Summary suffix: `[rhtpa-2.2]`
+- Mapped stream: **2.2.x** (from Version Streams table in Security Configuration)
+- Konflux release repo: git.example.com/rhtpa/rhtpa-release.0.4.z
+- Local path: /home/dev/repos/rhtpa-release.0.4.z
+- Scope: **Scoped** -- only the 2.2.x stream is in scope for this issue
+
+## Ecosystem Detection
+
+- Library: webpack
+- Ecosystem: **npm** (JavaScript/TypeScript package)
+- Category: Source dependency
+- Remediation tasks per stream: **2** (dependency bump + downstream propagation, assuming fix is available upstream at >= 5.98.0)
+
+## Vulnerability Description
+
+A vulnerability was found in webpack. The webpack package before version 5.98.0 allows arbitrary code execution through a specially crafted loader chain configuration. An attacker with control over a project's webpack configuration can execute arbitrary code during the build process. The vulnerability exists because webpack does not properly sanitize loader paths when resolving the loader chain, allowing path traversal to execute arbitrary modules.

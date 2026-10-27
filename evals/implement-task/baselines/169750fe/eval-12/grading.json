@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md Step 1 states: \"Using `find_symbol` / `search_for_pattern` (Serena) or Grep as fallback, search the entire `modules/fundamental/src/` directory tree for: SEVERITY_ORDER (exact name referenced in the task description), severity_order (snake_case variant), SeverityOrder (PascalCase variant)\". The search objective explicitly states this is done \"Before declaring any new constant for severity ordering in the SBOM service module\"."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md Step 2 states: \"Match found: `modules/fundamental/src/advisory/service/advisory.rs`\" and quotes the exact definition: \"const SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"];\""
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md Step 6.1 makes the constant public (\"Change const SEVERITY_ORDER to pub const SEVERITY_ORDER\"). Step 6.3 imports it: \"use crate::advisory::service::advisory::SEVERITY_ORDER;\" and notes \"Key: imports SEVERITY_ORDER from advisory module — no duplication.\""
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "plan.md Step 6.3 imports the existing constant via \"use crate::advisory::service::advisory::SEVERITY_ORDER;\" with no new declaration. Step 9 Symbol deduplication check confirms: \"No new `SEVERITY_ORDER` constant declared anywhere. The existing one is reused. Verified by searching for `SEVERITY_ORDER` across the diff.\" symbol-search.md Decision section explicitly rejects the alternative: \"Rejected alternative: Declaring a new `SEVERITY_ORDER` constant in `modules/fundamental/src/sbom/service/sbom.rs`.\""
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md Search Objective states: \"search the entire `modules/fundamental` package (not just `modules/fundamental/src/sbom/service/sbom.rs`)\". Step 1 specifies scope as \"modules/fundamental/src/**/*.rs\" and notes: \"this covers all submodules (advisory, sbom, package) within the fundamental crate, not just the file being edited.\""
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

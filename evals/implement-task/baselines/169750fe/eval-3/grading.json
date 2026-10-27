@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 6.1 point 3: 'Reuse `apply_filter` from `common/src/db/query.rs` — do NOT write new parsing logic for comma-separated values'. Step 6.2 point 3: 'Call `apply_filter` from `common/src/db/query.rs` to handle comma-separated values and generate the SQL `IN` clause — do NOT write custom parsing logic'. reuse-analysis.md Candidate 1: 'Reuse directly — call `apply_filter` in `PackageService::list` to process the `license` query parameter value. This handles both single-value and multi-value cases without writing any new parsing logic.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md Step 6.1: 'Following the pattern from `modules/fundamental/src/advisory/endpoints/list.rs` (the severity filter), add:'. reuse-analysis.md Candidate 2: 'Follow as structural guide — replicate the same pattern (Query struct with optional filter field → extract in handler → pass to service) for the license filter in the package list endpoint.'"
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Step 6.2 point 2: 'join through `entity/src/package_license.rs` (the package-license mapping entity) to filter by license SPDX identifier'. reuse-analysis.md Candidate 3: 'Reuse for JOIN query — use this existing entity to construct the join between the package table and the license data rather than writing raw SQL or creating a new entity.' and 'Use `package_license::Entity` to construct a SeaORM `JoinType::InnerJoin`'."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md contains three numbered sections: 1. 'common/src/db/query.rs::apply_filter' with 'How it will be applied' paragraph, 2. 'modules/fundamental/src/advisory/endpoints/list.rs (severity filter pattern)' with 'How it will be applied' paragraph, 3. 'entity/src/package_license.rs (package-license entity)' with 'How it will be applied' paragraph. Each includes Reuse decision and detailed application description."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 1 declares Files to Modify: modules/fundamental/src/package/endpoints/list.rs, modules/fundamental/src/package/service/mod.rs; Files to Create: tests/api/package_license_filter.rs. Step 9 Self-Verification confirms only these 3 files are modified/created: '1. modules/fundamental/src/package/endpoints/list.rs — listed in Files to Modify, 2. modules/fundamental/src/package/service/mod.rs — listed in Files to Modify, 3. tests/api/package_license_filter.rs — listed in Files to Create. All files are within the declared scope. No out-of-scope files are modified.' The git commit in Step 10 only stages these same 3 files."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 9 Duplication Check: 'No new utility functions are created. The implementation reuses `apply_filter` from `common/src/db/query.rs` directly. No duplication of existing filtering logic.' reuse-analysis.md Summary: 'No new utility functions or helpers are created. All filtering logic is delegated to existing code (`apply_filter`) and existing data access patterns (`package_license` entity).' The plan consistently directs calling apply_filter rather than creating new functions."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

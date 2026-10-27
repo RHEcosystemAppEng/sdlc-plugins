@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "Phase 7 ('Pre-Write Re-Read and Comparison') explicitly states: 'Per Step 10.6 rule 5: \"After the user confirms, re-read the target immediately before writing and compare it with that snapshot.\"' Phase 7.1 performs a systematic comparison table of 'Snapshot (Phase 1)' vs 'Current File (Re-Read)' across Last-Updated timestamp, Supportability rows, and Container Images rows."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "Phase 7.2 'Drift Detection Results' explicitly identifies both changes: '1. Timestamp drift: The Last-Updated value changed from 2026-06-28T10:00:00Z to 2026-10-26T09:15:00Z' and '2. New concurrent row: A CONCURRENT-ROW-KEEP entry was added for 2.1.0/api-rhel10.' The Phase 7.1 comparison table also marks both as 'CHANGED'."
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "Phase 9 states 'NO WRITE OCCURS. The matrix file is left unchanged on disk.' The final state summary confirms: 'The security-matrix.md file on disk retains the concurrent changes (Last-Updated 2026-10-26T09:15:00Z and CONCURRENT-ROW-KEEP row). No write has occurred.' The summary table confirms 'No write of stale proposal: Yes' and 'Preservation of concurrent timestamp: Yes' and 'Preservation of concurrent row: Yes'."
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Phase 8.1 lists the CONCURRENT-ROW-KEEP row's column values as all 'unknown' (Konflux Release Tag, Resolved Release Commit SHA, Image Reference, Image Digest, CPE). Phase 8.2 states 'The workflow ABORTS the merge.' Phase 9 requests from the user: 'The current full contents of security-matrix.md (so I can build a merged proposal from the actual current state), OR The complete column values for the CONCURRENT-ROW-KEEP row'. The summary table confirms 'No placeholder or fabricated data: Yes' and 'Abort on incomplete merge data: Yes'."
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "Phase 9 opens with 'NO WRITE OCCURS. The matrix file is left unchanged on disk.' The user-facing message in Phase 9 states: 'Once I have this data, I will prepare a new merged proposal that preserves both the concurrent changes and the 2.1.1 additions, present it for your review, and write only after fresh confirmation.' The summary table confirms 'No write of stale proposal: Yes' and 'Fresh confirmation required after reconciliation: Yes'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

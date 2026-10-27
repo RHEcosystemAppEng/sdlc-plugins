@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The query-scope analysis identifies that the task targets a subset — specifically 'SPDX SBOMs' not all SBOMs — by extracting subset-indicating language from the Description section",
+      "passed": true,
+      "evidence": "query-scope.md lines 5-12 explicitly extract subset-indicating language: 'Re-process all **SPDX SBOMs** — targets SPDX documents specifically, not all SBOMs', 'Only SPDX SBOMs need re-processing — CycloneDX documents already have supplier information populated during ingestion', and concludes 'The task targets a **subset** of the sbom table — specifically documents with type \"spdx\". This is not a full-table migration.'"
+    },
+    {
+      "text": "The query-scope analysis verifies that the sbom entity's labels column (jsonb) supports filtering by document type at the database level, rather than requiring application-level filtering",
+      "passed": true,
+      "evidence": "query-scope.md lines 16-28 state: 'The `labels` jsonb column on the `sbom` entity directly supports filtering by document type at the database level. PostgreSQL's `->>` operator can extract the `type` key as text for comparison. This means the subset restriction can be expressed as a database-level WHERE clause rather than requiring application-level filtering after loading all records.' It also provides the filter expression: WHERE labels->>'type' = 'spdx' and a SeaORM translation."
+    },
+    {
+      "text": "The plan uses a filtered query to select only SPDX documents (e.g., WHERE labels->>'type' = 'spdx' or equivalent ORM filter) instead of loading all documents and discarding CycloneDX ones in application code",
+      "passed": true,
+      "evidence": "plan.md lines 79-84 show the filtered query: sbom::Entity::find().filter(Expr::cust(\"labels->>'type' = 'spdx'\")).all(&db).await?; with the comment 'Query only SPDX documents using the labels jsonb column'. Line 86 explicitly states 'This filters at the database level using labels->>type = spdx on the sbom entity's labels jsonb column.'"
+    },
+    {
+      "text": "The plan or query-scope analysis explicitly mentions the performance impact of loading all documents — referencing that production environments have hundreds of thousands of non-target CycloneDX records",
+      "passed": true,
+      "evidence": "Both files reference this. query-scope.md line 40: 'production environments have hundreds of thousands of CycloneDX documents alongside a smaller number of SPDX documents. Loading all documents would mean fetching hundreds of thousands of records that will be immediately discarded — wasting database I/O, network bandwidth, and application memory.' plan.md line 86: 'production environments have hundreds of thousands of CycloneDX documents — loading all documents indiscriminately and filtering in application code would cause excessive, unnecessary I/O and memory consumption.'"
+    },
+    {
+      "text": "The plan does NOT propose using an unfiltered query like Sbom::find() or Document::all() followed by an application-level type check to discard CycloneDX documents",
+      "passed": true,
+      "evidence": "The plan exclusively uses a filtered query: sbom::Entity::find().filter(Expr::cust(\"labels->>'type' = 'spdx'\")). query-scope.md lines 36-37 explicitly state: 'Rejected approach: Unfiltered query (e.g., Sbom::find().all(db) or sbom::Entity::find().all(db)) followed by application-level filtering to discard CycloneDX documents.' No unfiltered query is proposed anywhere in either output file."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
