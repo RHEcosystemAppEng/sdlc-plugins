@@ -36,7 +36,20 @@ When bumping the version, update both files together.
 - Git Pull Request custom field: customfield_10875
 - GitHub Issue custom field: customfield_10747
 
+### Jira Field Defaults
+
+- Default priority: (none)
+- fixVersion scope: both
+- Prompt for priority: true
+- Prompt for fixVersion: true
+
 ## Code Intelligence
+
+Tools are prefixed by Serena instance name: `mcp__<instance>__<tool>`.
+
+For example, to search for a symbol in a repository whose Serena instance is `<instance>`:
+
+    mcp__<instance>__find_symbol(name_path_pattern="MyService")
 
 No Serena MCP servers are configured. Code intelligence is not available.
 

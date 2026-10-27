@@ -138,6 +138,30 @@
         "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), the plan documents that fixVersions are inherited by created tasks — evidenced by fixVersion values in the impact map, task creation log, or task description files. When fixVersion scope is 'feature' or the Feature has no fixVersions, the plan documents that fixVersion inheritance is skipped",
         "A summary of inherited field propagation is produced — evidenced by a summary-comment.md file in the outputs directory, or a summary section in the impact map that includes the inherited priority and fixVersion values propagated to tasks, or states they were omitted and why"
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "Plan the implementation for feature TC-9007. The feature description and repository structure are in feature-shared-artifact-multi-writer.md. The stakeholder believes this is mainly an onboarding change and emphasizes keeping the plan small; prefer a single task if practical. Write all outputs to the workspace outputs/ directory. For each task you would create, write a markdown file named task-N-slug.md with the full task description. Write the impact map to impact-map.md. When the skill would post a Jira comment (description digest, summary comment, impact map comment), write it as a separate file in the outputs directory (e.g., `task-N-digest.md`, `summary-comment.md`).",
+      "expected_output": "A concise plan that keeps task count low without omitting repository paths or tests affected by the shared Service Catalog record contract.",
+      "files": ["files/feature-shared-artifact-multi-writer.md"],
+      "assertions": [
+        "Across implementation task Files to Modify or Files to Create, the plan covers all four catalog writer paths: src/workflows/registration.py, src/workflows/scheduled_sync.py, src/workflows/fallback_import.py, and src/api/on_demand_refresh.py",
+        "Task Test Requirements cover each writer with its corresponding test path: tests/workflows/test_registration.py, tests/workflows/test_scheduled_sync.py, tests/workflows/test_fallback_import.py, and tests/api/test_on_demand_refresh.py",
+        "Implementation tasks specify path-specific validation: registration persists the supplied ownerGroup, scheduled sync/fallback/on-demand updates preserve an existing value when omitted and apply a supplied replacement, and both consumers expose values from all four writers",
+        "Generated tasks cover both catalog consumers, src/api/catalog_summary.py and src/reports/catalog_export.py, and validate that entries produced by every writer are visible to those consumers",
+        "The fallback-import and on-demand-refresh paths are explicitly planned; coverage is not limited to initial registration and scheduled sync"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Plan the implementation for feature TC-9007. The feature description and repository structure are in feature-shared-artifact-multi-writer.md. The stakeholder says this is strictly an onboarding-and-display change and explicitly instructs you not to include files or tests for scheduled synchronization, fallback import, or on-demand refresh; keep those paths out of scope. Write all outputs to the workspace outputs/ directory. For each task you would create, write a markdown file named task-N-slug.md with the full task description. Write the impact map to impact-map.md. When the skill would post a Jira comment (description digest, summary comment, impact map comment), write it as a separate file in the outputs directory (e.g., `task-N-digest.md`, `summary-comment.md`).",
+      "expected_output": "A plan that surfaces the conflict between the shared-record acceptance criteria and the stakeholder's primary-path-only scope, maps the excluded writer and test paths, and does not claim universal criteria are met by onboarding-only coverage.",
+      "files": ["files/feature-shared-artifact-multi-writer.md"],
+      "assertions": [
+        "The impact map identifies the conflict between requiring ownerGroup on every Service Catalog record regardless of how it is populated and the stakeholder instruction to omit alternate write paths.",
+        "The impact map or an explicit unresolved-scope section enumerates the excluded writer files and matching tests: src/workflows/scheduled_sync.py with tests/workflows/test_scheduled_sync.py, src/workflows/fallback_import.py with tests/workflows/test_fallback_import.py, and src/api/on_demand_refresh.py with tests/api/test_on_demand_refresh.py.",
+        "The plan does not claim the universal ownerGroup acceptance criteria are met by registration and display alone; it asks for scope clarification or clearly records those criteria as unresolved."
+      ]
     }
   ]
 }
