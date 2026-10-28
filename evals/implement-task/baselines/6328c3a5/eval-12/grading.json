@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md Section 2 'Broad Package Search' describes searching with multiple queries (SEVERITY_ORDER, severity_order, SeverityOrder, severityOrder) using 'Grep / search_for_pattern' across 'modules/fundamental/src/' and also 'common/src/'. The search is explicitly performed before any constant declaration, as stated in Section 1: 'the implement-task skill requires independent verification via symbol search before relying on task description claims.'"
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md Section 3 'Search Results' states: 'Found: SEVERITY_ORDER in modules/fundamental/src/advisory/service/advisory.rs' and quotes the exact definition: 'pub const SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"];'"
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md Section 2 for sbom/service/sbom.rs specifies: 'Add import: use crate::advisory::service::advisory::SEVERITY_ORDER;' and the code snippet uses SEVERITY_ORDER directly in the sort_by_key closure. Line 149-150 confirms: 'SEVERITY_ORDER handling: The constant is imported from crate::advisory::service::advisory::SEVERITY_ORDER -- no duplicate definition.'"
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "plan.md lists changes for sbom/service/sbom.rs as adding an import ('use crate::advisory::service::advisory::SEVERITY_ORDER') and a new method, but no const declaration. The code snippet for build_remediation_list uses the imported SEVERITY_ORDER without redefining it. plan.md explicitly states 'no duplicate definition.' No other file in the plan declares a SEVERITY_ORDER constant."
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md Section 2 explicitly states: 'Search scope: The entire modules/fundamental/ directory tree -- not just the file being edited (sbom/service/sbom.rs), but all sibling modules and shared code.' It also notes: 'Also searched: common/src/ to check if severity ordering is defined in shared utilities.' The search table shows scope as 'modules/fundamental/src/' for all queries."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "Plan Step 4a (line 80) inspects advisory/service/advisory.rs via mcp__serena_backend__get_symbols_overview. Step 4b (line 99) inspects advisory/endpoints/get.rs as an endpoint sibling. Step 4b (line 100) inspects advisory/model/summary.rs as a model sibling. Step 4a (line 94) searches for AppError pattern to understand error handling from common/src/error.rs. All 4 files are referenced."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": false,
+      "evidence": "The plan's Step 6 tables list only the 6 in-scope files. However, the 'Documentation Impact' subsection of Step 6 explicitly states: 'Since a new public endpoint (GET /api/v2/sbom/{id}/advisory-summary) is being added, would add an entry documenting the endpoint, its parameters, and response shape' for docs/api.md. This is an out-of-scope file not listed in the task's Files to Modify or Files to Create sections."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "Plan Step 6 'Files to Create' table lists: (4) modules/fundamental/src/advisory/model/severity_summary.rs — SeveritySummary response struct, (5) modules/fundamental/src/advisory/endpoints/severity_summary.rs — GET handler, (6) tests/api/advisory_summary.rs — Integration tests. All 3 files are present with corresponding file-4-description.md, file-5-description.md, and file-6-description.md."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "Plan Step 6 'Files to Modify' table lists: (1) modules/fundamental/src/advisory/service/advisory.rs, (2) modules/fundamental/src/advisory/endpoints/mod.rs, (3) modules/fundamental/src/advisory/model/mod.rs. All 3 files are present with corresponding file-1-description.md, file-2-description.md, and file-3-description.md."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "Plan Step 10 commit message: 'feat(api): add advisory severity aggregation endpoint' (type=feat, scope=api, description follows). Footer contains 'Implements TC-9201' referencing the Jira ticket."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "Plan Step 10 commit command includes: git commit --trailer=\"Assisted-by: Claude Code\" -m \"$(cat <<'EOF' ...)\""
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "Plan header (line 9): 'Branch Name: TC-9201'. Step 5: 'git checkout -b TC-9201'. Target Branch identified as 'main' on line 8. Step 10: 'gh pr create --base main' references the target branch."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md 'Error Handling' section (lines 42-46): 'All handlers return Result<T, AppError>' and 'Error wrapping uses .context(\"descriptive message\") (anyhow-style)'. 'Module Structure' section (lines 30-37): 'Each domain module follows the model/ + service/ + endpoints/ tri-partition'. Both patterns explicitly identified with source references."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "Plan header line 8: 'Target Branch: main'. Step 1 parsed sections list: 'Target Branch: main'. Step 10 PR creation: '--base main'. The target branch is consistently referenced throughout."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "Plan Step 1.5 'Verify Description Integrity' (lines 53-60): Searches for comments starting with '[sdlc-workflow] Description digest:'. Item 5 explicitly states: 'If no digest comment found: log warning (\"No description digest found -- skipping integrity check\") and proceed'. This confirms warning-only behavior without blocking."
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": true,
+      "evidence": "Plan Step 9 'Module-level test requirement (Rust)' (lines 201-219): Shows 'cargo metadata --no-deps --format-version 1' command. States: 'Parse the JSON output to find packages. For each modified file, find which package's manifest directory or source targets contain the file path.' Explicitly warns: 'The crate name comes from the name field in the metadata output, NOT from the directory name or nearest Cargo.toml (which may be a virtual workspace manifest).' Also repeated in file-6-description.md lines 143-157."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 1,
+    "total": 11,
+    "pass_rate": 0.909
+  }
+}

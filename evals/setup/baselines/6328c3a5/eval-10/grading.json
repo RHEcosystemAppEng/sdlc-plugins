@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "Phase 7 (titled 'Pre-Write Re-Read and Comparison') explicitly states: 'Re-read security-matrix.md from disk immediately before writing.' Phase 7.1 then performs a systematic comparison table with columns 'Snapshot (Phase 1)' vs 'Current File (Re-Read)', comparing Last-Updated timestamp, Supportability rows, and Container Images rows between the original snapshot and the re-read file."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "Phase 7.2 ('Drift Detection Results') explicitly identifies both changes: (1) 'Timestamp drift: The Last-Updated value changed from 2026-06-28T10:00:00Z to 2026-10-26T09:15:00Z' and (2) 'New concurrent row: A CONCURRENT-ROW-KEEP entry was added for 2.1.0/api-rhel10. This row was inserted by the concurrent triage-security run and MUST be preserved.'"
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "Phase 8.1 states preserving the concurrent timestamp is 'feasible'. Phase 8.2 aborts the merge entirely, preventing any overwrite. Phase 9 states 'NO WRITE OCCURS. The matrix file is left unchanged on disk.' The final state confirms: 'The security-matrix.md file on disk retains the concurrent changes (Last-Updated 2026-10-26T09:15:00Z and CONCURRENT-ROW-KEEP row). No write has occurred.'"
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Phase 8.1 identifies that the CONCURRENT-ROW-KEEP entry's complete column values are NOT available, listing five unknown fields (Konflux Release Tag, Resolved Release Commit SHA, Image Reference, Image Digest, CPE). It explicitly states the workflow MUST NOT 'Use placeholders for missing column values' or 'Call an incomplete merge complete'. Phase 8.2 aborts. Phase 9 requests from the user: 'The current full contents of security-matrix.md (so I can build a merged proposal from the actual current state), OR The complete column values for the CONCURRENT-ROW-KEEP row.'"
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "Phase 9 opens with 'NO WRITE OCCURS. The matrix file is left unchanged on disk.' The user-facing message states: 'Once I have this data, I will prepare a new merged proposal that preserves both the concurrent changes and the 2.1.1 additions, present it for your review, and write only after fresh confirmation.' The final state confirms: 'No write has occurred. The workflow is blocked pending the user's provision of current full matrix data and a subsequent fresh review-and-confirm cycle.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

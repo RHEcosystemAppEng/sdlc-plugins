@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md lines 62-82: Section 'Assertion Patterns (CONFLICT IDENTIFIED)' explicitly identifies both patterns with code examples. The .filter().any() pattern is quoted from tests/api/advisory.rs (lines 67-71: 'let has_critical = result.items.iter().filter(|a| a.severity == \"Critical\").any(|_| true);'). The .filter().count() > 0 pattern is quoted from tests/api/sbom.rs (lines 74-79: 'let matching = result.items.iter().filter(|s| s.name.contains(\"openssl\")).count(); assert!(matching > 0, ...);'). Both source files are correctly attributed."
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md lines 86-96: Section 'Conflict with Skill Quality Guidance' explicitly states 'The sibling .filter().any() and .filter().count() > 0 assertion patterns conflict with the implement-task skill's built-in quality guidance in Step 7' and directly quotes the skill guidance: 'Prefer value-based assertions over length-only checks: When verifying collections or response data, assert on the actual values -- not just the count.'"
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md line 96: 'Per the skill's explicit precedence rule -- \"Skill guidance overrides sibling patterns\" (Step 7) and \"Skill guidance takes precedence over sibling patterns\" (Step 4) -- the skill's value-based assertion guidance takes precedence over the sibling existence-check patterns.' Lines 98-107 further delineate what is adopted from siblings (non-conflicting) vs what is NOT adopted (conflicting assertion patterns), establishing that sibling conventions serve as defaults that yield to explicit skill instructions."
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md uses value-based assertions throughout all four tests: Test 1 (lines 62-73) uses assert_eq!(summary.permissive.count, 2), assert!(summary.permissive.licenses.contains(&\"MIT\".to_string())), assert_eq!(summary.copyleft.licenses, vec![\"GPL-3.0\".to_string()]). Test 3 (lines 136-141) uses assert_eq!(summary.permissive.count, 0) and assert_eq!(summary.permissive.licenses, Vec::<String>::new()). Test 4 (lines 179-188) uses assert_eq!(summary.permissive.count, 2) and assert_eq!(mit_occurrences, 1). No .any() or .count() > 0 existence-check patterns appear in any test."
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md lines 19-26 explicitly lists adopted sibling conventions: test file at tests/api/package_license.rs (sibling location pattern), test_<description> naming pattern (e.g., test_license_summary_with_known_licenses), real PostgreSQL test database with provisioned fixture data, HTTP status code validation with assert_eq!(resp.status(), StatusCode::OK), and descriptive assertion messages. Lines 200-208 summary table confirms that only the assertion style (.filter().any() and .filter().count() > 0) is overridden, while all other sibling conventions are followed."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

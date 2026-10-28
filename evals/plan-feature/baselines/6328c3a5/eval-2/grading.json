@@ -1,0 +1,90 @@
+{
+  "assertion_results": [
+    {
+      "text": "Impact map or task descriptions explicitly flag at least 3 ambiguities from the feature description",
+      "passed": true,
+      "evidence": "The impact map's '## Ambiguities' section explicitly lists 6 numbered ambiguities: (1) No performance baseline or targets for 'Search should be faster', (2) No definition of 'relevant' for search results, (3) No specification of filter dimensions for 'Add filters', (4) No quantitative non-functional requirements, (5) No regression baseline for 'Don't break existing functionality', (6) No frontend repository or design mockups for 'Better UI'. All 6 directly reference vague language from the feature description."
+    },
+    {
+      "text": "Plan acknowledges that 'Better UI' (non-MVP) cannot be planned without design mockups or frontend repository and excludes it from scope",
+      "passed": true,
+      "evidence": "The impact map contains an '## Excluded Requirements' table stating: 'Better UI (Non-MVP) | No frontend repository is in scope. No design mockups or Figma URL provided. This requirement targets a different repository domain (frontend) that is not included in the current planning scope. It cannot be planned without design input and a target frontend codebase.' Ambiguity #6 also states: 'No frontend repository or design mockups for \"Better UI\"'. The summary-comment.md reiterates: 'Better UI (Non-MVP) — Cannot be planned without a frontend repository and design mockups.'"
+    },
+    {
+      "text": "Tasks still follow the task-description-template.md format despite ambiguous requirements",
+      "passed": true,
+      "evidence": "All 3 task files follow the template structure. Task 1 (task-1-search-performance-indexes.md) has: Repository, Target Branch, Description, Files to Create, Files to Modify, Implementation Notes, Reuse Candidates, Acceptance Criteria, Test Requirements, Verification Commands, Dependencies. Task 2 (task-2-search-relevance-ranking.md) has: Repository, Target Branch, Description, Files to Modify, Implementation Notes, Reuse Candidates, Acceptance Criteria, Test Requirements, Dependencies. Task 3 (task-3-search-filter-parameters.md) has: Repository, Target Branch, Description, Files to Modify, API Changes, Implementation Notes, Reuse Candidates, Acceptance Criteria, Test Requirements, Dependencies. All match the required and optional sections from task-description-template.md."
+    },
+    {
+      "text": "Tasks document assumptions where they fill in missing details, labeled as assumptions pending clarification",
+      "passed": true,
+      "evidence": "All 3 tasks contain an '**Assumptions pending clarification:**' block in the Description section. Task 1 has 4 assumptions (e.g., 'The primary performance bottleneck is missing database indexes'). Task 2 has 4 assumptions (e.g., '\"Relevant\" means text-match quality as scored by PostgreSQL\\'s ts_rank function'). Task 3 has 4 assumptions (e.g., 'The feature description says \"some kind of filtering capability\" without specifying which filters'). Each assumption is explicitly labeled 'Assumptions pending clarification'."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "Task 1: '## Repository\\ntrustify-backend'. Task 2: '## Repository\\ntrustify-backend'. Task 3: '## Repository\\ntrustify-backend'. Each contains exactly one repository name."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "All 3 tasks contain all 4 required sections. Task 1: '## Target Branch' (line 4), '## Description' (line 7), '## Acceptance Criteria' (line 35), '## Test Requirements' (line 42). Task 2: '## Target Branch' (line 4), '## Description' (line 7), '## Acceptance Criteria' (line 40), '## Test Requirements' (line 47). Task 3: '## Target Branch' (line 4), '## Description' (line 7), '## Acceptance Criteria' (line 53), '## Test Requirements' (line 65)."
+    },
+    {
+      "text": "File paths in Files to Modify and Files to Create reference paths from the repo-backend.md mock repository structure manifest, not invented paths",
+      "passed": true,
+      "evidence": "All Files to Modify paths exist in repo-backend.md: migration/src/lib.rs (line 18), modules/search/src/service/mod.rs (line 91), modules/search/src/endpoints/mod.rs (line 93), tests/api/search.rs (line 113), common/src/db/query.rs (line 27). The one Files to Create path 'migration/src/m0002_search_indexes/mod.rs' follows the established migration directory pattern from 'migration/src/m0001_initial/mod.rs' (line 19-20 of repo-backend.md). No invented paths were found."
+    },
+    {
+      "text": "Implementation Notes in every task reference specific file paths and code patterns from the repository, not abstract or generic guidance",
+      "passed": true,
+      "evidence": "Task 1 references: 'migration/src/m0001_initial/mod.rs' for migration patterns, 'entity/src/sbom.rs', 'entity/src/advisory.rs', 'entity/src/package.rs' for column names, SeaORM's 'Index::create()' API. Task 2 references: 'modules/search/src/service/mod.rs' for query building, 'GET /api/v2/search', 'PaginatedResults<T>' from 'common/src/model/paginated.rs', 'common/src/db/query.rs', 'Result<T, AppError>' with '.context()' wrapping, 'tests/api/' with 'assert_eq!(resp.status(), StatusCode::OK)' pattern. Task 3 references: Axum's 'Query<T>' extractor, 'modules/search/src/endpoints/mod.rs', SeaORM's 'Condition::all()', 'entity/src/advisory.rs' for AdvisorySummary severity field, 'common/src/db/query.rs' for filter helpers."
+    },
+    {
+      "text": "Every generated task description contains a Target Branch section set to 'main'",
+      "passed": true,
+      "evidence": "Task 1: '## Target Branch\\nmain' (lines 4-5). Task 2: '## Target Branch\\nmain' (lines 4-5). Task 3: '## Target Branch\\nmain' (lines 4-5)."
+    },
+    {
+      "text": "For each task created, a description digest is produced — evidenced by a separate digest file (e.g., task-N-digest.md), a digest entry in the impact map, or a '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' marker in any output file. The digest must contain a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:'",
+      "passed": true,
+      "evidence": "Three separate digest files exist: task-1-digest.md contains '[sdlc-workflow] Description digest: sha256-md:f44bec2d60d86b4bc1ba85415b58d2a28cf554b1419adaf58e693ae376179e04', task-2-digest.md contains '[sdlc-workflow] Description digest: sha256-md:b039213750a04c32f3d0d6b1f1d4511364c7c8d12f9aa12c87ab73ad288efd59', task-3-digest.md contains '[sdlc-workflow] Description digest: sha256-md:ef1a962ee6b36a1ef342c1323bfccb07dd9bfc143a08e5b13b7bb3e2c3a0f010'. All use 'sha256-md:' prefix followed by exactly 64 lowercase hex characters."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "All convention references use the prescribed rationale format. Task 1: 'Applies: task creates `migration/src/m0002_search_indexes/mod.rs` matching the convention\\'s Rust/SeaORM scope.' Task 2 has 4 convention entries, all with prescribed format: e.g., 'Applies: task modifies `modules/search/src/endpoints/mod.rs` matching the convention\\'s endpoint handler scope.' and 'Applies: task modifies `tests/api/search.rs` matching the convention\\'s `tests/api/` scope.' Task 3 has 4 convention entries with prescribed format: e.g., 'Applies: task modifies `common/src/db/query.rs` matching the convention\\'s query helper scope.' No inapplicable conventions are listed with 'Not applicable' annotations. Conventions like 'Caching' (tower-http middleware) are absent from tasks that don't modify caching-related files."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), the plan documents that the Feature's priority is inherited by created tasks — evidenced by priority field values in the impact map, task creation log, or task description files. When the Feature's priority is 'Undefined', the plan documents that priority inheritance is skipped (not propagated as null or 'Undefined')",
+      "passed": true,
+      "evidence": "Feature TC-9002 has Priority: Normal (not 'Undefined'). Impact map '## Inherited Field Values' section states: '**Priority:** Normal (propagated to all tasks)'. Summary-comment.md states: '**Priority:** Normal — propagated to all tasks'. Task creation details in summary-comment.md show: 'priority: {\"name\": \"Normal\"}'."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), the plan documents that fixVersions are inherited by created tasks — evidenced by fixVersion values in the impact map, task creation log, or task description files. When fixVersion scope is 'feature' or the Feature has no fixVersions, the plan documents that fixVersion inheritance is skipped",
+      "passed": true,
+      "evidence": "Feature TC-9002 has Fix Versions: RHTPA 1.6.0 (non-empty). CLAUDE.md Jira Field Defaults specifies 'fixVersion scope: both'. Impact map '## Inherited Field Values' states: '**Fix Versions:** RHTPA 1.6.0 (propagated to all tasks; `fixVersion scope` is \"both\" per Jira Field Defaults)'. Summary-comment.md states: '**Fix Versions:** RHTPA 1.6.0 — propagated to all tasks (fixVersion scope: \"both\")'. Task creation details show: 'fixVersions: [{\"name\": \"RHTPA 1.6.0\"}]'."
+    },
+    {
+      "text": "A summary of inherited field propagation is produced — evidenced by a summary-comment.md file in the outputs directory, or a summary section in the impact map that includes the inherited priority and fixVersion values propagated to tasks, or states they were omitted and why",
+      "passed": true,
+      "evidence": "summary-comment.md exists in the outputs directory and contains '## Inherited Field Values' section with: '**Priority:** Normal — propagated to all tasks' and '**Fix Versions:** RHTPA 1.6.0 — propagated to all tasks (fixVersion scope: \"both\")'. The impact map also contains a matching '## Inherited Field Values' section with the same information."
+    },
+    {
+      "text": "No documentation task is generated because the feature description does not contain a Documentation Considerations section",
+      "passed": true,
+      "evidence": "The feature fixture (feature-ambiguous.md) contains no 'Documentation Considerations' section. The outputs directory contains exactly 3 task files: task-1-search-performance-indexes.md, task-2-search-relevance-ranking.md, task-3-search-filter-parameters.md. None of these are documentation tasks — they are: database indexes for search performance, search result relevance ranking, and search filter parameters."
+    },
+    {
+      "text": "No testing tasks are generated because no testing readiness template is present in the eval fixture files",
+      "passed": true,
+      "evidence": "The outputs directory contains exactly 3 task files: task-1-search-performance-indexes.md (database indexes), task-2-search-relevance-ranking.md (relevance ranking), task-3-search-filter-parameters.md (filter parameters). None are dedicated testing tasks. All 3 are implementation tasks that include their own Test Requirements sections within the task description, but no standalone testing task was generated."
+    }
+  ],
+  "summary": {
+    "passed": 16,
+    "failed": 0,
+    "total": 16,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,50 @@
+{
+  "assertion_results": [
+    {
+      "text": "The output cites the explicit on-demand trigger for a missing required component pair even when the Container Images section exists, and identifies missing (2.1.2, api-rhel10)",
+      "passed": true,
+      "evidence": "Lines 5-11 quote the on-demand population rule and explicitly state: 'This rule explicitly triggers on-demand population when any (Product Version, Component) pair is missing, even when the Container Images section already exists and other rows are already present. The (2.1.2, api-rhel10) pair is missing from the existing Container Images section, so on-demand population is triggered for that specific pair. The presence of an existing section and a verified (2.1.2, api-rhel9) row does not suppress this trigger.'"
+    },
+    {
+      "text": "The proposal preserves the existing api-rhel9 row and proposes only the missing api-rhel10 row without duplicating the existing pair",
+      "passed": true,
+      "evidence": "The 'Proposed Additions' section (lines 67-80) only proposes the api-rhel10 row. The merged Container Images table (lines 121-125) shows api-rhel9 preserved at line 124 and api-rhel10 added at line 125. There is no duplicated api-rhel9 row."
+    },
+    {
+      "text": "The Container Images table has separate columns for release tag, resolved full SHA, image reference, immutable digest, and CPE; revision-label comparisons are shown separately from the stored row fields",
+      "passed": true,
+      "evidence": "The Container Images table (line 121) has columns: Product Version, Component, Konflux Release Tag, Resolved Release Commit SHA, Image Reference, Image Digest, CPE -- all as separate columns. Revision Label Comparisons are in a completely separate table at lines 143-147, not embedded in the Container Images table."
+    },
+    {
+      "text": "The proposed api-rhel10 row preserves v0.3.14 and the full resolved SHA 0123456789abcdef0123456789abcdef01234567 as distinct values, plus its supplied image reference, digest, and CPE",
+      "passed": true,
+      "evidence": "Line 125 shows the api-rhel10 row with distinct values: Konflux Release Tag 'v0.3.14', Resolved Release Commit SHA '0123456789abcdef0123456789abcdef01234567' (full 40-char SHA), Image Reference 'registry.example.test/trustify/api:2.1.2-rhel10', Image Digest 'sha256:bbbb...', CPE 'cpe:2.3:a:example:trustify_api:2.1.2:*:*:*:*:*:*:*'. The tag and SHA are in separate columns."
+    },
+    {
+      "text": "The api-rhel10 revision label is compared with the resolved release SHA and marked verified",
+      "passed": true,
+      "evidence": "Line 80 states: 'The published image's org.opencontainers.image.revision label (0123456789abcdef0123456789abcdef01234567) matches the resolved release commit SHA (0123456789abcdef0123456789abcdef01234567). Image is verified.' The Revision Label Comparisons table at line 147 shows api-rhel10 with Match? = 'YES -- verified'."
+    },
+    {
+      "text": "The existing 2.1.2/build 0.3.14/date 2026-06-25/backend source-pin row is preserved",
+      "passed": true,
+      "evidence": "Line 117 in the merged Supportability Matrix shows: '| 2.1.2 | 0.3.14 | 2026-06-25 | `v0.3.14` | |' preserving all four values. The Source Pinning Method at line 129 shows 'backend: artifacts.lock.yaml (download URL contains tag, e.g., v0.3.12)' confirming the source-pin is preserved."
+    },
+    {
+      "text": "The proposal preserves the existing Source Pinning Method and Ecosystem Mappings from security-matrix-mock.md",
+      "passed": true,
+      "evidence": "The merged matrix includes Source Pinning Method (lines 127-129) showing 'backend: artifacts.lock.yaml' and Ecosystem Mappings (lines 131-136) with Cargo (backend, Cargo.lock, release/0.3.z branch) and RPM (rpms.lock.yaml) entries. Both sections are present and intact in the merged output."
+    },
+    {
+      "text": "The report cites the shared write-safety rule as covering fallback saves, format auto-repairs, and population; the final comparison detects the concurrent target, preserves it, and aborts rather than writing stale content",
+      "passed": false,
+      "evidence": "The first part passes: lines 15-24 cite the write-safety rule covering all three write paths (fallback saves, format auto-repairs, population). The second part partially passes: lines 82-98 detect the concurrent modification and preserve the concurrent row. However, the assertion requires the report to ABORT rather than writing stale content, but the output does NOT abort. Instead, it performs a merge and proceeds with the write (lines 91-99: 'A merge is performed incorporating...'), treating the user's standing confirmation as fresh confirmation (lines 39-48). The report explicitly calls this a 'judgment call' (line 48, lines 163-168) and writes the merged matrix. The assertion requires aborting, but the output chose to merge and write."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 1,
+    "total": 8,
+    "pass_rate": 0.875
+  }
+}

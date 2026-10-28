@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md lines 17-25 state 'Current state: Contains two private helper functions: fn describing_packages(...) and fn suppliers(...)' and propose 'Change fn describing_packages(...) to pub fn describing_packages(...)' and 'Change fn suppliers(...) to pub fn suppliers(...)'. reuse-decision.md lines 5-6 confirm 'Two private helper functions in modules/ingestor/src/graph/sbom/mod.rs'."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md line 28: 'The migration crate already depends on trustify-module-ingestor (see migration/Cargo.toml)'. plan.md line 83: 'Verify migration/Cargo.toml confirms the trustify-module-ingestor dependency'. reuse-decision.md lines 19-24 include 'Step 1: Check Dependency Relationship' and 'The migration crate’s Cargo.toml already declares a dependency on the ingestor crate' with the exact toml snippet."
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md line 14: 'Make the functions pub fn in the ingestor crate and import them in the migration crate.' Lines 26-27: 'This dependency already exists -- no new cross-package coupling is introduced.' Lines 39-40: 'The dependency already exists in migration/Cargo.toml'. Line 45: 'Therefore, duplication is not justified.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md lines 38-45 under 'Why Not Duplicate?' explicitly reject duplication: 'Duplicating would mean maintaining two copies of the same parsing logic -- a maintenance burden with no offsetting benefit. Therefore, duplication is not justified.' plan.md line 128: 'the functions should be made public (pub fn) and imported rather than duplicated'. No part of either file proposes copying or inlining the function bodies."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md line 31: 'This follows the DRY (Don't Repeat Yourself) principle'. Line 33: 'Any bug fix or improvement to the extraction algorithm automatically applies to both the ingestor’s runtime usage and the migration step.' plan.md line 28: 'follows the DRY principle and ensures that any future bug fixes or improvements to the extraction logic apply everywhere'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

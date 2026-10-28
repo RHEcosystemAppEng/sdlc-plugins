@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md lines 43-44 inspect apply_filter 'to read its signature, understand how it parses comma-separated values'. Lines 126-129: 'use common::db::query::apply_filter to: Parse the comma-separated license string into individual values, Generate a SQL IN clause... This reuses apply_filter directly -- no custom parsing or SQL generation needed.' Lines 150-152: 'apply_filter from common/src/db/query.rs handles all comma-separated parsing and IN clause generation'. reuse-analysis.md Reuse Candidate 1 (lines 12-28) provides full justification for direct reuse."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md lines 46-49: 'modules/fundamental/src/advisory/endpoints/list.rs (sibling reference) -- get_symbols_overview to see the severity filter pattern: the Query struct with its optional severity field, how it is extracted from the request, and how it is passed to the service layer.' Lines 95-96: 'Following the pattern from the advisory endpoint’s Query struct'. Lines 105-106: 'Follow the same pattern used in the advisory endpoint where query.severity is passed to AdvisoryService::list().' reuse-analysis.md Reuse Candidate 2 (lines 36-62) details how the advisory endpoint is used as a structural template."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md lines 51-52: 'entity/src/package_license.rs -- get_symbols_overview to see the SeaORM entity definition, its columns, and its relation to the package entity.' Lines 133-144: 'Join through package_license entity: Use the SeaORM entity from entity/src/package_license.rs to join the package table to the package_license table... This follows SeaORM’s relation-based join pattern rather than raw SQL.' Code snippet shows: 'query = query.join(JoinType::InnerJoin, package_license::Relation::Package.def().rev()); apply_filter(&mut query, package_license::Column::License, license);' Line 153: 'package_license entity from entity/src/package_license.rs provides the join relation'."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md contains three dedicated sections: Reuse Candidate 1 (lines 12-28) covers common/src/db/query.rs::apply_filter with 'What it provides', 'How it is reused', 'Justification', and 'Dependency check' subsections. Reuse Candidate 2 (lines 36-62) covers modules/fundamental/src/advisory/endpoints/list.rs with the same structure, explaining how it is used as a structural template in two files. Reuse Candidate 3 (lines 66-91) covers entity/src/package_license.rs with the same structure, including a code snippet showing the join pattern. Each candidate has a concrete explanation of how it would be applied in the implementation."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 1 (lines 27-29) states 'Files to Modify: 2 files' and 'Files to Create: 1 file'. The implementation section lists exactly: File 1 'modules/fundamental/src/package/endpoints/list.rs (MODIFY)', File 2 'modules/fundamental/src/package/service/mod.rs (MODIFY)', File 3 'tests/api/package_license_filter.rs (CREATE)' -- matching the 2-modify/1-create scope. The git commit (lines 249-251) stages only these 3 files. The plan mentions module registration in mod.rs (line 210) which is an implicit requirement of creating a Rust test file, and conditionally checking docs/api.md (line 216-219). The self-verification step (line 234) explicitly checks scope: 'Verify git diff --name-only only shows the 2 modified files and 1 created file plus any test module registration file.'"
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "The plan consistently proposes direct reuse of apply_filter with no new utility functions. plan.md line 129: 'This reuses apply_filter directly -- no custom parsing or SQL generation needed.' Lines 150-151: 'apply_filter from common/src/db/query.rs handles all comma-separated parsing and IN clause generation'. Lines 113-114: 'No new filtering logic is written here -- the actual filtering is delegated to apply_filter in the service layer.' Self-verification step (lines 237-238): 'Grep for apply_filter usage to confirm we are reusing it, not reimplementing filtering logic. Per constraint 5.4, do not duplicate existing filtering logic.' reuse-analysis.md line 120: 'No filtering logic is duplicated. All comma-separated parsing, SQL IN clause generation, and join-table traversal use existing infrastructure.' The summary table shows 'New Code Written: None -- called as-is' for apply_filter."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

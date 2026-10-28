@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md line 13 states 'Ecosystem | RPM (system package)'. The Ecosystem Detection section (lines 35-41) identifies openssl-libs as an RPM system package by referencing the Ecosystem Mappings table, which maps RPM to rpms.lock.yaml. Classification is explicitly stated as 'System package (RPM)'. No mention of Cargo."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md lines 7-13 contain a table with all five versions: 2.2.0 (openssl-libs 3.0.7-25.el9_3), 2.2.1 (3.0.7-27.el9_4), 2.2.2 (retag of 2.2.1), 2.2.3 (3.0.7-28.el9_4), and 2.2.4 (3.0.7-28.el9_4). The dependency chain section (line 32) confirms 'rpms.lock.yaml: present (openssl-libs entry found)' and line 40 states 'The openssl-libs package is present in rpms.lock.yaml at each pinned tag'."
+    },
+    {
+      "text": "Dependency chain context identifies openssl-libs as present in rpms.lock.yaml and uses this to determine the package origin — the lock file presence is the primary classification signal (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md lines 31-38 show the dependency chain: 'rpms.lock.yaml: present (openssl-libs entry found) --> explicit install'. Line 40 states 'The openssl-libs package is present in rpms.lock.yaml at each pinned tag, confirming it is an explicitly installed package (not inherited from a base image).' Line 41 confirms 'The rpms.lock.yaml classification is used as the sole source of truth for package origin.'"
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 8 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md line 9 explicitly states 'Ecosystem: RPM (system package) -- 1 remediation task for the Konflux release repo.' Only one remediation task description is provided (lines 17-70) targeting rhtpa-release.0.4.z. The Jira Operations Summary (line 78) lists only one 'Create remediation Task' operation. No upstream backport task is created."
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 8 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md contains all required sections: '## Repository' (line 18, value: rhtpa-release.0.4.z), '## Target Branch' (line 22, value: main), '## Description' (line 26), '## Implementation Notes' (line 44), '## Acceptance Criteria' (line 58). No '## Files to Modify' section is present anywhere in the task description, correctly omitted per remediation-templates.md."
+    },
+    {
+      "text": "The version impact output addresses SBOM verification in the dependency chain context — either noting that verification was skipped because cosign is not available or because external tools are prohibited, or presenting the SBOM classification result (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md line 33 states 'SBOM verification: skipped -- cosign not available. Using rpms.lock.yaml classification only.' Line 40-41 elaborates: 'SBOM cross-validation via cosign was not performed because cosign is not available in this environment. The rpms.lock.yaml classification is used as the sole source of truth for package origin.' Remediation.md line 47 also reiterates: 'SBOM verification: skipped -- cosign not available.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

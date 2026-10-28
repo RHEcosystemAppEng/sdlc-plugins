@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "Across implementation task Files to Modify or Files to Create, the plan covers all four catalog writer paths: src/workflows/registration.py, src/workflows/scheduled_sync.py, src/workflows/fallback_import.py, and src/api/on_demand_refresh.py",
+      "passed": true,
+      "evidence": "task-1-add-owner-group.md Files to Modify section lists all four writer paths explicitly: 'src/workflows/registration.py' (line 14), 'src/workflows/scheduled_sync.py' (line 15), 'src/workflows/fallback_import.py' (line 16), and 'src/api/on_demand_refresh.py' (line 17)."
+    },
+    {
+      "text": "Task Test Requirements cover each writer with its corresponding test path: tests/workflows/test_registration.py, tests/workflows/test_scheduled_sync.py, tests/workflows/test_fallback_import.py, and tests/api/test_on_demand_refresh.py",
+      "passed": true,
+      "evidence": "task-1-add-owner-group.md Test Requirements section includes all four test paths: 'tests/workflows/test_registration.py' (lines 68-69), 'tests/workflows/test_scheduled_sync.py' (lines 70-71), 'tests/workflows/test_fallback_import.py' (lines 72-73), and 'tests/api/test_on_demand_refresh.py' (lines 74-75)."
+    },
+    {
+      "text": "Implementation tasks cover src/catalog/store.py and tests/catalog/test_store.py, verifying ownerGroup persistence, omitted-update preservation, explicit replacement, and unchanged stable IDs",
+      "passed": true,
+      "evidence": "task-1-add-owner-group.md covers store.py (line 13) and test_store.py (line 20) in Files to Modify. The task's Test Requirements verify: ownerGroup persistence ('verify ownerGroup can be persisted and retrieved', line 65), unchanged stable IDs ('verify stable record IDs are unchanged', line 67). Omitted-update preservation is verified through scheduled sync tests ('verify existing ownerGroup is preserved when sync does not supply a new value', line 70) and on-demand refresh tests (line 74). Explicit replacement is verified through sync tests ('verify ownerGroup is updated when sync supplies a new value', line 71) and refresh tests (line 75)."
+    },
+    {
+      "text": "Implementation tasks specify path-specific validation: registration persists the supplied ownerGroup, scheduled sync/fallback/on-demand updates preserve an existing value when omitted and apply a supplied replacement, and both consumers expose values from all four writers",
+      "passed": false,
+      "evidence": "Registration and sync/on-demand paths match the assertion. However, fallback import is NOT given preservation semantics. The task specifies fallback tests as 'verify ownerGroup is loaded from import data and persisted' and 'verify import handles records without ownerGroup gracefully' (lines 72-73), which is about loading from import payloads, not about preserving an existing catalog value when omitted. The Implementation Notes confirm different semantics: sync/refresh say 'preserve the current ownerGroup value unless a new one is supplied' while fallback says 'read the ownerGroup from the import payload and persist it' (line 36). The assertion groups all three (sync/fallback/on-demand) as having preservation semantics, but the output only gives explicit preservation semantics to sync and on-demand, not fallback."
+    },
+    {
+      "text": "Generated tasks cover both catalog consumers, src/api/catalog_summary.py and src/reports/catalog_export.py, and validate that entries produced by every writer are visible to those consumers",
+      "passed": true,
+      "evidence": "task-1-add-owner-group.md Files to Modify includes both consumers: 'src/api/catalog_summary.py' (line 18) and 'src/reports/catalog_export.py' (line 19). Test Requirements validate entries from all writers through each consumer: 'verify summary API response includes ownerGroup for records created via each of the four writer paths' (line 77) and 'verify report output includes ownerGroup for records created via each of the four writer paths' (line 79)."
+    },
+    {
+      "text": "The impact map enumerates the four writer paths with their matching tests and both consumers with their test paths",
+      "passed": true,
+      "evidence": "impact-map.md Writers table (lines 24-28) lists all four writers with their test paths: registration.py/test_registration.py, scheduled_sync.py/test_scheduled_sync.py, fallback_import.py/test_fallback_import.py, on_demand_refresh.py/test_on_demand_refresh.py. Consumers table (lines 32-34) lists both consumers with test paths: catalog_summary.py/test_catalog_summary.py, catalog_export.py/test_catalog_export.py."
+    },
+    {
+      "text": "Task Test Requirements include tests/api/test_catalog_summary.py and tests/reports/test_catalog_export.py, exercising records from each writer through each consumer",
+      "passed": true,
+      "evidence": "task-1-add-owner-group.md Test Requirements include: 'tests/api/test_catalog_summary.py: verify summary API response includes ownerGroup for records created via each of the four writer paths' (line 77) and 'tests/reports/test_catalog_export.py: verify report output includes ownerGroup for records created via each of the four writer paths' (line 79). Both consumer tests explicitly exercise records from all four writers."
+    },
+    {
+      "text": "A documentation task or equivalent Documentation Updates section explains the shared Service Catalog contract and names registration, scheduled sync, fallback import, and on-demand refresh as population paths",
+      "passed": true,
+      "evidence": "task-2-documentation.md is a dedicated documentation task that explains 'the shared Service Catalog record contract changes' and states 'catalog records may be populated through four distinct paths (registration, scheduled synchronization, fallback import, and on-demand refresh)' and 'all paths use the same catalog contract' (lines 1-9). Additionally, task-1 has a Documentation Updates section: 'Document the shared catalog record contract including the new ownerGroup field' and 'Document that catalog records may be populated through four paths: registration, scheduled sync, fallback import, on-demand refresh' (lines 82-84)."
+    },
+    {
+      "text": "Generated tasks preserve the fixture's existing-population behavior and stable-ID compatibility acceptance criterion",
+      "passed": true,
+      "evidence": "task-1-add-owner-group.md Acceptance Criteria include: 'Existing catalog population behavior remains unchanged (no regressions in registration, sync, import, or refresh)' (line 60), 'Stable record IDs remain unchanged after adding ownerGroup to the schema' (line 61), and 'Existing records without ownerGroup continue to function correctly' (line 62). These directly preserve the fixture's acceptance criterion: 'Existing catalog population behavior and stable IDs remain unchanged.'"
+    },
+    {
+      "text": "The fallback-import and on-demand-refresh paths are explicitly planned; coverage is not limited to initial registration and scheduled sync",
+      "passed": true,
+      "evidence": "task-1-add-owner-group.md Files to Modify explicitly includes 'src/workflows/fallback_import.py' (line 16) and 'src/api/on_demand_refresh.py' (line 17) with dedicated test files (lines 23-24). Implementation Notes have detailed guidance for both paths (lines 36-37). Acceptance criteria include specific entries for both: 'src/workflows/fallback_import.py persists ownerGroup from imported data' (line 53) and 'src/api/on_demand_refresh.py preserves existing ownerGroup unless a new value is supplied' (line 52). Coverage extends well beyond registration and scheduled sync."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 1,
+    "total": 10,
+    "pass_rate": 0.9
+  }
+}
