@@ -653,6 +653,16 @@ Before finalizing implementation tasks, reconcile them against the shared-artifa
 
 If a stakeholder scope instruction excludes a path required by an acceptance criterion, keep the criterion visibly unresolved in the impact map and request clarification before finalizing tasks. Until the user approves expanding scope, do not put excluded paths in task Files to Modify, Files to Create, or Test Requirements; list them only as unresolved impact-map paths. A task set that covers only the primary workflow must not be presented as satisfying a criterion that applies to the shared artifact across population paths.
 
+### Fail-open risk coverage
+
+When the Feature or any source description names a failure mode that can finish "green" without doing the intended work — e.g., a call that silently returns `[]`, a check that fails open, a step that skips verification, or an unauthenticated/degraded request that still exits 0 — lower that risk into verifiable, code-level coverage in the task that owns the affected gate. For every stated risk of a silent, empty, or no-op success, emit a fail-closed Acceptance Criterion and test; never let a prose-only or operational mitigation stand alone. The task MUST include:
+
+1. **Acceptance Criterion** — a code-level, verifiable criterion requiring fail-closed behavior on the degraded/empty path (e.g., "the gate exits non-zero when the source cannot be proven authenticated, instead of treating an empty result as a skip").
+2. **Test Requirement** — a test that drives the degraded/empty path and asserts the fail-closed outcome.
+3. **Implementation Note** — the specific gate or skip site (file and function) where the guard belongs.
+
+An operational or post-merge mitigation (e.g., "a live run after merge confirms it") may supplement this coverage but MUST NOT be the only coverage for such a risk.
+
 ### Epic grouping (when available)
 
 If Step 2.5 discovered a level-1 type (Epic role), group tasks into Epics before
