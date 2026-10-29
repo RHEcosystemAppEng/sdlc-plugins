@@ -15,8 +15,9 @@
 #
 # 1. Validates required env vars and the PR URL shape
 # 2. Verifies the Jira identity (/myself → accountId) and fails the run if it
-#    cannot be confirmed, so an unauthenticated empty search is never a skip;
-#    then resolves + gates the Jira key by JQL on customfield_10875 == PR URL
+#    cannot be confirmed, and checks Browse Projects on JIRA_PROJECT_KEY, so an
+#    unauthenticated or permission-filtered empty search is never a skip; then
+#    resolves + gates the Jira key by JQL on customfield_10875 == PR URL
 # 3. If the gate fails (no/ambiguous match, status != Review, label absent):
 #    emits an ADR-0072 skip signal and exits 0 (nothing to verify)
 # 4. Fetches the full Jira issue and prefetches the GitHub tier-1 read bundle
@@ -29,6 +30,7 @@
 #   FULLSEND_WORK_ITEM_URL — the triggering PR URL (harness-run / local export)
 #   JIRA_SERVER_URL        — Jira REST base (the Atlassian API gateway)
 #   JIRA_API_TOKEN         — Jira API token (sent as Bearer; no email needed)
+#   JIRA_PROJECT_KEY       — Jira project whose Browse permission the gate checks
 #   GH_TOKEN               — GitHub token (PR prefetch)
 #
 # Optional env vars:
@@ -44,6 +46,7 @@ set -euo pipefail
 : "${FULLSEND_WORK_ITEM_URL:?FULLSEND_WORK_ITEM_URL (triggering PR URL) is required}"
 : "${JIRA_SERVER_URL:?JIRA_SERVER_URL is required}"
 : "${JIRA_API_TOKEN:?JIRA_API_TOKEN is required}"
+: "${JIRA_PROJECT_KEY:?JIRA_PROJECT_KEY is required}"
 
 PR_URL="${FULLSEND_WORK_ITEM_URL}"
 
@@ -107,6 +110,19 @@ IDENTITY_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" verify_identity \
 rm -f "${JIRA_STDERR_FILE}"
 IDENTITY_NAME=$(printf '%s' "${IDENTITY_JSON}" | python3 -c 'import json,sys; u=json.load(sys.stdin); print(u.get("displayName") or u["accountId"])')
 echo "Jira identity verified: ${IDENTITY_NAME}"
+
+# 2c. Verify the identity can browse the project. Jira silently drops issues the
+#     caller cannot see, so a search by an account without Browse Projects also
+#     returns [] with exit 0 — indistinguishable from a genuine no-match.
+python3 "${SCRIPT_DIR}/jira-client.py" verify_project_access "${JIRA_PROJECT_KEY}" \
+  >/dev/null 2>"${JIRA_STDERR_FILE}" || {
+  echo "ERROR: Jira credential cannot browse project ${JIRA_PROJECT_KEY} — refusing to treat an empty search as a skip"
+  cat "${JIRA_STDERR_FILE}" 2>/dev/null || true
+  rm -f "${JIRA_STDERR_FILE}"
+  exit 1
+}
+rm -f "${JIRA_STDERR_FILE}"
+echo "Jira project access verified: ${JIRA_PROJECT_KEY} (BROWSE_PROJECTS)"
 
 # 3. Resolve + gate the Jira key by JQL on the Git Pull Request custom field.
 #    The JQL `~` recall is broad; resolve-gated-issue re-confirms the exact PR

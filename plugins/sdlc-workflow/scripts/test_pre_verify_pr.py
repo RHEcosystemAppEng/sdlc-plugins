@@ -1835,13 +1835,18 @@ def test_pre_verify_sh_revalidates_gate_before_writing_input():
         "a failed re-validation must map to request_skip"
 
 
-# --- Jira identity gate (pre-verify-pr.sh, TC-7265) ---
+# --- Jira identity + project-access gate (pre-verify-pr.sh, TC-7265 / TC-6191) ---
+
+_BROWSE_GRANTED = {"permissions": {"BROWSE_PROJECTS": {"havePermission": True}}}
+_MYSELF_PATH = "/rest/api/3/myself"
+_PERMISSIONS_PATH = "/rest/api/3/mypermissions?projectKey=TC&permissions=BROWSE_PROJECTS"
+_SEARCH_PATH = "/rest/api/3/search/jql"
 
 
 class _StubJira:
-    """Local HTTP stand-in for Jira: configurable /myself, empty JQL search, request log."""
+    """Local HTTP stand-in for Jira: configurable /myself and /mypermissions, empty JQL search, request log."""
 
-    def __init__(self, myself_status, myself_body):
+    def __init__(self, myself_status, myself_body, permissions_status=200, permissions_body=None):
         self.paths = []
         stub = self
 
@@ -1856,8 +1861,11 @@ class _StubJira:
 
             def do_GET(self):
                 stub.paths.append(self.path)
-                if self.path == "/rest/api/3/myself":
+                if self.path == _MYSELF_PATH:
                     self._reply(myself_status, myself_body)
+                elif self.path.startswith("/rest/api/3/mypermissions"):
+                    self._reply(permissions_status,
+                                _BROWSE_GRANTED if permissions_body is None else permissions_body)
                 else:
                     self._reply(404, {"errorMessages": ["unexpected"]})
 
@@ -1880,12 +1888,12 @@ class _StubJira:
         self.server.server_close()
 
 
-def _run_pre_verify_gate(myself_status, myself_body):
+def _run_pre_verify_gate(myself_status, myself_body, permissions_status=200, permissions_body=None):
     """Run the real pre-verify-pr.sh against a stub Jira.
 
     Returns (result, prescript-output text, request paths seen by the stub).
     """
-    stub = _StubJira(myself_status, myself_body)
+    stub = _StubJira(myself_status, myself_body, permissions_status, permissions_body)
     try:
         with tempfile.TemporaryDirectory() as d:
             signal_file = os.path.join(d, "prescript-output")
@@ -1895,6 +1903,7 @@ def _run_pre_verify_gate(myself_status, myself_body):
                 "FULLSEND_WORK_ITEM_URL": "https://github.com/acme/widget/pull/42",
                 "JIRA_SERVER_URL": stub.url,
                 "JIRA_API_TOKEN": "token",
+                "JIRA_PROJECT_KEY": "TC",
                 "PRE_DIR": os.path.join(d, "pre"),
                 "FULLSEND_PRESCRIPT_OUTPUT": signal_file,
                 "TMPDIR": d,
@@ -1926,22 +1935,47 @@ def test_unverified_identity_with_empty_search_fails_instead_of_skipping():
         assert result.returncode != 0, case + result.stdout + result.stderr
         assert "SKIP:" not in result.stdout, case + result.stdout
         assert "skipped=true" not in signal, case + signal
-        assert paths == ["/rest/api/3/myself"], case + repr(paths)
+        assert paths == [_MYSELF_PATH], case + repr(paths)
 
 
 def test_verified_identity_with_empty_search_is_a_normal_skip():
-    """An authenticated no-match search still yields the ADR-0072 skip, after the identity check."""
+    """An authenticated no-match search still yields the ADR-0072 skip, after the identity and access checks."""
     # Given a Jira that resolves the principal and finds no issue for the PR
     # When the verify-pr pre-script gates the PR
     result, signal, paths = _run_pre_verify_gate(
         200, {"accountId": "sa-123", "displayName": "tpa-fullsend-jira-sa"})
 
-    # Then it skips cleanly, and identity was verified before the search
+    # Then it skips cleanly, and identity and project access were verified before the search
     assert result.returncode == 0, result.stdout + result.stderr
     assert "Jira identity verified: tpa-fullsend-jira-sa" in result.stdout
+    assert "Jira project access verified: TC (BROWSE_PROJECTS)" in result.stdout
     assert "SKIP:" in result.stdout
     assert "skipped=true" in signal
-    assert paths == ["/rest/api/3/myself", "/rest/api/3/search/jql"]
+    assert paths == [_MYSELF_PATH, _PERMISSIONS_PATH, _SEARCH_PATH]
+
+
+def test_missing_browse_permission_with_empty_search_fails_instead_of_skipping():
+    """A real account without Browse Projects on the project fails the run instead of skipping on a filtered empty search."""
+    cases = [
+        (200, {"permissions": {"BROWSE_PROJECTS": {"havePermission": False}}}),
+        (200, {"permissions": {}}),
+        (200, {}),
+        (403, {"errorMessages": ["Forbidden"]}),
+    ]
+    for permissions_status, permissions_body in cases:
+        # Given a resolved principal whose project permission is missing or denied
+        # When the verify-pr pre-script gates the PR
+        result, signal, paths = _run_pre_verify_gate(
+            200, {"accountId": "sa-123", "displayName": "tpa-fullsend-jira-sa"},
+            permissions_status, permissions_body)
+
+        # Then it exits non-zero naming the project, emits no skip, and never runs the search
+        case = f"/mypermissions {permissions_status} {permissions_body!r}: "
+        assert result.returncode != 0, case + result.stdout + result.stderr
+        assert "cannot browse project TC" in result.stdout, case + result.stdout
+        assert "SKIP:" not in result.stdout, case + result.stdout
+        assert "skipped=true" not in signal, case + signal
+        assert paths == [_MYSELF_PATH, _PERMISSIONS_PATH], case + repr(paths)
 
 
 # --- runner ---

@@ -11,6 +11,7 @@ import json
 import os
 import re
 import sys
+from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from urllib.error import HTTPError, URLError
 from base64 import b64encode
@@ -739,6 +740,34 @@ def verify_identity() -> Dict[str, Any]:
     return user
 
 
+def verify_project_access(project_key: str) -> Dict[str, Any]:
+    """Confirm the credential can browse ``project_key``.
+
+    Jira silently drops issues the caller cannot see, so a search by an account
+    without Browse Projects returns an empty result instead of an error. Callers
+    that treat an empty search as meaningful must call this first.
+
+    Args:
+        project_key: Project key (e.g., TC)
+
+    Returns:
+        The ``mypermissions`` response
+
+    Raises:
+        SystemExit: On HTTP errors, or unless BROWSE_PROJECTS.havePermission is true
+    """
+    query = urlencode({'projectKey': project_key, 'permissions': 'BROWSE_PROJECTS'})
+    result = make_request('GET', f"mypermissions?{query}")
+    permissions = result.get('permissions') if isinstance(result, dict) else None
+    browse = permissions.get('BROWSE_PROJECTS') if isinstance(permissions, dict) else None
+    if not isinstance(browse, dict) or browse.get('havePermission') is not True:
+        print(f"❌ The Jira credential cannot browse project {project_key} "
+              "(BROWSE_PROJECTS not granted); searches would silently return no issues",
+              file=sys.stderr)
+        sys.exit(1)
+    return result
+
+
 # Process-wide cache for get_server_info(); serverInfo does not change mid-run.
 _SERVER_INFO_CACHE: Optional[Dict[str, Any]] = None
 
@@ -915,6 +944,11 @@ def main(argv=None):
     # verify_identity
     subparsers.add_parser('verify_identity', help='Fail unless the credential resolves to a Jira accountId')
 
+    # verify_project_access
+    verify_access_parser = subparsers.add_parser(
+        'verify_project_access', help='Fail unless the credential has BROWSE_PROJECTS on the project')
+    verify_access_parser.add_argument('project_key', help='Project key (e.g., TC)')
+
     # get_server_info
     subparsers.add_parser('get_server_info', help='Get server info (baseUrl is the site URL for browse links)')
 
@@ -994,6 +1028,10 @@ def main(argv=None):
     elif args.command == 'verify_identity':
         user = verify_identity()
         result = {"accountId": user["accountId"], "displayName": user.get("displayName")}
+
+    elif args.command == 'verify_project_access':
+        verify_project_access(args.project_key)
+        result = {"projectKey": args.project_key, "BROWSE_PROJECTS": True}
 
     elif args.command == 'get_server_info':
         result = get_server_info()

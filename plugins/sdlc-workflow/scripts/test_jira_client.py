@@ -897,6 +897,47 @@ def test_verify_identity_returns_resolved_user(monkeypatch):
     assert requests == [("GET", "myself")]
 
 
+@pytest.mark.parametrize("response", [
+    {"permissions": {"BROWSE_PROJECTS": {"havePermission": False}}},
+    {"permissions": {"BROWSE_PROJECTS": {}}},
+    {"permissions": {}},
+    {},
+    [],
+])
+def test_verify_project_access_without_browse_permission_exits(monkeypatch, capsys, response):
+    """verify_project_access aborts unless BROWSE_PROJECTS.havePermission is exactly true."""
+    # Given a mypermissions response that does not grant Browse Projects
+    monkeypatch.setattr(jira_client, "make_request", lambda *_args, **_kwargs: response)
+
+    # When verifying project access
+    with pytest.raises(SystemExit) as excinfo:
+        jira_client.verify_project_access("TC")
+
+    # Then it exits 1 naming the project
+    assert excinfo.value.code == 1
+    assert "cannot browse project TC" in capsys.readouterr().err
+
+
+def test_verify_project_access_queries_browse_permission(monkeypatch):
+    """verify_project_access requests BROWSE_PROJECTS for the URL-encoded project key and returns the grant."""
+    # Given a mypermissions response granting Browse Projects
+    granted = {"permissions": {"BROWSE_PROJECTS": {"havePermission": True}}}
+    requests = []
+
+    def fake_make_request(method, endpoint, data=None):
+        requests.append((method, endpoint))
+        return granted
+
+    monkeypatch.setattr(jira_client, "make_request", fake_make_request)
+
+    # When verifying access to a project key needing encoding
+    result = jira_client.verify_project_access("T C")
+
+    # Then the query names the project and permission, and the grant is returned
+    assert result == granted
+    assert requests == [("GET", "mypermissions?projectKey=T+C&permissions=BROWSE_PROJECTS")]
+
+
 def run_all_tests():
     """Run all tests and report results."""
     tests = [
