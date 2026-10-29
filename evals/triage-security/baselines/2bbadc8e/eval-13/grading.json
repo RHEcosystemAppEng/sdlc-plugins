@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The remediation output describes the digest protocol for the upstream backport task: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "Preemptive Task 3 (Upstream Backport, 2.1.x) in remediation.md includes 'Description Digest Comment Steps (Preemptive Task 3)' (lines 348-395). Step 1: 'Re-fetch the created task's description from Jira: task_desc = jira.get_issue(<preemptive-upstream-task-key>, fields=[\"description\"])'. Step 3: 'Compute the digest using the script: python3 scripts/sha256-digest.py /tmp/task-desc.md'. Both re-fetching and SHA-256 computation via scripts/sha256-digest.py are explicitly described."
+    },
+    {
+      "text": "The remediation output describes the digest protocol for the downstream propagation subtask: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "Two downstream propagation tasks have digest protocols. Task 2 (Downstream Propagation, 2.2.x) at lines 201-247: Step 1 re-fetches via 'jira.get_issue(<downstream-task-key>, fields=[\"description\"])', Step 3 computes via 'python3 scripts/sha256-digest.py /tmp/task-desc.md'. Preemptive Task 4 (Downstream Propagation, 2.1.x) at lines 459-504: Step 1 re-fetches via 'jira.get_issue(<preemptive-downstream-task-key>, fields=[\"description\"])', Step 3 computes via 'python3 scripts/sha256-digest.py /tmp/task-desc.md'."
+    },
+    {
+      "text": "The remediation output includes the digest comment marker '[sdlc-workflow] Description digest:' in the described steps for each remediation task — both upstream and downstream (§1.66)",
+      "passed": true,
+      "evidence": "All four tasks include the exact marker. Task 1 (line 118): 'jira.add_comment(<bump-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'. Task 2 (line 223): 'jira.add_comment(<downstream-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'. Preemptive Task 3 (line 369): 'jira.add_comment(<preemptive-upstream-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'. Preemptive Task 4 (line 481): 'jira.add_comment(<preemptive-downstream-task-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")'."
+    },
+    {
+      "text": "The remediation output sequences digest comments BEFORE issue links (Depend, Blocks) or other comments in the described procedure for each task (§1.66, shared/description-digest-protocol.md Rules)",
+      "passed": true,
+      "evidence": "Each task explicitly sequences digest before links. Task 1 (line 141): 'Only after the digest comment is posted, proceed to create issue links (Depend link to TC-8001, Blocks link...)'. Task 2 (line 244): 'Only after the digest comment is posted, proceed to create issue links'. Preemptive Task 3 (line 391): 'Only after the digest comment is posted, create the \"Related\" link'. Preemptive Task 4 (line 502): 'Only after the digest comment is posted, create the links'. Summary section (lines 561-567) explicitly lists order: step 5 is 'Post digest comment' and step 6 is 'Create issue links'."
+    },
+    {
+      "text": "The remediation output specifies that the digest is computed from the re-fetched description (via Jira API after create_issue), not from the description string passed to create_issue (shared/description-digest-protocol.md Hashing)",
+      "passed": true,
+      "evidence": "The summary section at lines 552-553 explicitly states: 'Re-fetch required: The digest is computed from the description as stored by Jira (re-fetched via API), NOT from the description string passed to create_issue, because Jira normalizes content during storage.' Each task's digest steps also begin with re-fetching: e.g., Task 1 step 1 (line 100): 'Re-fetch the created task's description from Jira: task_desc = jira.get_issue(<bump-task-key>, fields=[\"description\"])'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

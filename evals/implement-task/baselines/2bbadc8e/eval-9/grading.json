@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md Step 9 Dead parameter detection: 'After removing the version filtering logic from the list method body, the version_filter: &str parameter has zero references in the function body. This is a dead parameter. Action: Remove version_filter from the signature entirely. Do NOT prefix with underscore.' parameter-cleanup.md Detection section: 'The correct fix is removal, not renaming to _version_filter.' and summary: 'Parameter renamed to underscore: No (removal is the correct fix, not renaming)'"
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 1: 'Remove the version_filter: &str parameter from the signature entirely (dead parameter -- see parameter-cleanup.md).' Shows the new signature without version_filter. parameter-cleanup.md Section 1 'Remove from function signature' explicitly shows before/after signatures with version_filter removed from the parameter list."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "parameter-cleanup.md explicitly enumerates all 3 call sites: 'Call site 1: Endpoint handler' in modules/fundamental/src/sbom/endpoints/list.rs, 'Call site 2: Search service' in modules/search/src/service/mod.rs, 'Call site 3: Integration tests' in tests/api/sbom.rs. The summary table lists all 3 with 'Total call sites updated: 3'. plan.md Step 9 Scope containment also lists modules/search/src/service/mod.rs as a call site update."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": false,
+      "evidence": "parameter-cleanup.md states 'The correct fix is removal, not renaming to _version_filter' and 'Parameter renamed to underscore: No (removal is the correct fix, not renaming)' but does NOT explain WHY underscore prefixing is wrong. The document never mentions that underscore prefixes suppress compiler warnings or that they leave unnecessary API surface. It only states the conclusion (remove, don't rename) without the reasoning about compiler warnings and API surface bloat."
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "plan.md Step 7: 'Run cargo test -p <crate> for each affected crate to verify existing tests still pass without the version_filter argument.' Step 9 CI checks lists: 'cargo test -p trustify-fundamental', 'cargo test -p trustify-search', 'cargo test for integration test crate'. parameter-cleanup.md Section 4 Verification lists: 'Run cargo test -p trustify-fundamental', 'Run cargo test -p trustify-search', 'Run integration tests (cargo test --test api or equivalent)'."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 1,
+    "total": 5,
+    "pass_rate": 0.8
+  }
+}

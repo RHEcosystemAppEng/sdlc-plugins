@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation traces compute_risk_score() output through create_assessment() to diesel::insert_into(assessments::table) and identifies the persistence boundary at the assessments table, risk_score column (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md lines 86-92 contain an explicit trace: 'compute_risk_score(total_deps, vulnerable_deps) -> returns f64 (the buggy score) -> assigned to `score` in create_assessment() -> diesel::insert_into(assessments::table) .values(assessments::risk_score.eq(score)) -- PERSISTENCE BOUNDARY'. Lines 96-98 identify: 'Table: assessments', 'Column: risk_score (DOUBLE PRECISION)', 'Write operation: diesel::insert_into(assessments::table) in create_assessment()'."
+    },
+    {
+      "text": "Investigation records that risk_score is written at ingestion time (assessment creation) and is NOT recomputed on read, confirming a data migration is needed (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md line 99: 'Write timing: Ingestion time (when the assessment is first created). The risk_score is computed once during create_assessment() and written to the database. It is NOT recomputed on read.' Lines 107-109: 'A data migration is needed to correct existing risk_score values in the assessments table. The migration must recompute risk_score using the correct formula (vulnerable_deps / total_deps) from the source SBOM data linked via sbom_id.'"
+    },
+    {
+      "text": "Task description Files to Create includes a data migration file following the Diesel naming convention discovered in the repository (YYYY-MM-DD-NNNNNN_description/up.sql) (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md line 25: '- `migration/2026-10-29-000001_fix_risk_score_values/up.sql` -- Data migration to correct existing `risk_score` values in the `assessments` table'. This follows the YYYY-MM-DD-NNNNNN_description/up.sql Diesel convention documented in investigation.md line 80."
+    },
+    {
+      "text": "Task description Implementation Notes includes migration logic to recompute and update existing risk_score values in the assessments table (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md lines 53-84, under '### Data migration' within Implementation Notes, includes: 'UPDATE assessments SET risk_score = 1.0 / risk_score WHERE risk_score != 0 AND risk_score IS NOT NULL;' and an alternative: 'UPDATE assessments a SET risk_score = s.vulnerable_deps::double precision / s.total_deps::double precision FROM sboms s WHERE a.sbom_id = s.id AND s.total_deps > 0;'"
+    },
+    {
+      "text": "Task description Acceptance Criteria includes a criterion that existing assessments with incorrect persisted risk_score values are corrected by the migration (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md line 95: '- [ ] Existing assessments with incorrect `risk_score` values are corrected by the data migration (the migration recalculates all stored scores)'"
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before the data migration criterion and any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md lines 94-97 show Acceptance Criteria ordering: (1) '- [ ] A reproducer test calls `compute_risk_score()` with asymmetric inputs (e.g., `total_deps=100, vulnerable_deps=5`) and asserts the result is `0.05` (not `20.0`). This test fails before the fix and passes after.' (2) '- [ ] Existing assessments with incorrect `risk_score` values are corrected by the data migration...' (3) '- [ ] `compute_risk_score()` returns `vulnerable_deps / total_deps` for all inputs' (4) '- [ ] No regression in existing tests...'. The reproducer test is the first criterion."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

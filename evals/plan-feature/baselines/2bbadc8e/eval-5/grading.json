@@ -1,0 +1,85 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan determines feature-branch workflow mode (not direct-to-main) based on the atomicity constraints in the feature description",
+      "passed": true,
+      "evidence": "workflow-mode-comment.md states 'Selected mode: feature-branch' with rationale citing three atomicity indicators: (1) Coordinated schema migration — migration drops advisory_status table that queries still join, (2) Breaking internal API changes — entity definition consumed by service/endpoints/ingestion, (3) Tightly coupled feature components forming a dependency chain. impact-map.md also confirms 'Selected mode: feature-branch'."
+    },
+    {
+      "text": "A bookend task with Bookend Type create-branch is generated as the first task in the plan",
+      "passed": true,
+      "evidence": "task-1-create-branch.md contains '## Bookend Type\\ncreate-branch'. summary-comment.md lists it as task #1 with type 'Bookend (create-branch)'."
+    },
+    {
+      "text": "A bookend task with Bookend Type merge-branch is generated as the last task in the plan",
+      "passed": true,
+      "evidence": "task-7-merge-branch.md contains '## Bookend Type\\nmerge-branch'. summary-comment.md lists it as task #7 (the last task) with type 'Bookend (merge-branch)'."
+    },
+    {
+      "text": "All intermediate tasks (between the create-branch and merge-branch bookend tasks) have Target Branch set to TC-9005",
+      "passed": true,
+      "evidence": "All five intermediate task files have '## Target Branch\\nTC-9005': task-2-migration.md, task-3-entity-update.md, task-4-service-endpoints.md, task-5-ingestion-pipeline.md, task-6-documentation.md."
+    },
+    {
+      "text": "The create-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-1-create-branch.md contains '## Target Branch\\nmain'."
+    },
+    {
+      "text": "The merge-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-7-merge-branch.md contains '## Target Branch\\nmain'."
+    },
+    {
+      "text": "All non-documentation intermediate tasks list the create-branch bookend task as a dependency. Documentation tasks may list implementation tasks as dependencies instead of the create-branch bookend task, since documentation depends on implementation completion",
+      "passed": true,
+      "evidence": "Non-documentation intermediate tasks all list Task 1 as a dependency: task-2-migration.md ('Depends on: Task 1 -- Create feature branch TC-9005 from main'), task-3-entity-update.md ('Depends on: Task 1'), task-4-service-endpoints.md ('Depends on: Task 1'), task-5-ingestion-pipeline.md ('Depends on: Task 1'). Documentation task-6-documentation.md lists implementation tasks as dependencies instead (Tasks 2, 3, 4, 5), which is permitted by the assertion."
+    },
+    {
+      "text": "The merge-branch bookend task lists all non-documentation intermediate tasks as dependencies",
+      "passed": true,
+      "evidence": "task-7-merge-branch.md Dependencies section lists all non-documentation intermediate tasks: Task 2 (migration), Task 3 (entity definitions), Task 4 (service/endpoints), Task 5 (ingestion pipeline). It also lists Task 6 (documentation), which does not violate the requirement."
+    },
+    {
+      "text": "Each non-documentation task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements. Documentation tasks are exempt from requiring Files to Modify, Files to Create, and Implementation Notes — they must still include Repository, Target Branch, Description, Acceptance Criteria, and Test Requirements",
+      "passed": false,
+      "evidence": "Bookend tasks (non-documentation) are missing required sections. task-1-create-branch.md lacks 'Files to Modify', 'Files to Create', and 'Implementation Notes' sections. task-7-merge-branch.md also lacks 'Files to Modify', 'Files to Create', and 'Implementation Notes' sections. The assertion grants exemptions only to documentation tasks, not bookend tasks. Implementation tasks 2-5 have all required sections. Documentation task 6 has Repository, Target Branch, Description, Acceptance Criteria, and Test Requirements as required."
+    },
+    {
+      "text": "The plan includes a workflow:feature-branch label decision to be applied to the feature issue",
+      "passed": true,
+      "evidence": "workflow-mode-comment.md states 'The `workflow:feature-branch` label will be applied to the TC-9005 feature issue.' summary-comment.md includes 'Feature label: `workflow:feature-branch` -- applied to the Feature issue TC-9005'. impact-map.md also confirms 'The `workflow:feature-branch` label will be applied to the TC-9005 feature issue.'"
+    },
+    {
+      "text": "For each task created, a description digest is produced — evidenced by a separate digest file (e.g., task-N-digest.md), a digest entry in the impact map, or a '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' marker in any output file. The digest must contain a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:'",
+      "passed": true,
+      "evidence": "All 7 tasks have separate digest files with the correct format: task-1-digest.md (sha256-md:1b52850d...a457), task-2-digest.md (sha256-md:6e5f205f...6afb), task-3-digest.md (sha256-md:9a427061...a515), task-4-digest.md (sha256-md:4c5740b2...63a3d), task-5-digest.md (sha256-md:03ee45ad...fdf87), task-6-digest.md (sha256-md:8f6bf4b6...82fe3), task-7-digest.md (sha256-md:9db9eec0...03b9). Each uses '[sdlc-workflow] Description digest: sha256-md:<64-hex>' format with exactly 64 lowercase hex characters."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "All convention references in task files use the prescribed rationale format. Task 2: 'Applies: task creates `migration/src/m0002_advisory_status_enum/mod.rs` matching the convention's SeaORM database scope.' Task 3: 'Applies: task modifies `entity/src/advisory.rs` matching the convention's SeaORM database scope.' Task 4 has five convention entries, all following the format (e.g., 'Applies: task modifies `modules/fundamental/src/advisory/service/advisory.rs` matching the convention's module directory scope.'). Task 5: 'Applies: task modifies `modules/ingestor/src/graph/advisory/mod.rs` matching the convention's SeaORM database scope.' No inapplicable conventions are listed with 'Not applicable' annotations anywhere in the output files."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), the plan documents that the Feature's priority is inherited by created tasks — evidenced by priority field values in the impact map, task creation log, or task description files. When the Feature's priority is 'Undefined', the plan documents that priority inheritance is skipped (not propagated as null or 'Undefined')",
+      "passed": true,
+      "evidence": "summary-comment.md states: 'Priority: `High` -- propagated from Feature TC-9005 to all created tasks via `additional_fields.priority`'. The additional_fields JSON block includes '\"priority\": {\"name\": \"High\"}'. Priority is High (not Undefined), and inheritance is documented."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), the plan documents that fixVersions are inherited by created tasks — evidenced by fixVersion values in the impact map, task creation log, or task description files. When fixVersion scope is 'feature' or the Feature has no fixVersions, the plan documents that fixVersion inheritance is skipped",
+      "passed": true,
+      "evidence": "summary-comment.md states: 'fixVersions: `RHTPA 2.0.0` -- propagated from Feature TC-9005 to all created tasks via `additional_fields.fixVersions` (fixVersion scope is `both` per Jira Field Defaults, so task-level propagation is enabled)'. The additional_fields JSON includes '\"fixVersions\": [{\"name\": \"RHTPA 2.0.0\"}]'. CLAUDE.md Jira Field Defaults has 'fixVersion scope: both', and the plan correctly propagates fixVersions to tasks."
+    },
+    {
+      "text": "A summary of inherited field propagation is produced — evidenced by a summary-comment.md file in the outputs directory, or a summary section in the impact map that includes the inherited priority and fixVersion values propagated to tasks, or states they were omitted and why",
+      "passed": true,
+      "evidence": "summary-comment.md exists in the outputs directory and contains a dedicated '## Inherited Field Propagation' section with: 'Priority: `High` -- propagated from Feature TC-9005 to all created tasks' and 'fixVersions: `RHTPA 2.0.0` -- propagated from Feature TC-9005 to all created tasks'. Both inherited field values and their propagation method are documented."
+    }
+  ],
+  "summary": {
+    "passed": 14,
+    "failed": 1,
+    "total": 15,
+    "pass_rate": 0.93
+  }
+}

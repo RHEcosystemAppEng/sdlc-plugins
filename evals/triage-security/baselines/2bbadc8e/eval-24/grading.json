@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 detects the absence of the Deployment Context column in the Source Repositories table and defaults all repositories to upstream (§1.78)",
+      "passed": false,
+      "evidence": "data-extraction.md lines 36-37 explicitly detect the absence: 'The Source Repositories table in Security Configuration does NOT have a Deployment Context column.' However, the output never states that repositories are defaulted to upstream. It says 'Per backward compatibility rules, coordination guidance is omitted entirely from remediation task descriptions.' The omission of coordination guidance is consistent with upstream behavior, but the output does not explicitly state that repositories default to upstream as required by the assertion."
+    },
+    {
+      "text": "Remediation task descriptions do NOT include a Coordination Guidance subsection — the section is omitted entirely when no Deployment Context column exists",
+      "passed": true,
+      "evidence": "Examined both remediation task descriptions in remediation.md. Task 1 (Upstream Backport, lines 33-103) contains sections: Repository, Target Branch, Description, Implementation Notes, Acceptance Criteria, Test Requirements, Dependencies -- no Coordination Guidance subsection. Task 2 (Downstream Propagation, lines 125-182) contains sections: Repository, Target Branch, Description, Implementation Notes, Acceptance Criteria, Test Requirements, Dependencies -- no Coordination Guidance subsection. The pre-creation checklist at line 262 explicitly confirms: 'Coordination Guidance subsection is omitted entirely from all task descriptions.'"
+    },
+    {
+      "text": "The triage proceeds normally through all steps without errors from the missing Deployment Context column",
+      "passed": true,
+      "evidence": "data-extraction.md covers Step 1 (Data Extraction, lines 3-21), Stream Scope Resolution (lines 22-24), Ecosystem Detection (lines 26-33), Deployment Context Lookup (lines 36-37), Step 2 (Version Impact Analysis, lines 39-64), Step 3 (Affects Versions Correction, lines 66-78), and Cross-Stream Impact Assessment (lines 80-95). remediation.md covers Step 8 (Remediation, lines 1-263) including task creation proposals and all Jira mutation proposals. No error messages, stack traces, failure notifications, or warnings about the missing column causing processing issues appear anywhere in either file. The missing column is handled gracefully with a clean fallback."
+    },
+    {
+      "text": "Backward compatibility is maintained — existing eval behavior is unaffected by the absence of the Deployment Context column",
+      "passed": true,
+      "evidence": "data-extraction.md line 37 explicitly invokes backward compatibility: 'Per backward compatibility rules, coordination guidance is omitted entirely from remediation task descriptions.' The standard triage flow is fully preserved: CVE data extraction, stream scope resolution, ecosystem detection, version impact analysis with lock file evidence, affects versions correction, cross-stream impact assessment (Case A), preemptive remediation task creation (2 tasks for Cargo ecosystem), Jira mutation proposals, and pre-creation checklist. The only behavioral difference is the omission of the Coordination Guidance subsection, which is the defined backward-compatible behavior when the column is absent."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 1,
+    "total": 4,
+    "pass_rate": 0.75
+  }
+}

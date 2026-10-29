@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "At least one task's Acceptance Criteria contains a code-level, testable criterion requiring the gating flow to fail closed (e.g., exit non-zero or report an error rather than skip) when the tracker search returns an empty result from a source that cannot be proven authenticated or healthy.",
+      "passed": true,
+      "evidence": "Task 2 (task-2-fail-closed-guard.md) Acceptance Criteria line 29: '`resolve_gated_issue` exits non-zero or raises an error when the tracker search returns an empty result from an unauthenticated or degraded source, instead of treating the empty result as a normal skip'. Line 30: '`resolve_gated_issue` continues to return `None` (skip) only when the empty result can be confirmed to come from an authenticated, fully privileged session'. These are code-level, testable criteria requiring fail-closed behavior when authentication cannot be proven."
+    },
+    {
+      "text": "The same task's Test Requirements include a test that drives the unauthenticated, degraded, or empty-search path and asserts the fail-closed outcome rather than a skip.",
+      "passed": true,
+      "evidence": "Task 2 (task-2-fail-closed-guard.md) Test Requirements line 35: 'Test that `resolve_gated_issue` raises an error or exits non-zero when `search_issues` returns an empty list from an unauthenticated or degraded session (simulated by mocking the tracker client to return `[]` without authentication proof)'. Line 39: 'Test the end-to-end path: unauthenticated gateway request returning `[]` must cause the pre-verification step to fail, not silently skip'. Both explicitly drive the unauthenticated/degraded empty-search path and assert fail-closed rather than skip."
+    },
+    {
+      "text": "That task's Implementation Notes point at the specific gate or skip site where the guard belongs, naming src/gate/resolve_issue.py (resolve_gated_issue) and/or scripts/pre-verify.sh.",
+      "passed": true,
+      "evidence": "Task 2 (task-2-fail-closed-guard.md) Implementation Notes line 20: 'Gate site: `src/gate/resolve_issue.py`, function `resolve_gated_issue(pr_url)`. This is the specific location where the fail-closed guard must be inserted.' Line 21: 'Shell wrapper site: `scripts/pre-verify.sh`. This script runs the gate before verification and currently only detects auth failures by grepping client stderr for 401/403.' Both specific sites are named explicitly."
+    },
+    {
+      "text": "The documented silent-empty risk is not covered only by an operational or post-merge mitigation: if a live run after merge is mentioned, it appears alongside the fail-closed Acceptance Criterion and test, not as their replacement.",
+      "passed": true,
+      "evidence": "Task 2 (task-2-fail-closed-guard.md) Implementation Notes line 23: 'The operational mitigation mentioned in the Feature’s Known Risks (\"a live run after merge confirms the token works\") supplements this code-level guard but does not replace it.' The live run is explicitly framed as supplementary. The Acceptance Criteria (lines 29-32) and Test Requirements (lines 35-39) are all code-level and testable, not operational. summary-comment.md line 21 reinforces: 'This is a code-level, testable mitigation; the operational \"live run after merge\" mentioned in the feature’s Known Risks supplements this guard but does not replace it.'"
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

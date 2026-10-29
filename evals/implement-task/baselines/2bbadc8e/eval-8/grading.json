@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md line 44 instructs to 'Confirm they are currently private (`fn`, not `pub fn`)' in modules/ingestor/src/graph/sbom/mod.rs. Lines 67-71 explicitly state 'Change: Make `describing_packages()` and `suppliers()` public' with specific before/after signatures. reuse-decision.md line 12 states 'Both functions are currently private (no `pub` keyword).'"
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md line 48 explicitly lists 'migration/Cargo.toml -- Verify that `trustify-module-ingestor` is already listed as a dependency. This is critical for the reuse decision.' reuse-decision.md lines 24-32 confirm: 'The migration crate’s `Cargo.toml` already declares a dependency on the ingestor crate: trustify-module-ingestor = { path = \"../modules/ingestor\" }' and 'The dependency relationship already exists -- no new cross-package coupling is introduced.'"
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md line 16: 'Make the functions `pub` in the ingestor crate and import them in the migration crate.' Lines 35-41 state: 'Since `trustify-module-ingestor` is already a dependency of the migration crate, the skill prescribes: make the function public (`pub`, `export`, etc.) and import it rather than duplicating the code.' Lines 45-46: 'No new coupling: The migration crate already depends on the ingestor crate.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "plan.md line 73: 'reuse is strictly preferred over duplication.' reuse-decision.md lines 63-72 explicitly reject duplication under 'Why not duplicate (Option 3)?' heading, concluding at line 72: 'Duplicating would violate DRY without any offsetting benefit.' No part of the plan proposes copying or inlining function bodies."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md line 40: 'This follows the DRY principle and ensures future bug fixes apply in one place.' Lines 48-50: 'DRY principle: The extraction logic in `describing_packages()` and `suppliers()` encodes specific SBOM parsing rules. Duplicating this logic would create two copies that must be kept in sync.' Lines 93-94: 'future changes to SBOM parsing logic (format updates, bug fixes, performance improvements) automatically propagate to all consumers, including the migration crate.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

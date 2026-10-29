@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "population-race.md Step 3 heading 'Pre-Write Re-Read and Comparison' (line 39). Lines 41-42: 'The target was re-read immediately before writing. The re-read revealed changes compared to the source snapshot.' The initial snapshot is recorded in Step 1 (lines 11-15) and the comparison table (lines 49-52) shows field-by-field differences between snapshot and re-read."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "population-race.md lines 49-52: comparison table shows Last-Updated changed from '2026-06-28T10:00:00Z' to '2026-10-26T09:15:00Z' and '2.1.0/api-rhel10 row' changed from 'Not present' to 'CONCURRENT-ROW-KEEP entry added'. Line 55: 'The target file was modified by a concurrent triage-security run between the initial read and the pre-write re-read.'"
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "population-race.md lines 86-89: Actions list explicitly states '1. Preserved the current target file — no write was performed. 2. Preserved the concurrent Last-Updated: 2026-10-26T09:15:00Z timestamp. 3. Preserved the concurrent CONCURRENT-ROW-KEEP entry for 2.1.0/api-rhel10. 4. Did not write the stale proposal over the concurrent update.' Line 106: 'No write was performed.'"
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "population-race.md lines 73-76: 'The full contents of the concurrent row (Konflux Release Tag, Resolved Release Commit SHA, Image Reference, Image Digest, CPE, and other fields) were not supplied and cannot be inferred. Building a merged proposal without these values would produce an incomplete result with placeholders, which the skill explicitly prohibits.' Lines 95-97: 'Current full matrix contents — provide the complete current security-matrix.md file as it exists after the concurrent triage-security update, including all row values for the CONCURRENT-ROW-KEEP entry.'"
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "population-race.md line 106: 'No write was performed.' Lines 100-102: 'Fresh confirmation — the user must confirm the merged proposal before any write occurs, per the skill's concurrent-change reconciliation requirement.' Lines 107-109: 'The target security-matrix.md remains unchanged at its current state...The population workflow is paused pending the full current matrix contents and fresh confirmation of a reconciled proposal.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

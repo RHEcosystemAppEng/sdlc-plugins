@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md line 36: 'The vulnerable package `openssl-libs` is an RPM system package. Per the 2.2.x stream's Ecosystem Mappings table:' followed by a table showing Ecosystem=RPM, Lock File=rpms.lock.yaml. Line 43: 'Ecosystem: RPM (system package)'. No mention of Cargo anywhere. The ecosystem is identified from the Ecosystem Mappings config table."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md Section 2.3 lists all five versions: 2.2.0 (v0.4.5, 3.0.7-25.el9_3), 2.2.1 (v0.4.8, 3.0.7-27.el9_4), 2.2.2 (v0.4.9, retag), 2.2.3 (v0.4.11, 3.0.7-28.el9_4), 2.2.4 (v0.4.12, 3.0.7-28.el9_4). Extraction method stated as 'git show <tag>:rpms.lock.yaml | grep openssl-libs'. Section 2.4 repeats all five versions in the summary table."
+    },
+    {
+      "text": "Dependency chain context identifies openssl-libs as present in rpms.lock.yaml and uses this to determine the package origin — the lock file presence is the primary classification signal (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md Section 2.3.5 states: 'rpms.lock.yaml: present (openssl-libs entries found at all non-retag tags)' and 'Origin: explicit install (openssl-libs specified in rpms.lock.yaml)'. Lines 66-70 further confirm: 'The rpms.lock.yaml classification (explicit install) is used as the sole source of truth for package origin.'"
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 8 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md line 5: 'Ecosystem: RPM (system package) -- 1 remediation task per affected stream.' Line 48: 'one remediation task is created for the 2.2.x stream.' The task targets 'rhtpa-release.0.4.z' (Konflux release repo) per the task description Repository section (line 70). Pre-creation checklist (line 178): 'Task count per stream: 1 task (RPM system package = 1 task per stream)'. Only one jira.create_issue call is proposed."
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 8 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md task description (lines 68-128) contains: '## Repository' (line 69, value: rhtpa-release.0.4.z), '## Target Branch' (line 73, value: main), '## Description' (line 77), '## Implementation Notes' (line 98), '## Acceptance Criteria' (line 117). No '## Files to Modify' section is present anywhere in the task description, which is the correct omission per remediation-templates.md for system packages."
+    },
+    {
+      "text": "The version impact output addresses SBOM verification in the dependency chain context — either noting that verification was skipped because cosign is not available or because external tools are prohibited, or presenting the SBOM classification result (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md Section 2.3.5 states: 'SBOM verification: skipped -- cosign not available in this environment. Using rpms.lock.yaml classification only.' Lines 66-70 elaborate: 'SBOM verification status: SBOM comparison was not performed because `cosign` is not available in this environment. The rpms.lock.yaml classification (explicit install) is used as the sole source of truth for package origin. In a production triage, `cosign download sbom` would be used to cross-check the rpms.lock.yaml classification against the final and base image SBOMs.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
