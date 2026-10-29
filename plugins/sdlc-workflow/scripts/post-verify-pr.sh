@@ -5,9 +5,10 @@
 # Working directory is the fullsend run output directory.
 #
 # Required env vars:
-#   JIRA_SERVER_URL   — Jira instance URL
-#   JIRA_EMAIL        — Jira user email
-#   JIRA_API_TOKEN    — Jira API token
+#   JIRA_SERVER_URL   — Jira REST base (the Atlassian API gateway)
+#   JIRA_API_TOKEN    — Jira API token (jira-client.py sends it as Bearer)
+#   JIRA_USER_EMAIL   — email on record for the token; read ONLY by the fullsend
+#                       CLI (`fullsend issues post-comment`), which needs Basic auth
 #   JIRA_PROJECT_KEY  — Jira project key (for root-cause task creation)
 #   GH_TOKEN          — GitHub token
 #

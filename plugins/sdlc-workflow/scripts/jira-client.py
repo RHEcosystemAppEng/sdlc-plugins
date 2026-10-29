@@ -17,25 +17,27 @@ from base64 import b64encode
 from typing import Dict, List, Optional, Any
 
 
-def get_credentials() -> tuple[str, str, str]:
+def get_credentials() -> tuple[str, Optional[str], str]:
     """Read credentials from environment variables.
 
+    ``JIRA_EMAIL`` is optional: when set, requests use Basic auth (personal API
+    tokens, which are Basic-only); when unset, requests send the token as a
+    Bearer header (Atlassian Service Account tokens on the API gateway).
+
     Returns:
-        Tuple of (server_url, email, api_token)
+        Tuple of (server_url, email or None, api_token)
 
     Raises:
-        SystemExit: If any credentials are missing
+        SystemExit: If JIRA_SERVER_URL or JIRA_API_TOKEN is missing
     """
     server_url = os.getenv('JIRA_SERVER_URL')
-    email = os.getenv('JIRA_EMAIL')
+    email = os.getenv('JIRA_EMAIL') or None
     api_token = os.getenv('JIRA_API_TOKEN')
 
-    if not all([server_url, email, api_token]):
+    if not all([server_url, api_token]):
         missing = []
         if not server_url:
             missing.append('JIRA_SERVER_URL')
-        if not email:
-            missing.append('JIRA_EMAIL')
         if not api_token:
             missing.append('JIRA_API_TOKEN')
 
@@ -44,6 +46,22 @@ def get_credentials() -> tuple[str, str, str]:
         sys.exit(1)
 
     return server_url.rstrip('/'), email, api_token
+
+
+def build_auth_header(email: Optional[str], api_token: str) -> str:
+    """Build the Authorization header value: Basic when an email is set, else Bearer.
+
+    Args:
+        email: Account email for Basic auth, or None to send a Bearer token
+        api_token: The Jira API token
+
+    Returns:
+        The ``Authorization`` header value
+    """
+    if email:
+        auth_b64 = b64encode(f"{email}:{api_token}".encode('utf-8')).decode('ascii')
+        return f"Basic {auth_b64}"
+    return f"Bearer {api_token}"
 
 
 def mask_token(token: str) -> str:
@@ -78,12 +96,9 @@ def make_request(method: str, endpoint: str, data: Optional[Dict] = None) -> Dic
 
     # Build request
     url = f"{server_url}/rest/api/3/{endpoint}"
-    auth_string = f"{email}:{api_token}"
-    auth_bytes = auth_string.encode('utf-8')
-    auth_b64 = b64encode(auth_bytes).decode('ascii')
 
     headers = {
-        'Authorization': f"Basic {auth_b64}",
+        'Authorization': build_auth_header(email, api_token),
         'Accept': 'application/json',
         'Content-Type': 'application/json'
     }
@@ -118,7 +133,7 @@ def handle_http_error(error: HTTPError) -> None:
 
     if status == 401:
         print("❌ Authentication failed (401 Unauthorized)", file=sys.stderr)
-        print("Check your email and API token. Run /setup to update credentials.", file=sys.stderr)
+        print("Check your API token (and JIRA_EMAIL, if set). Run /setup to update credentials.", file=sys.stderr)
     elif status == 403:
         print("❌ Permission denied (403 Forbidden)", file=sys.stderr)
         print("Contact your JIRA admin to grant project access.", file=sys.stderr)
@@ -700,6 +715,46 @@ def get_user_info() -> Dict[str, Any]:
     return make_request('GET', 'myself')
 
 
+# Process-wide cache for get_server_info(); serverInfo does not change mid-run.
+_SERVER_INFO_CACHE: Optional[Dict[str, Any]] = None
+
+
+def get_server_info() -> Dict[str, Any]:
+    """Get Jira server info, fetched once per process and cached.
+
+    ``baseUrl`` is the site address (e.g. ``https://redhat.atlassian.net``)
+    whether JIRA_SERVER_URL is the site or the API gateway, so it is the base
+    for human-facing ``/browse/`` links.
+
+    Returns:
+        serverInfo object with baseUrl, version, deploymentType
+
+    Raises:
+        SystemExit: On HTTP errors, or if the response has no ``baseUrl``
+    """
+    global _SERVER_INFO_CACHE
+    if _SERVER_INFO_CACHE is None:
+        info = make_request('GET', 'serverInfo')
+        base_url = info.get('baseUrl') if isinstance(info, dict) else None
+        if not isinstance(base_url, str) or not base_url:
+            print("❌ serverInfo response has no baseUrl; cannot build Jira browse links", file=sys.stderr)
+            sys.exit(1)
+        _SERVER_INFO_CACHE = info
+    return _SERVER_INFO_CACHE
+
+
+def browse_url(issue_key: str) -> str:
+    """Build the human-facing ``/browse/`` URL for an issue from serverInfo.baseUrl.
+
+    Args:
+        issue_key: Issue key (e.g., TC-123)
+
+    Returns:
+        ``<site baseUrl>/browse/<issue_key>``
+    """
+    return f"{get_server_info()['baseUrl'].rstrip('/')}/browse/{issue_key}"
+
+
 def get_remote_links(issue_key: str) -> List[Dict[str, Any]]:
     """Get remote links for a JIRA issue.
 
@@ -774,7 +829,9 @@ def main(argv=None):
 
     parser = argparse.ArgumentParser(
         description='JIRA REST API v3 client for sdlc-workflow skills',
-        epilog='Set JIRA_SERVER_URL, JIRA_EMAIL, JIRA_API_TOKEN environment variables before use.'
+        epilog=('Set JIRA_SERVER_URL and JIRA_API_TOKEN environment variables before use. '
+                'Set JIRA_EMAIL to use Basic auth (personal API tokens); leave it unset to '
+                'send the token as Bearer (Service Account tokens on the API gateway).')
     )
     subparsers = parser.add_subparsers(dest='command', required=True, help='Available commands')
 
@@ -830,6 +887,9 @@ def main(argv=None):
 
     # get_user_info
     subparsers.add_parser('get_user_info', help='Get current user info')
+
+    # get_server_info
+    subparsers.add_parser('get_server_info', help='Get server info (baseUrl is the site URL for browse links)')
 
     # get_remote_links
     get_remote_links_parser = subparsers.add_parser('get_remote_links', help='Get remote links for issue')
@@ -903,6 +963,9 @@ def main(argv=None):
 
     elif args.command == 'get_user_info':
         result = get_user_info()
+
+    elif args.command == 'get_server_info':
+        result = get_server_info()
 
     elif args.command == 'get_remote_links':
         result = get_remote_links(args.issue_key)

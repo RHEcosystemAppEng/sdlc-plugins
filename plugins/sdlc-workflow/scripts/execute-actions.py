@@ -26,7 +26,10 @@ Usage:
     execute-actions.py <result-json>
 
 Required env vars:
-    JIRA_SERVER_URL, JIRA_EMAIL, JIRA_API_TOKEN — Jira credentials
+    JIRA_SERVER_URL, JIRA_API_TOKEN — Jira REST base (the API gateway) and token;
+        jira-client.py sends the token as Bearer (no JIRA_EMAIL is set)
+    JIRA_USER_EMAIL — email on record for the token; read only by the fullsend
+        CLI (`fullsend issues post-comment`), which requires Basic auth
     GH_TOKEN — GitHub token
     JIRA_PROJECT_KEY — Jira project key (for root-cause task creation)
 """
@@ -467,26 +470,28 @@ def adf_to_markdown(doc: dict) -> str:
 
 
 def build_issue_url(key: str) -> str:
-    """Build Jira issue browse URL from key."""
-    server = os.environ.get("JIRA_SERVER_URL", "").rstrip("/")
-    if not server:
-        print("JIRA_SERVER_URL is required for issue URL construction", file=sys.stderr)
-        sys.exit(1)
-    return f"{server}/browse/{key}"
+    """Build the Jira issue browse URL from serverInfo.baseUrl (the site address).
+
+    JIRA_SERVER_URL may be the API gateway, which has no browsable /browse/
+    path, so the link base comes from the cached serverInfo, never the REST base.
+    Exits if serverInfo cannot be fetched.
+    """
+    return _jira_mod.browse_url(key)
 
 
 def _jira_native_env() -> dict[str, str]:
     """Build the environment for the native fullsend Jira CLI.
 
-    Maps this script's JIRA_SERVER_URL / JIRA_EMAIL / JIRA_API_TOKEN onto the
-    JIRA_BASE_URL / JIRA_USER_EMAIL / JIRA_TOKEN names the fullsend CLI expects.
+    Maps this script's JIRA_SERVER_URL / JIRA_API_TOKEN onto the JIRA_BASE_URL /
+    JIRA_TOKEN names the fullsend CLI expects, and passes JIRA_USER_EMAIL through
+    unchanged: the CLI is the only consumer of the email (it requires Basic auth).
     Exits with a clear message if any credential is missing.
     """
     try:
         return {
             **os.environ,
             "JIRA_BASE_URL": os.environ["JIRA_SERVER_URL"],
-            "JIRA_USER_EMAIL": os.environ["JIRA_EMAIL"],
+            "JIRA_USER_EMAIL": os.environ["JIRA_USER_EMAIL"],
             "JIRA_TOKEN": os.environ["JIRA_API_TOKEN"],
         }
     except KeyError as e:
@@ -555,6 +560,10 @@ def _create_and_register(action: dict, registry: dict, *,
     labels = action["labels"]
     description_adf = resolve_refs_in_obj(action["description_adf"], registry)
 
+    # Fetch (and cache) serverInfo before the write: if the browse-link base is
+    # unavailable, abort now rather than after creating an issue whose key would
+    # never be registered (a retry would then create a duplicate).
+    _jira_mod.get_server_info()
     try:
         result = _jira_mod.create_issue(
             project_key=project_key,

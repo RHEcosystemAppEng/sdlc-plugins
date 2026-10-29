@@ -9,6 +9,7 @@ Verifies that the CLI correctly handles:
 
 import importlib.util
 import io
+import json
 import sys
 import os
 
@@ -198,6 +199,47 @@ def test_create_issue_help_shows_fix_versions_flag():
     print("✓ create_issue --help shows --fix-versions flag test passed")
 
 
+def test_get_server_info_help():
+    """Verifies that the get_server_info subcommand is registered and shows help."""
+    exit_code, stdout, stderr = run_cli_command(['get_server_info', '--help'])
+
+    assert exit_code == 0, f"Expected exit code 0, got {exit_code}"
+    assert "get_server_info" in stdout, f"Expected 'get_server_info' in help output, got: {stdout}"
+
+    print("✓ get_server_info --help test passed")
+
+
+def test_help_epilog_documents_optional_email():
+    """Verifies that --help lists the required variables and documents JIRA_EMAIL as the Basic-auth switch."""
+    exit_code, stdout, stderr = run_cli_command(['--help'])
+
+    assert exit_code == 0, f"Expected exit code 0, got {exit_code}"
+    flat = " ".join(stdout.split())
+    assert "Set JIRA_SERVER_URL and JIRA_API_TOKEN" in flat, f"Got: {stdout}"
+    assert "Set JIRA_EMAIL to use Basic auth" in flat, f"Got: {stdout}"
+    assert "Bearer" in flat, f"Got: {stdout}"
+
+    print("✓ --help epilog documents optional JIRA_EMAIL test passed")
+
+
+def test_get_server_info_dispatch_prints_json():
+    """Verifies that get_server_info dispatches to get_server_info() and prints its JSON."""
+    # Given a stubbed get_server_info
+    original = jira_client.get_server_info
+    jira_client.get_server_info = lambda: {"baseUrl": "https://redhat.atlassian.net"}
+    try:
+        # When running the subcommand
+        exit_code, stdout, stderr = run_cli_command(['get_server_info'])
+    finally:
+        jira_client.get_server_info = original
+
+    # Then it prints the serverInfo JSON
+    assert exit_code == 0, f"Expected exit code 0, got {exit_code}: {stderr}"
+    assert json.loads(stdout) == {"baseUrl": "https://redhat.atlassian.net"}
+
+    print("✓ get_server_info dispatch test passed")
+
+
 def test_create_issue_fix_versions_comma_parsing():
     """Verifies that --fix-versions splits comma-separated values into a list."""
     # Given comma-separated version names
@@ -227,6 +269,9 @@ def run_all_tests():
         test_create_issue_help_shows_priority_flag,
         test_create_issue_help_shows_fix_versions_flag,
         test_create_issue_fix_versions_comma_parsing,
+        test_get_server_info_help,
+        test_help_epilog_documents_optional_email,
+        test_get_server_info_dispatch_prints_json,
     ]
 
     failed = []

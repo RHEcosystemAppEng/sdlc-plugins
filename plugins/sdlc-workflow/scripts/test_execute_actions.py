@@ -7,6 +7,7 @@ import json
 import tempfile
 import importlib.util
 
+import pytest
 from jsonschema import validate, ValidationError
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -133,7 +134,7 @@ class _RunRecorder:
 
 _JIRA_ENV = {
     "JIRA_SERVER_URL": "https://jira.example.com",
-    "JIRA_EMAIL": "bot@example.com",
+    "JIRA_USER_EMAIL": "bot@example.com",
     "JIRA_API_TOKEN": "s3cr3t",
 }
 
@@ -176,7 +177,7 @@ def test_post_jira_comment_native_builds_argv():
 
 
 def test_post_jira_comment_native_maps_env():
-    """The native CLI receives JIRA_BASE_URL/JIRA_USER_EMAIL/JIRA_TOKEN mapped from this script's vars."""
+    """The native CLI receives JIRA_BASE_URL/JIRA_TOKEN mapped from this script's vars and JIRA_USER_EMAIL passed through."""
     recorder = _RunRecorder()
     restore = _with_jira_env_and_recorder(recorder)
     try:
@@ -187,6 +188,81 @@ def test_post_jira_comment_native_maps_env():
     assert recorder.env["JIRA_BASE_URL"] == "https://jira.example.com"
     assert recorder.env["JIRA_USER_EMAIL"] == "bot@example.com"
     assert recorder.env["JIRA_TOKEN"] == "s3cr3t"
+
+
+def test_jira_native_env_never_reads_jira_email(monkeypatch):
+    """JIRA_USER_EMAIL is passed through as-is; a conflicting JIRA_EMAIL is never read."""
+    # Given both JIRA_USER_EMAIL and a different JIRA_EMAIL in the runner env
+    for key, value in _JIRA_ENV.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.setenv("JIRA_EMAIL", "interactive-user@example.com")
+
+    # When building the native CLI environment
+    env = execute_actions._jira_native_env()
+
+    # Then the CLI email is JIRA_USER_EMAIL, not JIRA_EMAIL
+    assert env["JIRA_USER_EMAIL"] == "bot@example.com"
+
+
+def test_jira_native_env_missing_user_email_exits(monkeypatch, capsys):
+    """Without JIRA_USER_EMAIL the native CLI env aborts, even when JIRA_EMAIL is set."""
+    # Given the REST credentials and JIRA_EMAIL, but no JIRA_USER_EMAIL
+    for key, value in _JIRA_ENV.items():
+        monkeypatch.setenv(key, value)
+    monkeypatch.delenv("JIRA_USER_EMAIL")
+    monkeypatch.setenv("JIRA_EMAIL", "bot@example.com")
+
+    # When building the native CLI environment
+    with pytest.raises(SystemExit) as excinfo:
+        execute_actions._jira_native_env()
+
+    # Then it exits 1 naming the missing variable
+    assert excinfo.value.code == 1
+    assert "JIRA_USER_EMAIL" in capsys.readouterr().err
+
+
+_SITE_URL = "https://redhat.atlassian.net"
+_GATEWAY_URL = "https://api.atlassian.com/ex/jira/2b9e35e3-6bd3-4cec-b838-f4249ee02432"
+
+
+@pytest.mark.parametrize("server_url", [_SITE_URL, _GATEWAY_URL])
+def test_build_issue_url_uses_server_info_base_url(monkeypatch, server_url):
+    """Sub-task links use serverInfo.baseUrl (the site) whether the REST base is the site or the gateway."""
+    # Given a REST base and a Jira that reports the site as its baseUrl
+    monkeypatch.setenv("JIRA_SERVER_URL", server_url)
+    monkeypatch.setattr(execute_actions._jira_mod, "_SERVER_INFO_CACHE", None)
+    requests = []
+
+    def fake_make_request(method, endpoint, data=None):
+        requests.append((method, endpoint))
+        return {"baseUrl": _SITE_URL}
+
+    monkeypatch.setattr(execute_actions._jira_mod, "make_request", fake_make_request)
+
+    # When building two issue URLs
+    urls = [execute_actions.build_issue_url("TC-100"), execute_actions.build_issue_url("TC-101")]
+
+    # Then both are site browse links and serverInfo was fetched once
+    assert urls == [_SITE_URL + "/browse/TC-100", _SITE_URL + "/browse/TC-101"]
+    assert requests == [("GET", "serverInfo")]
+
+
+def test_build_issue_url_server_info_failure_exits(monkeypatch):
+    """A failed serverInfo request aborts link construction instead of guessing a base."""
+    # Given a Jira whose serverInfo request fails
+    monkeypatch.setattr(execute_actions._jira_mod, "_SERVER_INFO_CACHE", None)
+
+    def failing_make_request(method, endpoint, data=None):
+        raise SystemExit(1)
+
+    monkeypatch.setattr(execute_actions._jira_mod, "make_request", failing_make_request)
+
+    # When building an issue URL
+    with pytest.raises(SystemExit) as excinfo:
+        execute_actions.build_issue_url("TC-100")
+
+    # Then it exits 1
+    assert excinfo.value.code == 1
 
 
 def test_post_jira_comment_native_nonzero_exits():
@@ -991,10 +1067,12 @@ def test_post_report_resolves_ref_created_by_later_action():
 
     saved_run = execute_actions.subprocess.run
     saved_create = execute_actions._jira_mod.create_issue
+    saved_server_info = execute_actions._jira_mod.get_server_info
     saved_argv = sys.argv
     saved_env = {k: os.environ.get(k) for k in _JIRA_ENV}
     execute_actions.subprocess.run = fake_run
     execute_actions._jira_mod.create_issue = fake_create_issue
+    execute_actions._jira_mod.get_server_info = lambda: {"baseUrl": "https://jira.example.com"}
     os.environ.update(_JIRA_ENV)
     fd, path = tempfile.mkstemp(suffix=".json")
     try:
@@ -1005,6 +1083,7 @@ def test_post_report_resolves_ref_created_by_later_action():
     finally:
         execute_actions.subprocess.run = saved_run
         execute_actions._jira_mod.create_issue = saved_create
+        execute_actions._jira_mod.get_server_info = saved_server_info
         sys.argv = saved_argv
         os.remove(path)
         for k, v in saved_env.items():

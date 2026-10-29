@@ -76,9 +76,8 @@ def _plugin_version() -> str:
 
 
 def _browse_url(issue_key: str) -> str:
-    """Build a Jira browse URL for a generated issue reference."""
-    base_url = os.environ.get("JIRA_SERVER_URL", "https://jira.invalid").rstrip("/")
-    return "{}/browse/{}".format(base_url, issue_key)
+    """Build a Jira browse URL for a generated issue reference from serverInfo.baseUrl."""
+    return _jira_mod.browse_url(issue_key)
 
 
 def _validate_action(action: Any) -> None:
@@ -331,7 +330,12 @@ def _trusted_targets(trusted_input: dict[str, Any]) -> set[str]:
 
 
 def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> None:
-    """Authorize every target and reference before Jira reads, writes, or retry repair."""
+    """Authorize every target and reference before Jira reads, writes, or retry repair.
+
+    The only Jira request made here is the cached serverInfo read behind
+    ``_browse_url`` (for reference-producing actions), so a missing browse-link
+    base aborts before any write.
+    """
     targets = _trusted_targets(trusted_input)
     if result["report"]["issue"] != trusted_input["issue"]["key"]:
         raise ActionError("report issue does not match the trusted issue")

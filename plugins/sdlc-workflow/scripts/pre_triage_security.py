@@ -881,13 +881,30 @@ def untriaged_jql(configuration):
     )
 
 
+# Process-wide cache for _browse_base_url(); serverInfo does not change mid-run.
+_SERVER_INFO_BASE_URL = None
+
+
+def _browse_base_url():
+    """Return the Jira site URL for /browse/ links from serverInfo.baseUrl, fetched once.
+
+    JIRA_SERVER_URL may be the API gateway, which carries no browsable hostname,
+    so links never derive from it. A failed or malformed serverInfo aborts.
+    """
+    global _SERVER_INFO_BASE_URL
+    if _SERVER_INFO_BASE_URL is None:
+        info = _require_mapping(_jira_client("get_server_info"), "serverInfo")
+        base_url = info.get("baseUrl")
+        if not isinstance(base_url, str) or not base_url:
+            raise EvidenceError("serverInfo has no baseUrl")
+        _SERVER_INFO_BASE_URL = base_url.rstrip("/")
+    return _SERVER_INFO_BASE_URL
+
+
 def discover_untriaged(project_root, max_results=20):
     """List untriaged Vulnerability issues for an unattended poller, in JQL order."""
     if not isinstance(max_results, int) or max_results < 1:
         raise EvidenceError("max_results must be a positive integer")
-    server_url = os.environ.get("JIRA_SERVER_URL", "").rstrip("/")
-    if not server_url:
-        raise EvidenceError("JIRA_SERVER_URL is required")
     claude_path = Path(project_root) / "CLAUDE.md"
     if not claude_path.is_file():
         raise EvidenceError("target project CLAUDE.md is required")
@@ -899,13 +916,15 @@ def discover_untriaged(project_root, max_results=20):
     search = _require_mapping(
         _jira_client("search_jql", "--jql", untriaged_jql(configuration), "--fields", "key", *paging),
         "untriaged search")
-    issues = []
+    keys = []
     for item in _require_list(search.get("issues"), "untriaged search issues", allow_empty=True)[:max_results]:
         key = _require_mapping(item, "untriaged issue").get("key")
         if not isinstance(key, str) or not _ISSUE_KEY_RE.fullmatch(key) or not key.startswith(project + "-"):
             raise EvidenceError("untriaged issue is outside the configured project")
-        issues.append({"key": key, "url": "{}/browse/{}".format(server_url, key)})
-    return {"issues": issues}
+        keys.append(key)
+    # Fetch serverInfo only when there is a link to build, after every key is valid.
+    base_url = _browse_base_url() if keys else None
+    return {"issues": [{"key": key, "url": "{}/browse/{}".format(base_url, key)} for key in keys]}
 
 
 def parse_mutation_authorization(value):

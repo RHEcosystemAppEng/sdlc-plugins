@@ -25,9 +25,8 @@
 #
 # Required env vars:
 #   FULLSEND_WORK_ITEM_URL — the triggering PR URL (harness-run / local export)
-#   JIRA_SERVER_URL        — Jira instance URL
-#   JIRA_EMAIL             — Jira user email
-#   JIRA_API_TOKEN         — Jira API token
+#   JIRA_SERVER_URL        — Jira REST base (the Atlassian API gateway)
+#   JIRA_API_TOKEN         — Jira API token (sent as Bearer; no email needed)
 #   GH_TOKEN               — GitHub token (PR prefetch)
 #
 # Optional env vars:
@@ -42,7 +41,6 @@ set -euo pipefail
 # 1. Validate required env vars are set
 : "${FULLSEND_WORK_ITEM_URL:?FULLSEND_WORK_ITEM_URL (triggering PR URL) is required}"
 : "${JIRA_SERVER_URL:?JIRA_SERVER_URL is required}"
-: "${JIRA_EMAIL:?JIRA_EMAIL is required}"
 : "${JIRA_API_TOKEN:?JIRA_API_TOKEN is required}"
 
 PR_URL="${FULLSEND_WORK_ITEM_URL}"
@@ -91,7 +89,7 @@ SEARCH_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" search_jql \
   2>"/tmp/fullsend-pre-jira-stderr.txt") || {
   JIRA_STDERR=$(cat /tmp/fullsend-pre-jira-stderr.txt 2>/dev/null || echo "")
   if echo "${JIRA_STDERR}" | grep -qi "401\|unauthorized"; then
-    echo "ERROR: Jira authentication failed — check JIRA_EMAIL and JIRA_API_TOKEN"
+    echo "ERROR: Jira authentication failed — check JIRA_API_TOKEN and JIRA_SERVER_URL"
   elif echo "${JIRA_STDERR}" | grep -qi "403\|forbidden"; then
     echo "ERROR: Jira permission denied — check that the API token can search issues"
   else
@@ -124,7 +122,7 @@ echo "Jira issue resolved + gated: ${JIRA_ISSUE_ID} (status=Review, label=ai-gen
 ISSUE_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}" --fields "*all" 2>"/tmp/fullsend-pre-jira-stderr.txt") || {
   JIRA_STDERR=$(cat /tmp/fullsend-pre-jira-stderr.txt 2>/dev/null || echo "")
   if echo "${JIRA_STDERR}" | grep -qi "401\|unauthorized"; then
-    echo "ERROR: Jira authentication failed — check JIRA_EMAIL and JIRA_API_TOKEN"
+    echo "ERROR: Jira authentication failed — check JIRA_API_TOKEN and JIRA_SERVER_URL"
   elif echo "${JIRA_STDERR}" | grep -qi "403\|forbidden"; then
     echo "ERROR: Jira permission denied — check that the API token has access to ${JIRA_ISSUE_ID}"
   elif echo "${JIRA_STDERR}" | grep -qi "404\|not found"; then
