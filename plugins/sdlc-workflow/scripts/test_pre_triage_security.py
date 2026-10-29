@@ -157,7 +157,6 @@ def test_pre_triage_script_rejects_missing_poller_work_item_url():
     environment = {
         "PATH": os.environ["PATH"],
         "JIRA_SERVER_URL": "https://jira.example.com",
-        "JIRA_EMAIL": "runner@example.com",
         "JIRA_API_TOKEN": "token",
     }
 
@@ -177,7 +176,6 @@ def test_pre_triage_script_rejects_missing_runner_credentials():
         "PATH": os.environ["PATH"],
         "FULLSEND_WORK_ITEM_URL": "https://jira.example.com/browse/TC-42",
         "JIRA_SERVER_URL": "https://jira.example.com",
-        "JIRA_EMAIL": "runner@example.com",
     }
 
     # When the trusted pre-script starts
@@ -204,7 +202,6 @@ def _run_dir_guard_environment(tmp_path, run_directory):
         "FULLSEND_PROJECT_ROOT": str(project_root),
         "FULLSEND_RUN_DIR": str(run_directory),
         "JIRA_SERVER_URL": "https://jira.example.com",
-        "JIRA_EMAIL": "runner@example.com",
         "JIRA_API_TOKEN": "token",
     }
 
@@ -284,8 +281,7 @@ def test_pre_triage_script_isolates_bundles_per_fullsend_run(tmp_path, request):
             "COLLECTOR_READY_DIR": str(ready_directory),
             "COLLECTOR_RELEASE": str(release_file),
             "JIRA_SERVER_URL": "https://jira.example.com",
-            "JIRA_EMAIL": "runner@example.com",
-            "JIRA_API_TOKEN": "token",
+                "JIRA_API_TOKEN": "token",
         }
 
     first_run = tmp_path / "run-one"
@@ -1263,11 +1259,17 @@ _DISCOVERY_CLAUDE_MD = """# Project Configuration
 """
 
 
-def _discovery_project(tmp_path, monkeypatch, project_key="TC", issue_type_id="10016"):
-    """Write a synthetic target CLAUDE.md and set the runner's Jira server URL."""
+_SITE_URL = "https://redhat.atlassian.net"
+_GATEWAY_URL = "https://api.atlassian.com/ex/jira/2b9e35e3-6bd3-4cec-b838-f4249ee02432"
+
+
+def _discovery_project(tmp_path, monkeypatch, project_key="TC", issue_type_id="10016",
+                       server_url="https://jira.example.com/"):
+    """Write a synthetic target CLAUDE.md, set the runner's Jira REST base, and reset the serverInfo cache."""
     (tmp_path / "CLAUDE.md").write_text(
         _DISCOVERY_CLAUDE_MD.format(project_key=project_key, issue_type_id=issue_type_id))
-    monkeypatch.setenv("JIRA_SERVER_URL", "https://jira.example.com/")
+    monkeypatch.setenv("JIRA_SERVER_URL", server_url)
+    monkeypatch.setattr(pre_triage_security, "_SERVER_INFO_BASE_URL", None)
     return tmp_path
 
 
@@ -1315,8 +1317,10 @@ def test_discover_returns_ordered_keys_and_urls_within_cap(
     root = _discovery_project(tmp_path, monkeypatch)
     calls = []
 
-    def jira_client(_command, *arguments):
-        """Return three issues in the order the JQL sorts them."""
+    def jira_client(command, *arguments):
+        """Return three issues in the order the JQL sorts them, and the site serverInfo."""
+        if command == "get_server_info":
+            return {"baseUrl": "https://jira.example.com"}
         calls.append(arguments)
         return {"issues": [{"key": "TC-3"}, {"key": "TC-1"}, {"key": "TC-2"}]}
 
@@ -1374,6 +1378,86 @@ def test_discover_reports_jira_client_failure(tmp_path, monkeypatch, capsys):
     assert captured.err.startswith("ERROR:")
 
 
+@pytest.mark.parametrize("server_url", [_SITE_URL, _GATEWAY_URL])
+def test_discover_links_use_server_info_base_url(tmp_path, monkeypatch, capsys, server_url):
+    """Discover links come from serverInfo.baseUrl whether the REST base is the site or the gateway."""
+    # Given a REST base (site or gateway) and serverInfo reporting the site address
+    root = _discovery_project(tmp_path, monkeypatch, server_url=server_url)
+    commands = []
+
+    def jira_client(command, *_arguments):
+        """Return one issue and the site serverInfo, recording each command."""
+        commands.append(command)
+        if command == "get_server_info":
+            return {"baseUrl": _SITE_URL + "/"}
+        return {"issues": [{"key": "TC-7"}, {"key": "TC-8"}]}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root)])
+
+    # Then every link is on the site, and serverInfo is fetched once for both links
+    assert status == 0
+    assert json.loads(capsys.readouterr().out) == {"issues": [
+        {"key": "TC-7", "url": _SITE_URL + "/browse/TC-7"},
+        {"key": "TC-8", "url": _SITE_URL + "/browse/TC-8"},
+    ]}
+    assert commands == ["search_jql", "get_server_info"]
+
+
+def test_discover_skips_server_info_when_no_issues(tmp_path, monkeypatch, capsys):
+    """An empty untriaged search builds no links, so serverInfo is never fetched."""
+    # Given a search with no untriaged issues
+    root = _discovery_project(tmp_path, monkeypatch)
+    commands = []
+
+    def jira_client(command, *_arguments):
+        """Record each command and return no issues."""
+        commands.append(command)
+        return {"issues": []}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root)])
+
+    # Then it reports an empty list after a single search
+    assert status == 0
+    assert json.loads(capsys.readouterr().out) == {"issues": []}
+    assert commands == ["search_jql"]
+
+
+@pytest.mark.parametrize("server_info", [
+    subprocess.CalledProcessError(1, ["jira-client"]),
+    {"version": "1001.0.0"},
+    {"baseUrl": ""},
+])
+def test_discover_fails_when_server_info_is_unusable(tmp_path, monkeypatch, capsys, server_info):
+    """A failed or baseUrl-less serverInfo aborts discover instead of emitting guessed links."""
+    # Given a valid search and a serverInfo call that fails or lacks baseUrl
+    root = _discovery_project(tmp_path, monkeypatch)
+
+    def jira_client(command, *_arguments):
+        """Return one issue; fail or return a malformed serverInfo."""
+        if command != "get_server_info":
+            return {"issues": [{"key": "TC-7"}]}
+        if isinstance(server_info, Exception):
+            raise server_info
+        return server_info
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root)])
+
+    # Then it exits 1 with an error and prints no issue list
+    captured = capsys.readouterr()
+    assert status == 1
+    assert captured.out == ""
+    assert captured.err.startswith("ERROR:")
+
+
 @pytest.mark.parametrize("setup, message", [
     (lambda root, mp: (root / "CLAUDE.md").unlink(), "target project CLAUDE.md is required"),
     (lambda root, mp: (root / "CLAUDE.md").write_text("# Project Configuration\n"),
@@ -1381,7 +1465,6 @@ def test_discover_reports_jira_client_failure(tmp_path, monkeypatch, capsys):
     (lambda root, mp: (root / "CLAUDE.md").write_text(
         _DISCOVERY_CLAUDE_MD.format(project_key="TC", issue_type_id="10016 OR x")),
      "Vulnerability issue type ID must be numeric"),
-    (lambda root, mp: mp.delenv("JIRA_SERVER_URL"), "JIRA_SERVER_URL is required"),
 ])
 def test_discover_rejects_invalid_configuration(tmp_path, monkeypatch, capsys, setup, message):
     """Missing or invalid runner configuration fails before any Jira search."""

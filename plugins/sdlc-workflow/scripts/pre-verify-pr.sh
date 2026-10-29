@@ -14,7 +14,10 @@
 # so a stale or unqualified PR is never reviewed.
 #
 # 1. Validates required env vars and the PR URL shape
-# 2. Resolves + gates the Jira key by JQL on customfield_10875 == PR URL
+# 2. Verifies the Jira identity (/myself → accountId) and fails the run if it
+#    cannot be confirmed, and checks Browse Projects on JIRA_PROJECT_KEY, so an
+#    unauthenticated or permission-filtered empty search is never a skip; then
+#    resolves + gates the Jira key by JQL on customfield_10875 == PR URL
 # 3. If the gate fails (no/ambiguous match, status != Review, label absent):
 #    emits an ADR-0072 skip signal and exits 0 (nothing to verify)
 # 4. Fetches the full Jira issue and prefetches the GitHub tier-1 read bundle
@@ -25,9 +28,9 @@
 #
 # Required env vars:
 #   FULLSEND_WORK_ITEM_URL — the triggering PR URL (harness-run / local export)
-#   JIRA_SERVER_URL        — Jira instance URL
-#   JIRA_EMAIL             — Jira user email
-#   JIRA_API_TOKEN         — Jira API token
+#   JIRA_SERVER_URL        — Jira REST base (the Atlassian API gateway)
+#   JIRA_API_TOKEN         — Jira API token (sent as Bearer; no email needed)
+#   JIRA_PROJECT_KEY       — Jira project whose Browse permission the gate checks
 #   GH_TOKEN               — GitHub token (PR prefetch)
 #
 # Optional env vars:
@@ -42,14 +45,20 @@ set -euo pipefail
 # 1. Validate required env vars are set
 : "${FULLSEND_WORK_ITEM_URL:?FULLSEND_WORK_ITEM_URL (triggering PR URL) is required}"
 : "${JIRA_SERVER_URL:?JIRA_SERVER_URL is required}"
-: "${JIRA_EMAIL:?JIRA_EMAIL is required}"
 : "${JIRA_API_TOKEN:?JIRA_API_TOKEN is required}"
+: "${JIRA_PROJECT_KEY:?JIRA_PROJECT_KEY is required}"
 
 PR_URL="${FULLSEND_WORK_ITEM_URL}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PRE_OUTPUT_DIR="${PRE_DIR:-/tmp/fullsend-pre-output}"
 mkdir -p "${PRE_OUTPUT_DIR}"
+
+# Per-run scratch file for jira-client stderr. mktemp (not a fixed /tmp path) so
+# concurrent runs on one host — or parallel test runs — never read each other's
+# errors; kept out of PRE_OUTPUT_DIR, which is mounted into the sandbox.
+JIRA_STDERR_FILE="$(mktemp)"
+trap 'rm -f "${JIRA_STDERR_FILE}"' EXIT
 
 # request_skip REASON — emit an ADR-0072 skip signal and exit cleanly.
 # The pre-script output protocol (v1) is line-based key=value; the guard on
@@ -79,6 +88,42 @@ PR_REPO="${BASH_REMATCH[1]}"
 PR_NUM="${BASH_REMATCH[2]}"
 echo "PR: ${PR_REPO}#${PR_NUM} (${PR_URL})"
 
+# 2b. Verify the Jira identity BEFORE trusting any search result. Some invalid
+#     credentials (e.g. a Service Account token off the API gateway) make JQL
+#     return an empty result with exit 0 instead of a 401, which step 3 would
+#     otherwise turn into a green ADR-0072 skip without verifying the PR.
+#     verify_identity exits non-zero unless /myself resolves to an accountId.
+IDENTITY_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" verify_identity \
+  2>"${JIRA_STDERR_FILE}") || {
+  JIRA_STDERR=$(cat "${JIRA_STDERR_FILE}" 2>/dev/null || echo "")
+  if echo "${JIRA_STDERR}" | grep -qi "401\|unauthorized"; then
+    echo "ERROR: Jira authentication failed — check JIRA_API_TOKEN and JIRA_SERVER_URL"
+  elif echo "${JIRA_STDERR}" | grep -qi "403\|forbidden"; then
+    echo "ERROR: Jira permission denied — check that the API token can read its own user"
+  else
+    echo "ERROR: Jira identity could not be verified — refusing to treat an empty search as a skip"
+    echo "${JIRA_STDERR}"
+  fi
+  rm -f "${JIRA_STDERR_FILE}"
+  exit 1
+}
+rm -f "${JIRA_STDERR_FILE}"
+IDENTITY_NAME=$(printf '%s' "${IDENTITY_JSON}" | python3 -c 'import json,sys; u=json.load(sys.stdin); print(u.get("displayName") or u["accountId"])')
+echo "Jira identity verified: ${IDENTITY_NAME}"
+
+# 2c. Verify the identity can browse the project. Jira silently drops issues the
+#     caller cannot see, so a search by an account without Browse Projects also
+#     returns [] with exit 0 — indistinguishable from a genuine no-match.
+python3 "${SCRIPT_DIR}/jira-client.py" verify_project_access "${JIRA_PROJECT_KEY}" \
+  >/dev/null 2>"${JIRA_STDERR_FILE}" || {
+  echo "ERROR: Jira credential cannot browse project ${JIRA_PROJECT_KEY} — refusing to treat an empty search as a skip"
+  cat "${JIRA_STDERR_FILE}" 2>/dev/null || true
+  rm -f "${JIRA_STDERR_FILE}"
+  exit 1
+}
+rm -f "${JIRA_STDERR_FILE}"
+echo "Jira project access verified: ${JIRA_PROJECT_KEY} (BROWSE_PROJECTS)"
+
 # 3. Resolve + gate the Jira key by JQL on the Git Pull Request custom field.
 #    The JQL `~` recall is broad; resolve-gated-issue re-confirms the exact PR
 #    URL and enforces status=Review + the ai-generated-jira label in Python.
@@ -88,20 +133,20 @@ echo "PR: ${PR_REPO}#${PR_NUM} (${PR_URL})"
 PR_JQL=$(python3 "${SCRIPT_DIR}/pre_verify_pr.py" build-pr-jql "${PR_URL}")
 SEARCH_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" search_jql \
   --jql "${PR_JQL}" --fields "status,labels,customfield_10875" --all \
-  2>"/tmp/fullsend-pre-jira-stderr.txt") || {
-  JIRA_STDERR=$(cat /tmp/fullsend-pre-jira-stderr.txt 2>/dev/null || echo "")
+  2>"${JIRA_STDERR_FILE}") || {
+  JIRA_STDERR=$(cat "${JIRA_STDERR_FILE}" 2>/dev/null || echo "")
   if echo "${JIRA_STDERR}" | grep -qi "401\|unauthorized"; then
-    echo "ERROR: Jira authentication failed — check JIRA_EMAIL and JIRA_API_TOKEN"
+    echo "ERROR: Jira authentication failed — check JIRA_API_TOKEN and JIRA_SERVER_URL"
   elif echo "${JIRA_STDERR}" | grep -qi "403\|forbidden"; then
     echo "ERROR: Jira permission denied — check that the API token can search issues"
   else
     echo "ERROR: Failed to search Jira for PR ${PR_URL}"
     echo "${JIRA_STDERR}"
   fi
-  rm -f /tmp/fullsend-pre-jira-stderr.txt
+  rm -f "${JIRA_STDERR_FILE}"
   exit 1
 }
-rm -f /tmp/fullsend-pre-jira-stderr.txt
+rm -f "${JIRA_STDERR_FILE}"
 
 # resolve-gated-issue exits 3 when a gate fails (→ ADR-0072 skip), 0 with the
 # resolved key on success, and 1 on an unexpected error. Capture without letting
@@ -121,10 +166,10 @@ JIRA_ISSUE_ID="${GATE_OUT}"
 echo "Jira issue resolved + gated: ${JIRA_ISSUE_ID} (status=Review, label=ai-generated-jira)"
 
 # 4. Fetch full issue details (pre-fetches the task context for the sandbox)
-ISSUE_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}" --fields "*all" 2>"/tmp/fullsend-pre-jira-stderr.txt") || {
-  JIRA_STDERR=$(cat /tmp/fullsend-pre-jira-stderr.txt 2>/dev/null || echo "")
+ISSUE_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}" --fields "*all" 2>"${JIRA_STDERR_FILE}") || {
+  JIRA_STDERR=$(cat "${JIRA_STDERR_FILE}" 2>/dev/null || echo "")
   if echo "${JIRA_STDERR}" | grep -qi "401\|unauthorized"; then
-    echo "ERROR: Jira authentication failed — check JIRA_EMAIL and JIRA_API_TOKEN"
+    echo "ERROR: Jira authentication failed — check JIRA_API_TOKEN and JIRA_SERVER_URL"
   elif echo "${JIRA_STDERR}" | grep -qi "403\|forbidden"; then
     echo "ERROR: Jira permission denied — check that the API token has access to ${JIRA_ISSUE_ID}"
   elif echo "${JIRA_STDERR}" | grep -qi "404\|not found"; then
@@ -133,10 +178,10 @@ ISSUE_JSON=$(python3 "${SCRIPT_DIR}/jira-client.py" get_issue "${JIRA_ISSUE_ID}"
     echo "ERROR: Failed to fetch Jira issue ${JIRA_ISSUE_ID}"
     echo "${JIRA_STDERR}"
   fi
-  rm -f /tmp/fullsend-pre-jira-stderr.txt
+  rm -f "${JIRA_STDERR_FILE}"
   exit 1
 }
-rm -f /tmp/fullsend-pre-jira-stderr.txt
+rm -f "${JIRA_STDERR_FILE}"
 
 echo "Jira issue verified: ${JIRA_ISSUE_ID}"
 

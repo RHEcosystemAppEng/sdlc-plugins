@@ -109,6 +109,8 @@ def recorder(monkeypatch):
     monkeypatch.setattr(executor._jira_mod, "get_issue", value.get_issue)
     monkeypatch.setattr(executor._jira_mod, "create_link", value.create_link)
     monkeypatch.setattr(executor._jira_mod, "make_request", value.make_request)
+    monkeypatch.setattr(executor._jira_mod, "get_server_info",
+                        lambda: {"baseUrl": "https://jira.example.com"})
     monkeypatch.setattr(executor._action_helpers, "post_jira_comment_native", value.post_native)
     return value
 
@@ -1182,3 +1184,47 @@ def test_duplicate_planned_release_identity_fails_before_calls(kind, recorder):
     with pytest.raises(executor.ActionError):
         executor.execute_plan(_plan(actions), _release_trusted())
     assert recorder.calls == []
+
+
+_SITE_URL = "https://redhat.atlassian.net"
+_GATEWAY_URL = "https://api.atlassian.com/ex/jira/2b9e35e3-6bd3-4cec-b838-f4249ee02432"
+
+
+@pytest.mark.parametrize("server_url", [_SITE_URL, _GATEWAY_URL])
+def test_browse_url_uses_server_info_base_url(monkeypatch, server_url):
+    """Generated-reference links use serverInfo.baseUrl whether the REST base is the site or the gateway."""
+    # Given a REST base and a Jira that reports the site as its baseUrl
+    monkeypatch.setenv("JIRA_SERVER_URL", server_url)
+    monkeypatch.setattr(executor._jira_mod, "_SERVER_INFO_CACHE", None)
+    requests = []
+
+    def fake_make_request(method, endpoint, data=None):
+        requests.append((method, endpoint))
+        return {"baseUrl": _SITE_URL}
+
+    monkeypatch.setattr(executor._jira_mod, "make_request", fake_make_request)
+
+    # When building links for two generated references
+    urls = [executor._browse_url("TC-42"), executor._browse_url("TC-43")]
+
+    # Then both are site browse links and serverInfo was fetched once
+    assert urls == [_SITE_URL + "/browse/TC-42", _SITE_URL + "/browse/TC-43"]
+    assert requests == [("GET", "serverInfo")]
+
+
+def test_browse_url_server_info_failure_aborts(monkeypatch):
+    """A failed serverInfo aborts instead of falling back to a placeholder host."""
+    # Given a Jira whose serverInfo request fails
+    monkeypatch.setattr(executor._jira_mod, "_SERVER_INFO_CACHE", None)
+
+    def failing_make_request(method, endpoint, data=None):
+        raise SystemExit(1)
+
+    monkeypatch.setattr(executor._jira_mod, "make_request", failing_make_request)
+
+    # When building a generated-reference link
+    with pytest.raises(SystemExit) as excinfo:
+        executor._browse_url("TC-42")
+
+    # Then it exits 1
+    assert excinfo.value.code == 1

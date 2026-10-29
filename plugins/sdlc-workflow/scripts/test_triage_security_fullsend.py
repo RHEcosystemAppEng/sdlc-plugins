@@ -118,6 +118,8 @@ def recorder(monkeypatch):
     monkeypatch.setattr(executor._jira_mod, "get_issue", value.get_issue)
     monkeypatch.setattr(executor._jira_mod, "create_link", value.create_link)
     monkeypatch.setattr(executor._jira_mod, "make_request", value.make_request)
+    monkeypatch.setattr(executor._jira_mod, "get_server_info",
+                        lambda: {"baseUrl": "https://jira.example.com"})
     monkeypatch.setattr(executor._action_helpers, "post_jira_comment_native", value.post_native)
     return value
 

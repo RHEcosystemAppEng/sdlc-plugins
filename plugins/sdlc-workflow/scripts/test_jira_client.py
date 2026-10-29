@@ -12,6 +12,8 @@ import json
 import os
 import importlib.util
 
+import pytest
+
 # Import jira-client.py dynamically (has hyphen in name)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 jira_client_path = os.path.join(script_dir, 'jira-client.py')
@@ -708,6 +710,232 @@ def test_create_issue_fails_fast_on_empty_issue_type():
         jira_client.make_request = original_make_request
 
     print("✓ create_issue fails fast on empty issue_type test passed")
+
+
+_SITE_URL = "https://redhat.atlassian.net"
+_GATEWAY_URL = "https://api.atlassian.com/ex/jira/2b9e35e3-6bd3-4cec-b838-f4249ee02432"
+
+
+class _FakeResponse:
+    """Minimal urlopen() context-manager response returning a JSON body."""
+
+    def __init__(self, body):
+        self._body = json.dumps(body).encode("utf-8")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_exc):
+        return False
+
+    def read(self):
+        return self._body
+
+
+@pytest.mark.parametrize("email, expected_auth", [
+    (None, "Bearer s3cr3t-token"),
+    ("", "Bearer s3cr3t-token"),
+    ("me@example.com", "Basic bWVAZXhhbXBsZS5jb206czNjcjN0LXRva2Vu"),
+])
+def test_make_request_auth_scheme_follows_jira_email(monkeypatch, email, expected_auth):
+    """make_request sends Bearer when JIRA_EMAIL is unset or empty, and Basic email:token when set."""
+    # Given a gateway REST base, a token, and JIRA_EMAIL unset, empty, or set
+    monkeypatch.setenv("JIRA_SERVER_URL", _GATEWAY_URL + "/")
+    monkeypatch.setenv("JIRA_API_TOKEN", "s3cr3t-token")
+    if email is None:
+        monkeypatch.delenv("JIRA_EMAIL", raising=False)
+    else:
+        monkeypatch.setenv("JIRA_EMAIL", email)
+    captured = []
+
+    def fake_urlopen(request):
+        captured.append(request)
+        return _FakeResponse({"accountId": "abc"})
+
+    monkeypatch.setattr(jira_client, "urlopen", fake_urlopen)
+
+    # When a command issues a request
+    result = jira_client.get_user_info()
+
+    # Then the request targets the gateway with the expected Authorization scheme
+    assert result == {"accountId": "abc"}
+    assert captured[0].full_url == _GATEWAY_URL + "/rest/api/3/myself"
+    assert captured[0].get_header("Authorization") == expected_auth
+
+
+def test_get_credentials_requires_server_url_and_token_only(monkeypatch, capsys):
+    """Missing JIRA_SERVER_URL/JIRA_API_TOKEN abort; a missing JIRA_EMAIL is not reported."""
+    # Given no Jira variables at all
+    for key in ("JIRA_SERVER_URL", "JIRA_EMAIL", "JIRA_API_TOKEN"):
+        monkeypatch.delenv(key, raising=False)
+
+    # When reading credentials
+    with pytest.raises(SystemExit) as excinfo:
+        jira_client.get_credentials()
+
+    # Then it exits 1 naming only the two required variables
+    err = capsys.readouterr().err
+    assert excinfo.value.code == 1
+    assert "Missing credentials: JIRA_SERVER_URL, JIRA_API_TOKEN" in err
+    assert "JIRA_EMAIL" not in err
+
+
+def test_get_server_info_is_cached_per_process(monkeypatch):
+    """serverInfo is requested once; later calls and browse links reuse the cached response."""
+    # Given an empty cache and a Jira that reports the site baseUrl
+    monkeypatch.setattr(jira_client, "_SERVER_INFO_CACHE", None)
+    requests = []
+
+    def fake_make_request(method, endpoint, data=None):
+        requests.append((method, endpoint))
+        return {"baseUrl": _SITE_URL, "deploymentType": "Cloud"}
+
+    monkeypatch.setattr(jira_client, "make_request", fake_make_request)
+
+    # When fetching serverInfo twice and building a browse link
+    first = jira_client.get_server_info()
+    second = jira_client.get_server_info()
+    link = jira_client.browse_url("TC-1")
+
+    # Then exactly one GET serverInfo was issued and every caller saw the same data
+    assert requests == [("GET", "serverInfo")]
+    assert first == second == {"baseUrl": _SITE_URL, "deploymentType": "Cloud"}
+    assert link == _SITE_URL + "/browse/TC-1"
+
+
+@pytest.mark.parametrize("response", [{}, {"baseUrl": ""}, {"baseUrl": None}, []])
+def test_get_server_info_without_base_url_exits(monkeypatch, capsys, response):
+    """A serverInfo response without a usable baseUrl aborts and is not cached."""
+    # Given a Jira whose serverInfo lacks baseUrl
+    monkeypatch.setattr(jira_client, "_SERVER_INFO_CACHE", None)
+    monkeypatch.setattr(jira_client, "make_request", lambda *_args, **_kwargs: response)
+
+    # When fetching serverInfo
+    with pytest.raises(SystemExit) as excinfo:
+        jira_client.get_server_info()
+
+    # Then it exits 1 with a clear error and leaves the cache empty
+    assert excinfo.value.code == 1
+    assert "serverInfo response has no baseUrl" in capsys.readouterr().err
+    assert jira_client._SERVER_INFO_CACHE is None
+
+
+def test_get_server_info_request_failure_raises(monkeypatch):
+    """A failed serverInfo request propagates SystemExit rather than falling back to JIRA_SERVER_URL."""
+    # Given a reachable REST base but a failing serverInfo request
+    monkeypatch.setenv("JIRA_SERVER_URL", _SITE_URL)
+    monkeypatch.setattr(jira_client, "_SERVER_INFO_CACHE", None)
+
+    def failing_make_request(method, endpoint, data=None):
+        raise SystemExit(1)
+
+    monkeypatch.setattr(jira_client, "make_request", failing_make_request)
+
+    # When building a browse link
+    with pytest.raises(SystemExit) as excinfo:
+        jira_client.browse_url("TC-1")
+
+    # Then the failure propagates
+    assert excinfo.value.code == 1
+
+
+@pytest.mark.parametrize("server_url", [_SITE_URL, _GATEWAY_URL])
+def test_browse_url_uses_site_base_for_site_and_gateway(monkeypatch, server_url):
+    """browse_url emits a site link whether JIRA_SERVER_URL is the site or the gateway."""
+    # Given a REST base (site or gateway) whose serverInfo reports the site with a trailing slash
+    monkeypatch.setenv("JIRA_SERVER_URL", server_url)
+    monkeypatch.setenv("JIRA_API_TOKEN", "t")
+    monkeypatch.delenv("JIRA_EMAIL", raising=False)
+    monkeypatch.setattr(jira_client, "_SERVER_INFO_CACHE", None)
+    captured = []
+
+    def fake_urlopen(request):
+        captured.append(request.full_url)
+        return _FakeResponse({"baseUrl": _SITE_URL + "/"})
+
+    monkeypatch.setattr(jira_client, "urlopen", fake_urlopen)
+
+    # When building a browse link
+    link = jira_client.browse_url("TC-6191")
+
+    # Then serverInfo was read through the REST base and the link is on the site
+    assert captured == [server_url + "/rest/api/3/serverInfo"]
+    assert link == _SITE_URL + "/browse/TC-6191"
+
+
+@pytest.mark.parametrize("user", [{}, {"accountId": ""}, {"accountId": None}, []])
+def test_verify_identity_without_account_id_exits(monkeypatch, capsys, user):
+    """verify_identity aborts when /myself resolves no accountId (anonymous or unresolved principal)."""
+    # Given a /myself response with no usable accountId
+    monkeypatch.setattr(jira_client, "make_request", lambda *_args, **_kwargs: user)
+
+    # When verifying identity
+    with pytest.raises(SystemExit) as excinfo:
+        jira_client.verify_identity()
+
+    # Then it exits 1 with a clear error
+    assert excinfo.value.code == 1
+    assert "Jira identity could not be verified" in capsys.readouterr().err
+
+
+def test_verify_identity_returns_resolved_user(monkeypatch):
+    """verify_identity returns the /myself user when it carries an accountId."""
+    # Given a /myself response for a real principal
+    requests = []
+
+    def fake_make_request(method, endpoint, data=None):
+        requests.append((method, endpoint))
+        return {"accountId": "sa-123", "displayName": "tpa-fullsend-jira-sa"}
+
+    monkeypatch.setattr(jira_client, "make_request", fake_make_request)
+
+    # When verifying identity
+    user = jira_client.verify_identity()
+
+    # Then the user is returned after one GET myself
+    assert user == {"accountId": "sa-123", "displayName": "tpa-fullsend-jira-sa"}
+    assert requests == [("GET", "myself")]
+
+
+@pytest.mark.parametrize("response", [
+    {"permissions": {"BROWSE_PROJECTS": {"havePermission": False}}},
+    {"permissions": {"BROWSE_PROJECTS": {}}},
+    {"permissions": {}},
+    {},
+    [],
+])
+def test_verify_project_access_without_browse_permission_exits(monkeypatch, capsys, response):
+    """verify_project_access aborts unless BROWSE_PROJECTS.havePermission is exactly true."""
+    # Given a mypermissions response that does not grant Browse Projects
+    monkeypatch.setattr(jira_client, "make_request", lambda *_args, **_kwargs: response)
+
+    # When verifying project access
+    with pytest.raises(SystemExit) as excinfo:
+        jira_client.verify_project_access("TC")
+
+    # Then it exits 1 naming the project
+    assert excinfo.value.code == 1
+    assert "cannot browse project TC" in capsys.readouterr().err
+
+
+def test_verify_project_access_queries_browse_permission(monkeypatch):
+    """verify_project_access requests BROWSE_PROJECTS for the URL-encoded project key and returns the grant."""
+    # Given a mypermissions response granting Browse Projects
+    granted = {"permissions": {"BROWSE_PROJECTS": {"havePermission": True}}}
+    requests = []
+
+    def fake_make_request(method, endpoint, data=None):
+        requests.append((method, endpoint))
+        return granted
+
+    monkeypatch.setattr(jira_client, "make_request", fake_make_request)
+
+    # When verifying access to a project key needing encoding
+    result = jira_client.verify_project_access("T C")
+
+    # Then the query names the project and permission, and the grant is returned
+    assert result == granted
+    assert requests == [("GET", "mypermissions?projectKey=T+C&permissions=BROWSE_PROJECTS")]
 
 
 def run_all_tests():

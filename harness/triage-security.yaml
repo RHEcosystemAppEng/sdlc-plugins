@@ -63,14 +63,17 @@ validation_loop:
 env:
   runner:
     PYTHONDONTWRITEBYTECODE: "1"
+    # JIRA_BASE_URL is the Atlassian API gateway; with no JIRA_EMAIL set,
+    # jira-client.py sends the token as Bearer. Browse links come from serverInfo.
     JIRA_SERVER_URL: "${JIRA_BASE_URL}"
-    JIRA_EMAIL: "${JIRA_USER_EMAIL}"
     JIRA_API_TOKEN: "${JIRA_TOKEN}"
+    # The email on record for the token, consumed ONLY by the fullsend CLI:
+    # `comment` actions post through execute-actions.py post_jira_comment_native
+    # (`fullsend issues post-comment`, Basic auth). fullsend drops JIRA_USER_EMAIL
+    # from script environments unless env.runner declares it.
+    JIRA_USER_EMAIL: "${JIRA_USER_EMAIL}"
     JIRA_PROJECT_KEY: "TC"
     FULLSEND_OUTPUT_FILE: "agent-result.json"
-  sandbox:
-    # Display-only context; the sandbox has no Jira egress or credential.
-    JIRA_BASE_URL: "${JIRA_BASE_URL}"
 
 timeout_minutes: 30
 version: 1

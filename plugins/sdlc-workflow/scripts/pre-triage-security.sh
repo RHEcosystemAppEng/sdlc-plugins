@@ -9,7 +9,6 @@ set -euo pipefail
 # the complete evidence bundle for that one issue.
 : "${FULLSEND_WORK_ITEM_URL:?FULLSEND_WORK_ITEM_URL (Jira work-item URL) is required}"
 : "${JIRA_SERVER_URL:?JIRA_SERVER_URL is required}"
-: "${JIRA_EMAIL:?JIRA_EMAIL is required}"
 : "${JIRA_API_TOKEN:?JIRA_API_TOKEN is required}"
 
 if [[ ! "${FULLSEND_WORK_ITEM_URL}" =~ ^https?://[^/]+/browse/([A-Z][A-Z0-9]+-[0-9]+)/?$ ]]; then

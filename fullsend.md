@@ -56,8 +56,8 @@ serve interactive Claude Code users and fullsend runs with zero duplication.
 The Jira and GitHub tokens live **only on the runner**. The pre_script prefetches
 everything the agent needs (the Jira issue and a GitHub read bundle) and the
 post_script performs every write after the sandbox is destroyed. The sandbox
-itself receives read-only context only — `JIRA_BASE_URL` (display links) — plus
-the prefetched read bundle mounted read-only. The Jira key is not passed as an
+itself receives no Jira configuration — only the prefetched read bundle, mounted
+read-only. The Jira key is not passed as an
 env var: the pre_script derives it from the triggering PR URL and records it as
 `task_id` inside `verify-pr-input.json`, which the agent reads. The **only**
 credential that ever enters the sandbox is the Vertex AI service-account key,
@@ -70,9 +70,97 @@ never place a credential in the sandbox at all.
 
 | Service | Tier | Credential in sandbox? | How it is delivered |
 |---|---|---|---|
-| **Jira** | 1 | No | The pre_script prefetches the issue on the runner; the post_script posts comments with `fullsend issues post-comment --tracker jira`. The token stays in runner env only. |
+| **Jira** | 1 | No | The pre_script prefetches the issue on the runner; the post_script posts comments with `fullsend issues post-comment --tracker jira`. The token stays in runner env only. REST calls go through the Atlassian API gateway (see **Jira through the API gateway** below). |
 | **GitHub** | 1 | No | The pre_script prefetches the read bundle (`gh pr diff` / `gh pr view` → diff, diffstat, reviews, comments, commits), the head-SHA **CI check-run outcomes** (`github.check_runs` — name/status/conclusion/details_url), and the **concatenated `--log-failed` output of every failed check-run** (written to `check-run-logs.txt`, mounted separately; only its path rides in the bundle so the large log text stays off the agent's context until Correctness Check 1b reads it on a FAIL), and records the PR head ref name and head commit SHA in it; the post_script writes via `fullsend issues post-comment --tracker github` and `gh` (PR reviews/replies via `gh api`). The token stays in runner env only. The PR-head working tree is the `--target-repo` clone, checked out at the head SHA before the run (see below) — the pre_script does not check out. |
 | **Vertex AI** | 4 (fullsend-mandated) | **Yes** | The in-sandbox runtime does the model inference and reads `GOOGLE_APPLICATION_CREDENTIALS` from a file (`/tmp/.gcp-credentials.json`). Vertex auth requires local JWT signing, so tier 4 (file on the sandbox filesystem) is unavoidable. This is the one credential set in the sandbox. |
+
+### Jira through the API gateway
+
+The Jira credential is a dedicated Atlassian **Service Account**
+(`tpa-fullsend-jira-sa`, issued through JIRACONFSD-10163). Its scoped API token
+authenticates **only through the Atlassian API gateway**, so every runner-side
+Jira REST call uses the gateway as its base:
+
+```text
+JIRA_BASE_URL=https://api.atlassian.com/ex/jira/<cloudId>
+```
+
+On the site URL (`https://redhat.atlassian.net`) the Service Account token gets
+401/403, and an unauthenticated JQL search **silently returns `[]`** — so a green
+job is not proof the credential works; check that the report comment is authored
+by the Service Account.
+
+| Token | Site, Basic | Site, Bearer | Gateway, Basic | Gateway, Bearer |
+|---|---|---|---|---|
+| Service Account (`ATSTT`) | 401 / empty `[]` | 403 | 200 | 200 |
+| Personal (`ATATT`) | 200 | 403 | 200 | 401 |
+
+- **`jira-client.py` picks the auth scheme from `JIRA_EMAIL`.** Unset or empty
+  (the runner): the token is sent as `Bearer`. Set (interactive users with
+  personal tokens, which are Basic-only): `Basic email:token`, unchanged. Neither
+  harness sets `JIRA_EMAIL`. fullsend layers `env.runner` over the inherited host
+  environment, so **do not export `JIRA_EMAIL` in the shell of a local
+  `fullsend run`** (the interactive `/setup` flow may have): it would reach
+  `jira-client.py` and switch the runner to Basic, which pairs your email with
+  the Service Account token and gets a 401.
+- **The email reaches only the fullsend CLI.** `fullsend issues post-comment`
+  (called from `execute-actions.py`, including triage-security `comment` actions
+  through `post_jira_comment_native`) authenticates with Basic and requires
+  `JIRA_USER_EMAIL`. Both harnesses declare it in `env.runner` because fullsend
+  drops it from script environments otherwise; no other script reads it.
+- **The pre_script fails closed before trusting an empty search.** Because both
+  a broken credential and an account without project access get `200 []` from
+  JQL, `pre-verify-pr.sh` first requires `GET /myself` to resolve an `accountId`
+  (`jira-client.py verify_identity`) and `BROWSE_PROJECTS` on
+  `JIRA_PROJECT_KEY` (`verify_project_access`, via `GET /mypermissions`); only
+  then is an empty search an ADR-0072 skip. The Service Account therefore needs
+  Browse Projects on TC and a token allowed to read `/myself`.
+- **The email must be the one on record, with its random suffix**
+  (`tpa-fullsend-jira-sa-<suffix>@serviceaccount.atlassian.com`); the display
+  address without the suffix gets 401. Read it with
+  `GET <gateway>/rest/api/3/myself` → `emailAddress`.
+- **`/browse/` links come from `GET /rest/api/3/serverInfo` → `baseUrl`**, which
+  returns the site address through either base. It is fetched once per process,
+  only when a link is needed, and a failure aborts the run — there is no fallback
+  to `JIRA_SERVER_URL` (the gateway URL has no browsable hostname). The three link
+  builders are `execute-actions.py` (sub-task links in PR replies),
+  `execute-triage-security-actions.py` (generated references) and
+  `pre_triage_security.py discover`.
+
+> **Unsupported fullsend setup.** fullsend documents gateway URLs and managed
+> Service Accounts as unsupported (fullsend-ai/fullsend#8678; native support is
+> tracked in #4885). It works today because the CLI builds
+> `{JIRA_BASE_URL}/rest/api/3/...`. **Re-check it on every fullsend bump.**
+> Fallback if a bump breaks it: replace `post_jira_comment_native` with
+> `jira-client.py` (Bearer on the gateway), adding a find-and-update-by-marker
+> helper so re-runs don't duplicate the report comment; then drop
+> `JIRA_USER_EMAIL` and the `JIRA_EMAIL` secret. Switch back once #4885 delivers
+> native support.
+
+**Exit condition.** The interim personal API token used before TC-6191 is
+replaced by the Service Account: CI's `JIRA_API_TOKEN` / `JIRA_EMAIL` secrets
+hold the Service Account token and suffixed email, and `JIRA_BASE_URL` is the
+gateway. Because the runner sends Bearer and personal tokens fail Bearer, the
+secrets must be switched **before** merging code that drops `JIRA_EMAIL` from the
+runner.
+
+**Emergency fallback to a personal token (CI).** If the Service Account token is
+unavailable, CI can run on a personal API token, but not by swapping secrets
+alone: personal tokens are Basic-only, and the dispatch forwards only
+`JIRA_TOKEN`, `JIRA_USER_EMAIL` and `JIRA_BASE_URL` to the runner, so
+`jira-client.py` has no email and sends Bearer (personal token → 401). The
+procedure is a code change:
+
+1. Set the repo secrets `JIRA_API_TOKEN` (personal token) and `JIRA_EMAIL`
+   (that account's email). `JIRA_BASE_URL` can stay on the gateway (personal
+   Basic → 200 there).
+2. In `harness/verify-pr.yaml` (and `harness/triage-security.yaml` if needed),
+   add `JIRA_EMAIL: "${JIRA_USER_EMAIL}"` under `env.runner`, so `jira-client.py`
+   uses Basic.
+3. Commit, push, re-pin and re-lock (**The pin-and-bump process**), and merge
+   with a merge commit.
+4. To return to the Service Account, restore its secrets and revert step 2 with
+   another re-pin.
 
 Because Vertex is the only in-sandbox credential, the sandbox's only network
 egress is the inference egress of fullsend's **built-in `fullsend-vertex-ai`
@@ -156,11 +244,11 @@ ANTHROPIC_VERTEX_PROJECT_ID=my-project
 GOOGLE_CLOUD_PROJECT=my-project
 CLOUD_ML_REGION=global
 GOOGLE_APPLICATION_CREDENTIALS=/path/to/sa-key.json
-# Jira (tier 1 — runner only)
-JIRA_SERVER_URL=https://myorg.atlassian.net
-JIRA_EMAIL=me@example.com
-JIRA_API_TOKEN=my-jira-token
-JIRA_PROJECT_KEY=TC
+# Jira (tier 1 — runner only). The harness maps these host vars in env.runner.
+JIRA_BASE_URL=https://api.atlassian.com/ex/jira/<cloudId>
+JIRA_TOKEN=my-service-account-token
+# Email on record (with its suffix); read only by `fullsend issues post-comment`
+JIRA_USER_EMAIL=my-sa-<suffix>@serviceaccount.atlassian.com
 # GitHub (tier 1 — runner only)
 GH_TOKEN=my-github-token
 ```
@@ -313,9 +401,9 @@ repo's **Settings → Secrets and variables → Actions** (or with `gh variable 
 
 | Name | Kind | Purpose | Update when |
 |---|---|---|---|
-| `JIRA_EMAIL` | secret | Jira Service Account email for the tier-1 Basic-auth credential (mapped to vendor input `JIRA_USER_EMAIL`); authors the report comment. | Changing the Jira Service Account. |
-| `JIRA_API_TOKEN` | secret | Jira scoped API token for the same account (mapped to `JIRA_TOKEN`). | Rotating the SA token (tokens expire / are revoked). |
-| `JIRA_BASE_URL` | variable | Jira site URL for display links inside the sandbox. | Jira site moves. |
+| `JIRA_EMAIL` | secret | Jira Service Account email **on record, with its random suffix** (mapped to vendor input `JIRA_USER_EMAIL`); read only by the fullsend CLI, which authors the report comment with Basic auth. | Changing the Jira Service Account. |
+| `JIRA_API_TOKEN` | secret | Jira scoped API token for the same account (mapped to `JIRA_TOKEN`); `jira-client.py` sends it as Bearer. | Rotating the SA token (tokens expire / are revoked). |
+| `JIRA_BASE_URL` | variable | Atlassian API gateway REST base, `https://api.atlassian.com/ex/jira/<cloudId>`, for every runner Jira call. Not used for links (those come from `serverInfo`). | Jira site / cloud ID changes. |
 | `FULLSEND_GCP_WIF_PROVIDER` | secret | Vertex Workload Identity Federation provider resource. | Re-provisioning inference (`fullsend inference provision`). |
 | `FULLSEND_GCP_PROJECT_ID` | secret | GCP project hosting Vertex inference. | GCP project changes. |
 | `FULLSEND_MINT_URL` | variable | OIDC mint endpoint for the review-role App token. | App / mint endpoint changes. |
@@ -323,8 +411,9 @@ repo's **Settings → Secrets and variables → Actions** (or with `gh variable 
 | `FULLSEND_PROJECT_NUMBER` | variable | GCP project number for OIDC. | GCP project changes. |
 | `OTEL_EXPORTER_OTLP_HEADERS`, `OTEL_EXPORTER_OTLP_TRACES_HEADERS` | secret | OpenTelemetry export auth headers (optional observability). | Rotating the OTLP endpoint credential. |
 
-The Jira credential is a dedicated **Service Account** — email + scoped token,
-Basic auth (fullsend's Jira tracker is Basic-auth only). It is a **tier-1**
+The Jira credential is a dedicated **Service Account** — scoped token used through
+the API gateway (Bearer from `jira-client.py`, Basic with the suffixed email from
+the fullsend CLI; see **Jira through the API gateway**). It is a **tier-1**
 credential: it stays in runner env and never enters the sandbox (see **Credential
 delivery and tiers**). To rotate it, issue a new scoped token for the SA and
 update `JIRA_API_TOKEN` (and `JIRA_EMAIL` if the account itself changes); the next
@@ -429,10 +518,10 @@ that affect this repo:
 - **Jira secrets no longer inherited by host scripts** (#8154, v0.46.0).
   `JIRA_TOKEN`, `JIRA_USER_EMAIL` and the OTLP header variables are dropped from
   the pre/post/validation script environment unless the harness declares them in
-  `env.runner`. Both harnesses already map them explicitly
-  (`JIRA_API_TOKEN: "${JIRA_TOKEN}"`, `JIRA_EMAIL: "${JIRA_USER_EMAIL}"`), so no
-  change is needed — but a script must never read the dispatch-provided names
-  ambiently.
+  `env.runner`. Both harnesses map the token explicitly
+  (`JIRA_API_TOKEN: "${JIRA_TOKEN}"`) and declare
+  `JIRA_USER_EMAIL: "${JIRA_USER_EMAIL}"` for the fullsend CLI, so no change is
+  needed — but a script must never read the dispatch-provided names ambiently.
 - **`issues post-comment` verifies the comment author** (v0.44.0). The sticky
   Jira/GitHub comment that `execute-actions.py` posts is edited only when its
   author is the identity posting now; otherwise a new comment is posted. After a
@@ -691,8 +780,9 @@ against the pinned `validation_loop.schema`. The caller supplies the rest.
   history (matrix refs are read with `git show`); `git clone --filter=blob:none`
   is enough, a shallow clone is not.
 - The runner needs `jsonschema[format]` for the pre-script's bundle validation.
-- Jira credentials stay runner-only (`JIRA_BASE_URL`, `JIRA_USER_EMAIL`,
-  `JIRA_TOKEN`, mapped in `env.runner`).
+- Jira credentials stay runner-only (`JIRA_BASE_URL` — the API gateway —
+  `JIRA_TOKEN`, and `JIRA_USER_EMAIL` for `comment` actions, mapped in
+  `env.runner`; see **Jira through the API gateway**).
 
 **Adopter child.** Fullsend rejects an absolute `host_files` source inherited
 from a URL-sourced base, so the adopter's local child re-declares the runner

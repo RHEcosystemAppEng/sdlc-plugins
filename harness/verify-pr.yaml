@@ -14,8 +14,10 @@
 #
 # Split-trust I/O: the Jira and GitHub tokens live ONLY on the runner (pre_script
 # prefetch + post_script writes) and are NEVER exposed to the sandbox. The
-# sandbox receives read-only context only (JIRA_BASE_URL for display links) and
-# reads the Jira task + PR URL from the pre_script's verify-pr-input.json.
+# sandbox gets no Jira configuration at all: it reads the Jira task + PR URL from
+# the pre_script's verify-pr-input.json. Runner Jira REST calls go through the
+# Atlassian API gateway (JIRA_BASE_URL); human-facing /browse/ links come from
+# Jira's serverInfo.baseUrl, not from that URL (fullsend.md "Credential delivery").
 #
 # The Vertex provider and its egress profile are fullsend's built-ins, declared by
 # bare name below (TC-7141); the repo copies (providers/vertex-ai.yaml,
@@ -110,8 +112,7 @@ validation_loop:
 
 env:
   # Tokens (JIRA_API_TOKEN, GH_TOKEN) live on the runner ONLY — the pre_script
-  # prefetch and post_script writes need them; they are never placed in
-  # env.sandbox.
+  # prefetch and post_script writes need them; nothing is placed in env.sandbox.
   runner:
     # Disable Python bytecode writes for every runner-side Python invocation.
     # The pre/post scripts execute in place inside fullsend's content-addressed
@@ -120,14 +121,21 @@ env:
     # execute-actions.py's own sys.dont_write_bytecode (TC-6112).
     PYTHONDONTWRITEBYTECODE: "1"
     # Map fullsend's dispatch-provided Jira host vars (JIRA_BASE_URL /
-    # JIRA_USER_EMAIL / JIRA_TOKEN — set by reusable-dispatch harness-run) onto
-    # the canonical names jira-client.py reads. A local run must export the same
-    # JIRA_BASE_URL / JIRA_USER_EMAIL / JIRA_TOKEN host vars. JIRA_ISSUE_ID is no
-    # longer an input: the pre_script derives the Jira key from the triggering PR
-    # URL (FULLSEND_WORK_ITEM_URL, read ambiently) by JQL on customfield_10875.
+    # JIRA_TOKEN — set by reusable-dispatch harness-run) onto the canonical
+    # names jira-client.py reads. JIRA_BASE_URL is the Atlassian API gateway
+    # (https://api.atlassian.com/ex/jira/<cloudId>); with no JIRA_EMAIL set,
+    # jira-client.py sends the Service Account token as Bearer. A local run must
+    # export the same JIRA_BASE_URL / JIRA_USER_EMAIL / JIRA_TOKEN host vars.
+    # JIRA_ISSUE_ID is no longer an input: the pre_script derives the Jira key
+    # from the triggering PR URL (FULLSEND_WORK_ITEM_URL, read ambiently) by JQL
+    # on customfield_10875.
     JIRA_SERVER_URL: "${JIRA_BASE_URL}"
-    JIRA_EMAIL: "${JIRA_USER_EMAIL}"
     JIRA_API_TOKEN: "${JIRA_TOKEN}"
+    # The email on record for the token, consumed ONLY by the fullsend CLI
+    # (`fullsend issues post-comment` in execute-actions.py requires Basic auth).
+    # Declared explicitly because fullsend drops JIRA_USER_EMAIL from script
+    # environments unless env.runner declares it (inheritedScriptDenyKeys).
+    JIRA_USER_EMAIL: "${JIRA_USER_EMAIL}"
     # Project key for post_script root-cause task creation. The CI dispatch path
     # exports no project-key host var, so pin this repo's constant (CLAUDE.md
     # Jira Configuration: Project key TC) as a literal rather than a ${ref} that
@@ -136,13 +144,9 @@ env:
     GH_TOKEN: "${GH_TOKEN}"
     FULLSEND_OUTPUT_SCHEMA: "${FULLSEND_DIR}/plugins/sdlc-workflow/schemas/verify-pr-result.schema.json"
     FULLSEND_OUTPUT_FILE: "agent-result.json"
-  # Read-only context only — no tokens, and no atlassian/github egress from the
-  # sandbox (network policy enforced in TC-5809). JIRA_BASE_URL is the base for
-  # display links only (no token), sourced from the dispatch-provided host var.
-  # The Jira key and PR URL reach the sandbox via verify-pr-input.json (the
-  # pre_script writes the JQL-derived key as task_id), so no JIRA_ISSUE_ID env
-  # var is needed here.
-  sandbox:
-    JIRA_BASE_URL: "${JIRA_BASE_URL}"
+  # No env.sandbox: the sandbox has no tokens and no atlassian/github egress
+  # (network policy enforced in TC-5809), and needs no Jira URL — the Jira key
+  # and PR URL reach it via verify-pr-input.json (the pre_script writes the
+  # JQL-derived key as task_id).
 
 timeout_minutes: 30
