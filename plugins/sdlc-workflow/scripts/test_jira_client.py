@@ -863,6 +863,40 @@ def test_browse_url_uses_site_base_for_site_and_gateway(monkeypatch, server_url)
     assert link == _SITE_URL + "/browse/TC-6191"
 
 
+@pytest.mark.parametrize("user", [{}, {"accountId": ""}, {"accountId": None}, []])
+def test_verify_identity_without_account_id_exits(monkeypatch, capsys, user):
+    """verify_identity aborts when /myself resolves no accountId (anonymous or unresolved principal)."""
+    # Given a /myself response with no usable accountId
+    monkeypatch.setattr(jira_client, "make_request", lambda *_args, **_kwargs: user)
+
+    # When verifying identity
+    with pytest.raises(SystemExit) as excinfo:
+        jira_client.verify_identity()
+
+    # Then it exits 1 with a clear error
+    assert excinfo.value.code == 1
+    assert "Jira identity could not be verified" in capsys.readouterr().err
+
+
+def test_verify_identity_returns_resolved_user(monkeypatch):
+    """verify_identity returns the /myself user when it carries an accountId."""
+    # Given a /myself response for a real principal
+    requests = []
+
+    def fake_make_request(method, endpoint, data=None):
+        requests.append((method, endpoint))
+        return {"accountId": "sa-123", "displayName": "tpa-fullsend-jira-sa"}
+
+    monkeypatch.setattr(jira_client, "make_request", fake_make_request)
+
+    # When verifying identity
+    user = jira_client.verify_identity()
+
+    # Then the user is returned after one GET myself
+    assert user == {"accountId": "sa-123", "displayName": "tpa-fullsend-jira-sa"}
+    assert requests == [("GET", "myself")]
+
+
 def run_all_tests():
     """Run all tests and report results."""
     tests = [

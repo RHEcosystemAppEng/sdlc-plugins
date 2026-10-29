@@ -7,6 +7,8 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, script_dir)
@@ -1831,6 +1833,115 @@ def test_pre_verify_sh_revalidates_gate_before_writing_input():
     # A gate failure at re-validation emits the ADR-0072 skip, like Step 3.
     assert "request_skip \"${REVAL_OUT}\"" in script, \
         "a failed re-validation must map to request_skip"
+
+
+# --- Jira identity gate (pre-verify-pr.sh, TC-7265) ---
+
+
+class _StubJira:
+    """Local HTTP stand-in for Jira: configurable /myself, empty JQL search, request log."""
+
+    def __init__(self, myself_status, myself_body):
+        self.paths = []
+        stub = self
+
+        class Handler(BaseHTTPRequestHandler):
+            def _reply(self, status, body):
+                payload = json.dumps(body).encode()
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(payload)))
+                self.end_headers()
+                self.wfile.write(payload)
+
+            def do_GET(self):
+                stub.paths.append(self.path)
+                if self.path == "/rest/api/3/myself":
+                    self._reply(myself_status, myself_body)
+                else:
+                    self._reply(404, {"errorMessages": ["unexpected"]})
+
+            def do_POST(self):
+                stub.paths.append(self.path)
+                self.rfile.read(int(self.headers.get("Content-Length", 0)))
+                # An unauthenticated gateway search answers 200 with no issues,
+                # exactly like a legitimate no-match.
+                self._reply(200, {"issues": [], "isLast": True})
+
+            def log_message(self, *_args):
+                pass
+
+        self.server = HTTPServer(("127.0.0.1", 0), Handler)
+        self.url = "http://127.0.0.1:{}".format(self.server.server_port)
+        threading.Thread(target=self.server.serve_forever, daemon=True).start()
+
+    def close(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+
+def _run_pre_verify_gate(myself_status, myself_body):
+    """Run the real pre-verify-pr.sh against a stub Jira.
+
+    Returns (result, prescript-output text, request paths seen by the stub).
+    """
+    stub = _StubJira(myself_status, myself_body)
+    try:
+        with tempfile.TemporaryDirectory() as d:
+            signal_file = os.path.join(d, "prescript-output")
+            open(signal_file, "w").close()
+            env = {
+                "PATH": os.environ["PATH"],
+                "FULLSEND_WORK_ITEM_URL": "https://github.com/acme/widget/pull/42",
+                "JIRA_SERVER_URL": stub.url,
+                "JIRA_API_TOKEN": "token",
+                "PRE_DIR": os.path.join(d, "pre"),
+                "FULLSEND_PRESCRIPT_OUTPUT": signal_file,
+                "TMPDIR": d,
+                "PYTHONDONTWRITEBYTECODE": "1",
+            }
+            result = subprocess.run(["bash", pre_verify_sh], env=env, capture_output=True,
+                                    text=True, timeout=60)
+            with open(signal_file) as f:
+                signal = f.read()
+    finally:
+        stub.close()
+    return result, signal, stub.paths
+
+
+def test_unverified_identity_with_empty_search_fails_instead_of_skipping():
+    """An unauthenticated or accountId-less /myself fails the run before an empty search can become a skip."""
+    cases = [
+        (401, {"errorMessages": ["Client must be authenticated to access this resource."]}),
+        (200, {}),
+        (200, {"accountId": ""}),
+    ]
+    for myself_status, myself_body in cases:
+        # Given a Jira whose search returns [] but whose /myself does not resolve a principal
+        # When the verify-pr pre-script gates the PR
+        result, signal, paths = _run_pre_verify_gate(myself_status, myself_body)
+
+        # Then it exits non-zero, emits no skip signal, and never runs the search
+        case = f"/myself {myself_status} {myself_body!r}: "
+        assert result.returncode != 0, case + result.stdout + result.stderr
+        assert "SKIP:" not in result.stdout, case + result.stdout
+        assert "skipped=true" not in signal, case + signal
+        assert paths == ["/rest/api/3/myself"], case + repr(paths)
+
+
+def test_verified_identity_with_empty_search_is_a_normal_skip():
+    """An authenticated no-match search still yields the ADR-0072 skip, after the identity check."""
+    # Given a Jira that resolves the principal and finds no issue for the PR
+    # When the verify-pr pre-script gates the PR
+    result, signal, paths = _run_pre_verify_gate(
+        200, {"accountId": "sa-123", "displayName": "tpa-fullsend-jira-sa"})
+
+    # Then it skips cleanly, and identity was verified before the search
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Jira identity verified: tpa-fullsend-jira-sa" in result.stdout
+    assert "SKIP:" in result.stdout
+    assert "skipped=true" in signal
+    assert paths == ["/rest/api/3/myself", "/rest/api/3/search/jql"]
 
 
 # --- runner ---

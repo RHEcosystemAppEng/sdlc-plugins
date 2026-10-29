@@ -715,6 +715,30 @@ def get_user_info() -> Dict[str, Any]:
     return make_request('GET', 'myself')
 
 
+def verify_identity() -> Dict[str, Any]:
+    """Confirm the configured credential resolves to a real Jira principal.
+
+    Some invalid credentials (e.g. a Service Account token used outside the API
+    gateway) make JQL searches return an empty result instead of an HTTP error,
+    which is indistinguishable from a genuine no-match. Callers that treat an
+    empty search as meaningful must call this first.
+
+    Returns:
+        The ``myself`` user object (contains a non-empty ``accountId``)
+
+    Raises:
+        SystemExit: On HTTP errors (401/403 via make_request), or if the
+            response carries no ``accountId`` (anonymous / unresolved principal)
+    """
+    user = get_user_info()
+    account_id = user.get('accountId') if isinstance(user, dict) else None
+    if not isinstance(account_id, str) or not account_id:
+        print("❌ Jira identity could not be verified: /myself returned no accountId "
+              "(unauthenticated or unresolved principal)", file=sys.stderr)
+        sys.exit(1)
+    return user
+
+
 # Process-wide cache for get_server_info(); serverInfo does not change mid-run.
 _SERVER_INFO_CACHE: Optional[Dict[str, Any]] = None
 
@@ -888,6 +912,9 @@ def main(argv=None):
     # get_user_info
     subparsers.add_parser('get_user_info', help='Get current user info')
 
+    # verify_identity
+    subparsers.add_parser('verify_identity', help='Fail unless the credential resolves to a Jira accountId')
+
     # get_server_info
     subparsers.add_parser('get_server_info', help='Get server info (baseUrl is the site URL for browse links)')
 
@@ -963,6 +990,10 @@ def main(argv=None):
 
     elif args.command == 'get_user_info':
         result = get_user_info()
+
+    elif args.command == 'verify_identity':
+        user = verify_identity()
+        result = {"accountId": user["accountId"], "displayName": user.get("displayName")}
 
     elif args.command == 'get_server_info':
         result = get_server_info()
