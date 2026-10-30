@@ -3,7 +3,7 @@ name: verify-pr
 description: >-
   Verify a PR against its Jira task acceptance criteria using the
   sdlc-workflow verify-pr skill inside an OpenShell sandbox.
-model: opus
+model: claude-opus-5-5
 ---
 
 # Verify PR Agent
