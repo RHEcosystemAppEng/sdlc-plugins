@@ -19,8 +19,8 @@ import venv
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
-CASES = ["033-absent", "034-empty", "035-malformed", "036-valid", "037-release"]
-ASSERTION_COUNTS = dict(zip(CASES, [4, 5, 5, 7, 7]))
+CASES = ["034-empty", "035-malformed", "036-valid", "037-release"]
+ASSERTION_COUNTS = dict(zip(CASES, [5, 5, 7, 7]))
 
 
 def pins():
@@ -156,7 +156,7 @@ def preflight(cache, model, judge_model, effort):
     cases = sorted((HERE / "triage-security/cases").iterdir())
     if [p.name for p in cases] != CASES:
         raise ValueError("Native dataset must contain exactly the reviewed gate and release cases")
-    if [yaml.safe_load((p / "annotations.yaml").read_text())["assertion_count"] for p in cases] != [4, 5, 5, 7, 7]:
+    if [yaml.safe_load((p / "annotations.yaml").read_text())["assertion_count"] for p in cases] != [5, 5, 7, 7]:
         raise ValueError("Native assertion count mismatch")
     print("NO-INFERENCE preflight passed; propagation, services, credentials and runtime success remain unproven")
 

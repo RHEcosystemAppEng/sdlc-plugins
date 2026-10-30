@@ -27,7 +27,7 @@ def test_incomplete_grading_reports_unavailable_score_and_allowlisted_failure():
     # Given synthetic partial outcomes and adversarial diagnostics
     source = {"pr_number": 299, **{k: "a" * 40 for k in
               ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}}
-    report = {"source": source, "complete": False, "total": 28, "exit_code": 1,
+    report = {"source": source, "complete": False, "total": 24, "exit_code": 1,
               "outcomes": {"037-release": {"assertion_1": True, "assertion_3": False}}, "execution_valid": False,
               "summary_failures": [
                   {"case": "037-release", "assertion": "assertion_2", "reason": "scorer-error", "category": "quota-error"},
@@ -41,10 +41,10 @@ def test_incomplete_grading_reports_unavailable_score_and_allowlisted_failure():
     # Then incomplete grading remains red and only fixed identifiers enter Markdown
     assert result["errors"]
     assert "quality score (advisory): unavailable" in body
-    assert "2/28 judgments available, 1 passed / 1 failed" in body
-    assert "0/28 passed" not in body and "1/28 passed" not in body
+    assert "2/24 judgments available, 1 passed / 1 failed" in body
+    assert "0/24 passed" not in body and "1/24 passed" not in body
     assert "037-release / assertion_2: scorer-error (quota-error)" in body
-    assert "| 033-absent | invalid | unavailable (0/4 judgments, 0 passed / 0 failed) |" in body
+    assert "| 034-empty | invalid | unavailable (0/5 judgments, 0 passed / 0 failed) |" in body
     assert "| 037-release | invalid | unavailable (2/7 judgments, 1 passed / 1 failed) |" in body
     assert "SECRET" not in body
 
@@ -197,7 +197,7 @@ def test_source_resolution_reread_preserves_identity_checks():
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/skills/triage-security/SKILL.md", "true"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/scripts/triage-security-input.schema.json", "true"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/schemas/triage-security-result.schema.json", "true"),
-    (299, "verify-pr-fullsend", "evals/fullsend/triage-security/cases/033-absent/input.yaml", "false"),
+    (299, "verify-pr-fullsend", "evals/fullsend/triage-security/cases/034-empty/input.yaml", "false"),
     (299, "verify-pr-fullsend", "evals/triage-security/files/fullsend-release-trusted-input.json", "false"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/policies/triage-security.yaml", "false"),
     (299, "verify-pr-fullsend", "plugins/sdlc-workflow/env/gcp-vertex.env", "false"),
@@ -232,7 +232,7 @@ def test_native_execution_uses_trusted_setup_and_readonly_github_permissions():
     assert jobs["gate"]["environment"] == "eval-protected"
     checkouts = [s for s in native["steps"] if s.get("uses", "").startswith("actions/checkout@")]
     assert [s["with"]["ref"] for s in checkouts] == ["${{ github.sha }}", "${{ needs.discover.outputs.merge_sha }}",
-        "${{ env.NATIVE_EVAL_SOURCE_SHA }}", "c68903c0373e2216af03f5412642d4aa4019057f"]
+        "${{ env.NATIVE_EVAL_SOURCE_SHA }}", "cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208"]
     assert all(s["with"]["persist-credentials"] is False for s in checkouts)
     assert next(s for s in native["steps"] if s.get("id") == "revision")["name"] == "Recheck approved revision before WIF"
     auth = next(s for s in native["steps"] if s.get("uses", "").startswith("google-github-actions/auth@"))
@@ -307,14 +307,14 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
     source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
               "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
     outcomes = {case: {f"assertion_{i}": True for i in range(1, n+1)}
-                for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}
-    report = {"source": source, "outcomes": outcomes, "complete": True, "total": 28, "exit_code": 0,
+                for case,n in {"034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}
+    report = {"source": source, "outcomes": outcomes, "complete": True, "total": 24, "exit_code": 0,
               "rationale": "SECRET /tmp/gha-creds-evil", "execution_valid": True,
               "execution": synthetic_execution(outcomes)}
     if defect == "wrong-source": source["head_sha"] = "d" * 40
     elif defect == "wrong-eval-source": source["eval_source_sha"] = "d" * 40
-    elif defect == "missing-outcome": del outcomes["033-absent"]["assertion_1"]
-    elif defect in {"null", "false"}: outcomes["033-absent"]["assertion_1"] = None if defect == "null" else False
+    elif defect == "missing-outcome": del outcomes["034-empty"]["assertion_1"]
+    elif defect in {"null", "false"}: outcomes["034-empty"]["assertion_1"] = None if defect == "null" else False
     elif defect == "scorer-failed":
         report["exit_code"] = 7
         report["execution_valid"] = False
@@ -323,7 +323,7 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
     elif defect == "old-inventory":
         del outcomes["037-release"]
         del report["execution"]["cases"]["037-release"]
-        report["total"] = 21
+        report["total"] = 17
     elif defect == "release-execution-failed": report["execution"]["cases"]["037-release"]["tools_completed"] = False
     elif defect == "missing-report": report = None
     if defect == "false": report["exit_code"] = 1
@@ -335,9 +335,9 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
     if defect == "false":
         assert len(result["reviews"]) == 1
         body = result["reviews"][0]["body"]
-        assert "quality score (advisory): 27/28 passed." in body
+        assert "quality score (advisory): 23/24 passed." in body
         assert "| Case | Execution evidence | Quality score (advisory) |" in body
-        for row in ["| 033-absent | valid | 3/4 |", "| 034-empty | valid | 5/5 |",
+        for row in ["| 034-empty | valid | 4/5 |",
                     "| 035-malformed | valid | 5/5 |", "| 036-valid | valid | 7/7 |", "| 037-release | valid | 7/7 |"]:
             assert row in body
     if result["reviews"]:
@@ -353,7 +353,7 @@ def test_wrapper_rejects_different_reviewed_suite_before_credentials(tmp_path):
     tools = tmp_path / "tools"
     tools.mkdir()
     git = tools / "git"
-    git.write_text("#!/bin/sh\ncase \"$2\" in *upstream-fullsend) echo c68903c0373e2216af03f5412642d4aa4019057f;; *) echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;; esac\n")
+    git.write_text("#!/bin/sh\ncase \"$2\" in *upstream-fullsend) echo cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208;; *) echo aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa;; esac\n")
     git.chmod(0o755)
     environment = dict(os.environ, GITHUB_WORKSPACE=str(tmp_path), RUNNER_TEMP=str(tmp_path),
                        NATIVE_EVAL_SOURCE_SHA="b" * 40, PATH=str(tools) + os.pathsep + os.environ["PATH"])
@@ -422,9 +422,9 @@ def test_review_reruns_reuse_only_matching_bot_head_review(native, existing_kind
         assert "github.paginate(github.rest.pulls.listReviews" in script
     source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
               "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
-    report = {"source": source, "complete": True, "total": 28, "exit_code": 0,
+    report = {"source": source, "complete": True, "total": 24, "exit_code": 0,
               "outcomes": {case: {f"assertion_{i}": True for i in range(1, n+1)}
-                           for case,n in {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}}
+                           for case,n in {"034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}}
     report.update(execution_valid=True, execution=synthetic_execution(report["outcomes"]))
     result = run_js(script, {"report": report, "existingReviews": stored, "repeat": 2}, {
         "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
@@ -481,7 +481,7 @@ def test_native_artifact_download_failure_keeps_controlled_reporting():
     assert "No safe native result was produced; native execution/approval failed." in result["reviews"][0]["body"]
 
 
-def run_credential_wrapper(tmp_path, output, passed=28, broken_execution=False):
+def run_credential_wrapper(tmp_path, output, passed=24, broken_execution=False):
     """Run the real wrapper/checker with synthetic credentials and inference records."""
     # Given explicitly synthetic native artifacts, generated without inference
     spec = importlib.util.spec_from_file_location("execution_fixtures", ROOT / "plugins/sdlc-workflow/scripts/test_native_fullsend_execution.py")
@@ -508,7 +508,7 @@ def run_credential_wrapper(tmp_path, output, passed=28, broken_execution=False):
     (scripts / "prepare-sandbox-credentials.sh").write_text(
         '#!/bin/sh\n# SYNTHETIC TEST DATA — emit the test environment file\ncat "$TC6742_FIXTURE" >> "$GITHUB_ENV"\n')
     doubles = {
-        "git": '#!/bin/sh\n# SYNTHETIC TEST DATA — immutable checkout identities\ncase "$2" in *upstream-fullsend) echo c68903c0373e2216af03f5412642d4aa4019057f;; *) echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;; esac\n',
+        "git": '#!/bin/sh\n# SYNTHETIC TEST DATA — immutable checkout identities\ncase "$2" in *upstream-fullsend) echo cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208;; *) echo bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb;; esac\n',
         "jq": '#!/bin/sh\n# SYNTHETIC TEST DATA — host ADC type\necho external_account\n',
         "python3.12": '#!/usr/bin/env python3\n# SYNTHETIC TEST DATA — double inference only; execute the actual checker\nimport json, os, sys\nfrom pathlib import Path\nif sys.argv[1].endswith("check-native-fullsend-execution.py"):\n    os.execv(sys.executable, [sys.executable, *sys.argv[1:]])\nPath(os.environ["TC6742_CAPTURE"]).with_suffix(".argv.json").write_text(json.dumps(sys.argv[1:]))\nPath(os.environ["TC6742_CAPTURE"]).write_text(json.dumps({k: os.environ.get(k) for k in ["GOOGLE_APPLICATION_CREDENTIALS", "TC6726_SANDBOX_CREDENTIALS", "GCP_OIDC_TOKEN_FILE", "FULLSEND_GCP_OIDC_URL", "FULLSEND_GCP_OIDC_AUTH_FILE", "TC6742_UNEXPECTED"]}))\nsys.exit(int(os.environ["TC6809_RUNNER_EXIT"]))\n',
     }
@@ -531,7 +531,7 @@ def run_credential_wrapper(tmp_path, output, passed=28, broken_execution=False):
     return result, json.loads(capture.read_text()) if capture.exists() else None
 
 
-@pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (27, False, 0), (28, False, 0), (28, True, 1)])
+@pytest.mark.parametrize("passed,broken,expected", [(20, False, 0), (16, False, 0), (0, False, 0), (23, False, 0), (24, False, 0), (24, True, 1)])
 def test_wrapper_enforces_execution_integrity_instead_of_quality_score(tmp_path, passed, broken, expected):
     """The wrapper invokes the runner correctly and gates execution independently of score."""
     # Given synthetic credential preparation and native artifacts
@@ -811,8 +811,8 @@ def test_safe_report_contains_boolean_outcomes_and_revision_without_raw_credenti
     common.publish_report(run, tmp_path / "safe", source, 0)
     result = json.loads((tmp_path / "safe/native-result.json").read_text())
     assert result["source"] == source
-    assert result["passed"] == result["total"] == 28 and result["exit_code"] == 0
-    assert result["outcomes"]["033-absent"] == {f"assertion_{i}": True for i in range(1, 5)}
+    assert result["passed"] == result["total"] == 24 and result["exit_code"] == 0
+    assert result["outcomes"]["034-empty"] == {f"assertion_{i}": True for i in range(1, 6)}
     assert "SECRET" not in (tmp_path / "safe/native-result.json").read_text()
     assert sorted(p.name for p in (tmp_path / "safe").iterdir()) == ["native-result.json"]
 

@@ -174,7 +174,7 @@ github egress from the sandbox — those are handled on the runner.
 > `openshell.profiles`). It selects the built-in egress profile and declares no
 > credential; the Vertex credential still arrives via the host-file mount, not a
 > proxied placeholder. Both harnesses therefore require **fullsend ≥ v0.45.0**
-> (the release that reserves the built-in provider names; CI runs v0.47.1).
+> (the release that reserves the built-in provider names; CI runs v0.52.0).
 >
 > **Egress decision (TC-7141).** Before TC-7141 the harnesses shipped their own
 > copies, `providers/vertex-ai.yaml` and `profiles/fullsend-vertex-ai.yaml`
@@ -192,12 +192,17 @@ github egress from the sandbox — those are handled on the runner.
 
 - [fullsend](https://github.com/fullsend-ai/fullsend) CLI installed — **≥ v0.45.0**
   for the built-in `vertex-ai` provider the harnesses declare. To match CI
-  exactly, use the supported commit the GitHub verify-pr dispatch pins
-  (`9f188578`, untagged — build it from source with
-  `go build -o fullsend ./cmd/fullsend` in a fullsend checkout at that commit);
-  see [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump).
-- OpenShell **0.1.x** (the version the chosen fullsend release pins in
-  `.github/scripts/openshell-version.sh`; 0.1.2 for v0.47.1 and `9f188578`).
+  exactly, use the supported release the GitHub verify-pr dispatch pins
+  (**v0.52.0**, `cc4fa1c5` — the release archive from the
+  [v0.52.0 release](https://github.com/fullsend-ai/fullsend/releases/tag/v0.52.0),
+  checked against its `checksums.txt`); see
+  [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump).
+- OpenShell **0.1.4** (the version the chosen fullsend release pins in
+  `.github/scripts/openshell-version.sh`). OpenShell 0.1 cannot read 0.0.x gateway
+  state; replace a 0.0.x install with fullsend's
+  [Upgrading from OpenShell 0.0.x](https://github.com/fullsend-ai/fullsend/blob/cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208/docs/guides/user/running-agents-locally.md)
+  procedure (schema-v2 `gateway.toml`, NVIDIA installer with
+  `OPENSHELL_ACK_BREAKING_UPGRADE=1`).
 - An OpenShell gateway running — fullsend uses OpenShell as its sandbox runtime.
 - GCP credentials for Vertex AI — a service-account key JSON (local) or a WIF
   external-account config (CI). Referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
@@ -336,9 +341,9 @@ The dispatch job hands a pre-built single-entry matrix (agent `verify-pr`, role
 `review`) to the vendor reusable workflow
 `fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml`, whose
 `harness-run` job mints the review-role App token via OIDC and runs `fullsend run`.
-The reusable workflow and the CLI (`fullsend_version`) are **both pinned by full
-SHA to the supported fullsend commit**
-(`@9f188578f0d8c94169287594b0c79cd4c4eeaa91 # main as of 2026-10-14`), never the
+The reusable workflow (by full SHA) and the CLI (`fullsend_version`, by release
+tag) are **both pinned to the supported fullsend release**
+(`@cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208 # v0.52.0 as of 2026-10-28`, `fullsend_version: "v0.52.0"`), never the
 floating `@v0` tag — see [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump) below.
 
 This `pull_request_target` trigger is the CI-side equivalent of the harness's own
@@ -462,28 +467,92 @@ workflow, not the harness content.
 
 | | |
 |---|---|
-| Commit | [`9f188578f0d8c94169287594b0c79cd4c4eeaa91`](https://github.com/fullsend-ai/fullsend/commit/9f188578f0d8c94169287594b0c79cd4c4eeaa91) on `fullsend-ai/fullsend` `main` (merge of #8394) |
-| Date | 2026-10-14 (09:26 UTC) |
-| Tag | none — the newest release, `v0.47.1` (`c68903c0`, 2026-10-11), predates #8313 and #8397 |
+| Commit | [`cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208`](https://github.com/fullsend-ai/fullsend/commit/cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208) on `fullsend-ai/fullsend` `main` |
+| Date | 2026-10-28 (release published 21:24 UTC) |
+| Tag | `v0.52.0` (latest release at the time of the bump) |
+| Sandbox image | `DefaultCodeImage` of this CLI (`internal/config/config.go`): `ghcr.io/fullsend-ai/fullsend-code@sha256:3055d4f52136a7c89fb8aa1976b468a5f9dd929c6be55fd6cd958e222c6e18ca` — Claude Code **2.1.296** |
 
-**Why this commit:** it is the first reviewed `main` commit carrying all of the
-GitLab support the GitLab triage-security deployment needs — the fail-closed
-GitLab project lease (#8258, released in v0.46.0), the GitLab role
-service-account lifecycle (#8313, merged 2026-10-13) and the GitLab webhook
-Poller hand-off (#8397, merged 2026-10-13) — plus the follow-up GitLab
-variable-scope fixes (#8405, #8407). No release tag contains #8313 and #8397 yet,
-so a reviewed `main` SHA is pinned instead of a tag. It stops before #8426
-(Claude aliases default to 5.5), which was outside the reviewed range; both
-harnesses pin `model:` explicitly, so that change would not alter them anyway.
+**Why this commit (TC-7300):** the agents are moving to `claude-opus-5-5`
+(TC-7278), which needs Claude Code ≥ 2.1.280. The previous pin `9f188578`
+(untagged `main` of 2026-10-14, chosen for the GitLab support in #8258, #8313,
+#8397, #8405 and #8407 — all contained here) was never paired with its own image:
+the harnesses still ran the v0.37.0-era image `fullsend-code@sha256:9743bc7b…`
+(Claude Code 2.1.156), and even `9f188578`'s default image (`ea2a31f3…`) carries
+2.1.258. v0.52.0 is a tagged release, so CI installs a published binary instead
+of building from source, and the native eval CI can share the same pin. The CLI
+and the harness `image:` move together from now on (see
+[Why the stock digest-pinned image](#why-the-stock-digest-pinned-image)).
 
 **Deployments and their current pins** (decoupled timing — each bumps on its own
 schedule, but both target the supported commit):
 
 | Deployment | Pin today | Target |
 |---|---|---|
-| GitHub verify-pr (this repo) | CLI and reusable-dispatch both at the supported commit `9f188578f0d8c94169287594b0c79cd4c4eeaa91` (TC-6936; previously CLI `v0.43.0` + reusable-dispatch `d5f36921`) | supported commit — **reached** |
-| GitLab triage-security (`sdlc-fullsend`) | — (not deployed yet) | supported commit from the first deployment |
-| Native Fullsend eval CI (`eval-pr-run.yml`) | CLI release `v0.47.1` (`c68903c0373e2216af03f5412642d4aa4019057f`), OpenShell `0.1.2` | stays on a tagged release: the eval CI installs the CLI only from digest-checked release archives, and `9f188578` is untagged. v0.47.1 is the newest release before the supported commit; its built-in Vertex provider/profile, OpenShell pin and CI install scripts are identical to `9f188578`'s (TC-7141) |
+| GitHub verify-pr (this repo) | CLI `v0.52.0` and reusable-dispatch `cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208`, harness `image:` = v0.52.0 `DefaultCodeImage` (TC-7300; previously both at `9f188578` with the v0.37.0-era image, TC-6936) | supported commit — **reached** |
+| GitLab triage-security (`sdlc-fullsend`) | tracked in `sdlc-fullsend` | supported commit — its CLI must reach v0.52.0 with (or before) the `base:` move that brings it the new harness `image:` |
+| Native Fullsend eval CI (`eval-pr-run.yml`) | CLI release `v0.52.0` (`cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208`), OpenShell `0.1.4`, eval harness `image:` = v0.52.0 `DefaultCodeImage` (TC-7300; previously v0.47.1 / OpenShell 0.1.2) | supported commit — **reached** (the eval CI installs the CLI only from digest-checked release archives, so it can track the supported commit whenever that is a release) |
+
+#### Update path from 9f188578 to v0.52.0 (TC-7300)
+
+Review range: `9f188578` → `cc4fa1c5` (905 commits, `compare` status `ahead`;
+releases v0.48.0, v0.48.1, v0.49.0, v0.50.0, v0.51.0, v0.52.0). Every
+conventional-commit `!` change in the range, with its disposition:
+
+**Applies — adaptation made**
+
+- **`.env` read as data** (#8498, #8574, #8575; v0.49.0). `.env` and every
+  `.env.d/*.env` are parsed by a data loader (`internal/runtime/env_data.go`):
+  only blank lines, comments, `[export ]NAME=VALUE` (with `$NAME`/`${NAME}`
+  expansion) and `export NAME`. `unset`, `;`-joined commands, `${NAME:-x}` and the
+  like are **dropped**. fullsend itself exports `FULLSEND_OUTPUT_DIR` in `.env`, so
+  the native eval fixture's `unset FULLSEND_OUTPUT_DIR` can no longer produce an
+  absent gate: **native case 033-absent is dropped** (dataset, runner, fixture
+  script, judge, CI counts, tests, docs — see
+  [docs/testing/fullsend-gate-evals.md](docs/testing/fullsend-gate-evals.md)).
+  034-empty (`export FULLSEND_OUTPUT_DIR=''`) remains valid.
+  `plugins/sdlc-workflow/env/gcp-vertex.env` uses only `export NAME=value` lines
+  → unaffected.
+- **Harness image** (not a `!` change, but the reason for the bump): the harness
+  `image:` pins move to v0.52.0's `DefaultCodeImage` in `harness/verify-pr.yaml`,
+  `harness/triage-security.yaml` and `evals/fullsend/triage-security/harness.yaml`.
+
+**Applies — no change needed (checked)**
+
+- **#3373** credential-class variables and 25 more reserved names are refused in
+  `env.sandbox` — no harness declares `env.sandbox`.
+- **#8626 / `fix(hooks)!`** the interpreter, CLI and node are pinned on the
+  trusted PATH and custom images may break — the harnesses use the stock
+  `DefaultCodeImage`.
+- **#8530** `fullsend run` sets `GITHUB_TOKEN` as well as `GH_TOKEN` to the minted
+  token — the scripts read `GH_TOKEN`; `execute-actions.py`'s `fullsend` CLI calls
+  get the App token either way.
+- **#7849** a sandbox harness must name a `policy:` — all three harnesses do.
+- **#7830** skills are matched by the `SKILL.md` `name:` — the plugin's nine skill
+  names are unique.
+- **#8426** the `opus` / `sonnet` / `haiku` aliases default to 5.5 — every harness
+  and the native judge pin explicit model ids.
+- **#8721 + ADR 0128** (v0.51/v0.52) `validation_loop.preflight_check` allowlist
+  and path-shaped values — not used.
+- **717e7091** (v0.51) the config `roles` key no longer gates execution —
+  `config.base.yaml` has no `roles`; agents default to enabled.
+- **#8259** (v0.48) pre-launch check of Claude Code `hooks.json` — the plugin
+  ships no hooks.
+- **v0.50.0** Claude runs set `CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1`;
+  per-harness role permission on CEL dispatch — this repo dispatches through its
+  own poller workflow, no change.
+- **OpenShell 0.1.4** (v0.48) uploads pass `--no-git-ignore`, so gitignored files
+  are uploaded too — watch the native `037-release` judge-prompt size; a
+  regression there is recorded as a failure, not hidden.
+- **7f2f73d8** (v0.49) the dispatch existing-PR gate moved into the code agent —
+  code agent only.
+
+**Does not apply** (install, GitLab or test-only changes): #8219, #8434, #8242,
+#8243, #8407, #8246, #8030, #8031, #8032, #8508, #8509, #8564, #8865, #8492 (pi),
+7dff1811 (OpenCode), #5613, #8622, #8758.
+
+The reusable-dispatch caller interface is unchanged between `9f188578` and
+`cc4fa1c5`: identical `inputs`, unchanged nested-job permission union, and one new
+optional secret, `FULLSEND_GITHUB_RUNNER_SECRETS`, which this repo does not pass.
 
 #### Update path from v0.43.0 / d5f36921
 
@@ -613,8 +682,29 @@ untouched — the GitHub and GitLab deployments bump independently.
      gh api "repos/fullsend-ai/fullsend/contents/.github/workflows/reusable-dispatch.yml?ref=<new>" --jq .content | base64 -d > new.yml
      diff old.yml new.yml
      ```
-   - **GitLab triage-security** — the fullsend CLI pin in `.gitlab-ci.yml` of the
-     `sdlc-fullsend` repo.
+   - **Sandbox image** — set `image:` in `harness/verify-pr.yaml`,
+     `harness/triage-security.yaml` and `evals/fullsend/triage-security/harness.yaml`
+     to the new CLI's `DefaultCodeImage` (`internal/config/config.go` at the new
+     commit), and update the production-image fixture in
+     `plugins/sdlc-workflow/scripts/test_fullsend_gate_eval.py`. Verify the image's
+     Claude Code version (anonymous `ghcr.io` token → image index → amd64 manifest →
+     config blob history, `CLAUDE_CODE_VERSION=`) and record it in the supported
+     commit table: the image, not the CLI, decides which models the agents can run.
+   - **Native eval** — move these together, only to a **release** (the eval CI
+     installs the CLI from digest-checked release archives):
+     `evals/fullsend/dependencies.json` (`fullsend.version`, `source_commit`, the
+     four archive sha256s from the release `checksums.txt`, `openshell`); the
+     `ref:` of the "Checkout pinned Fullsend infrastructure" step in
+     `.github/workflows/eval-pr-run.yml` (its `openshell-version.sh` sets the
+     OpenShell version `run.py preflight` expects); the `rev-parse HEAD` assertion
+     in `.github/scripts/run-native-fullsend-evals.sh`; and the upstream pin
+     fixtures in `plugins/sdlc-workflow/scripts/test_native_fullsend_eval_ci.py`
+     and the resolver-probe `pin` in `test_fullsend_gate_eval.py`. Confirm the
+     upstream scripts the wrapper calls (`openshell-version.sh`, `install-podman.sh`,
+     `install-openshell.sh`, `prepare-sandbox-credentials.sh`) still exist and that
+     the schema-v2 `gateway.toml` it writes still matches upstream `action.yml`.
+   - **GitLab triage-security** — the fullsend CLI pin in the `sdlc-fullsend`
+     repo.
    - **Harness content** — if the adaptation in step 2 changed a harness or any
      pinned plugin file, follow [Releasing an update (this repo)](#releasing-an-update-this-repo):
      re-pin the `base:` line (commit SHA + `#sha256=`) in each affected
@@ -657,7 +747,10 @@ untouched — the GitHub and GitLab deployments bump independently.
      (agent + repo + PR number, `cancel-in-progress: true`) shared by both
      copies, so only one verify-pr report is posted. Confirm in the run log that
      the surviving `harness-run` is the temporary copy's (`fullsend version`
-     prints the new commit).
+     prints the new commit, `Image:` the new digest). **Race:** the `main` copy's
+     `harness-run` can start *last* and cancel the proof through that shared group
+     (seen on #363). Then cancel the `main` copy's run and re-run the proof with
+     `gh run rerun <proof-run-id> --failed`.
    - **GitLab triage-security** — run a manual pipeline dispatch on a known
      Vulnerability issue and confirm it completes and produces its report.
    - Update the `## Prerequisites` CLI note if the local CLI must track CI.
@@ -677,10 +770,11 @@ for the new one. The GitLab deployment may adopt such content as soon as its own
 CLI pin points at the supported commit; the GitHub `base:` re-pin waits for the
 GitHub bump.
 
-**Guard rule status: satisfied for `9f188578`** (TC-6936). The GitHub CLI and
-reusable-dispatch pins are at the supported commit, so verify-pr may be re-pinned
-to sdlc-plugins content adapted for it. The rule applies again from the next
-supported-commit change.
+**Guard rule status: satisfied for v0.52.0** (TC-7300; previously `9f188578`,
+TC-6936). The GitHub CLI, reusable-dispatch and `base:` pins moved in the same
+PR, so verify-pr may be re-pinned to sdlc-plugins content adapted for v0.52.0.
+The GitLab deployment (`sdlc-fullsend`) must move its CLI to v0.52.0 before or
+with the `base:` move that brings it the new harness `image:`. The rule applies again from the next supported-commit change.
 
 The fullsend pins are independent of the harness `base:` re-pin (which tracks
 sdlc-plugins content) and of the plugin version below.
@@ -869,6 +963,14 @@ The harness pins `ghcr.io/fullsend-ai/fullsend-code` by `@sha256:` digest. The
 stock image already carries Claude Code, `git`, the `gh` CLI, Python, and the
 fullsend security tooling, so there is nothing to add — the sandbox *policy*, not
 the image, is the enforcement layer.
+
+The digest **must equal the pinned CLI's `DefaultCodeImage`**
+(`internal/config/config.go` at the supported commit). The image decides the
+Claude Code version — and so which models the agents can run — while the CLI
+decides the launch contract the image is used with. TC-7278's proof failed with
+`Claude Code 2.1.156 does not support this model; version 2.1.280 or newer is
+required` because the CLI had moved twice while `image:` stayed on the v0.37.0-era
+digest. Move both together in every pin-and-bump (step 3).
 
 ## Acceptance run
 

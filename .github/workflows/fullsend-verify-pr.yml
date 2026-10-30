@@ -216,25 +216,24 @@ jobs:
       issues: write
       packages: read
       pull-requests: write
-    # Pinned to the supported fullsend commit (never a floating ref such as
-    # `@v0`). `uses:@` and `fullsend_version` MUST move together: at this commit
+    # Pinned to the supported fullsend release commit (never a floating ref
+    # such as `@v0`). `uses:@` and `fullsend_version` MUST move together: at this commit
     # `fullsend run` itself exports GOOGLE_APPLICATION_CREDENTIALS (runner-owned
     # credentials), so a newer dispatch with an older CLI fails the child
     # harness's host_files validation. Bump both only through fullsend.md
     # "Updating fullsend (pin-and-bump)" / "Supported fullsend commit".
-    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@9f188578f0d8c94169287594b0c79cd4c4eeaa91 # main as of 2026-10-14
+    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208 # v0.52.0 as of 2026-10-28
     with:
       matrix: ${{ needs.wait-for-checks.outputs.matrix }}
       mint_url: ${{ vars.FULLSEND_MINT_URL }}
       gcp_region: ${{ vars.FULLSEND_GCP_REGION }}
       project_number: ${{ vars.FULLSEND_PROJECT_NUMBER }}
       jira_base_url: ${{ vars.JIRA_BASE_URL }}
-      # Same commit as `uses:@`. The supported commit is untagged, so the full
-      # SHA is passed (the vendor action accepts a 40-char SHA and builds the CLI
-      # from source when no release matches). An empty value would fall back to
-      # `job.workflow_sha` (the `uses:` SHA); it is kept explicit so the CLI pin
-      # is visible in review.
-      fullsend_version: "9f188578f0d8c94169287594b0c79cd4c4eeaa91"
+      # Same release as `uses:@` (v0.52.0 = cc4fa1c5). The tag resolves to the
+      # published release binary, so no CLI is built from source. An empty value
+      # would fall back to `job.workflow_sha` (the `uses:` SHA); it is kept
+      # explicit so the CLI pin is visible in review.
+      fullsend_version: "v0.52.0"
       runner_image: ubuntu-24.04
     # The reusable workflow declares Jira credentials under vendor names
     # (JIRA_TOKEN / JIRA_USER_EMAIL); this repo stores them under the canonical
