@@ -30,7 +30,9 @@ bytes are not claimed reproducible. OpenShell, Podman, the host OS, service
 configuration and the delivered model runtime inside the production image are
 outside the Python lock.
 
-The operator must provide installed **OpenShell CLI and gateway 0.1.4**, Podman,
+The operator must provide installed **OpenShell CLI and gateway 0.1.4**, Podman
+with a **server ≥ 5.8.4** (the version Fullsend's CI pins in `install-podman.sh`;
+OpenShell 0.1.4 sandbox creation hangs on older servers),
 an approved running gateway and container-driver configuration, and an accessible
 production sandbox image. The pin is Fullsend v0.52.0's
 [OpenShell pin file](https://github.com/fullsend-ai/fullsend/blob/cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208/.github/scripts/openshell-version.sh).
@@ -48,7 +50,9 @@ credentials, change gateway/TLS configuration, or relax sandbox policy.
 Platform differences:
 
 - **macOS:** Python3.12 and curl may need separate installation; Podman needs
-  an initialized/running machine. Paths are resolved to physical paths (including
+  an initialized/running machine whose `machine-os` image provides the server
+  version above (`podman version` reports it as `Server`, separately from the
+  host client). Paths are resolved to physical paths (including
   `/private/tmp`) for delivery. Setup downloads the Darwin host binary and the
   matching Linux binary for the sandbox. The VM/image CPU architecture must match
   the selected host architecture; cross-architecture execution is not prepared here.

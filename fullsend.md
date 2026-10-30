@@ -203,6 +203,11 @@ github egress from the sandbox — those are handled on the runner.
   [Upgrading from OpenShell 0.0.x](https://github.com/fullsend-ai/fullsend/blob/cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208/docs/guides/user/running-agents-locally.md)
   procedure (schema-v2 `gateway.toml`, NVIDIA installer with
   `OPENSHELL_ACK_BREAKING_UPGRADE=1`).
+- Podman with a **server ≥ 5.8.4** — the version fullsend's CI pins in
+  `.github/scripts/install-podman.sh`. OpenShell 0.1.4 sandbox creation hangs on
+  older servers (observed with 5.4.0). On macOS the server runs inside the Podman
+  machine VM and its version comes from the VM's `machine-os` image, not from the
+  host client, so check the `Server` version reported by `podman version`.
 - An OpenShell gateway running — fullsend uses OpenShell as its sandbox runtime.
 - GCP credentials for Vertex AI — a service-account key JSON (local) or a WIF
   external-account config (CI). Referenced by `GOOGLE_APPLICATION_CREDENTIALS`.
