@@ -685,6 +685,105 @@ supported-commit change.
 The fullsend pins are independent of the harness `base:` re-pin (which tracks
 sdlc-plugins content) and of the plugin version below.
 
+### Managing the agent model
+
+The verify-pr and triage-security agents, and the native eval agent, run on
+**`claude-opus-5-5` at effort `medium`** (TC-7274). The model is pinned content
+like everything else: changing it is a harness edit that goes through the
+re-pin + re-lock loop.
+
+#### Where model and effort are set
+
+| Location | Sets | Consumed by |
+|---|---|---|
+| `harness/verify-pr.yaml`, `harness/triage-security.yaml` — `model:` / `effort:` | model + effort | every `fullsend run` (local + CI) through the pinned `base:` |
+| `plugins/sdlc-workflow/agents/{verify-pr,triage-security}.md` — frontmatter `model:` | model only | Claude Code when nothing else names a model (e.g. interactive `claude --agent`) |
+| `evals/fullsend/run.py` — `--model` / `--effort` defaults | model + effort | the native eval agent (CI passes only `--judge-model`) |
+| `evals/fullsend/triage-security/harness.yaml`, `eval.yaml` (`models.skill`, `runner.effort`) | model + effort | overridden at runtime by `run.py`; kept equal for readability |
+
+The `.fullsend/harness/*.yaml` composing children set **no** model or effort —
+they inherit both from the pinned base.
+
+**Which wins.** fullsend resolves the run model as `--model` flag >
+`FULLSEND_MODEL` > config `agents:` entry > harness `model:`, and only when that
+chain is empty falls back to the agent frontmatter `model:`
+(`internal/runtime/model.go` `EffectiveModel` at the supported commit). The
+Claude runtime passes the resolved value to Claude Code as `--model` and the
+harness `effort:` as `--effort` (`internal/runtime/claude.go`), and the CLI flag
+takes precedence over the agent definition's frontmatter. In production the
+**harness value wins**; the frontmatter is a fallback for runs that name no
+model. Both are pinned to the same ID anyway, and
+`plugins/sdlc-workflow/scripts/test_model_pins.py` fails if any pin listed above
+disagrees with the others, uses a floating alias, or if a composing child
+overrides the base. `metrics.json` records the outcome per run:
+`requested_model` (what fullsend asked for), `override_source` (`harness`,
+`--model flag`, …) and `model` (what the provider reported).
+
+#### Why a concrete model ID, not an alias
+
+Claude Code aliases (`opus`, `sonnet`) resolve to whatever generation the CLI in
+the image maps them to. Under CLI v0.43.0 `opus` resolved to `claude-opus-4-6`,
+which the Vertex deployment had not enabled (run 34951983374: *"model
+claude-opus-4-6 is not available on your vertex deployment"*). A concrete ID
+makes the model change only when this repo changes it — the same reason the
+frontmatter carries `claude-opus-5-5` instead of `opus`.
+
+#### Why an explicit effort
+
+Effort is set explicitly instead of inheriting the model's default so that a
+change of the default effort (per model generation or per CLI release) cannot
+silently alter run behaviour, cost, or latency.
+
+#### Changing the model
+
+1. **Enable the model on Vertex first.** The fullsend Vertex project must serve
+   the new ID in the configured region; an unknown or disabled model fails
+   inference (`not available on your vertex deployment` / HTTP 400/404), not
+   preflight — `run.py preflight` does not check model availability either.
+2. **Edit every pin** in the table above in one change, and update
+   `test_model_pins.py`'s target-model assertion.
+3. **Commit and push to an upstream `RHEcosystemAppEng` branch** — a fork PR ref
+   fails the promisor fetch.
+4. **Re-pin both** `.fullsend/harness/verify-pr.yaml` and
+   `.fullsend/harness/triage-security.yaml` (`base:` commit SHA + `#sha256=` of
+   the base file), then **re-lock**:
+   `fullsend lock --all --fullsend-dir .fullsend` (see
+   [Releasing an update](#releasing-an-update-this-repo)). Commit `.fullsend/`
+   in the same PR.
+5. **Prove before merging** (below), then **merge with a merge commit**.
+   URL-registered adopters (`sdlc-fullsend`) pick the model up by moving their
+   own `base:` pin to the merge commit.
+
+#### Pre-merge proof
+
+CI cannot self-prove a model change: verify-pr dispatches from `main`
+(`pull_request_target`) and Eval PR Run is a `workflow_run` that executes
+`run.py` from `main`. Prove each consumer explicitly:
+
+- **verify-pr** — the temporary `pull_request` workflow copy from
+  [Updating fullsend](#updating-fullsend-pin-and-bump) step 5, on a same-repo
+  branch carrying the re-pinned `.fullsend/`. The run must complete, validate
+  against the result schema, and post its report.
+- **triage-security** — a local `fullsend run triage-security` of the
+  production harness from the re-pinned branch with `--no-post-script`
+  (report-only), validated against the result schema.
+- **Native eval agent** — the local paid run in
+  `docs/testing/fullsend-gate-evals.md` with the new defaults; all cases must
+  complete.
+
+For every run, confirm in `metrics.json` (or the run log) that the provider
+reported the new model. A run that does not reach it — model not enabled, HTTP
+400, an alias resolved elsewhere, or a different `override_source` than
+expected — is a **failed** proof, not a pass.
+
+#### Forced `tool_choice` and Opus 5.5
+
+`claude-opus-5-5` rejects a forced `tool_choice` with HTTP 400 (a model
+restriction, not a Vertex policy; verified 2026-10-29). The agents are
+unaffected — Claude Code does not force tool use. LLM judges that force a tool
+call (the agent-eval-harness judges used by the native eval) therefore cannot run
+on Opus 5.5; the judge model is managed separately (`--judge-model`, TC-7279).
+
 ### Keeping the two plugin-version files in sync
 
 The plugin/skill version is stored in **two** files that must always match:

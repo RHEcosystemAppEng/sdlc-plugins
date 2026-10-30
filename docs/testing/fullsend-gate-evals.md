@@ -112,10 +112,21 @@ After host services and those inputs are ready, the operator can run:
 python3.12 evals/fullsend/run.py run \
   --cache /tmp/tc-6677-eval-deps \
   --output /tmp/tc-6677-native-evals \
-  --model claude-opus-4-8 \
+  --model claude-opus-5-5 \
   --judge-model claude-opus-4-6 \
-  --effort high
+  --effort medium
 ```
+
+The native eval agent model and effort come from the `run.py` defaults
+(`--model claude-opus-5-5`, `--effort medium`): CI
+(`.github/scripts/run-native-fullsend-evals.sh`) passes only `--judge-model`, and
+`run.py` writes both values into the resolved suite config and hands them to
+`fullsend run` as `--model`/`--effort`, which override `harness.yaml`'s
+`model:`/`effort:` and `eval.yaml`'s `models.skill`/`runner.effort` (kept equal
+for readability; `test_model_pins.py` fails on drift). Because Eval PR Run is a
+`workflow_run` that executes `run.py` from `main`, a PR changing these defaults
+is not exercised by its own CI run — prove it with the local command above. See
+`fullsend.md` "Managing the agent model".
 
 This command **does perform paid inference**: five serial native Fullsend runs
 and28 upstream Boolean LLM judgments. Select model IDs supported by your Vertex

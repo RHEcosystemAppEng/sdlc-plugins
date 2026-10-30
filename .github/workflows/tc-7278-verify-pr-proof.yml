@@ -1,0 +1,177 @@
+# TEMPORARY — TC-7278 pre-merge live proof only. DROP THIS COMMIT BEFORE MERGE.
+# `pull_request` copy of fullsend-verify-pr.yml (fullsend.md "Updating fullsend"
+# step 5, TC-6936 recipe): on a same-repo PR the dispatch checks out the merge ref
+# (github.sha), so the re-pinned .fullsend/ (claude-opus-5-5) runs against PR #363.
+name: fullsend verify-pr (TC-7278 proof)
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main]
+
+# One in-flight verify-pr per PR; a new push cancels the superseded run (both
+# the CI wait and any dispatch already handed off).
+concurrency:
+  group: verify-pr-proof-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  wait-for-checks:
+    name: wait-for-checks
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    # Bounds the total wait (check-runs in Step 1 AND commit statuses in Step
+    # 1b): a check or status that never terminates lets this job hit
+    # timeout-minutes and fail, which skips the dispatch job below (no-checks /
+    # hung-check timeout behavior = SKIP). A normal terminal CI outcome — or a
+    # PR with no other checks at all — lets the wait succeed and Step 2 proceed.
+    timeout-minutes: 45
+    permissions:
+      checks: read
+      statuses: read
+      pull-requests: read
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      # Step 1 — wait for every OTHER check on the PR head to reach a terminal
+      # state. Self-excluded via running-workflow-name so it never waits on
+      # itself. allowed-conclusions lists ALL terminal conclusions, so a failing
+      # or cancelled check still releases the wait (CI result is data, not a
+      # gate). fail-on-no-checks:false → a PR with no other checks proceeds.
+      - name: Wait for other PR checks
+        uses: lewagon/wait-on-check-action@369769072fe522a3a8a85c03c96af1e5242a1994 # v1.9.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          running-workflow-name: wait-for-checks
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 30
+          checks-discovery-timeout: 60
+          fail-on-no-checks: false
+          allowed-conclusions: success,failure,neutral,cancelled,skipped,timed_out,action_required,stale,startup_failure
+
+      # Step 1b — wait for every PR-head COMMIT STATUS to leave `pending`
+      # (TC-6978). Step 1 sees the Checks API only, but `Eval PR Run`
+      # (eval-pr-run.yml) runs as a `workflow_run`: its check-runs attach to the
+      # DEFAULT-branch SHA, so on the PR head it reports solely through the
+      # Statuses API (context `Eval PR Run`, pending -> success/failure). Without
+      # this step verify-pr dispatched while the evals were still running.
+      # - failure/error are terminal and release the wait, like Step 1's
+      #   allowed-conclusions: the CI result is data, not a gate.
+      # - Eval PR is path-filtered, so many PRs carry NO status: after a short
+      #   discovery grace (mirroring checks-discovery-timeout: 60) an empty list
+      #   proceeds at once.
+      # - A status that stays pending (e.g. eval-pr-run.yml's "Waiting for
+      #   approval in eval-protected environment" on an unapproved untrusted PR)
+      #   is bounded by the job's timeout-minutes: 45 — the job fails and dispatch
+      #   is skipped (the hung-check behavior described on the job).
+      # The combined-status endpoint returns only the latest status per context.
+      - name: Wait for pending commit statuses
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          discovery_grace=60
+          wait_interval=30
+          start=$(date +%s)
+          while true; do
+            statuses=$(gh api --paginate --slurp "repos/${REPO}/commits/${HEAD_SHA}/status" \
+              | jq -c '[.[].statuses[] | {context, state}]')
+            total=$(jq 'length' <<<"${statuses}")
+            pending=$(jq -r '[.[] | select(.state == "pending") | .context] | join(", ")' <<<"${statuses}")
+            elapsed=$(( $(date +%s) - start ))
+            if [[ "${total}" -eq 0 ]]; then
+              if (( elapsed >= discovery_grace )); then
+                echo "No commit statuses on ${HEAD_SHA} after ${elapsed}s; proceeding."
+                break
+              fi
+              echo "No commit statuses yet (${elapsed}s of ${discovery_grace}s discovery grace)..."
+            elif [[ -z "${pending}" ]]; then
+              echo "All ${total} commit status(es) terminal: $(jq -r 'map("\(.context)=\(.state)") | join(", ")' <<<"${statuses}")"
+              break
+            else
+              echo "Waiting on pending commit status(es): ${pending} (${elapsed}s elapsed)"
+            fi
+            sleep "${wait_interval}"
+          done
+
+      # Step 2a — build the single-entry harness matrix for the custom-poller
+      # path. Format matches `fullsend dispatch --output-driver gha-matrix`
+      # (internal/harnessdispatch/ref.go ExecutionRef). The full PR event is
+      # embedded as the event_payload string that harness-run consumes.
+      - name: Build verify-pr dispatch matrix
+        id: matrix
+        env:
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          matrix=$(jq -cn \
+            --arg repo "${REPO}" \
+            --arg num "${PR_NUMBER}" \
+            --argjson event "$(cat "${GITHUB_EVENT_PATH}")" \
+            '{include:[{
+               agent: "verify-pr",
+               role: "review",
+               source_repo: $repo,
+               event_type: "pull_request",
+               event_payload: ($event | tojson),
+               status_repo: $repo,
+               status_number: $num
+             }]}')
+          echo "matrix=${matrix}" >> "${GITHUB_OUTPUT}"
+
+  # Step 2b — run verify-pr via the vendor reusable workflow. Passing the
+  # pre-computed matrix skips its route + harness-dispatch jobs; harness-run
+  # mints the review-role GitHub App token (mint OIDC) and runs the agent.
+  # Default `needs` gating means this runs only when the wait job succeeds.
+  verify-pr:
+    needs: wait-for-checks
+    # GitHub validates a reusable-workflow caller's permissions STATICALLY against
+    # EVERY nested job in the called workflow — including ones gated by `if:` that
+    # never run on this custom-poller (matrix) path. reusable-dispatch.yml's `code`
+    # and `fix` jobs declare `contents: write`, so the caller must grant it too, or
+    # the run fails at startup ("nested job 'code' is requesting 'contents: write',
+    # but is only allowed 'contents: read'"). These permissions are the UNION of
+    # all reusable-dispatch nested jobs; the harness-run job that actually executes
+    # here reads contents only.
+    permissions:
+      actions: write
+      contents: write
+      id-token: write
+      issues: write
+      packages: read
+      pull-requests: write
+    # Pinned to the supported fullsend commit (never a floating ref such as
+    # `@v0`). `uses:@` and `fullsend_version` MUST move together: at this commit
+    # `fullsend run` itself exports GOOGLE_APPLICATION_CREDENTIALS (runner-owned
+    # credentials), so a newer dispatch with an older CLI fails the child
+    # harness's host_files validation. Bump both only through fullsend.md
+    # "Updating fullsend (pin-and-bump)" / "Supported fullsend commit".
+    uses: fullsend-ai/fullsend/.github/workflows/reusable-dispatch.yml@9f188578f0d8c94169287594b0c79cd4c4eeaa91 # main as of 2026-10-14
+    with:
+      matrix: ${{ needs.wait-for-checks.outputs.matrix }}
+      mint_url: ${{ vars.FULLSEND_MINT_URL }}
+      gcp_region: ${{ vars.FULLSEND_GCP_REGION }}
+      project_number: ${{ vars.FULLSEND_PROJECT_NUMBER }}
+      jira_base_url: ${{ vars.JIRA_BASE_URL }}
+      # Same commit as `uses:@`. The supported commit is untagged, so the full
+      # SHA is passed (the vendor action accepts a 40-char SHA and builds the CLI
+      # from source when no release matches). An empty value would fall back to
+      # `job.workflow_sha` (the `uses:` SHA); it is kept explicit so the CLI pin
+      # is visible in review.
+      fullsend_version: "9f188578f0d8c94169287594b0c79cd4c4eeaa91"
+      runner_image: ubuntu-24.04
+    # The reusable workflow declares Jira credentials under vendor names
+    # (JIRA_TOKEN / JIRA_USER_EMAIL); this repo stores them under the canonical
+    # names (JIRA_API_TOKEN / JIRA_EMAIL). Map repo secret -> vendor input.
+    secrets:
+      FULLSEND_GCP_WIF_PROVIDER: ${{ secrets.FULLSEND_GCP_WIF_PROVIDER }}
+      FULLSEND_GCP_PROJECT_ID: ${{ secrets.FULLSEND_GCP_PROJECT_ID }}
+      OTEL_EXPORTER_OTLP_TRACES_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_TRACES_HEADERS }}
+      OTEL_EXPORTER_OTLP_HEADERS: ${{ secrets.OTEL_EXPORTER_OTLP_HEADERS }}
+      JIRA_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+      JIRA_USER_EMAIL: ${{ secrets.JIRA_EMAIL }}
