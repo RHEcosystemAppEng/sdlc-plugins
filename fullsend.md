@@ -77,7 +77,7 @@ never place a credential in the sandbox at all.
 ### Jira through the API gateway
 
 The Jira credential is a dedicated Atlassian **Service Account**
-(`tpa-fullsend-jira-sa`, issued through JIRACONFSD-10163). Its scoped API token
+(issued through JIRACONFSD-10163). Its scoped API token
 authenticates **only through the Atlassian API gateway**, so every runner-side
 Jira REST call uses the gateway as its base:
 
@@ -97,7 +97,7 @@ by the Service Account.
 
 **Required Jira project permissions.** The Service Account needs these on the
 TC project. A TC project admin grants them in the TC space settings by adding
-`tpa-fullsend-jira-sa` to project roles: the **Users** role carries the first
+the Service Account to project roles: the **Users** role carries the first
 three, but not Edit Issues, so the SA is also in the **Developers** role, which
 carries Edit Issues.
 
@@ -149,7 +149,7 @@ need further permissions and are not covered by this list.
   then is an empty search an ADR-0072 skip. The Service Account therefore needs
   Browse Projects on TC and a token allowed to read `/myself`.
 - **The email must be the one on record, with its random suffix**
-  (`tpa-fullsend-jira-sa-<suffix>@serviceaccount.atlassian.com`); the display
+  (`<sa-name>-<suffix>@serviceaccount.atlassian.com`); the display
   address without the suffix gets 401. Read it with
   `GET <gateway>/rest/api/3/myself` → `emailAddress`.
 - **`/browse/` links come from `GET /rest/api/3/serverInfo` → `baseUrl`**, which
