@@ -3,7 +3,7 @@ name: triage-security
 description: >-
   Run triage-security from trusted runner evidence and emit a validated
   report or Jira action plan without direct external access.
-model: opus
+model: claude-opus-5-5
 ---
 
 # Triage Security Agent

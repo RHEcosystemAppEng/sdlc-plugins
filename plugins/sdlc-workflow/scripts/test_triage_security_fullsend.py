@@ -195,18 +195,40 @@ def test_invalid_trusted_input_fixture_fails_closed_before_analysis(tmp_path):
 @pytest.mark.parametrize("gate, exit_code, stdout, stderr", [
     (None, 0, "interactive mode\n", ""),
     ("", 1, "", "ERROR: FULLSEND_OUTPUT_DIR is set but empty\n"),
-    ("/synthetic-output", 0, "sandbox mode: /synthetic-output\n", ""),
+    ("{tmp}/output", 0, "sandbox mode: {tmp}/output\n", ""),
 ])
-def test_literal_gate_instruction_distinguishes_presence(gate, exit_code, stdout, stderr):
+def test_literal_gate_instruction_distinguishes_presence(tmp_path, gate, exit_code, stdout, stderr):
     """Catch truthiness regressions in source; this is not proof the agent routed."""
     # Given the production instruction and separately supplied environment state
     source = _skill_bash("### Step 0.6 – Fullsend Mode Detection")
+    gate = gate if gate is None else gate.format(tmp=tmp_path)
 
     # When a credential-free shell executes that exact gate instruction
     result = _run_instruction(source, gate)
 
     # Then presence, empty export and nonempty export have distinct outcomes
-    assert (result.returncode, result.stdout, result.stderr) == (exit_code, stdout, stderr)
+    assert (result.returncode, result.stdout, result.stderr) == (exit_code, stdout.format(tmp=tmp_path), stderr)
+
+
+def test_literal_gate_creates_missing_output_dir_only_in_sandbox_mode(tmp_path):
+    """Fullsend's Claude runtime does not create FULLSEND_OUTPUT_DIR; the sandbox gate must."""
+    # Given the production gate instruction and an output directory that does not exist yet
+    source = _skill_bash("### Step 0.6 – Fullsend Mode Detection")
+    output = tmp_path / "workspace" / "output"
+
+    # When the gate runs in interactive mode
+    interactive = _run_instruction(source, None)
+
+    # Then nothing is created
+    assert interactive.returncode == 0
+    assert list(tmp_path.iterdir()) == []
+
+    # When the gate runs in sandbox mode
+    sandbox = _run_instruction(source, str(output))
+
+    # Then it creates the directory the result is written into
+    assert sandbox.returncode == 0
+    assert output.is_dir()
 
 
 def test_literal_valid_input_instruction_continues_without_abort(tmp_path):
