@@ -98,7 +98,8 @@ by the Service Account.
 **Required Jira project permissions.** The Service Account needs these on the
 TC project. A TC project admin grants them in the TC space settings by adding
 `tpa-fullsend-jira-sa` to project roles: the **Users** role carries the first
-three, but not Edit Issues, so the SA also needs a role that carries Edit Issues.
+three, but not Edit Issues, so the SA is also in the **Developers** role, which
+carries Edit Issues.
 
 | Permission | Key | Used for |
 |---|---|---|
