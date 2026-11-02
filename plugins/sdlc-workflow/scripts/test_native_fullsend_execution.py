@@ -230,10 +230,28 @@ def test_old_native_inventory_is_not_accepted_as_release_coverage(tmp_path):
 
 
 @pytest.mark.parametrize("passed", [0, 23, 24])
-def test_judge_api_error_blocks_distinct_from_failed_verdict(tmp_path, passed):
-    """A judge API error (scorer-error) invalidates the run and is counted separately from verdicts."""
-    # Given genuine synthetic execution whose grading hit a judge API error (e.g. 400)
+def test_judge_api_error_alone_blocks_otherwise_valid_run(tmp_path, passed):
+    """A scorer-error summary failure by itself invalidates an otherwise execution-valid run."""
+    # Given a report and runner exit that are execution-valid apart from one judge API error
     private, run, safe, source, status = synthetic_run(tmp_path, passed)
+    report = json.loads(safe.read_text())
+    report["summary_failures"] = [
+        {"case": "036-valid", "assertion": "assertion_3", "reason": "scorer-error", "category": "phase-exit"}]
+    safe.write_text(json.dumps(report))
+    # When the trusted checker assesses the run with the matching runner exit
+    assert checker().assess(private, safe, status, source) == 1
+    # Then only the judge error invalidates it: phases and execution evidence stay valid
+    result = json.loads(safe.read_text())
+    assert result["execution_valid"] is False
+    assert result["execution"]["judge_errors"] == 1
+    assert result["execution"]["phases_completed"] is True
+    assert all(all(e.values()) for e in result["execution"]["cases"].values())
+
+
+def test_judge_api_error_is_counted_on_incomplete_report(tmp_path):
+    """A judge API error on an incomplete report is reported as a judge error, not a failed verdict."""
+    # Given genuine synthetic execution whose grading stopped on a judge API error (e.g. 400)
+    private, run, safe, source, status = synthetic_run(tmp_path, 24)
     report = json.loads(safe.read_text())
     del report["outcomes"]["036-valid"]["assertion_3"]
     report.update(complete=False, exit_code=1, summary_failures=[
@@ -242,11 +260,10 @@ def test_judge_api_error_blocks_distinct_from_failed_verdict(tmp_path, passed):
     safe.write_text(json.dumps(report))
     # When the trusted checker assesses the run
     assert checker().assess(private, safe, 1, source) == 1
-    # Then the run is invalid and the judge error is reported as such, not as a failed verdict
+    # Then the run is invalid and the judge error is counted
     result = json.loads(safe.read_text())
     assert result["execution_valid"] is False
     assert result["execution"]["judge_errors"] == 1
-    assert all(all(e.values()) for e in result["execution"]["cases"].values())
 
 
 def test_unparsed_judge_reply_blocks_even_when_report_is_complete(tmp_path):
