@@ -95,6 +95,28 @@ by the Service Account.
 | Service Account (`ATSTT`) | 401 / empty `[]` | 403 | 200 | 200 |
 | Personal (`ATATT`) | 200 | 403 | 200 | 401 |
 
+**Required Jira project permissions.** The Service Account needs these on the
+TC project (granted through the TC permission scheme to the role/group holding
+`tpa-fullsend-jira-sa`):
+
+| Permission | Key | Used for |
+|---|---|---|
+| Browse Projects | `BROWSE_PROJECTS` | pre_script access check (`verify_project_access`) and the JQL gate; reading the task, its comments and links for the prefetch; finding an existing sticky report comment. |
+| Add Comments | `ADD_COMMENTS` | First verify-pr run on a task: `fullsend issues post-comment` creates the sticky report comment (also triage-security `comment` actions). |
+| Edit Own Comments | `EDIT_OWN_COMMENTS` | Later runs: the CLI edits its own sticky comment in place and sets the `fullsend.sticky-marker` comment property. Without it every re-run fails the post_script with `403 You do not have permission` (TC-7313), turning `verify-pr / Harness run` red even though the GitHub report is posted. |
+
+Check the SA's effective permissions with its token, Bearer, on the gateway;
+each key must report `"havePermission": true`:
+
+```bash
+curl -s -H "Authorization: Bearer $JIRA_TOKEN" \
+  "$JIRA_BASE_URL/rest/api/3/mypermissions?projectKey=TC&permissions=BROWSE_PROJECTS,ADD_COMMENTS,EDIT_OWN_COMMENTS" \
+  | jq '.permissions | map_values(.havePermission)'
+```
+
+triage-security Jira mutations (off by default, `mutation_authorized: false`)
+need further permissions and are not covered by this list.
+
 - **`jira-client.py` picks the auth scheme from `JIRA_EMAIL`.** Unset or empty
   (the runner): the token is sent as `Bearer`. Set (interactive users with
   personal tokens, which are Basic-only): `Basic email:token`, unchanged. Neither
@@ -425,7 +447,9 @@ The Jira credential is a dedicated **Service Account** — scoped token used thr
 the API gateway (Bearer from `jira-client.py`, Basic with the suffixed email from
 the fullsend CLI; see **Jira through the API gateway**). It is a **tier-1**
 credential: it stays in runner env and never enters the sandbox (see **Credential
-delivery and tiers**). To rotate it, issue a new scoped token for the SA and
+delivery and tiers**). Its Jira project permissions (Browse Projects, Add
+Comments, Edit Own Comments) are listed under **Required Jira project
+permissions**. To rotate it, issue a new scoped token for the SA and
 update `JIRA_API_TOKEN` (and `JIRA_EMAIL` if the account itself changes); the next
 dispatch authenticates the post_script Jira comment with the new value. The same
 pattern applies to every row above — update the value in repo settings, no code
