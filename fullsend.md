@@ -96,24 +96,33 @@ by the Service Account.
 | Personal (`ATATT`) | 200 | 403 | 200 | 401 |
 
 **Required Jira project permissions.** The Service Account needs these on the
-TC project. A TC project admin grants them by adding `tpa-fullsend-jira-sa` to
-the **Users** role in the TC space settings; that role carries all three in the
-TC permission scheme:
+TC project. A TC project admin grants them in the TC space settings by adding
+`tpa-fullsend-jira-sa` to project roles: the **Users** role carries the first
+three, but not Edit Issues, so the SA also needs a role that carries Edit Issues.
 
 | Permission | Key | Used for |
 |---|---|---|
 | Browse Projects | `BROWSE_PROJECTS` | pre_script access check (`verify_project_access`) and the JQL gate; reading the task, its comments and links for the prefetch; finding an existing sticky report comment. |
-| Add Comments | `ADD_COMMENTS` | First verify-pr run on a task: `fullsend issues post-comment` creates the sticky report comment (also triage-security `comment` actions). |
-| Edit Own Comments | `EDIT_OWN_COMMENTS` | Later runs: the CLI edits its own sticky comment in place and sets the `fullsend.sticky-marker` comment property. Without it every re-run fails the post_script with `403 You do not have permission` (TC-7313), turning `verify-pr / Harness run` red even though the GitHub report is posted. |
+| Add Comments | `ADD_COMMENTS` | First verify-pr run on a task: `fullsend issues post-comment` creates the sticky report comment, with its `fullsend.sticky-marker` comment property set inline (also triage-security `comment` actions). |
+| Edit Own Comments | `EDIT_OWN_COMMENTS` | Later runs: the CLI edits the body of its own sticky comment in place. |
+| Edit Issues | `EDIT_ISSUES` | Later runs: before editing the body, the CLI (`MigrateAndUpdateComment`, fullsend v0.52.0) re-writes the `fullsend.sticky-marker` comment property, and Jira requires Edit Issues for comment-property writes, even on the account's own comment. Without it every re-run fails the post_script with `403 You do not have permission to edit issues in this project` (TC-7313), turning `verify-pr / Harness run` red even though the GitHub report is posted. |
 
-Check the SA's effective permissions with its token, Bearer, on the gateway;
-each key must report `"havePermission": true`:
+Edit Issues lets the SA edit any field of any TC issue, far more than the
+redundant property write needs. Once fullsend skips that write when the property
+is already set, re-check whether Edit Issues can be dropped.
+
+Check the SA's effective permissions with its token, Bearer, on the gateway,
+**against an issue** (any TC task); each key must report `"havePermission": true`:
 
 ```bash
 curl -s -H "Authorization: Bearer $JIRA_TOKEN" \
-  "$JIRA_BASE_URL/rest/api/3/mypermissions?projectKey=TC&permissions=BROWSE_PROJECTS,ADD_COMMENTS,EDIT_OWN_COMMENTS" \
+  "$JIRA_BASE_URL/rest/api/3/mypermissions?issueKey=<TC-task>&permissions=BROWSE_PROJECTS,ADD_COMMENTS,EDIT_OWN_COMMENTS,EDIT_ISSUES" \
   | jq '.permissions | map_values(.havePermission)'
 ```
+
+Do not check with `projectKey=TC`: at project level Jira reports `true` when the
+permission is held on **any** issue (for example as reporter or assignee), so
+`EDIT_ISSUES` can read `true` there while every issue-level edit gets 403.
 
 triage-security Jira mutations (off by default, `mutation_authorized: false`)
 need further permissions and are not covered by this list.
@@ -449,7 +458,7 @@ the API gateway (Bearer from `jira-client.py`, Basic with the suffixed email fro
 the fullsend CLI; see **Jira through the API gateway**). It is a **tier-1**
 credential: it stays in runner env and never enters the sandbox (see **Credential
 delivery and tiers**). Its Jira project permissions (Browse Projects, Add
-Comments, Edit Own Comments) are listed under **Required Jira project
+Comments, Edit Own Comments, Edit Issues) are listed under **Required Jira project
 permissions**. To rotate it, issue a new scoped token for the SA and
 update `JIRA_API_TOKEN` (and `JIRA_EMAIL` if the account itself changes); the next
 dispatch authenticates the post_script Jira comment with the new value. The same
