@@ -48,6 +48,8 @@ def synthetic_run(tmp_path, passed=20):
         path.parent.mkdir(parents=True)
         path.write_text("".join(json.dumps(r) + "\n" for r in synthetic_records()))
         (run / f"cases/{case}/run_result.json").write_text(json.dumps({"exit_code": 1}))
+    # Benign judge summary: genuine rationales only, no unparsed-reply fallback.
+    (run / "summary.yaml").write_text("per_case: {}\nrationale: SYNTHETIC genuine rationale\n")
     source = {key: "a" * 40 for key in ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}
     source["pr_number"] = 299
     outcomes = {}
@@ -302,5 +304,20 @@ def test_symlinked_summary_blocks(tmp_path):
     private, run, safe, source, status = synthetic_run(tmp_path, 24)
     target = tmp_path / "outside.yaml"
     target.write_text("per_case: {}\n")
+    (run / "summary.yaml").unlink()
     (run / "summary.yaml").symlink_to(target)
     assert checker().assess(private, safe, status, source) == 1
+
+
+def test_missing_summary_blocks_complete_report(tmp_path):
+    """A complete report whose private summary.yaml is missing is a judge error (fail-closed)."""
+    # Given a complete, otherwise execution-valid 24/24 run without its judge summary
+    private, run, safe, source, status = synthetic_run(tmp_path, 24)
+    (run / "summary.yaml").unlink()
+    # When the trusted checker assesses the run
+    assert checker().assess(private, safe, status, source) == 1
+    # Then the unverifiable judge results invalidate the run
+    result = json.loads(safe.read_text())
+    assert result["execution_valid"] is False
+    assert result["execution"]["judge_errors"] == 1
+    assert result["execution"]["phases_completed"] is True
