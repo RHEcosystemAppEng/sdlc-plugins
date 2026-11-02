@@ -542,7 +542,7 @@ def test_wrapper_enforces_execution_integrity_instead_of_quality_score(tmp_path,
     assert arguments == [
         str(tmp_path / "native-eval-source/evals/fullsend/run.py"), "run",
         "--cache", str(tmp_path / "tc6726-deps"),
-        "--judge-model", "claude-opus-4-8",
+        "--judge-model", "claude-sonnet-5",
         "--plugin-root", str(tmp_path / "pr-head/plugins/sdlc-workflow"),
         "--output", str(tmp_path / "tc6726-private"),
         "--report-dir", str(tmp_path / "tc6726-safe"),
@@ -893,7 +893,7 @@ def test_older_head_cannot_overwrite_current_sticky_report():
 
 
 def test_native_wrapper_passes_requested_judge_model(tmp_path):
-    """The trusted wrapper overrides the reviewed runner's older judge default."""
+    """The trusted wrapper pins the judge model explicitly rather than relying on the runner default."""
     output = ("GOOGLE_APPLICATION_CREDENTIALS=synthetic-sandbox-adc\n"
               "GCP_OIDC_TOKEN_FILE=synthetic-token\n"
               "FULLSEND_GCP_OIDC_URL=synthetic-url\n"
@@ -902,7 +902,7 @@ def test_native_wrapper_passes_requested_judge_model(tmp_path):
     assert result.returncode == 0
     arguments = json.loads((tmp_path / "captured.argv.json").read_text())
     assert arguments[1] == "run"
-    assert arguments[arguments.index("--judge-model") + 1] == "claude-opus-4-8"
+    assert arguments[arguments.index("--judge-model") + 1] == "claude-sonnet-5"
 
 
 def run_ordinary_eval_step(tmp_path, mode, skills="first"):

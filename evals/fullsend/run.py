@@ -424,7 +424,7 @@ def main():
     parser.add_argument("--cache", type=Path, default=Path(tempfile.gettempdir()) / "tc-6677-eval-deps")
     parser.add_argument("--output", type=Path, default=Path(tempfile.gettempdir()) / "tc-6677-native-evals")
     parser.add_argument("--model", default="claude-opus-5-5")
-    parser.add_argument("--judge-model", default="claude-opus-4-6")
+    parser.add_argument("--judge-model", default="claude-sonnet-5")
     parser.add_argument("--effort", choices=["low", "medium", "high", "max"], default="medium")
     parser.add_argument("--plugin-root", type=Path, help="Sandbox-tested plugin; tooling always comes from this checkout")
     parser.add_argument("--report-dir", type=Path, help="Allowlisted CI result directory; never raw credentials/transcripts")

@@ -122,7 +122,7 @@ python3.12 evals/fullsend/run.py run \
   --cache /tmp/tc-6677-eval-deps \
   --output /tmp/tc-6677-native-evals \
   --model claude-opus-5-5 \
-  --judge-model claude-opus-4-6 \
+  --judge-model claude-sonnet-5 \
   --effort medium
 ```
 
@@ -145,6 +145,42 @@ validation loop has one iteration. Framework budget hints are advisory, not a
 spend cap. A zero/unknown framework cost is not evidence of zero actual cost;
 the unchanged native metrics use `total_cost_usd`, while CliRunner looks for
 `cost_usd`. Use the retained native metrics.
+
+### Judge model
+
+The 24 Boolean judgments run on the host through agent-eval-harness with
+`claude-sonnet-5`. The judge model is set in three places, kept equal:
+`--judge-model` in `.github/scripts/run-native-fullsend-evals.sh` (what CI
+uses), the `--judge-model` default in `evals/fullsend/run.py` (local runs), and
+`models.judge` in `evals/fullsend/triage-security/eval.yaml` (overwritten by
+`run.py` in the resolved config; kept for readability).
+
+The harness forces `tool_choice: {type: "tool"}` to get structured verdicts, so
+the judge **must accept forced `tool_choice`**. `claude-opus-5-5` and
+`claude-sonnet-5-5` reject it with HTTP 400 and cannot be judges
+(fullsend-ai/agents#1603); `claude-sonnet-5` accepts it. Before switching the
+judge, qualify the candidate with a 1-token forced-tool probe against the same
+Vertex project/region and expect HTTP 200:
+
+```bash
+MODEL=claude-sonnet-5
+curl -sS -o /dev/null -w '%{http_code}\n' -X POST \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H 'Content-Type: application/json' \
+  "https://${CLOUD_ML_REGION}-aiplatform.googleapis.com/v1/projects/${ANTHROPIC_VERTEX_PROJECT_ID}/locations/${CLOUD_ML_REGION}/publishers/anthropic/models/${MODEL}:rawPredict" \
+  -d '{"anthropic_version":"vertex-2023-10-16","max_tokens":1,
+       "messages":[{"role":"user","content":"ok"}],
+       "tools":[{"name":"verdict","input_schema":{"type":"object","properties":{}}}],
+       "tool_choice":{"type":"tool","name":"verdict"}}'
+```
+
+Judge errors are blocking, never failed verdicts. A judge API error (for
+example a 400 on forced `tool_choice`) is recorded by `run.py` as a
+`scorer-error` summary failure, and an unusable judge reply (the harness's
+`Could not parse judge response:` fallback, otherwise scored `False`) is found
+in the private `summary.yaml`. `check-native-fullsend-execution.py` counts both
+as `execution.judge_errors`; any nonzero count sets `execution_valid: false`
+and fails the check, independently of the advisory quality score.
 
 ## Automatic CI, WIF and rollout
 

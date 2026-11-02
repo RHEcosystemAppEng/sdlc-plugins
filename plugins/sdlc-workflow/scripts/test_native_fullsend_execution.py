@@ -227,3 +227,63 @@ def test_old_native_inventory_is_not_accepted_as_release_coverage(tmp_path):
     report['outcomes'].pop('037-release')
     safe.write_text(json.dumps(report))
     assert checker().assess(private, safe, status, source) == 1
+
+
+@pytest.mark.parametrize("passed", [0, 23, 24])
+def test_judge_api_error_blocks_distinct_from_failed_verdict(tmp_path, passed):
+    """A judge API error (scorer-error) invalidates the run and is counted separately from verdicts."""
+    # Given genuine synthetic execution whose grading hit a judge API error (e.g. 400)
+    private, run, safe, source, status = synthetic_run(tmp_path, passed)
+    report = json.loads(safe.read_text())
+    del report["outcomes"]["036-valid"]["assertion_3"]
+    report.update(complete=False, exit_code=1, summary_failures=[
+        {"case": "036-valid", "assertion": "assertion_3", "reason": "scorer-error", "category": "phase-exit"}])
+    report["diagnostics"].update(phase="summary", code="invalid-summary")
+    safe.write_text(json.dumps(report))
+    # When the trusted checker assesses the run
+    assert checker().assess(private, safe, 1, source) == 1
+    # Then the run is invalid and the judge error is reported as such, not as a failed verdict
+    result = json.loads(safe.read_text())
+    assert result["execution_valid"] is False
+    assert result["execution"]["judge_errors"] == 1
+    assert all(all(e.values()) for e in result["execution"]["cases"].values())
+
+
+def test_unparsed_judge_reply_blocks_even_when_report_is_complete(tmp_path):
+    """The harness's unparsed-reply fallback (scored False) must not pass as a failed verdict."""
+    # Given a complete 23/24 report whose single False came from an unusable judge reply
+    private, run, safe, source, status = synthetic_run(tmp_path, 23)
+    (run / "summary.yaml").write_text(
+        "per_case:\n  037-release:\n    assertion_7:\n      value: false\n"
+        "      rationale: 'Could not parse judge response: (empty)'\n")
+    # When the trusted checker assesses the run
+    assert checker().assess(private, safe, status, source) == 1
+    # Then the judge error invalidates the run although execution evidence is genuine
+    result = json.loads(safe.read_text())
+    assert result["execution_valid"] is False
+    assert result["execution"]["judge_errors"] == 1
+    assert result["passed"] == 23 and result["complete"] is True
+
+
+def test_genuine_failed_verdict_has_no_judge_errors(tmp_path):
+    """A real False verdict stays advisory: zero judge errors, execution valid."""
+    # Given a complete 23/24 report whose False verdict carries a genuine rationale
+    private, run, safe, source, status = synthetic_run(tmp_path, 23)
+    (run / "summary.yaml").write_text(
+        "per_case:\n  037-release:\n    assertion_7:\n      value: false\n"
+        "      rationale: SYNTHETIC genuine failing rationale\n")
+    # When the trusted checker assesses the run
+    assert checker().assess(private, safe, status, source) == 0
+    # Then the failed verdict lowers only the advisory score
+    result = json.loads(safe.read_text())
+    assert result["execution_valid"] is True
+    assert result["execution"]["judge_errors"] == 0
+
+
+def test_symlinked_summary_blocks(tmp_path):
+    """A symlinked private summary cannot be trusted for judge-error detection."""
+    private, run, safe, source, status = synthetic_run(tmp_path, 24)
+    target = tmp_path / "outside.yaml"
+    target.write_text("per_case: {}\n")
+    (run / "summary.yaml").symlink_to(target)
+    assert checker().assess(private, safe, status, source) == 1

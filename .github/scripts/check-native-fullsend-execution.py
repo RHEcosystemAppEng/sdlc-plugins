@@ -9,6 +9,9 @@ from pathlib import Path
 
 CASES = {"034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}
 FIELDS = ("case_result_valid", "transcript_readable", "runtime_completed", "skill_invoked", "tools_completed")
+# Pinned agent-eval-harness score.py text fallback: an unusable judge reply is
+# recorded as passed=false with this rationale prefix instead of an error.
+JUDGE_UNPARSED = "Could not parse judge response:"
 
 
 def unique_object(pairs):
@@ -98,6 +101,19 @@ def observe_case(case_dir):
     return observed
 
 
+def judge_errors(report, run):
+    """Count judge failures (API errors, unusable replies) that must never pass as verdicts."""
+    failures = report.get("summary_failures", [])
+    if not isinstance(failures, list) or not all(isinstance(f, dict) for f in failures):
+        raise ValueError("Invalid summary failures")
+    # run.py records a judge exception (e.g. a 400 on forced tool_choice) as scorer-error.
+    count = sum(f.get("reason") == "scorer-error" for f in failures)
+    summary = run / "summary.yaml" if run is not None else None
+    if summary is not None and (summary.exists() or summary.is_symlink()):
+        count += regular_text(summary).count(JUDGE_UNPARSED)
+    return count
+
+
 def assess(private_root, report_path, runner_exit, expected_source):
     """Add fixed observations to the safe report; never rewrite scores or raw records."""
     try:
@@ -126,8 +142,12 @@ def assess(private_root, report_path, runner_exit, expected_source):
         observations = {case: dict.fromkeys(FIELDS, False) for case in CASES}
         if len(runs) == 1:
             observations = {case: observe_case(runs[0] / "cases" / case) for case in CASES}
-        report["execution"] = {"phases_completed": bool(phases_completed), "cases": observations}
-        report["execution_valid"] = bool(phases_completed and all(all(e.values()) for e in observations.values()))
+        # Judge errors are not failed verdicts: they invalidate the run (fail-closed).
+        errors = judge_errors(report, runs[0] if len(runs) == 1 else None)
+        report["execution"] = {"phases_completed": bool(phases_completed), "judge_errors": errors,
+                               "cases": observations}
+        report["execution_valid"] = bool(phases_completed and errors == 0
+                                         and all(all(e.values()) for e in observations.values()))
         report_path.write_text(json.dumps(report, indent=2) + "\n")
         return int(not report["execution_valid"])
     except (OSError, UnicodeError, ValueError, TypeError, AttributeError, RecursionError):
@@ -145,7 +165,14 @@ def main():
               ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}
     source["pr_number"] = int(os.environ["TC6726_PR_NUMBER"])
     status = assess(args.private_root, args.report, args.runner_exit, source)
-    print("Native execution evidence: " + ("valid; quality score is advisory" if status == 0 else "invalid; blocking"))
+    detail = ""
+    try:
+        errors = json.loads(args.report.read_text())["execution"]["judge_errors"]
+        detail = f" ({errors} judge errors)" if errors else ""
+    except (OSError, ValueError, KeyError, TypeError):
+        pass
+    print("Native execution evidence: " + ("valid; quality score is advisory" if status == 0
+                                           else "invalid; blocking" + detail))
     return status
 
 
