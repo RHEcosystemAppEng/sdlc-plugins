@@ -180,7 +180,9 @@ example a 400 on forced `tool_choice`) is recorded by `run.py` as a
 `Could not parse judge response:` fallback, otherwise scored `False`) is found
 in the private `summary.yaml`. `check-native-fullsend-execution.py` counts both
 as `execution.judge_errors`; any nonzero count sets `execution_valid: false`
-and fails the check, independently of the advisory quality score.
+and fails the check, independently of the advisory quality score. A complete
+report whose private `summary.yaml` is missing also counts as a judge error,
+because its judgments cannot be checked for unparsed replies.
 
 ## Automatic CI, WIF and rollout
 

@@ -111,6 +111,9 @@ def judge_errors(report, run):
     summary = run / "summary.yaml" if run is not None else None
     if summary is not None and (summary.exists() or summary.is_symlink()):
         count += regular_text(summary).count(JUDGE_UNPARSED)
+    elif summary is not None and report.get("complete") is True:
+        # A complete report without its summary cannot be checked for unparsed replies.
+        count += 1
     return count
 
 
