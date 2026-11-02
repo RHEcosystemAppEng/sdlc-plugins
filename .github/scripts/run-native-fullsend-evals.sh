@@ -4,7 +4,7 @@ set -euo pipefail
 
 cache="${RUNNER_TEMP:?}/tc6726-deps"
 upstream="${GITHUB_WORKSPACE:?}/upstream-fullsend"
-test "$(git -C "$upstream" rev-parse HEAD)" = c68903c0373e2216af03f5412642d4aa4019057f
+test "$(git -C "$upstream" rev-parse HEAD)" = cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208
 
 reviewed="${GITHUB_WORKSPACE}/native-eval-source"
 : "${NATIVE_EVAL_SOURCE_SHA:?Reviewed eval source pin is required}"
@@ -20,7 +20,7 @@ case "${1:?setup or run}" in
     source "$upstream/.github/scripts/openshell-version.sh"
     mkdir -p "$HOME/.config/openshell"
     echo 'OPENSHELL_BIND_ADDRESS=0.0.0.0' > "$HOME/.config/openshell/gateway.env"
-    # OpenShell 0.1 reads only the schema v2 gateway config (upstream functional CI).
+    # OpenShell 0.1 reads only the schema v2 gateway config (upstream action.yml).
     cat > "$HOME/.config/openshell/gateway.toml" <<EOF
 [openshell]
 version = 2
@@ -39,7 +39,7 @@ EOF
     fi
     podman system migrate
     # The OpenShell 0.1 gateway is a systemd user service pinned to the podman
-    # driver; it needs the socket-activated API (upstream functional CI), not a
+    # driver; it needs the socket-activated API (upstream action.yml), not a
     # backgrounded `podman system service`.
     systemctl --user start podman.socket
     socket_path="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/podman/podman.sock"

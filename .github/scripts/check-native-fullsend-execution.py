@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 
-CASES = {"033-absent": 4, "034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}
+CASES = {"034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}
 FIELDS = ("case_result_valid", "transcript_readable", "runtime_completed", "skill_invoked", "tools_completed")
 
 

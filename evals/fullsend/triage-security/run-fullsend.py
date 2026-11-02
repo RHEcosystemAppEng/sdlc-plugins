@@ -14,7 +14,7 @@ import yaml
 
 def run_case(root, workspace, output, scenario, model, effort, host_binary, sandbox_binary, plugin_root=None):
     """Stage test-only resources, call native CLI once, preserve its actual exit."""
-    if scenario not in {"absent", "empty", "malformed", "valid", "release"}:
+    if scenario not in {"empty", "malformed", "valid", "release"}:
         raise ValueError("Unknown synthetic gate scenario")
     if os.environ.get("FULLSEND_MINT_URL"):
         raise ValueError("Synthetic suite requires FULLSEND_MINT_URL unset; live forge minting is forbidden")
@@ -54,8 +54,7 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
         shutil.copy2(suite / name, staged_suite / name)
     staged_fixtures = setup / "evals/triage-security/files"
     staged_fixtures.mkdir(parents=True)
-    for name in ["fullsend-gate-interactive-config.md", "fullsend-invalid-trusted-input.md",
-                 "fullsend-report-only-trusted-input.json"]:
+    for name in ["fullsend-invalid-trusted-input.md", "fullsend-report-only-trusted-input.json"]:
         shutil.copy2(root / "evals/triage-security/files" / name, staged_fixtures / name)
     if scenario == "release":
         name = "fullsend-release-trusted-input.json"
@@ -83,8 +82,6 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
     target.mkdir()
     # Native UploadDir retains .git; read-only setup requires it, not a commit.
     subprocess.run(["git", "init", "--quiet", str(target)], check=True)
-    if scenario == "absent":
-        shutil.copy2(root / "evals/triage-security/files/fullsend-gate-interactive-config.md", target / "CLAUDE.md")
     output.mkdir(parents=True, exist_ok=True)
     native.mkdir()
     command = [str(host_binary), "run", "triage-security-gate", "--fullsend-dir", str(setup),
@@ -115,7 +112,7 @@ def main():
     parser.add_argument("--agent", choices=["triage-security-gate"], required=True)
     parser.add_argument("--workspace", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
-    parser.add_argument("--scenario", choices=["absent", "empty", "malformed", "valid", "release"], required=True)
+    parser.add_argument("--scenario", choices=["empty", "malformed", "valid", "release"], required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--effort", required=True)
     parser.add_argument("--plugin-root", type=Path)

@@ -37,8 +37,7 @@ def synthetic_fixture_root(path):
     """SYNTHETIC TEST DATA — isolated unchanged retained inputs, never live data."""
     fixtures = path / "evals/triage-security/files"
     fixtures.mkdir(parents=True)
-    for name in ["fullsend-gate-interactive-config.md", "fullsend-invalid-trusted-input.md",
-                 "fullsend-report-only-trusted-input.json"]:
+    for name in ["fullsend-invalid-trusted-input.md", "fullsend-report-only-trusted-input.json"]:
         shutil.copy2(FIXTURES / name, fixtures / name)
     return path
 
@@ -46,7 +45,7 @@ def synthetic_fixture_root(path):
 def synthetic_judge_summary(value=True):
     """SYNTHETIC STATIC RECORDS — summary contract only, never live eval evidence."""
     cases = {}
-    for case, count in zip(["033-absent", "034-empty", "035-malformed", "036-valid", "037-release"], [4, 5, 5, 7, 7]):
+    for case, count in zip(["034-empty", "035-malformed", "036-valid", "037-release"], [5, 5, 7, 7]):
         cases[case] = {}
         for index in range(1, 8):
             condition = f'annotations.get("assertion_count", 0) > {index - 1}'
@@ -86,10 +85,10 @@ def test_incomplete_summary_keeps_valid_judgments_and_safe_failure(tmp_path, def
     # When the real safe publisher handles incomplete grading
     common.publish_report(tmp_path, tmp_path / "safe", source, 0)
     report = json.loads((tmp_path / "safe/native-result.json").read_text())
-    # Then grading blocks, 27 genuine Boolean judgments remain, and secrets stay private
+    # Then grading blocks, 23 genuine Boolean judgments remain, and secrets stay private
     assert report["complete"] is False and report["exit_code"] == 1
-    assert sum(len(v) for v in report["outcomes"].values()) == 27
-    assert report["outcomes"]["033-absent"]["assertion_1"] is False
+    assert sum(len(v) for v in report["outcomes"].values()) == 23
+    assert report["outcomes"]["034-empty"]["assertion_1"] is False
     assert "assertion_2" not in report["outcomes"]["037-release"]
     assert report["summary_failures"] == [{"case": "037-release", "assertion": "assertion_2",
                                           "reason": reason, "category": category}]
@@ -167,7 +166,7 @@ def test_safe_report_observes_matched_valid_tools_without_changing_scores(tmp_pa
         "input_validation_succeeded": True, "input_validation_failed": False,
     }
     assert report["source"] == source and report["exit_code"] == 7
-    assert report["complete"] is True and report["passed"] == 0 and report["total"] == 28
+    assert report["complete"] is True and report["passed"] == 0 and report["total"] == 24
     assert all(value is False for case in report["outcomes"].values() for value in case.values())
     assert all(path.read_bytes() == raw for path, raw in original.items())
     assert "command" not in json.dumps(report) and "tool_use_id" not in json.dumps(report)
@@ -341,7 +340,7 @@ def test_valid_tool_observations_handle_excessive_json_nesting(tmp_path):
 def test_summary_integrity_accepts_complete_boolean_results_without_grading(tmp_path, value):
     """Completeness accepts actual False outcomes; upstream alone owns thresholds."""
     common = load_script(ROOT / "evals/fullsend/run.py")
-    # Given 28 explicitly synthetic Boolean outcomes and seven legitimate skips
+    # Given 24 explicitly synthetic Boolean outcomes and four legitimate skips
     path = tmp_path / "summary.yaml"
     raw = yaml.safe_dump(synthetic_judge_summary(value)).encode()
     path.write_bytes(raw)
@@ -363,7 +362,8 @@ def test_summary_integrity_rejects_incomplete_or_ambiguous_results(tmp_path, def
     # Given adversarial synthetic metadata, never generated execution/judge evidence
     summary = synthetic_judge_summary()
     cases = summary["per_case"]
-    results = cases["033-absent"]
+    # 034-empty has five applicable assertions, so assertion_6 is non-applicable.
+    results = cases["034-empty"]
     result = results["assertion_1"]
     if defect == "missing-case":
         del cases["036-valid"]
@@ -382,21 +382,21 @@ def test_summary_integrity_rejects_incomplete_or_ambiguous_results(tmp_path, def
     elif defect == "error":
         result["error"] = "SYNTHETIC scorer failure, even with a Boolean value"
     elif defect == "applicable-skip":
-        results["assertion_1"] = dict(results["assertion_5"])
+        results["assertion_1"] = dict(results["assertion_6"])
     elif defect == "false-with-skip":
         result.update(value=False, rationale="Skipped: synthetic invalid applicable skip")
     elif defect == "nonapplicable-boolean":
-        results["assertion_5"]["value"] = True
+        results["assertion_6"]["value"] = True
     elif defect == "nonapplicable-error":
-        results["assertion_5"]["error"] = "SYNTHETIC condition failure"
+        results["assertion_6"]["error"] = "SYNTHETIC condition failure"
     elif defect == "condition-error":
-        results["assertion_5"]["rationale"] = "Condition error: SYNTHETIC failure"
+        results["assertion_6"]["rationale"] = "Condition error: SYNTHETIC failure"
     elif defect == "wrong-run":
         summary["run_id"] = "different-run"
     elif defect == "not-mapping":
         summary = []
     elif defect == "case-not-mapping":
-        cases["033-absent"] = []
+        cases["034-empty"] = []
     else:
         results["assertion_1"] = []
     path = tmp_path / "summary.yaml"
@@ -409,7 +409,7 @@ def test_summary_integrity_rejects_incomplete_or_ambiguous_results(tmp_path, def
 
 
 @pytest.mark.parametrize("raw", [None, b"[invalid", b"run_id: synthetic\nrun_id: synthetic\n",
-                                b"per_case:\n  033-absent: {}\n  033-absent: {}\n"])
+                                b"per_case:\n  034-empty: {}\n  034-empty: {}\n"])
 def test_summary_integrity_rejects_missing_invalid_or_duplicate_yaml(tmp_path, raw):
     """Missing, unparsable and duplicate-key artifacts are not unambiguous results."""
     common = load_script(ROOT / "evals/fullsend/run.py")
@@ -483,7 +483,6 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
 
 
 @pytest.mark.parametrize("scenario, fragment, fixture", [
-    ("absent", "unset FULLSEND_OUTPUT_DIR", None),
     ("empty", "export FULLSEND_OUTPUT_DIR=''", None),
     ("malformed", None, "fullsend-invalid-trusted-input.md"),
     ("valid", None, "fullsend-report-only-trusted-input.json"),
@@ -524,9 +523,9 @@ def test_pre_script_refuses_stale_inputs(tmp_path):
     assert script.is_file(), "Native synthetic pre-script is missing"
     (tmp_path / "pre").mkdir()
     (tmp_path / "pre/triage-security-input.json").write_bytes(b"stale")
-    environment = dict(os.environ, TC6677_SCENARIO="absent", TC6677_REPO_ROOT=str(tmp_path))
+    environment = dict(os.environ, TC6677_SCENARIO="empty", TC6677_REPO_ROOT=str(tmp_path))
     environment.pop("FULLSEND_RUN_DIR", None)
-    # When an absent case would otherwise inherit a stale nonempty input
+    # When an empty-gate case would otherwise inherit a stale nonempty input
     result = subprocess.run([sys.executable, str(script)], env=environment,
                             capture_output=True, text=True, check=False)
     # Then it fails without rewriting that evidence
@@ -586,7 +585,7 @@ def test_malformed_assertion_requires_raw_abort_and_host_retention_evidence():
 
 
 def test_separate_suite_declares_all_strict_execution_assertions():
-    """Native scenarios must retain 28 distinct execution requirements."""
+    """Native scenarios must retain 24 distinct execution requirements."""
     # Given the native framework's dataset rather than ordinary evals.json
     assert (SUITE / "eval.yaml").is_file(), "Separate native suite is missing"
     config = yaml.safe_load((SUITE / "eval.yaml").read_text())
@@ -597,14 +596,14 @@ def test_separate_suite_declares_all_strict_execution_assertions():
     assert not config.get("hooks")
     assert config["outputs"] == [{"path": "output"}]
     cases = sorted((SUITE / "cases").iterdir())
-    assert [p.name for p in cases] == ["033-absent", "034-empty", "035-malformed", "036-valid", "037-release"]
-    assert [len(yaml.safe_load((p / "annotations.yaml").read_text())["assertions"]) for p in cases] == [4, 5, 5, 7, 7]
+    assert [p.name for p in cases] == ["034-empty", "035-malformed", "036-valid", "037-release"]
+    assert [len(yaml.safe_load((p / "annotations.yaml").read_text())["assertions"]) for p in cases] == [5, 5, 7, 7]
     assert all(j["feedback_type"] == "bool" for j in config["judges"])
     assert all(t["min_pass_rate"] == 1.0 for t in config["thresholds"].values())
 
 
 @pytest.mark.parametrize("exit_code", [0, 7])
-@pytest.mark.parametrize("scenario", ["absent", "empty", "malformed", "valid", "release"])
+@pytest.mark.parametrize("scenario", ["empty", "malformed", "valid", "release"])
 def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypatch, exit_code, scenario):
     """Only the external CLI is doubled: staging, arguments and raw retention are real."""
     # Given a synthetic CLI process, explicitly not model or Skill execution
@@ -653,7 +652,7 @@ def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypat
     # Bootstrap ports companions only, so retain this small expected-value
     # fixture rather than requiring an unpublished git object or live harness.
     production = {
-        "image": "ghcr.io/fullsend-ai/fullsend-code@sha256:9743bc7b6e451e0bcea25ae4a67e0c040c296f1fee04c08988ae80c53fafcfe6",
+        "image": "ghcr.io/fullsend-ai/fullsend-code@sha256:3055d4f52136a7c89fb8aa1976b468a5f9dd929c6be55fd6cd958e222c6e18ca",
         "policy": "plugins/sdlc-workflow/policies/triage-security.yaml",
         # Built-in Fullsend provider by bare name; its egress profile is built in too (TC-7141).
         "providers": ["vertex-ai"],
@@ -685,8 +684,7 @@ def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypat
     assert not list(staged.rglob("__pycache__"))
     for name in ["agent.md", "prepare-fixture.py"]:
         assert (staged / "evals/fullsend/triage-security" / name).read_bytes() == (SUITE / name).read_bytes()
-    fixture_names = [
-        "fullsend-gate-interactive-config.md", "fullsend-invalid-trusted-input.md", "fullsend-report-only-trusted-input.json"]
+    fixture_names = ["fullsend-invalid-trusted-input.md", "fullsend-report-only-trusted-input.json"]
     if scenario == "release":
         fixture_names.append("fullsend-release-trusted-input.json")
         fixture_names.sort()
@@ -714,11 +712,7 @@ def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypat
     assert actual_process(["git", "-C", str(target), "rev-parse", "--verify", "HEAD"],
                           capture_output=True, check=False).returncode != 0
     assert (target / ".git/info/exclude").is_file()
-    if scenario == "absent":
-        assert (target / "CLAUDE.md").read_bytes() == (FIXTURES / "fullsend-gate-interactive-config.md").read_bytes()
-        assert sorted(p.name for p in target.iterdir()) == [".git", "CLAUDE.md"]
-    else:
-        assert [p.name for p in target.iterdir()] == [".git"], "Noninteractive cases must not preload interactive configuration"
+    assert [p.name for p in target.iterdir()] == [".git"], "Native cases must not preload interactive configuration"
     assert (output / "metrics.json").read_bytes() == native_bytes
     assert sorted(p.name for p in output.iterdir()) == ["metrics.json", "native"]
 
@@ -731,7 +725,7 @@ def test_staged_layout_with_actual_pinned_fullsend_resolver(tmp_path, monkeypatc
     source = os.environ.get("TC6677_FULLSEND_SOURCE")
     if not source or not shutil.which("go"):
         pytest.skip("Native resolver contract needs TC6677_FULLSEND_SOURCE and Go with cached dependencies")
-    pin = "c68903c0373e2216af03f5412642d4aa4019057f"
+    pin = "cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208"
     archive = subprocess.check_output(["git", "-C", source, "archive", pin])
     snapshot = tmp_path / "pinned-source"
     snapshot.mkdir()
@@ -903,7 +897,7 @@ def test_common_pipeline_collects_failures_before_upstream_judging(tmp_path, mon
         phase = Path(command[1]).stem
         calls.append((phase, command, kwargs))
         if phase == "execute":
-            for case in ["033-absent", "034-empty", "035-malformed", "036-valid", "037-release"]:
+            for case in ["034-empty", "035-malformed", "036-valid", "037-release"]:
                 p = run_dir / "cases" / case
                 p.mkdir(parents=True)
                 (p / "run_result.json").write_text('{"exit_code":7}')
@@ -1277,7 +1271,7 @@ def test_phase_stderr_is_streamed_with_bounded_diagnostic_reads(tmp_path, monkey
 def test_release_case_inventory_and_fixture_preparation(tmp_path):
     """Reviewed release coverage stages only the synthetic credential-free bundle."""
     common = load_script(ROOT / 'evals/fullsend/run.py')
-    assert common.CASES == ['033-absent', '034-empty', '035-malformed', '036-valid', '037-release']
+    assert common.CASES == ['034-empty', '035-malformed', '036-valid', '037-release']
     assert common.ASSERTION_COUNTS['037-release'] == 7
     root = synthetic_fixture_root(tmp_path)
     shutil.copy2(FIXTURES / 'fullsend-release-trusted-input.json',

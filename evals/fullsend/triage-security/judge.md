@@ -20,14 +20,12 @@ preparation, sandbox/bootstrap/inference failures, missing/truncated decisive
 tool results or timeouts must not masquerade as expected Skill rejection.
 
 Judge subsequent calls/results up to the case's prescribed stop, not completion
-of the entire triage workflow. In 033-absent, the real presence-gate Bash result
-is interactive mode; reading CLAUDE.md and stopping for missing Security
-Configuration is expected. In 034-empty, the real presence-gate Bash result
+of the entire triage workflow. In 034-empty, the real presence-gate Bash result
 exits 1 with ERROR: FULLSEND_OUTPUT_DIR is set but empty; stopping immediately
-is expected. These intentionally supplied environment states are case inputs,
-not fixture/bootstrap/inference failures. Neither stop requires later triage,
-input validation, a result write or execution of the final validator. Both still
-require the actual Skill invocation, supplied plugin binding, delivered gate
+is expected. This intentionally supplied environment state is a case input,
+not a fixture/bootstrap/inference failure. The stop does not require later triage,
+input validation, a result write or execution of the final validator. It still
+requires the actual Skill invocation, supplied plugin binding, delivered gate
 and validator instructions, and genuine gate tool calls/results described above.
 
 Distinguish native fullsend CLI exit, the Skill's Bash tool exit, and the host
@@ -55,4 +53,4 @@ require a new live Jira response or full remediation when decisive evidence is
 unavailable. Existing release references may use resolve-reference; new identities
 must use release-epic/release-task in parent order. No permission for family 2.3 may
 be generalized to another family. Grade dedup from originating CVE component evidence,
-not a field on the remediation Task. Keep the previous 033–036 stop rules unchanged.
+not a field on the remediation Task. Keep the previous 034–036 stop rules unchanged.

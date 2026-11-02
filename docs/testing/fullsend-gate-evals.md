@@ -7,6 +7,8 @@ This suite invokes the actual `sdlc-workflow:triage-security` Skill for syntheti
 TC-8101 through a test agent. It covers real Skill execution in Fullsend with
 synthetic bundles; full production pre/post integration and native verify-pr coverage remain separate.
 TC-6213 stays closed for its approved scope; hosted rollout evidence belongs to TC-6726.
+TC-7300 moved the suite to Fullsend v0.52.0 and dropped case 033-absent (see
+[Cases and raw evidence](#cases-and-raw-evidence)); four cases and 24 assertions remain.
 
 **Local native execution is proven:** fresh run
 `tc6677-8d4aab96a2684e47ab5f1fdf65700a8b` passed all 21/21 on 2026-10-05,
@@ -17,7 +19,7 @@ Static tests and preflight do not establish hosted credentials, infrastructure o
 ## Versions and prerequisites
 
 Use Python3.12, Git and curl on macOS or Linux (amd64/arm64). `setup` installs
-only into the chosen cache. It verifies Fullsend v0.47.1 release archives against
+only into the chosen cache. It verifies Fullsend v0.52.0 release archives against
 the SHA256 values in [dependencies.json](../../evals/fullsend/dependencies.json),
 and fetches canonical agent-eval-harness1.22.0 at immutable commit
 `4b540c652f5ed325e18abf6b4bd0eb4414a4bb3c`. Python runtime/Vertex/build
@@ -28,22 +30,29 @@ bytes are not claimed reproducible. OpenShell, Podman, the host OS, service
 configuration and the delivered model runtime inside the production image are
 outside the Python lock.
 
-The operator must provide installed **OpenShell CLI and gateway 0.1.2**, Podman,
+The operator must provide installed **OpenShell CLI and gateway 0.1.4**, Podman
+with a **server ≥ 5.8.4** (the version Fullsend's CI pins in `install-podman.sh`;
+OpenShell 0.1.4 sandbox creation hangs on older servers),
 an approved running gateway and container-driver configuration, and an accessible
-production sandbox image. The pin is Fullsend v0.47.1's
-[OpenShell pin file](https://github.com/fullsend-ai/fullsend/blob/c68903c0373e2216af03f5412642d4aa4019057f/.github/scripts/openshell-version.sh)
-(identical to the supported commit `9f188578`'s). OpenShell 0.1 needs a **schema
+production sandbox image. The pin is Fullsend v0.52.0's
+[OpenShell pin file](https://github.com/fullsend-ai/fullsend/blob/cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208/.github/scripts/openshell-version.sh).
+The suite harness pins the same sandbox image as production — v0.52.0's
+`DefaultCodeImage` (`fullsend-code@sha256:3055d4f5…`, Claude Code 2.1.296).
+OpenShell 0.1 needs a **schema
 v2 `gateway.toml`** (`[openshell] version = 2`, `compute_driver = "podman"`,
 `[openshell.drivers.podman] supervisor_image`) and cannot read 0.0.x gateway
-state; follow the pinned local guide's upgrade steps when replacing a 0.0.x
-install. Provision/run `openshell-gateway` using your existing approved
+state; follow the pinned local guide's
+[Upgrading from OpenShell 0.0.x](https://github.com/fullsend-ai/fullsend/blob/cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208/docs/guides/user/running-agents-locally.md)
+steps when replacing a 0.0.x install. Provision/run `openshell-gateway` using your existing approved
 authenticated configuration. The Python entrypoint does not install or start host services, create
 credentials, change gateway/TLS configuration, or relax sandbox policy.
 
 Platform differences:
 
 - **macOS:** Python3.12 and curl may need separate installation; Podman needs
-  an initialized/running machine. Paths are resolved to physical paths (including
+  an initialized/running machine whose `machine-os` image provides the server
+  version above (`podman version` reports it as `Server`, separately from the
+  host client). Paths are resolved to physical paths (including
   `/private/tmp`) for delivery. Setup downloads the Darwin host binary and the
   matching Linux binary for the sandbox. The VM/image CPU architecture must match
   the selected host architecture; cross-architecture execution is not prepared here.
@@ -51,13 +60,13 @@ Platform differences:
   Rootless Podman needs valid subordinate UID/GID mappings and an active API socket,
   normally `${XDG_RUNTIME_DIR}/podman/podman.sock`. Provision these through the
   runner's approved host setup, along with OpenShell's authenticated gateway and
-  required supervisor image. The existing Fullsend
-  [functional CI source](https://github.com/fullsend-ai/fullsend/blob/c68903c0373e2216af03f5412642d4aa4019057f/.github/workflows/functional-tests.yml)
-  documents this host dependency. The trusted CI wrapper reuses the pinned upstream
+  required supervisor image. Fullsend's
+  [action.yml](https://github.com/fullsend-ai/fullsend/blob/cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208/action.yml)
+  (gateway setup) documents this host dependency. The trusted CI wrapper reuses the pinned upstream
   installers and rootless Podman setup; Python `setup` remains dependency-only.
 
 For further platform context, consult the pinned
-[Fullsend local guide](https://github.com/fullsend-ai/fullsend/blob/c68903c0373e2216af03f5412642d4aa4019057f/docs/guides/user/running-agents-locally.md).
+[Fullsend local guide](https://github.com/fullsend-ai/fullsend/blob/cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208/docs/guides/user/running-agents-locally.md).
 Use the actual installed OpenShell CLI/help and approved gateway configuration
 where older guide commands differ.
 
@@ -117,8 +126,8 @@ python3.12 evals/fullsend/run.py run \
   --effort high
 ```
 
-This command **does perform paid inference**: five serial native Fullsend runs
-and28 upstream Boolean LLM judgments. Select model IDs supported by your Vertex
+This command **does perform paid inference**: four serial native Fullsend runs
+and 24 upstream Boolean LLM judgments. Select model IDs supported by your Vertex
 project/region. Model availability is not checked by preflight. The native
 agent timeout is30minutes, the opaque CLI case timeout40minutes, and the test
 validation loop has one iteration. Framework budget hints are advisory, not a
@@ -155,8 +164,8 @@ Trusted suite resources supply the pre-script, policy and host schema validator;
 the Vertex provider and its egress profile are the ones built into the pinned
 Fullsend release (bare `vertex-ai`). Only the selected PR plugin is sandbox test content.
 
-Cases033–036 retain all21 original assertion texts. Case037 adds seven release
-assertions, for28 total. Missing, null, skipped applicable judgments, errors or
+Cases 034–036 retain their 17 original assertion texts (033-absent and its four
+were dropped by TC-7300). Case 037 adds seven release assertions, for 24 total. Missing, null, skipped applicable judgments, errors or
 failed infrastructure block reporting and the combined check. Complete False
 judgments are advisory when genuine runtime execution and provenance are valid. Expected negative native exits remain intact.
 Only source pins, Boolean outcomes, counts and exit/completeness status are
@@ -184,39 +193,50 @@ Native verify-pr and production pre/post mutation coverage remain separate.
 
 | Case | Input/gate | Strict assertions |
 |---|---|---:|
-| 033-absent | Test fragment unsets native gate; target CLAUDE.md lacks Security Configuration | 4 |
 | 034-empty | Test fragment exports an empty gate; no target CLAUDE.md/input | 5 |
 | 035-malformed | Native nonempty gate; exact retained malformed bytes mounted | 5 |
 | 036-valid | Native nonempty gate; retained trusted report-only bundle mounted | 7 |
 | 037-release | Native nonempty gate; typed release/dedup evidence and explicit creation decisions; proposals only | 7 |
 
+**033-absent was dropped (TC-7300).** It injected an absent gate with an
+`unset FULLSEND_OUTPUT_DIR` line in the `.env.d` fragment. From Fullsend v0.49.0
+(#8498/#8574/#8575) the launch reads `.env` and every `.env.d/*.env` **as data**
+(`internal/runtime/env_data.go`): only blank lines, comments, `[export ]NAME=VALUE`
+and `export NAME` are accepted, and `unset`, `;`-joined commands and forms such as
+`${NAME:-x}` are dropped. Fullsend itself exports `FULLSEND_OUTPUT_DIR` in `.env`, so
+the absent condition can no longer be produced inside a native run. Native coverage
+of the interactive/absent path is therefore gone; the ordinary
+`sdlc-workflow:run-evals` triage cases still exercise interactive mode.
+
 The input mount is `/sandbox/workspace/.pre-script/triage-security-input.json`.
 The native output directory is `/sandbox/workspace/output`, **not `/sandbox/output`**.
-Negative gate injection uses a mounted test-only `.env.d` fragment sourced before
-model launch, as supported by Fullsend v0.47.1 `bootstrapEnv` and Claude runtime
-`buildRunCommand`. It is deliberate negative configuration, not a normal Fullsend
+Negative gate injection uses a mounted test-only `.env.d` fragment that Fullsend
+v0.52.0 loads as data before model launch (`env_data.go`, re-verified at
+`cc4fa1c5`). The empty case's `export FULLSEND_OUTPUT_DIR=''` is inside that
+grammar. It is deliberate negative configuration, not a normal Fullsend
 configuration. Source support does not establish runtime propagation.
 
 The test agent bypasses only the production agent's input-before-Skill startup
 guard by invoking the actual Skill first. It does not duplicate gate/validator
-logic or run nested model CLIs. The absent case must reach the existing interactive
-missing-configuration guard before credentials. Empty must fail at the precise
+logic or run nested model CLIs. Empty must fail at the precise
 gate instruction. Malformed must execute the actual input validator and error-only
 abort. Valid must perform real analysis, write the completed result, then execute
 the actual inline final JSON/schema validator. Every assertion requires genuine
 Skill/tool records and intended plugin binding; narrated outcomes fail.
 
 Each local case copies the unchanged delivered plugin (including script companions),
-test agent/pre-script and the three retained synthetic fixtures into its isolated
+test agent/pre-script and the two retained synthetic fixtures (plus the release
+bundle for 037) into its isolated
 `.work/native-config` directory. The harness collector excludes `.work`, so these
 staged copies are never collected as modified files or rendered into judge
 prompts. Resource paths and fixture/schema references point
 inside that directory, which Fullsend uses as the resolver workspace root through
 `--fullsend-dir`. The separate synthetic target is a fresh local `git init`
-repository, with no remote or commit. Its only project file is the absent case's
-`CLAUDE.md`; the other cases have no project configuration or input content.
-Pinned Fullsend v0.47.1 `UploadDir` includes `.git`, and read-only setup requires
-that metadata directory; neither operation requires a commit. The fresh local 21/21 run exercised this source
+repository, with no remote or commit, and no project configuration or input content.
+Pinned Fullsend v0.52.0 `UploadDir` (re-verified at `cc4fa1c5`) tars the directory's
+root members including `.git` (it strips only `.git/hooks` and macOS `._*` files) and
+uploads that archive with `--no-git-ignore`, so OpenShell 0.1.4's Git filtering cannot
+drop it. Read-only setup requires that metadata directory; neither operation requires a commit. The fresh local 21/21 run exercised this source
 contract; hosted setup still needs its own real WIF run. The target never points at the
 real repository. No containment check is disabled and external resource symlinks
 are not used.
@@ -250,9 +270,9 @@ Expected retained evidence includes:
   records showing Skill invocation/body, subsequent tool calls/results and failures.
 - `cases/<id>/output/native/agent-*/iteration-1/output/`: retained native output inventory after host validation.
   Malformed may produce no file or sole `agent-result.json` containing `{}` after host stripping;
-  valid produces sole `agent-result.json`, while absent/empty produce none.
+  valid produces sole `agent-result.json`, while empty produces none.
 - Native metrics/logs/traces and the unchanged root metrics copy when uniquely found.
-- Upstream judge results and summary, with all28 individual Boolean results/rationales.
+- Upstream judge results and summary, with all 24 individual Boolean results/rationales.
 
 Negative cases may cause a nonzero native CLI exit because the production host
 schema intentionally rejects absent/no result or the malformed abort result.
@@ -279,8 +299,8 @@ upstream judges.
 
 At the pinned framework revision, partial judge exceptions yield `value:null`
 and are omitted from aggregate values. After successful upstream scoring, the
-entrypoint checks the unchanged `summary.yaml`: exactly five reviewed cases and
-all28 applicable Boolean outcomes (4/5/5/7/7) are mandatory. Missing, null,
+entrypoint checks the unchanged `summary.yaml`: exactly four reviewed cases and
+all 24 applicable Boolean outcomes (5/5/7/7) are mandatory. Missing, null,
 non-Boolean, error or skipped applicable outcomes fail the command. Invalid YAML,
 duplicate keys, wrong run/case identities and unexpected assertion names also
 fail. The scorer emits seven named records per case; only the configured
@@ -329,7 +349,7 @@ The fresh local run proves the four paths locally; hosted WIF acceptance remains
 pending until the bootstrap is merged and PR299 runs successfully.
 
 An optional no-inference resolver regression uses actual Fullsend APIs from a
-temporary snapshot of pinned source `c68903c0373e2216af03f5412642d4aa4019057f`.
+temporary snapshot of pinned source `cc4fa1c5fce7d03ef1a0acff6d6d40d40aa9f208` (v0.52.0).
 It needs Go1.26.5 or newer and already cached module dependencies (downloads and
 automatic toolchain installation are disabled). It proves resource resolution and
 early environment validation without a generated run-directory variable, confirms
