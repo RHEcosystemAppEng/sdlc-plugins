@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "Lines 24-26: 'Before writing, the workflow re-reads the target file (`security-matrix.md`) immediately and compares it with the snapshot that was used to prepare the confirmed proposal.' The section heading is 'Pre-Write Re-Read and Comparison' which explicitly describes this behavior."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the CONCURRENT-ROW-KEEP entry",
+      "passed": true,
+      "evidence": "Lines 30-39 under 'Detected Changes': (1) 'Last-Updated timestamp changed: The file now contains `<!-- Last-Updated: 2026-10-26T09:15:00Z -->` instead of the original `<!-- Last-Updated: 2026-06-28T10:00:00Z -->`' and (2) 'New concurrent row added: A `CONCURRENT-ROW-KEEP` entry for 2.1.0/api-rhel10 now appears in the file. This row was not present in the snapshot used to build the proposal.'"
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "Lines 48-52: 'The newer `Last-Updated: 2026-10-26T09:15:00Z` timestamp is **not** overwritten with the stale `2026-06-28T10:00:00Z` value.' and 'The `CONCURRENT-ROW-KEEP` entry for 2.1.0/api-rhel10 is **not** removed or replaced.' The Changes Log table at lines 89-93 confirms: Concurrent Last-Updated timestamp is 'Preserved' and Concurrent CONCURRENT-ROW-KEEP row is 'Preserved — not overwritten'."
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Lines 54-59: 'The workflow **aborts the merge**... the `CONCURRENT-ROW-KEEP` row's complete values (Konflux Release Tag, Resolved Release Commit SHA, Image Reference, Image Digest, CPE, and other fields) were **not supplied**... Presenting a merged proposal with placeholder or incomplete values for this row would violate the skill's data integrity requirements.' Lines 63-74 show the workflow asking the user: 'Please provide the current full matrix contents or the complete row data for the concurrent entry so I can build an accurate merged proposal for your review.'"
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "Lines 76-83: '**No write occurs** until: 1. The concurrent change is fully reconciled with the confirmed proposal 2. A complete merged proposal (with no placeholders or missing values) is presented to the user 3. The user provides fresh confirmation of the merged result 4. A final re-read confirms the target has not changed again since the merged proposal was built'. The Changes Log also confirms: 'Project file write — **Not performed** — awaiting reconciliation and fresh confirmation'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

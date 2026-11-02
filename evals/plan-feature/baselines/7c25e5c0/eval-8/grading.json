@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "The impact map identifies the conflict between requiring ownerGroup on every Service Catalog record regardless of how it is populated and the stakeholder instruction to omit alternate write paths.",
+      "passed": true,
+      "evidence": "impact-map.md contains a '## Unresolved scope conflict' section that explicitly states: 'The following acceptance criterion applies universally across all population paths' (quoting the universal ownerGroup requirement), then: 'The stakeholder explicitly excluded scheduled synchronization, fallback import, and on-demand refresh from scope. However, these three paths also populate Service Catalog records and are therefore subject to the universal acceptance criteria above. Covering only registration and display does **not** satisfy these criteria.' This directly identifies the conflict."
+    },
+    {
+      "text": "The impact map or an explicit unresolved-scope section enumerates the excluded writer files and matching tests: src/workflows/scheduled_sync.py with tests/workflows/test_scheduled_sync.py, src/workflows/fallback_import.py with tests/workflows/test_fallback_import.py, and src/api/on_demand_refresh.py with tests/api/test_on_demand_refresh.py.",
+      "passed": true,
+      "evidence": "impact-map.md contains a subsection '### Excluded writer files and matching tests (unresolved)' with a table listing all three pairs: src/workflows/scheduled_sync.py with tests/workflows/test_scheduled_sync.py, src/workflows/fallback_import.py with tests/workflows/test_fallback_import.py, and src/api/on_demand_refresh.py with tests/api/test_on_demand_refresh.py. Each row also includes an 'Impact' column describing the consequence."
+    },
+    {
+      "text": "No task lists the three stakeholder-excluded writer files or their tests in Files to Modify, Files to Create, or Test Requirements; those paths may appear in the impact map only as unresolved exclusions.",
+      "passed": true,
+      "evidence": "Checked all 4 task files. Task 1 (task-1-add-ownergroup-to-catalog-store.md) Files to Modify: src/catalog/store.py, tests/catalog/test_store.py only. Task 2 (task-2-capture-ownergroup-in-registration.md) Files to Modify: src/workflows/registration.py, tests/workflows/test_registration.py only. Task 3 (task-3-display-ownergroup-in-consumers.md) Files to Modify: src/api/catalog_summary.py, src/reports/catalog_export.py, tests/api/test_catalog_summary.py, tests/reports/test_catalog_export.py only. Task 4 (task-4-documentation.md) has no Files to Modify or Files to Create sections. None of the excluded paths (scheduled_sync.py, fallback_import.py, on_demand_refresh.py, or their corresponding test files) appear in any task's Files to Modify, Files to Create, or Test Requirements."
+    },
+    {
+      "text": "The plan does not claim the universal ownerGroup acceptance criteria are met by registration and display alone; it asks for scope clarification or clearly records those criteria as unresolved.",
+      "passed": true,
+      "evidence": "impact-map.md states 'Scope clarification is required before these criteria can be marked as met' and contains a '### Unresolved acceptance criteria' subsection listing three criteria that 'cannot be claimed as met by the in-scope tasks alone', including: (1) 'Every Service Catalog record has an ownerGroup value after creation or update — only registration is in scope', (2) display coverage may show the field but 'records populated by excluded paths may have no ownerGroup value to display', and (3) existing-population behavior cannot be verified without excluded path test coverage. Task 3 also explicitly notes: 'Records from excluded population paths (scheduled sync, fallback import, on-demand refresh) are out of scope per stakeholder instruction and may not have ownerGroup set — see the unresolved scope conflict in the impact map.'"
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

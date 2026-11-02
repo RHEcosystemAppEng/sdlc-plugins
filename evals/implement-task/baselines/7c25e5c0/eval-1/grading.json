@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4 lists all 4 files: (1) 'advisory/endpoints/get.rs' — get_symbols_overview for GET handler pattern, (2) 'advisory/service/advisory.rs' — find_symbol for AdvisoryService methods, (3) 'advisory/model/summary.rs' — get_symbols_overview for AdvisorySummary struct, (4) 'common/src/error.rs' — get_symbols_overview for AppError enum."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6 lists exactly the 3 Files to Modify (advisory/service/advisory.rs, advisory/endpoints/mod.rs, advisory/model/mod.rs) and 3 Files to Create (advisory/model/severity_summary.rs, advisory/endpoints/severity_summary.rs, tests/api/advisory_summary.rs). The git add command in Step 10 lists only these 6 files. No out-of-scope files are modified."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md Step 6 'Files to Create' section lists: (4) 'modules/fundamental/src/advisory/model/severity_summary.rs', (5) 'modules/fundamental/src/advisory/endpoints/severity_summary.rs', (6) 'tests/api/advisory_summary.rs'. Each has a corresponding file-N-description.md."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md Step 6 'Files to Modify' section lists: (1) 'modules/fundamental/src/advisory/service/advisory.rs', (2) 'modules/fundamental/src/advisory/endpoints/mod.rs', (3) 'modules/fundamental/src/advisory/model/mod.rs'."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10 shows commit message: 'feat(advisory): add severity aggregation endpoint for SBOM advisories' (type=feat, scope=advisory, description) with footer 'Implements TC-9201'."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: Claude Code' in the commit (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md Step 10 shows: 'git commit --trailer=\"Assisted-by: Claude Code\" -m \"feat(advisory): ...\"'"
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Step 5 shows: 'git checkout main\\ngit pull\\ngit checkout -b TC-9201' and states 'Branch TC-9201 is created from the Target Branch (main)'."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md 'Error Handling' section: 'All service methods and handlers return Result<T, AppError>' and 'Error wrapping uses .context(\"description\")'. 'Module Structure' section: 'Each domain module follows the model/ + service/ + endpoints/ structure'."
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md Step 1 lists 'Target Branch: main'. Step 5 states 'Branch TC-9201 is created from the Target Branch (main)'. Step 10 shows 'gh pr create --base main'."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "plan.md Step 1.5 states: 'search for the marker string [sdlc-workflow] Description digest: as defined in shared/description-digest-protocol.md' and 'If no digest comment found: log warning — \"No description digest found — skipping integrity check. This task may have been created before digest tracking was introduced.\" Proceed normally (backward compatibility).'"
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": true,
+      "evidence": "plan.md Step 7: 'would first run cargo metadata --no-deps --format-version 1 from the workspace root to find the package whose targets include the test file, rather than deriving the crate name from the nearest Cargo.toml (which may be a virtual workspace manifest)'. Step 9 reiterates: 'Would run cargo metadata --no-deps --format-version 1 to resolve the crate name ... Would NOT derive the crate name from the nearest Cargo.toml, which may be a virtual workspace manifest.'"
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "pass_rate": 1.0
+  }
+}

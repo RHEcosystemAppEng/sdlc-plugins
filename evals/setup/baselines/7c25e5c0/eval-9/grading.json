@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+      "passed": true,
+      "evidence": "Line 6: 'Initial existence check (Step 10.5): File does not exist.' Line 13: 'Result: The file now exists. A concurrent triage-security run created it between the initial check and the write attempt.'"
+    },
+    {
+      "text": "The current Last-Updated: 2026-10-26T09:00:00Z value and CONCURRENT-ROW-KEEP content are preserved rather than replaced by the scaffold",
+      "passed": true,
+      "evidence": "Lines 28-29: 'The current Last-Updated: 2026-10-26T09:00:00Z timestamp is preserved. The CONCURRENT-ROW-KEEP row is preserved.' Also line 30: 'The prepared scaffold is discarded rather than written over the concurrent file.'"
+    },
+    {
+      "text": "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+      "passed": true,
+      "evidence": "Line 26: 'The setup skill uses create-if-absent semantics for security-matrix.md scaffolding. Because the target file now exists — despite being absent at the initial check — the scaffold will not be written.'"
+    },
+    {
+      "text": "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+      "passed": true,
+      "evidence": "Line 25: 'Decision: Scaffold Aborted'. Line 49: 'The now-existing target is skipped for scaffolding purposes.' Lines 44-45: 'a new merge proposal must be built from the current file's actual contents, presented for review, and receive fresh confirmation before any write occurs. The prior confirmation does not carry forward because the target state has changed.'"
+    },
+    {
+      "text": "The output states that no project file is written until the changed target is reconciled and confirmed",
+      "passed": true,
+      "evidence": "Line 48: 'No project file was written. The existing security-matrix.md created by the concurrent triage-security run is untouched.' Lines 50-51: 'Any future merge of scaffold structure into the existing file requires: (1) reading the current file, (2) building a complete merged proposal, (3) presenting it for user review, and (4) obtaining fresh confirmation before writing.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

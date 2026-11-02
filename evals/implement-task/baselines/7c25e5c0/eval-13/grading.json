@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md sections '1. `cves: Option<Vec<String>>`', '2. `affected_packages: Option<Vec<AffectedPackage>>`', and '3. `severity_counts: Option<HashMap<String, u32>>`' each list the field name and exact Option<T> type signature."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md Step 6 shows: cves uses `as_ref().map(|v| v.clone()).unwrap_or_default()`, affected_packages uses `as_ref().map(|pkgs| pkgs.len() as u32).unwrap_or(0)`, severity_counts uses `as_ref().map(|m| m.clone()).unwrap_or_default()`. null-guards.md 'Patterns NOT Used' table explicitly lists `.unwrap()` as avoided because it 'Panics on None'. No `.unwrap()` call appears in any code block."
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "plan.md Step 6 code block shows all three fields accessed through `as_ref().map().unwrap_or_default()` or `as_ref().map().unwrap_or(0)`. null-guards.md confirms 'Direct field access (`.len()`, `.join()`, `.iter()`) — Does not compile on `Option<T>`' is explicitly avoided. No unguarded access appears anywhere in the plan."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md 'Why Guards Are Needed' section states: 'The `AdvisoryIngestResult` struct is produced by `IngestorService::ingest_advisory()` in the **ingestor** module... The consumer is `AdvisoryService::extract_vulnerability_summary()` in the **fundamental** module... **The data crosses a module boundary.** The ingestor module's schema uses `Option<T>` types for all three aggregate fields, meaning the producer explicitly allows `None` values.'"
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md Step 7 includes `test_extract_vulnerability_summary_all_none` with comment: 'Given an AdvisoryIngestResult with cves=None, affected_packages=None, severity_counts=None / When extracting the vulnerability summary / Then returns zeroed/empty defaults: cve_count=0, cve_list=[], affected_package_count=0, severity_breakdown={}'. null-guards.md 'Test Coverage for Guards' section also confirms: 'Input: AdvisoryIngestResult { cves: None, affected_packages: None, severity_counts: None }'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation traces compute_risk_score() output through create_assessment() to diesel::insert_into(assessments::table) and identifies the persistence boundary at the assessments table, risk_score column (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md sections '1. Buggy Function: compute_risk_score()' -> '2. Caller: create_assessment()' trace the full call chain, showing 'let score = compute_risk_score(total_deps, vulnerable_deps);' followed by 'diesel::insert_into(assessments::table).values((...assessments::risk_score.eq(score)...))'. The 'Persistence-Impact Analysis' section explicitly identifies 'Table: assessments' and 'Column: risk_score (type: DOUBLE PRECISION)' as the persistence boundary."
+    },
+    {
+      "text": "Investigation records that risk_score is written at ingestion time (assessment creation) and is NOT recomputed on read, confirming a data migration is needed (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md 'Persistence-Impact Analysis' section states: 'Written at: Ingestion time (assessment creation via create_assessment())', 'Recomputed on read: NO -- get_assessment() reads persisted value directly', and concludes 'Data Migration Required' with explanation: 'Fixing compute_risk_score() alone is insufficient. A data migration is required to correct the risk_score values for all existing assessments in the database.'"
+    },
+    {
+      "text": "Task description Files to Create includes a data migration file following the Diesel naming convention discovered in the repository (YYYY-MM-DD-NNNNNN_description/up.sql) (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md 'Files to Create' section includes: 'migration/YYYY-MM-DD-NNNNNN_fix_risk_scores/up.sql -- data migration to recompute and update all existing risk_score values in the assessments table'. This follows the Diesel naming convention (YYYY-MM-DD-NNNNNN_description/up.sql) documented in the investigation."
+    },
+    {
+      "text": "Task description Implementation Notes includes migration logic to recompute and update existing risk_score values in the assessments table (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md 'Implementation Notes' states: 'The data migration must update existing rows in the assessments table' and provides SQL: 'UPDATE assessments SET risk_score = (vulnerable_deps::double precision / total_deps::double precision) FROM sboms WHERE assessments.sbom_id = sboms.id AND total_deps > 0;'"
+    },
+    {
+      "text": "Task description Acceptance Criteria includes a criterion that existing assessments with incorrect persisted risk_score values are corrected by the migration (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md 'Acceptance Criteria' includes the item: '[ ] Existing assessments with incorrect persisted `risk_score` values are corrected by the data migration'"
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before the data migration criterion and any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md 'Acceptance Criteria' lists items in order: (1) 'A reproducer test is added that fails before the fix and passes after (e.g., compute_risk_score(100, 5) asserts 0.05)', (2) 'Existing assessments with incorrect persisted risk_score values are corrected by the data migration', (3) 'compute_risk_score() returns vulnerable_deps / total_deps for all new assessments'. The reproducer test is the first criterion."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

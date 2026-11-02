@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md states: 'Search method: `find_symbol(name_path_pattern=\"SEVERITY_ORDER\")` across the `modules/fundamental` crate, supplemented by `search_for_pattern(pattern=\"SEVERITY_ORDER\")` to catch string literals and non-symbolic references.' Also searched variations: 'SEVERITY_ORDER', 'severity_order', 'SeverityOrder'."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md states: '**Existing definition found in:** `modules/fundamental/src/advisory/service/advisory.rs`' and quotes the definition: 'pub(crate) const SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"];'"
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md Step 6 File 1 states: 'Add import: `use crate::advisory::service::advisory::SEVERITY_ORDER;`' and the sorting logic references SEVERITY_ORDER directly. symbol-search.md Decision section: 'Import and reuse the existing `SEVERITY_ORDER` constant from the advisory module. Do not declare a duplicate.'"
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "plan.md File 1 changes list only: (1) add import, (2) add RemediationItem struct, (3) add get_remediation_list method. No new constant declaration. Step 9 confirms: 'SEVERITY_ORDER is imported from `crate::advisory::service::advisory`, not redeclared.' symbol-search.md explicitly rejects duplication: 'Declaring a new SEVERITY_ORDER in the sbom service would create a duplication that could silently diverge.'"
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md 'Search scope' section states: 'Searched the entire `modules/fundamental/` package (not just the sbom service file being edited)' and used both find_symbol and search_for_pattern across the crate."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
