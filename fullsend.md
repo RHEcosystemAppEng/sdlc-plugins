@@ -96,8 +96,9 @@ by the Service Account.
 | Personal (`ATATT`) | 200 | 403 | 200 | 401 |
 
 **Required Jira project permissions.** The Service Account needs these on the
-TC project (granted through the TC permission scheme to the role/group holding
-`tpa-fullsend-jira-sa`):
+TC project. A TC project admin grants them by adding `tpa-fullsend-jira-sa` to
+the **Users** role in the TC space settings; that role carries all three in the
+TC permission scheme:
 
 | Permission | Key | Used for |
 |---|---|---|
