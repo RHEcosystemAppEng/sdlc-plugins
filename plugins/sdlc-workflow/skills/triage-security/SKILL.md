@@ -73,6 +73,8 @@ if [ "${FULLSEND_OUTPUT_DIR+x}" = x ]; then
     echo "ERROR: FULLSEND_OUTPUT_DIR is set but empty" >&2
     exit 1
   fi
+  # Fullsend's Claude runtime exports the output dir without creating it.
+  mkdir -p "$FULLSEND_OUTPUT_DIR"
   echo "sandbox mode: $FULLSEND_OUTPUT_DIR"
 else
   echo "interactive mode"
@@ -286,9 +288,10 @@ PYEOF
   validated trusted input bundle is also accepted provenance: derive those values from
   its `source_evidence` and `jira_metadata`, never infer or invent them.
 - **Fullsend output exception:** In Fullsend mode, the only permitted sandbox-side file
-  write is `$FULLSEND_OUTPUT_DIR/agent-result.json`: write either the deliberately
-  schema-invalid validation failure object or the completed valid accumulated result.
-  Do not create, modify, or repair any other local file.
+  write is `$FULLSEND_OUTPUT_DIR/agent-result.json` (Step 0.6 creates that directory):
+  write either the deliberately schema-invalid validation failure object or the
+  completed valid accumulated result. Do not create, modify, or repair any other
+  local file.
 - **Do NOT use Edit, Write, or Bash tools** to change files — except for
   local `security-matrix.md` files in the project working directory (see Step 2.1).
   In Fullsend mode, the narrow output exception above also permits writing
