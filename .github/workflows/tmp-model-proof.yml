@@ -1,0 +1,64 @@
+# TEMPORARY — pre-merge proof for TC-7280 (claude-opus-5-5 / claude-sonnet-5-5).
+# Delete this file before merging. It runs one small skill suite on the new
+# models so the PR has a live, graded result; eval-pr-run.yml and
+# eval-baseline.yml execute from main and cannot exercise the pins from a PR.
+
+name: TMP Model Proof
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  proof:
+    if: github.event.repository.fork != true
+    name: Prove new eval models
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+
+      - name: Install Claude Code
+        run: curl -fsSL https://claude.ai/install.sh | bash
+
+      - name: Run one eval suite on the new models
+        env:
+          CLAUDE_CODE_USE_VERTEX: "1"
+          ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          CLOUD_ML_REGION: ${{ secrets.GCP_CLOUD_ML_REGION }}
+          ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-5-5"
+          ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-5-5"
+          ANTHROPIC_MODEL: "claude-opus-5-5"
+        run: |
+          skill=report-bug
+          workspace="/tmp/${skill}-model-proof"
+          claude -p "$(cat <<PROMPT
+          Use the sdlc-workflow:run-evals skill for skill /${skill}.
+          Evals path: evals/${skill}/evals.json
+          Workspace: ${workspace}
+          PROMPT
+          )" --permission-mode dontAsk \
+            --allowedTools Read Write Bash Skill Agent Glob \
+            --verbose 2>&1
+
+          echo "--- Workspace contents ---"
+          find "${workspace}" -type f 2>/dev/null || true
+          test -f "${workspace}/benchmark.json"
+          test -f "${workspace}/summary.md"
+
+      - name: Upload graded results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tmp-model-proof-results
+          path: /tmp/report-bug-model-proof/
+          if-no-files-found: warn
