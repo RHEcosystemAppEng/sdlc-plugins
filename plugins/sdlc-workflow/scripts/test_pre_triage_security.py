@@ -1290,7 +1290,8 @@ def test_discover_jql_matches_skill_discovery_query(tmp_path, monkeypatch):
 
     def jira_client(command, *arguments):
         """Record the search arguments and return no issues."""
-        searched.append((command, arguments))
+        if command == "search_jql":
+            searched.append((command, arguments))
         return {"issues": []}
 
     monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
@@ -1321,7 +1322,8 @@ def test_discover_returns_ordered_keys_and_urls_within_cap(
         """Return three issues in the order the JQL sorts them, and the site serverInfo."""
         if command == "get_server_info":
             return {"baseUrl": "https://jira.example.com"}
-        calls.append(arguments)
+        if command == "search_jql":
+            calls.append(arguments)
         return {"issues": [{"key": "TC-3"}, {"key": "TC-1"}, {"key": "TC-2"}]}
 
     monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
@@ -1359,12 +1361,14 @@ def test_discover_rejects_unexpected_issue_keys(tmp_path, monkeypatch, capsys, k
 
 def test_discover_reports_jira_client_failure(tmp_path, monkeypatch, capsys):
     """A failed Jira search exits 1 rather than reporting an empty list."""
-    # Given a Jira client process that fails
+    # Given a Jira client process that fails on the search
     root = _discovery_project(tmp_path, monkeypatch)
 
-    def failing_client(*_args):
-        """Simulate the existing fail-fast Jira process."""
-        raise subprocess.CalledProcessError(1, ["jira-client"])
+    def failing_client(command, *_arguments):
+        """Simulate the existing fail-fast Jira process on the untriaged search."""
+        if command == "search_jql":
+            raise subprocess.CalledProcessError(1, ["jira-client"])
+        return {}
 
     monkeypatch.setattr(pre_triage_security, "_jira_client", failing_client)
 
@@ -1376,6 +1380,104 @@ def test_discover_reports_jira_client_failure(tmp_path, monkeypatch, capsys):
     assert status == 1
     assert captured.out == ""
     assert captured.err.startswith("ERROR:")
+
+
+@pytest.mark.parametrize("failure", [
+    subprocess.CalledProcessError(1, ["jira-client", "verify_identity"]),
+    subprocess.CalledProcessError(2, ["jira-client", "verify_identity"],
+                                  stderr="Jira identity could not be verified"),
+], ids=["exit-1", "exit-2-with-stderr"])
+def test_discover_fails_closed_when_identity_is_unverified(
+        tmp_path, monkeypatch, capsys, failure):
+    """An unverified Jira identity aborts discover before the untriaged search runs."""
+    # Given a credential whose /myself verification fails
+    root = _discovery_project(tmp_path, monkeypatch)
+    commands = []
+
+    def jira_client(command, *arguments):
+        """Fail the identity check and record every command attempted."""
+        commands.append((command, arguments))
+        if command == "verify_identity":
+            raise failure
+        return {"issues": []}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root)])
+
+    # Then it exits 1 with an ERROR, prints no issue list, and never searches
+    captured = capsys.readouterr()
+    assert status == 1
+    assert captured.out == ""
+    assert "ERROR:" in captured.err
+    assert "could not be verified" in captured.err
+    assert commands == [("verify_identity", ())]
+
+
+@pytest.mark.parametrize("failure", [
+    subprocess.CalledProcessError(1, ["jira-client", "verify_project_access"]),
+    subprocess.CalledProcessError(2, ["jira-client", "verify_project_access"],
+                                  stderr="The Jira credential cannot browse project TC"),
+], ids=["exit-1", "exit-2-with-stderr"])
+def test_discover_fails_closed_without_project_access(
+        tmp_path, monkeypatch, capsys, failure):
+    """Missing Browse Projects on the configured project aborts discover before the search."""
+    # Given a verified identity whose project-access check fails
+    root = _discovery_project(tmp_path, monkeypatch)
+    commands = []
+
+    def jira_client(command, *arguments):
+        """Pass the identity check, fail project access, and record every command."""
+        commands.append((command, arguments))
+        if command == "verify_project_access":
+            raise failure
+        return {"accountId": "sa-1"}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root)])
+
+    # Then it exits 1 with an ERROR, checks the configured project, and never searches
+    captured = capsys.readouterr()
+    assert status == 1
+    assert captured.out == ""
+    assert "ERROR:" in captured.err
+    assert "could not be verified" in captured.err
+    assert commands == [
+        ("verify_identity", ()),
+        ("verify_project_access", ("TC",)),
+    ]
+
+
+def test_discover_reports_empty_search_only_after_access_checks(
+        tmp_path, monkeypatch, capsys):
+    """A verified identity and project access make an empty search a genuine no-work result."""
+    # Given a verified credential and an untriaged search that matches nothing
+    root = _discovery_project(tmp_path, monkeypatch)
+    commands = []
+
+    def jira_client(command, *arguments):
+        """Answer the access checks, record every command, and return no issues."""
+        commands.append((command, arguments))
+        return {"issues": []}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When the poller runs the discover command
+    status = pre_triage_security.main(["discover", str(root)])
+
+    # Then it reports the empty list after the checks and the search, in that order
+    assert status == 0
+    assert json.loads(capsys.readouterr().out) == {"issues": []}
+    assert commands == [
+        ("verify_identity", ()),
+        ("verify_project_access", ("TC",)),
+        ("search_jql", ("--jql", pre_triage_security.untriaged_jql(
+            {"project_key": "TC", "vulnerability_issue_type_id": "10016"}),
+            "--fields", "key", "--max-results", "20")),
+    ]
 
 
 @pytest.mark.parametrize("server_url", [_SITE_URL, _GATEWAY_URL])
@@ -1403,7 +1505,8 @@ def test_discover_links_use_server_info_base_url(tmp_path, monkeypatch, capsys, 
         {"key": "TC-7", "url": _SITE_URL + "/browse/TC-7"},
         {"key": "TC-8", "url": _SITE_URL + "/browse/TC-8"},
     ]}
-    assert commands == ["search_jql", "get_server_info"]
+    assert commands == ["verify_identity", "verify_project_access",
+                        "search_jql", "get_server_info"]
 
 
 def test_discover_skips_server_info_when_no_issues(tmp_path, monkeypatch, capsys):
@@ -1422,10 +1525,10 @@ def test_discover_skips_server_info_when_no_issues(tmp_path, monkeypatch, capsys
     # When the poller runs the discover command
     status = pre_triage_security.main(["discover", str(root)])
 
-    # Then it reports an empty list after a single search
+    # Then it reports an empty list after the access checks and a single search
     assert status == 0
     assert json.loads(capsys.readouterr().out) == {"issues": []}
-    assert commands == ["search_jql"]
+    assert commands == ["verify_identity", "verify_project_access", "search_jql"]
 
 
 @pytest.mark.parametrize("server_info", [

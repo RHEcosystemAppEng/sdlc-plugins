@@ -902,7 +902,12 @@ def _browse_base_url():
 
 
 def discover_untriaged(project_root, max_results=20):
-    """List untriaged Vulnerability issues for an unattended poller, in JQL order."""
+    """List untriaged Vulnerability issues for an unattended poller, in JQL order.
+
+    Fails closed unless the credential resolves to a Jira account that can browse
+    the configured project, so an empty result is only reported when the search
+    itself ran with a verified identity and project access.
+    """
     if not isinstance(max_results, int) or max_results < 1:
         raise EvidenceError("max_results must be a positive integer")
     claude_path = Path(project_root) / "CLAUDE.md"
@@ -910,11 +915,26 @@ def discover_untriaged(project_root, max_results=20):
         raise EvidenceError("target project CLAUDE.md is required")
     configuration = parse_security_configuration(_read_text(claude_path, "target project CLAUDE.md"))
     project = configuration["project_key"]
+    # Build (and validate) the query before any Jira call, so a broken
+    # configuration fails without spending requests.
+    jql = untriaged_jql(configuration)
+    # Fail closed before trusting an empty search. A broken credential and an
+    # account without Browse Projects both make Jira answer a JQL search with
+    # `200 []` instead of an error, which is indistinguishable from "nothing to
+    # triage"; verify the identity, then access to the configured project, first.
+    try:
+        _jira_client("verify_identity")
+        _jira_client("verify_project_access", project)
+    except subprocess.CalledProcessError as error:
+        detail = (error.stderr or "").strip()
+        raise EvidenceError(
+            "Jira identity or access to project {} could not be verified{}".format(
+                project, ": " + detail if detail else "")) from error
     # One search_jql page holds at most 50 issues; page with --all only when the
     # cap needs more, then trim to the cap so the JQL ordering is preserved.
     paging = ["--max-results", str(max_results)] if max_results <= 50 else ["--all"]
     search = _require_mapping(
-        _jira_client("search_jql", "--jql", untriaged_jql(configuration), "--fields", "key", *paging),
+        _jira_client("search_jql", "--jql", jql, "--fields", "key", *paging),
         "untriaged search")
     keys = []
     for item in _require_list(search.get("issues"), "untriaged search issues", allow_empty=True)[:max_results]:
