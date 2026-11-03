@@ -141,7 +141,8 @@ need further permissions and are not covered by this list.
   through `post_jira_comment_native`) authenticates with Basic and requires
   `JIRA_USER_EMAIL`. Both harnesses declare it in `env.runner` because fullsend
   drops it from script environments otherwise; no other script reads it.
-- **The pre_script and `discover` fail closed before trusting an empty search.**
+- **The verify-pr pre_script and `discover` fail closed before trusting an empty
+  search.**
   Because both a broken credential and an account without project access get
   `200 []` from JQL, `pre-verify-pr.sh` first requires `GET /myself` to resolve an
   `accountId` (`jira-client.py verify_identity`) and `BROWSE_PROJECTS` on
@@ -150,9 +151,9 @@ need further permissions and are not covered by this list.
   (the untriaged-issue poller contract) runs the same two checks, in that order,
   before its untriaged JQL search, using the project key it parses from the target
   `CLAUDE.md`. If either check fails it exits non-zero with an `ERROR:` and prints
-  no work-item list, so the poller never reports green with nothing dispatched
-  because the run could not see the issues. The Service Account therefore needs
-  Browse Projects on TC and a token allowed to read `/myself`.
+  no work-item list, so a credential or project-access problem can no longer
+  masquerade as "nothing to triage". The Service Account therefore needs Browse
+  Projects on TC and a token allowed to read `/myself`.
 - **The email must be the one on record, with its random suffix**
   (`<sa-name>-<suffix>@serviceaccount.atlassian.com`); the display
   address without the suffix gets 401. Read it with

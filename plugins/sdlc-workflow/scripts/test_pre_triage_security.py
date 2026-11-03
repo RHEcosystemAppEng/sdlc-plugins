@@ -1411,7 +1411,7 @@ def test_discover_fails_closed_when_identity_is_unverified(
     assert status == 1
     assert captured.out == ""
     assert "ERROR:" in captured.err
-    assert "could not be verified" in captured.err
+    assert "Jira identity could not be verified" in captured.err
     assert commands == [("verify_identity", ())]
 
 
@@ -1444,7 +1444,7 @@ def test_discover_fails_closed_without_project_access(
     assert status == 1
     assert captured.out == ""
     assert "ERROR:" in captured.err
-    assert "could not be verified" in captured.err
+    assert "Jira access to project TC could not be verified" in captured.err
     assert commands == [
         ("verify_identity", ()),
         ("verify_project_access", ("TC",)),
