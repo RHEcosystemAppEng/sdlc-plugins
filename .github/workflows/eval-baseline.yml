@@ -10,6 +10,9 @@ on:
     paths:
       - 'plugins/sdlc-workflow/skills/**/*.md'
       - 'evals/**/evals.json'
+      # A model change edits this file, so it must re-baseline; otherwise `latest`
+      # stays on baselines produced by the previous models.
+      - '.github/workflows/eval-baseline.yml'
 
 jobs:
   eval-baseline:
@@ -53,9 +56,9 @@ jobs:
           CLAUDE_CODE_USE_VERTEX: "1"
           ANTHROPIC_VERTEX_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           CLOUD_ML_REGION: ${{ secrets.GCP_CLOUD_ML_REGION }}
-          ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-4-6"
-          ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-4-6"
-          ANTHROPIC_MODEL: "claude-opus-4-6"
+          ANTHROPIC_DEFAULT_SONNET_MODEL: "claude-sonnet-5-5"
+          ANTHROPIC_DEFAULT_OPUS_MODEL: "claude-opus-5-5"
+          ANTHROPIC_MODEL: "claude-opus-5-5"
         run: |
           COMMIT_HASH="${{ steps.discover.outputs.commit_hash }}"
           IFS=',' read -ra SKILLS <<< "${{ steps.discover.outputs.skills }}"
