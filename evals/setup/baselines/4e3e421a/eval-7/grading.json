@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review or changes log identifies docs/templates/security-matrix.template.md as the sole canonical scaffold and does not use docs/templates/security-matrix.md as a template or fallback",
+      "passed": true,
+      "evidence": "security-matrix-review.md section 2: \"Source: plugin-root `docs/templates/security-matrix.template.md` (the canonical template; `docs/templates/security-matrix.md` is only a worked example and was not used as the scaffold source)\". changes-log.md: \"Scaffold from `docs/templates/security-matrix.template.md`\". No fallback to security-matrix.md is mentioned anywhere."
+    },
+    {
+      "text": "outputs/security-matrix-review.md contains a Container Images table keyed by both Product Version and Component, with separate 2.1.0 api-rhel9 and api-rhel10 rows",
+      "passed": true,
+      "evidence": "Section 4 draft '#### Container Images' header: '| Product Version | Component | Konflux Release Tag | Resolved Release Commit SHA | Image Reference | Image Digest | CPE |', with separate rows '| 2.1.0 | api-rhel9 | ...' and '| 2.1.0 | api-rhel10 | ...'."
+    },
+    {
+      "text": "The proposed Supportability Matrix uses the configured dynamic source-repository columns backend and frontend-ui, with the supplied version/build/date/source-pin rows",
+      "passed": true,
+      "evidence": "Draft header '| Product Version | Build | Build Date | backend | frontend-ui | Notes |' with rows '| 2.1.0 | 0.3.12 | 2026-06-15 | `v0.3.12` | `bb447eeb` | |' and '| 2.1.1 | 0.3.13 | 2026-06-20 | `v0.3.13` | `deadbeef` | |', the same as the fixture."
+    },
+    {
+      "text": "The expanded Supportability Matrix header, separator, and data rows have the same number of cells for both configured source repositories",
+      "passed": true,
+      "evidence": "Draft: the header has 6 cells, the separator '|---|---|---|---|---|---|' has 6, and both data rows have 6 (the trailing empty Notes cell included). The scaffold has the same layout: header 6, separator 6, placeholder row '| {version} | {build} | {build-date} | `{source-ref}` | `{source-ref}` | |' 6."
+    },
+    {
+      "text": "The proposed Source Pinning Method section has one entry per configured repository and uses the supplied artifacts.lock.yaml and Git submodule methods",
+      "passed": true,
+      "evidence": "Draft '### Source Pinning Method': '- **backend**: `artifacts.lock.yaml` download URL contains the release tag' and '- **frontend-ui**: Git submodule at `components/frontend-ui`'. These are the fixture's entries word for word."
+    },
+    {
+      "text": "The proposed matrix preserves the supplied Ecosystem Mappings rows for Cargo/backend and npm/frontend-ui rather than replacing or omitting that section",
+      "passed": true,
+      "evidence": "Draft '## Ecosystem Mappings' contains '| Cargo | backend | `Cargo.lock` | `git show <tag>:Cargo.lock` | `release/0.3.z` |' and '| npm | frontend-ui | `package-lock.json` | `git show <commit>:package-lock.json` | `release/0.3.z` |', the same as the fixture."
+    },
+    {
+      "text": "The valid image rows preserve Konflux release tag v0.3.12 and resolved full commit SHA 0123456789abcdef0123456789abcdef01234567 as separate values",
+      "passed": true,
+      "evidence": "Both 2.1.0 Container Images rows have '`v0.3.12`' in the Konflux Release Tag column and '`0123456789abcdef0123456789abcdef01234567`' in a separate Resolved Release Commit SHA column."
+    },
+    {
+      "text": "The valid rows preserve distinct image references and immutable sha256 digests, retain the fixture's trustify_api:2.1.0 CPE on both api-rhel9 and api-rhel10 rows without requiring CPE uniqueness across platforms, and show the OCI revision label matching the resolved release commit SHA",
+      "passed": true,
+      "evidence": "The rows use different image references, 'registry.example.test/trustify/api:2.1.0-rhel9' and '...:2.1.0-rhel10', with digests 'sha256:aaaa...' and 'sha256:bbbb...'. Both rows carry 'cpe:2.3:a:example:trustify_api:2.1.0:*:*:*:*:*:*:*'. The shared CPE is 'Recorded exactly as supplied'; the user is asked to confirm it but the rows are not blocked. The section 3 revision-check table shows the `org.opencontainers.image.revision` '0123456789abcdef0123456789abcdef01234567' equal to the resolved SHA, 'MATCH — verified', for both rows."
+    },
+    {
+      "text": "The 2.1.1 api-rhel10 mapping is flagged because its OCI revision label fedcba9876543210fedcba9876543210fedcba98 does not match the SHA resolved from v0.3.13, and it is not presented as verified data",
+      "passed": true,
+      "evidence": "Section 3 row: '| 2.1.1 | api-rhel10 | `v0.3.13` | `89abcdef...` | `fedcba9876543210fedcba9876543210fedcba98` | **MISMATCH — unresolved** |'. The draft leaves this row out: '2.1.1 / api-rhel10 withheld: published revision label fedcba98... does not match the commit 89abcdef... resolved from v0.3.13'. The text also says 'the mismatched row is not recorded or marked verified'."
+    },
+    {
+      "text": "The output presents the completed matrix for user review before writing and states that no matrix is written while the mismatch remains unresolved",
+      "passed": true,
+      "evidence": "Section 4 'Proposed populated matrix (DRAFT — for review only; NOT writable yet)' presents the full proposal built from the supplied evidence: all sections, both valid image rows, pinning and ecosystem data. Section 3 says 'the matrix is left unchanged until the evidence is verified. No populated content is written'. Section 6 says 'Matrix population: BLOCKED ... No populated matrix has been written'. changes-log.md says 'Populate ... **Blocked — not written**'. Caveat: section 4 also says 'if a scaffold is written first', so a confirmed scaffold write is not fully ruled out. The empty scaffold is separate from the populated matrix, so this was not treated as a contradiction."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

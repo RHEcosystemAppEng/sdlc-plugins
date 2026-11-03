@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The response describes locating the digest comment using the marker string '[sdlc-workflow] Description digest:' from shared/description-digest-protocol.md",
+      "passed": true,
+      "evidence": "digest-mismatch.md, Step 1.5 section 2 'Locate the digest comment': \"I search for comments whose body starts with the fixed marker `[sdlc-workflow] Description digest:`. Exactly one comment matches: [sdlc-workflow] Description digest: sha256-md:0000...\". The exact marker string is used to find the comment. The output never names shared/description-digest-protocol.md, but the marker it uses is that protocol's marker."
+    },
+    {
+      "text": "The response describes detecting a mismatch between the stored digest and the computed digest of the current description",
+      "passed": true,
+      "evidence": "Section 4b extracts the stored digest 'sha256-md' / all-zeros hex. Section 4c computes the current digest with `python3 scripts/sha256-digest.py /tmp/desc-TC-9201.txt`. Section 4e says: \"They are different. **This is a MISMATCH.**\" Section 4d also confirms that the format tags match, so the hex difference is a real content change."
+    },
+    {
+      "text": "The response alerts the user that the description was modified after plan-feature created the task and displays the expected vs actual digest values",
+      "passed": true,
+      "evidence": "The alert block says: \"The task description was modified after plan-feature created it.\" and lists \"**Expected digest** (from the plan-feature digest comment): `sha256-md:0000000000000000000000000000000000000000000000000000000000000000`\" and \"**Actual digest** (computed now ...): `sha256-md:<computed 64-char hex>`\". The actual value is a placeholder because the run is simulated."
+    },
+    {
+      "text": "The response offers the user a choice: (1) proceed with the current description, or (2) stop so they can re-run plan-feature",
+      "passed": true,
+      "evidence": "The alert ends with: \"1. **Proceed** and implement the task using the current description as it is\" / \"2. **Stop** so you can re-run plan-feature and regenerate the tasks\" / \"Please choose 1 or 2.\""
+    },
+    {
+      "text": "The response stops execution and does not proceed to Step 2 or implementation planning until the user responds — following the same pause-and-ask pattern as the incomplete description handling",
+      "passed": true,
+      "evidence": "\"**Execution stops immediately here.** Until the user responds, I would **not**: go to Step 2 (Verify Dependencies); assign the issue or transition it to In Progress (Step 3); inspect the code with Serena (Step 4), create a branch (Step 5) or make any code changes...\" and \"I would not silently continue, guess which choice the user wants, or treat the mismatch as only a warning.\" The summary table row reads: \"Alert the user ... offer Proceed or Stop, and stop until the user responds\"."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

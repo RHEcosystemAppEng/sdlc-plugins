@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md section 2a lists `mcp__serena_backend__find_symbol(name_path_pattern=\"SEVERITY_ORDER\", include_body=true)`, `search_for_pattern(substring_pattern=\"SEVERITY_ORDER|SeverityOrder|severity_order|severityOrder\")`, and a Grep fallback `Grep pattern=\"SEVERITY_ORDER|SeverityOrder|severity_order\" path=\"modules/\"`. Section 4 then concludes 'REUSE SEVERITY_ORDER, do not redeclare it'."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md Findings table: '`SEVERITY_ORDER` | **Yes** | `modules/fundamental/src/advisory/service/advisory.rs`, `SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]`'."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md: '**Reuse the existing constant. Do not redeclare it.**' and in sbom/service/sbom.rs changes: 'Add `use crate::advisory::service::advisory::SEVERITY_ORDER;`'."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "No new `const SEVERITY_ORDER` declaration appears in plan.md's per-file changes; only a `use` import and an optional visibility widening of the existing constant in advisory.rs. plan.md: 'Copying it is not an option.' symbol-search.md section 6 expects 'exactly one declaration (in advisory.rs) plus the new use in sbom.rs'."
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md section 2: 'Target package: the `fundamental` crate (`modules/fundamental/`)... I search the whole crate, not just `sbom/service/sbom.rs`. I also check the workspace crates that `fundamental` already depends on (`common`, `entity`).' Grep fallbacks target path=\"modules/\" and path=\".\"."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

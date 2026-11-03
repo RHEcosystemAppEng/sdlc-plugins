@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
+      "passed": true,
+      "evidence": "version-impact.md table: RHTPA 2.1.0 (`v0.3.8`, h2 0.4.5) **YES**, RHTPA 2.1.1 (`v0.3.12`, h2 0.4.5) **YES**; RHTPA 2.2.0-2.2.4 (h2 0.4.8/0.4.9) all NO. Source line: simulated `git show <tag>:Cargo.lock | grep -A2 'name = \"h2\"'` at pinned tags. Per-stream summary: 2.1.x AFFECTED, 2.2.x NOT AFFECTED, heading 'Per-stream summary (mixed impact)'."
+    },
+    {
+      "text": "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md diff: 'Current: [RHTPA 2.1.0, RHTPA 2.2.0] / Proposed: [RHTPA 2.1.0, RHTPA 2.1.1]'; RHTPA 2.2.0 action '**remove** — not affected'; 2.2.1-2.2.4 'do not add'. Proposed edit_issue versions contain only 2.1.0 and 2.1.1 IDs."
+    },
+    {
+      "text": "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 8 Case A scoping)",
+      "passed": true,
+      "evidence": "remediation.md: '2.2.x: **no tasks** — every 2.2.x version already ships h2 >= 0.4.8'; Task 1 and Task 2 both target 2.1.x (release/0.3.z, rhtpa-release.0.3.z); checklist 'Task count: 2 for 2.1.x (Cargo); 0 for unaffected 2.2.x'; 'No release Jira is needed for 2.2.x.'"
+    },
+    {
+      "text": "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
+      "passed": true,
+      "evidence": "data-extraction.md 'Stream scope resolution': 'Summary has **no bracketed stream suffix** -> issue is **unscoped** and covers all configured streams (2.1.x and 2.2.x)'. version-impact.md table lists all 7 versions across 2.1.x and 2.2.x. affects-versions.md comment: 'Issue is unscoped (no stream suffix); all streams analyzed.'"
+    },
+    {
+      "text": "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 8 Case B applies only to scoped issues)",
+      "passed": true,
+      "evidence": "No cross-stream impact notice/comment appears in any output file. data-extraction.md: 'Case A (cross-stream comment / preemptive tasks) does not apply'; remediation.md checklist: 'Cross-stream coverage: N/A (unscoped issue)' and 'Preemptive labels: none (no preemptive tasks)'. The ordered Jira operations list contains no cross-stream notice."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

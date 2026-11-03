@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation identifies two independent root causes: (1) convention reference formatter using wrong case transform, (2) task creation using Feature issue type ID instead of Task (Steps 2-4)",
+      "passed": true,
+      "evidence": "investigation.md Step 4: 'Conclusion: two independent root causes.' Row 1: 'Formatter lowercases and kebab-cases the CONVENTIONS.md heading instead of preserving it verbatim' in shared/convention-utils.md. Row 2: 'Step 6a selects the Feature issue type ID from configuration instead of the level-0 Task type discovered in Step 2.5' (10142 vs 10050). Step 2 traces both as 'two separate execution paths' and Step 4 lists why they are independent (different modules, phases, inputs)."
+    },
+    {
+      "text": "Decomposition Guard is triggered because the two root causes are in different modules/code paths (Step 6)",
+      "passed": true,
+      "evidence": "investigation.md line 138-140: 'This meets the Step 6 Decomposition Guard trigger (multiple independent fixes across different modules, each addressing a distinct root cause)'. decomposition-guard.md: 'These are independent root causes. They live in different modules, run in different phases of /plan-feature'."
+    },
+    {
+      "text": "Decomposition Guard presents both issues with their affected files/modules (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md issue 1: '(in `shared/convention-utils.md`, the convention reference formatter)'; issue 2: '(in `skills/plan-feature/SKILL.md` Step 6a, task creation)'."
+    },
+    {
+      "text": "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md: 'Options: 1. **Proceed**: create a single Task covering all fixes 2. **Split**: I recommend creating separate Bugs for each independent issue, then triaging each one individually ... Choose (1/2):'"
+    },
+    {
+      "text": "The skill does NOT silently create a single Task bundling both fixes — it waits for user input (Step 6 stop rule)",
+      "passed": true,
+      "evidence": "decomposition-guard.md: 'Prompt shown to the user before any Task is created' and ends with 'Choose (1/2):'. investigation.md 'Steps 5 / 5b / 5c — Deferred': 'Task generation, linking ... and digest posting are held pending the user's decomposition choice'; line 139: 'a single bundled Task should **not** be created silently'. No Task creation output exists in the outputs directory."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

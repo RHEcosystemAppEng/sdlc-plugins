@@ -1,0 +1,50 @@
+{
+  "assertion_results": [
+    {
+      "text": "The output cites the explicit on-demand trigger for a missing required component pair even when the Container Images section exists, and identifies missing (2.1.2, api-rhel10)",
+      "passed": true,
+      "evidence": "matrix-population.md Section 1 quotes version-impact-analysis.md: \"...or is missing any required component pair—even when the section and other rows already exist—research and prepare a complete update\"; pair table marks \"(2.1.2, api-rhel10) | No | Missing -> triggers on-demand population\" and states \"The Container Images section already exists and other rows are present; the written rule explicitly still triggers population for the single missing component pair.\""
+    },
+    {
+      "text": "The proposal preserves the existing api-rhel9 row and proposes only the missing api-rhel10 row without duplicating the existing pair",
+      "passed": true,
+      "evidence": "Proposed Container Images table (lines 89-90) has exactly one (2.1.2, api-rhel9) row and one new (2.1.2, api-rhel10) row; Section 3 says \"only one Container Images row is added\"; pair table marks api-rhel9 \"No change\"."
+    },
+    {
+      "text": "The Container Images table has separate columns for release tag, resolved full SHA, image reference, immutable digest, and CPE; revision-label comparisons are shown separately from the stored row fields",
+      "passed": true,
+      "evidence": "Header line 87: \"| Product Version | Component | Konflux Release Tag | Resolved Release Commit SHA | Image Reference | Image Digest | CPE |\"; separate section \"Revision-label comparisons (reported separately from the table, per step 3)\" at lines 48-53."
+    },
+    {
+      "text": "The proposed api-rhel10 row preserves v0.3.14 and the full resolved SHA 0123456789abcdef0123456789abcdef01234567 as distinct values, plus its supplied image reference, digest, and CPE",
+      "passed": true,
+      "evidence": "Line 90: \"| 2.1.2 | api-rhel10 | `v0.3.14` | `0123456789abcdef0123456789abcdef01234567` | `registry.example.test/trustify/api:2.1.2-rhel10` | `sha256:bbbb...bbbb` | `cpe:2.3:a:example:trustify_api:2.1.2:*:*:*:*:*:*:*` |\" — tag and SHA in distinct columns."
+    },
+    {
+      "text": "The api-rhel10 revision label is compared with the resolved release SHA and marked verified",
+      "passed": true,
+      "evidence": "Line 53: \"| (2.1.2, api-rhel10) | `0123456789abcdef0123456789abcdef01234567` | `0123456789abcdef0123456789abcdef01234567` | yes | VERIFIED (new) |\"."
+    },
+    {
+      "text": "The existing 2.1.2/build 0.3.14/date 2026-06-25/backend source-pin row is preserved",
+      "passed": true,
+      "evidence": "Proposed Supportability Matrix line 83: \"| 2.1.2 | 0.3.14 | 2026-06-25 | `v0.3.14` | |\" alongside preserved 2.1.0 and 2.1.1 rows."
+    },
+    {
+      "text": "The proposal preserves the existing Source Pinning Method and Ecosystem Mappings from security-matrix-mock.md",
+      "passed": true,
+      "evidence": "Proposal lines 92-101 reproduce the fixture's 2.1.x content exactly: \"- **backend**: `artifacts.lock.yaml` (download URL contains tag, e.g., `v0.3.12`)\" and the Cargo (`release/0.3.z`) and RPM (`rpms.lock.yaml`) Ecosystem Mappings rows, matching evals/triage-security/files/security-matrix-mock.md lines 17-26; 2.2.x section stated \"unchanged\"."
+    },
+    {
+      "text": "The report cites the shared write-safety rule as covering fallback saves, format auto-repairs, and population; the final comparison detects the concurrent target, preserves it, and aborts rather than writing stale content",
+      "passed": true,
+      "evidence": "Section 5 item 2 quotes: \"This procedure applies to every local `security-matrix.md` write: saving a Konflux fallback copy, applying Step 2.1.1 format auto-repairs, and on-demand population\" with sub-bullets for each. Section 4 pre-write check shows Last-Updated changed 2026-06-28T10:00:00Z -> 2026-10-26T09:15:00Z and CONCURRENT-ROW-KEEP row added; decision: \"abort the write, preserve the current file, leave Last-Updated unchanged\"; Outcome: \"NOT WRITTEN\"."
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 0,
+    "total": 8,
+    "pass_rate": 1.0
+  }
+}

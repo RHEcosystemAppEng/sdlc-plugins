@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "Across implementation task Files to Modify or Files to Create, the plan covers all four catalog writer paths: src/workflows/registration.py, src/workflows/scheduled_sync.py, src/workflows/fallback_import.py, and src/api/on_demand_refresh.py",
+      "passed": true,
+      "evidence": "task-1-owner-group-catalog-record.md 'Files to Modify' (lines 32-35) lists `src/workflows/registration.py`, `src/workflows/scheduled_sync.py`, `src/workflows/fallback_import.py`, and `src/api/on_demand_refresh.py`, each with a per-path change description."
+    },
+    {
+      "text": "Task Test Requirements cover each writer with its corresponding test path: tests/workflows/test_registration.py, tests/workflows/test_scheduled_sync.py, tests/workflows/test_fallback_import.py, and tests/api/test_on_demand_refresh.py",
+      "passed": true,
+      "evidence": "task-1 Test Requirements lines 97-100 contain separate items for `tests/workflows/test_registration.py`, `tests/workflows/test_scheduled_sync.py`, `tests/workflows/test_fallback_import.py`, and `tests/api/test_on_demand_refresh.py`, each describing writer-specific checks."
+    },
+    {
+      "text": "Implementation tasks cover src/catalog/store.py and tests/catalog/test_store.py, verifying ownerGroup persistence, omitted-update preservation, explicit replacement, and unchanged stable IDs",
+      "passed": false,
+      "evidence": "task-1 covers `src/catalog/store.py` (line 31) and `tests/catalog/test_store.py` with tests for round-trip persistence (line 94), fail-closed validation (line 95), and 'an update without `ownerGroup` keeps the stored value, and an update with a new value replaces it' (line 96). None of the test_store.py items, and none of the store.py descriptions, check that stable IDs stay unchanged. Stable-ID checks appear only in the writer tests (lines 97-100) and the general AC on line 91. Because the store-level verification of stable IDs is missing, this assertion fails under the strict, no-partial-credit rule."
+    },
+    {
+      "text": "Implementation tasks specify path-specific validation: registration persists the supplied ownerGroup, scheduled sync/fallback/on-demand updates preserve an existing value when omitted and apply a supplied replacement, and both consumers expose values from all four writers",
+      "passed": false,
+      "evidence": "The following parts are present. Registration: 'registering a service stores the supplied `ownerGroup`' (line 97). Fallback: 'importing exported data with `ownerGroup` stores it. Importing data without `ownerGroup` keeps the existing value' (line 99). On-demand: 'without `ownerGroup` keeps the stored value. With `ownerGroup`, it updates the value' (line 100). Consumers: lines 101-102. Scheduled sync, however, only preserves the value: 'syncing an existing record keeps its `ownerGroup`' (line 98) and 'keep the existing `ownerGroup` when synchronizing provider metadata' (line 33). Sync has no item that applies a supplied replacement value, so the requirement is not met for scheduled sync."
+    },
+    {
+      "text": "Generated tasks cover both catalog consumers, src/api/catalog_summary.py and src/reports/catalog_export.py, and validate that entries produced by every writer are visible to those consumers",
+      "passed": true,
+      "evidence": "task-1 Files to Modify, lines 36-37, list both consumers. AC line 89: 'The catalog summary API ... returns `ownerGroup` for records populated by each of the four paths'. AC line 90 says the same for the downloadable report."
+    },
+    {
+      "text": "The impact map enumerates the four writer paths with their matching tests and both consumers with their test paths",
+      "passed": true,
+      "evidence": "impact-map.md 'Producers / writers' table (rows P1-P4, lines 20-23) pairs each writer source with its test file. The 'Consumers / readers' table (rows C1-C2, lines 29-30) pairs `src/api/catalog_summary.py` with `tests/api/test_catalog_summary.py` and `src/reports/catalog_export.py` with `tests/reports/test_catalog_export.py`."
+    },
+    {
+      "text": "Task Test Requirements include tests/api/test_catalog_summary.py and tests/reports/test_catalog_export.py, exercising records from each writer through each consumer",
+      "passed": true,
+      "evidence": "task-1 line 101: '`tests/api/test_catalog_summary.py`: the summary response includes `ownerGroup` for records created via registration and records last written by sync, fallback import and refresh'. Line 102: '`tests/reports/test_catalog_export.py`: the report includes `ownerGroup` for records from each population path'."
+    },
+    {
+      "text": "A documentation task or equivalent Documentation Updates section explains the shared Service Catalog contract and names registration, scheduled sync, fallback import, and on-demand refresh as population paths",
+      "passed": true,
+      "evidence": "task-2-document-catalog-contract.md line 21: 'Catalog records can be populated through four paths: initial registration, scheduled synchronization, fallback import, and on-demand refresh (`POST /api/catalog/refresh`)'. Line 22: 'All four paths use the same catalog contract, including `ownerGroup`'. AC line 35 repeats this."
+    },
+    {
+      "text": "Generated tasks preserve the fixture's existing-population behavior and stable-ID compatibility acceptance criterion",
+      "passed": true,
+      "evidence": "task-1 AC line 91: 'Existing population behavior and stable IDs are unchanged on registration, scheduled sync, fallback import and on-demand refresh'. The Implementation Notes 'Preserve existing behavior' section (lines 63-68) backs this up."
+    },
+    {
+      "text": "The fallback-import and on-demand-refresh paths are explicitly planned; coverage is not limited to initial registration and scheduled sync",
+      "passed": true,
+      "evidence": "task-1 plans fallback import explicitly in Files to Modify (line 34), AC (line 87), and Test Requirements (line 99). On-demand refresh is planned explicitly in line 35, AC line 88, Test Requirements line 100, and API Changes line 48 (`POST /api/catalog/refresh`)."
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 2,
+    "total": 10,
+    "pass_rate": 0.8
+  }
+}

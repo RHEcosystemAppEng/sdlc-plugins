@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 6 #2: \"call `common::db::query::apply_filter(select, package_license::Column::License, license)` so that splitting the comma-separated values and building the `IN (...)` clause is handled by the shared helper\". reuse-analysis.md #1 'USE DIRECTLY': \"no custom `split(',')` loop and no hand-built `IN` clause in the package module. Both the single-value form (`MIT`) and the multi-value form (`MIT,Apache-2.0`) go through the shared helper.\" The handler's token check (for the required 400 response) is validation only, and the plan drops it if apply_filter already validates."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md Step 6 #1: \"Add an optional field to the package list Query struct, matching the advisory `severity` field\" and \"Copy whichever structure advisory uses\". reuse-analysis.md #2 is titled \"`modules/fundamental/src/advisory/endpoints/list.rs` (severity filter) — FOLLOW AS PATTERN\" and covers the Query struct, handler flow, error mapping, service plumbing and tests."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Step 6 #2: \"join `package::Entity` to `package_license::Entity` through the SeaORM relation (... `.inner_join(package_license::Entity)`), with no raw SQL\". reuse-analysis.md #3 \"`entity/src/package_license.rs` — USE FOR THE JOIN\": \"What is not written: no raw SQL, no new entity, and no migration.\""
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md has sections '## 1. common/src/db/query.rs::apply_filter — USE DIRECTLY' (with a code snippet for PackageService::list), '## 2. modules/fundamental/src/advisory/endpoints/list.rs (severity filter) — FOLLOW AS PATTERN' (with how-it-is-used bullets) and '## 3. entity/src/package_license.rs — USE FOR THE JOIN' (with the inner_join usage and the column passed to apply_filter). A summary table maps all three to their target files."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6 changes exactly modules/fundamental/src/package/endpoints/list.rs (MODIFY), modules/fundamental/src/package/service/mod.rs (MODIFY) and tests/api/package_license_filter.rs (CREATE). These match the task's Files to Modify and Files to Create sections. Step 9 states: \"expected diff = the 2 modified files + 1 new test file\". Other files that might need changes (docs/api.md, tests/Cargo.toml / mod registration, an OpenAPI spec, entity relation, making apply_filter pub) are explicitly \"flagged ... for user approval and not edited unilaterally\" rather than included as planned changes."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "The plan proposes no new helper or utility function. Step 9: \"Duplication check: grep for any new split/`IN`-building code. The plan adds none beyond the token validation, because `apply_filter` does the parsing. If `apply_filter` already validates its input, the local validation is dropped.\" reuse-analysis.md: \"no custom `split(',')` loop and no hand-built `IN` clause\". The only extra code is an inline validation step for the required 400 behavior, and it is conditional on apply_filter not already validating."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

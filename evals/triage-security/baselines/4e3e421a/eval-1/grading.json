@@ -1,0 +1,75 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
+      "passed": true,
+      "evidence": "data-extraction.md Step 1 table: 'CVE ID | **CVE-2026-31812**', 'Vulnerable library | **quinn-proto**', 'Affected version range | **< 0.11.14** (\"versions before 0.11.14\")', 'Fixed version | **0.11.14**'; issue type 'Vulnerability / New'."
+    },
+    {
+      "text": "Data extraction identifies the ecosystem as Cargo based on the library name and component context (Step 1 Ecosystem detection)",
+      "passed": true,
+      "evidence": "data-extraction.md '### Ecosystem detection': '`quinn-proto` is a Rust crate, and the backend repository (`rhtpa-backend`, rust-analyzer) uses `Cargo.lock`.' and '**Ecosystem: Cargo.**'"
+    },
+    {
+      "text": "Version impact table includes ALL versions from the security-matrix.md supportability matrix — no versions are skipped (Important Rule 4)",
+      "passed": true,
+      "evidence": "version-impact.md table lists 2.1.0, 2.1.1, 2.2.0, 2.2.1, 2.2.2, 2.2.3, 2.2.4 — exactly the 7 versions in evals/triage-security/files/security-matrix-mock.md (2 in stream 2.1.x, 5 in stream 2.2.x)."
+    },
+    {
+      "text": "Version impact analysis uses pinned commit tags from the supportability matrix for each version, not branch HEAD (Important Rule 13)",
+      "passed": true,
+      "evidence": "version-impact.md column 'Pinned backend tag (from matrix)' with v0.3.8, v0.3.12, v0.4.5, v0.4.8, v0.4.8 (retag), v0.4.11, v0.4.12, matching the matrix; text: 'All released versions use the **pinned tags from the supportability matrix**, never a branch HEAD (Rule 13).'"
+    },
+    {
+      "text": "Version impact table identifies retag versions and carries forward the affected status from the original version (Important Rule 5)",
+      "passed": true,
+      "evidence": "version-impact.md row: '2.2.2 | 2.2.x | `v0.4.8` (retag) | — | **YES** | Same as 2.2.1. Backend retag of 2.2.1 (build 0.4.9 reuses backend `v0.4.8`), so the lock check was skipped and the result carried forward'."
+    },
+    {
+      "text": "Affects Versions correction proposes replacing PSIRT-assigned versions with lock-file-verified versions, showing the diff (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md 3.2: 'Current:  [RHTPA 2.0.0] / Proposed: [RHTPA 2.2.0, RHTPA 2.2.1, RHTPA 2.2.2]' with diff lines '- RHTPA 2.0.0 (removed...)', '+ RHTPA 2.2.0 (quinn-proto 0.11.9 @ backend v0.4.5)', '+ RHTPA 2.2.1 (quinn-proto 0.11.12 @ backend v0.4.8)', '+ RHTPA 2.2.2 (retag of 2.2.1, backend v0.4.8)'."
+    },
+    {
+      "text": "Affects Versions correction references version names from the supportability matrix rather than hardcoded Jira version IDs (Important Rule 6)",
+      "passed": true,
+      "evidence": "affects-versions.md 3.1: 'Version IDs are **never hardcoded**' with runtime getJiraIssueTypeMetaWithFields discovery; proposed mutation uses placeholders '{\"id\": \"<id: RHTPA 2.2.0>\"}' etc.; versions referenced by name 'RHTPA 2.2.0/2.2.1/2.2.2'."
+    },
+    {
+      "text": "Remediation tasks include Repository, Target Branch, acceptance criteria, and dependency linkage between upstream and downstream tasks (Important Rule 9)",
+      "passed": true,
+      "evidence": "remediation.md Case B Task 1: '## Repository rhtpa-backend', '## Target Branch release/0.4.z', '## Acceptance Criteria' (3 items); Task 2: '## Repository rhtpa-release.0.4.z', '## Target Branch main', '## Acceptance Criteria', '## Dependencies - Depends on: <upstream-2.2-key> (upstream backport must merge first)'; linkage step 5 'Link **Blocks**: `<upstream-2.2-key>` (inward) to `<downstream-2.2-key>`'. Same structure for 2.1.x preemptive tasks."
+    },
+    {
+      "text": "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
+      "passed": true,
+      "evidence": "remediation.md: 'ecosystem Cargo = source dependency → 2 tasks per stream'; 'Case B — Task 1 of 2 (2.2.x): Upstream backport' and 'Case B — Task 2 of 2 (2.2.x): Downstream propagation (blocked by Task 1)'; linkage '5. Link **Blocks**: <upstream-2.2-key> (inward) to <downstream-2.2-key> (outward)'."
+    },
+    {
+      "text": "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
+      "passed": true,
+      "evidence": "affects-versions.md: 'PROPOSED correction only. No Jira field has been changed.'; data-extraction.md: 'Step 0.7 early assignment ... (PROPOSED, not performed)'; remediation.md: 'No Jira issue, link, label, comment, field edit, or transition has been created or performed', '7. Transition TC-8001 to In Progress ... It is still a proposal.', 'Post-triage summary (proposed...)- Add the label `ai-cve-triaged`'."
+    },
+    {
+      "text": "The data-extraction output describes Step 0.7 actions before the Step 1 data table: assigning the CVE issue to the current user and transitioning it to Assigned status (Step 0.7)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 19-33 section '## Step 0.7 early assignment: assign TC-8001 and transition to Assigned (PROPOSED, not performed)' precedes '## Step 1 — Parsed CVE Data' (line 35); includes 'jira.user_info()', 'jira.edit_issue(\"TC-8001\", assignee=<current-user-account-id>)', and transition to target status 'Assigned' via get_transitions/transition_issue."
+    },
+    {
+      "text": "Release orchestration preserves interactive confirmation of the exact release Epic version and separate child Task creation; when release evidence or confirmation is unavailable, it reports pending work instead of claiming creation.",
+      "passed": true,
+      "evidence": "remediation.md 7.5.1: prompt 'Proposed version: RHTPA 2.2.5 Release Tasks ... 1. Accept 2. Specify different version 3. Skip', 'After acceptance only, run jira.create_issue(...Epic...)', '**Status: PENDING.** No Epic has been created or confirmed.'; 7.5.2: 'ask separately. Approving the Epic does not approve the Task', 'Proceed? (Yes / No)', '**Status: PENDING.** No release Task exists from this run.'; also 'No release evidence is available in this eval ... A missing result here does **not** prove that no Epic exists.'"
+    },
+    {
+      "text": "Release dedup is skipped when its Upstream Affected Component configuration is absent. When trusted release evidence is available, the proposed procedure resolves originating CVEs through Blocks/Depend links, compares their components and allows library-summary fallback only for a missing Depend link or component field; a known nonmatch does not count as dedup, and unavailable release evidence is not fabricated.",
+      "passed": true,
+      "evidence": "remediation.md 7.5.3: '**Dedup is SKIPPED.** Its prerequisite, the Upstream Affected Component custom field, is **not configured**'; procedure: 'read the release Task's inward Blocks links ..., follow each Task's Depend links to its originating CVE, and compare that CVE's Upstream Affected Component with TC-8001's. It falls back to matching \"quinn-proto\" in the Task summary only when the Depend link or component value is missing, never when the component is present but different.'; no release evidence fabricated ('No release evidence is available in this eval')."
+    }
+  ],
+  "summary": {
+    "passed": 13,
+    "failed": 0,
+    "total": 13,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "population-race.md Section 2 records the snapshot ('Last-Updated: 2026-06-28T10:00:00Z', one row 2.1.0, no CONCURRENT-ROW-KEEP); Section 4 'Re-read just before writing: target has changed' states 'I re-read the file right before writing and compared it with the snapshot' with a Snapshot vs Current file comparison table."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "Section 4 table: 'Last-Updated | 2026-06-28T10:00:00Z | 2026-10-26T09:15:00Z | Yes' and 'CONCURRENT-ROW-KEEP entry for 2.1.0 / api-rhel10 | absent | present (added by a concurrent /triage-security run) | Yes'."
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "Section 7: 'security-matrix.md: unchanged by Setup. The concurrent Last-Updated: 2026-10-26T09:15:00Z and the CONCURRENT-ROW-KEEP row stay exactly as /triage-security wrote them' and 'The prepared proposal: discarded as stale, not written'. Section 5 refuses the user's request to write the prior proposal."
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Section 6: 'All I know is that the row exists and which version/component it covers. I don't have its values... I could fill the gaps with placeholders or guesses... The skill forbids both. The merge is aborted.' Section 8 option 1: 'Give me the current full contents of security-matrix.md, or at least the complete CONCURRENT-ROW-KEEP row'. No merged proposal is presented."
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "Final line: 'Nothing will be written until the concurrent change is reconciled, a complete merged proposal is shown, and you confirm it again.' Also header: 'Outcome: ABORTED. Nothing was written.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

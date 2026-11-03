@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md Step 4 item 1: get_symbols_overview(\"modules/ingestor/src/graph/sbom/mod.rs\") \"to confirm that `describing_packages` and `suppliers` exist and are private\"; Step 6 item 1: \"Change `fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>` to `pub fn describing_packages(...)`\" and the same for suppliers. reuse-decision.md line 6: the functions in modules/ingestor/src/graph/sbom/mod.rs \"change from `fn` to `pub fn`\"."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "reuse-decision.md Rationale item 1, 'Dependency check': \"`migration/Cargo.toml` already contains `trustify-module-ingestor = { path = \"../modules/ingestor\" }`. I would confirm this by reading the manifest in Step 4.\" plan.md Step 4 item 5: \"Read `migration/Cargo.toml` to confirm `trustify-module-ingestor = { path = \"../modules/ingestor\" }`\". The dependency check is listed as the basis for the decision (item 2: \"The dependency already exists, so make them public and import\")."
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md Decision: \"Make the functions public and import them. Do not duplicate them.\" Rationale item 2: \"The dependency already exists, so make them public and import. Exporting the functions adds no new coupling between the crates.\""
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md: \"Do not duplicate them.\" and item 3: \"The duplication fallback does not apply.\" plan.md Step 6 item 2: \"Import the reused logic instead of duplicating it\"; Step 8: \"no copy of the logic exists in the migration crate\"; Step 9: \"Duplication check: grep the migration crate for any re-implementation... There should be none.\" No part of either file proposes copying the bodies."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md Rationale item 2: \"Copying them would leave two versions of the SBOM supplier parsing logic, and a later bug fix or format change (for example, new SPDX/CycloneDX supplier fields) would have to be made in both places.\""
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
