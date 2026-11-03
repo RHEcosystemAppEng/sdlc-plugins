@@ -838,6 +838,12 @@ re-pin + re-lock loop.
 The `.fullsend/harness/*.yaml` composing children set **no** model or effort —
 they inherit both from the pinned base.
 
+The skill-eval CI workflows (`.github/workflows/eval-pr-run.yml`,
+`eval-baseline.yml`) pin the eval agent's model separately in their step `env`;
+[`test_skill_eval_models.py`](plugins/sdlc-workflow/scripts/test_skill_eval_models.py)
+keeps the two in sync. Update them in the same change when migrating, even
+though they drive the eval agent rather than the harness.
+
 **Which wins.** fullsend resolves the run model as `--model` flag >
 `FULLSEND_MODEL` > config `agents:` entry > harness `model:`, and only when that
 chain is empty falls back to the agent frontmatter `model:`
@@ -880,8 +886,9 @@ silently alter run behaviour, cost, or latency.
    required` (TC-7278 on the v0.37.0-era image). If the pinned image is too old,
    move the CLI and `image:` together first through
    [Updating fullsend (pin-and-bump)](#updating-fullsend-pin-and-bump) (TC-7300).
-2. **Edit every pin** in the table above in one change, and update
-   `test_model_pins.py`'s target-model assertion.
+2. **Edit every pin** in the table above and the skill-eval workflow pins in one
+   change, and update the target-model assertions in `test_model_pins.py` and
+   `test_skill_eval_models.py`.
 3. **Commit and push to an upstream `RHEcosystemAppEng` branch** — a fork PR ref
    fails the promisor fetch.
 4. **Re-pin both** `.fullsend/harness/verify-pr.yaml` and
