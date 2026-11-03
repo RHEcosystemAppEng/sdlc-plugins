@@ -75,6 +75,16 @@ from a PR branch. Prove the new models before merge with one of:
    once it exists on the default branch. Confirm the run writes
    `benchmark.json`, `feedback.json`, `summary.md` and graded per-case results.
    Remove the throwaway workflow before merge.
+
+   The task branch must live in the upstream repository. On a `pull_request`
+   run whose head is a FORK, GitHub withholds repo vars/secrets and OIDC
+   (id-token), so the temporary workflow cannot authenticate to Vertex AI and
+   fails before proving anything — the same limitation that makes
+   `fullsend-verify-pr.yml` a `pull_request_target` workflow (TC-6331). A
+   `pull_request_target` copy is not a way out here either: it runs the base
+   branch's version of the workflow, so it would not exercise the pins under
+   test. Fork contributors should therefore use option 2, or ask a maintainer
+   to push the branch to the upstream repository.
 2. **Local run:** export the same `ANTHROPIC_*` values and Vertex credentials for
    the `secrets.GCP_PROJECT_ID` project, then run the same `claude -p` command
    against one skill suite locally and inspect the workspace output.
