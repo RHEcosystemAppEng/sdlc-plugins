@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 Case A creates standard remediation tasks for the current stream (rhtpa-2.2) with standard labels ['ai-generated-jira', 'Security', 'CVE-2026-55123'] and 'Depend' link to TC-8020",
+      "passed": true,
+      "evidence": "remediation.md Task 1 'Remediate CVE-2026-55123: bump tokio to 1.42.0 (rhtpa-2.2)' and Task 2 'Propagate CVE-2026-55123 fix ... (rhtpa-2.2)' both have 'Labels: ai-generated-jira, Security, CVE-2026-55123' and 'Links: TC-8020 -> task (Depend)'. Execution order step 3: 'TC-8020 -> Task 1 (Depend), TC-8020 -> Task 2 (Depend)'. The output labels this section 'Case B'. That matches SKILL.md line 1078 ('Case B: Affected — create remediation tasks'), but the assertion calls it Case A, which is how remediation-templates.md names it. The skill docs use the two names inconsistently, so this was graded on behavior, which matches the assertion."
+    },
+    {
+      "text": "Step 8 Case B detects that stream rhtpa-2.1 is also affected but has no CVE Jira — creates proactive preemptive remediation tasks (§1.60)",
+      "passed": true,
+      "evidence": "cross-stream.md: 'Version impact analysis shows stream rhtpa-2.1 (2.1.x) is also affected: RHTPA 2.1.0 and 2.1.1 ship tokio 1.40.0'; the sibling JQL 'found no Vulnerability issue for rhtpa-2.1'; 'Result: preemptive remediation tasks are created for rhtpa-2.1.' remediation.md defines Tasks 3 and 4 as preemptive for rhtpa-2.1. The output labels this 'Case A', which matches SKILL.md line 1028 ('Case A: Cross-stream impact — proactive remediation'). The behavior matches the assertion."
+    },
+    {
+      "text": "Preemptive tasks for stream rhtpa-2.1 include the 'security-preemptive' label alongside standard labels: ['ai-generated-jira', 'Security', 'CVE-2026-55123', 'security-preemptive']",
+      "passed": true,
+      "evidence": "remediation.md Task 3 and Task 4 each have 'Labels: ai-generated-jira, Security, CVE-2026-55123, security-preemptive'. The cross-stream.md table rows P1/P2 show the same set. The checklist says: 'security-preemptive on Tasks 3 and 4 only'."
+    },
+    {
+      "text": "Preemptive tasks are linked to the originating CVE Jira TC-8020 with 'Related' link type (not 'Depend') because the originating CVE belongs to a different stream",
+      "passed": true,
+      "evidence": "remediation.md Task 3: 'Links: TC-8020 -> task (Related, not Depend)'. Task 4: 'TC-8020 -> task (Related)'. cross-stream.md has the link calls 'jira.create_link(inwardIssue: TC-8020, outwardIssue: <P1-key>, type: \"Related\")' and the same call for P2. Both descriptions say 'Related to: TC-8020 (originating CVE Jira, stream rhtpa-2.2)'."
+    },
+    {
+      "text": "Preemptive task descriptions include a preemptive remediation prefix noting TC-8020 (stream rhtpa-2.2) as the originating CVE",
+      "passed": true,
+      "evidence": "Task 3 and Task 4 descriptions in remediation.md both begin with '> **Preemptive remediation**: This task was created proactively from cross-stream impact analysis of TC-8020 (stream rhtpa-2.2). No stream-specific CVE Jira exists yet for this stream...'. cross-stream.md says: 'Both descriptions start with this prefix'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

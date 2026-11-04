@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md section 2 lists `mcp__serena_backend__find_symbol(name_path_pattern=\"SEVERITY_ORDER\", relative_path=\"modules/fundamental\", include_body=true)` and `search_for_pattern(substring_pattern=\"(?i)severity_?(order|rank|weight)\", relative_path=\"modules/fundamental\")`. The intro says the search runs 'before declaring any new constant'."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md section 2 Result: '**Found** in `modules/fundamental/src/advisory/service/advisory.rs`: SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]'. The Summary table repeats it: 'SEVERITY_ORDER | Yes | modules/fundamental/src/advisory/service/advisory.rs'."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md 'How SEVERITY_ORDER is handled': '**Reuse the existing constant. Do not redeclare it.**' with `use crate::advisory::service::advisory::SEVERITY_ORDER;`. Step 6 file 1 says 'Add `use crate::advisory::service::advisory::SEVERITY_ORDER;`'."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "Neither plan.md nor symbol-search.md declares a new SEVERITY_ORDER constant anywhere. plan.md says 'I do not fall back to a duplicate definition' and 'No hard-coded severity strings anywhere in the new code'. The only possible change to the constant is widening the existing one to `pub(crate)` in advisory.rs, and only if it is private. severity_rank is derived from `SEVERITY_ORDER.iter().position(...)`. Step 9 adds a duplication grep that must match only the advisory.rs definition."
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md opens with 'search the **target package** (not only the file being edited)' and names the target package as 'modules/fundamental'. The searches use relative_path=\"modules/fundamental\", and search 4 runs workspace-wide with relative_path=\".\" to cover 'common/ and the other modules'. The Result lists the directories checked: common/, sbom/, package/, ingestor/, search/."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

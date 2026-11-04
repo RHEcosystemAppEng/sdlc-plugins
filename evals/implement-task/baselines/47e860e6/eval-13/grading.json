@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md field-by-field table has rows for `cves: Option<Vec<String>>`, `affected_packages: Option<Vec<AffectedPackage>>`, and `severity_counts: Option<HashMap<String, u32>>`, each marked 'Needs a guard? Yes'."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md step 6.2 code: `result.cves.clone().unwrap_or_default()`, `result.affected_packages.as_ref().map_or(0, Vec::len)`, `result.severity_counts.clone().unwrap_or_default()`. It also says 'No `unwrap()` / `expect()` / indexing on any upstream field.'"
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "In plan.md 6.2, the code reaches each of the three Option fields only through a guard. `.len()` is called on the defaulted `cve_list` (`u32::try_from(cve_list.len())`), and the package length goes through `map_or(0, Vec::len)`. Unsafe patterns such as `result.cves.as_ref().unwrap().len()` appear only in null-guards.md's 'Patterns that are explicitly forbidden' table."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md Context: 'consumes `AdvisoryIngestResult`, which the **ingestor** module ... produces ... That data crosses a module boundary' and 'The producer's schema already allows absence (`Option<T>`).'"
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md 6.3 test table: `extract_summary_all_none_returns_zeroed` covers 'cves=None, affected_packages=None, severity_counts=None. Asserts == VulnerabilitySummary::default(), and that there is no panic.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

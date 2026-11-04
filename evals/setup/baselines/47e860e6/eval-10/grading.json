@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "population-race.md Section 2, step 1: 'I kept this exact read as the source snapshot for the proposal' (Last-Updated 2026-06-28T10:00:00Z). Step 5: 'Re-read just before writing: target changed... Last-Updated is now 2026-10-26T09:15:00Z. The snapshot had 2026-06-28T10:00:00Z.'"
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "Section 2 step 5: '`Last-Updated` is now `2026-10-26T09:15:00Z`' and 'A new `CONCURRENT-ROW-KEEP` entry was added for **2.1.0 / api-rhel10**.'"
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "Outcome: 'NOT WRITTEN... The concurrent update is left exactly as it is.' Section 3: 'Current state of the target: Unchanged by setup. The `CONCURRENT-ROW-KEEP` entry and `Last-Updated: 2026-10-26T09:15:00Z` stay exactly as triage-security wrote them.' Also quotes 'Never write a stale proposal over a concurrent update.'"
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Section 3: 'I have only seen the concurrent row's marker and which pair it covers. I do not have its full cell values or the rest of the current file... I must abort and ask for them. I must not fill gaps with placeholders or present a partial merge as complete.' Option 1: 'Let me re-read the full current `security-matrix.md`, or paste its contents.' Section 4 stale proposal is explicitly labeled 'kept for reference only. It is **not** a candidate to write'; no merged proposal is presented."
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "Section 3 option 1: 'show you the complete merged file, then write only after your fresh confirmation and one more check that the file has not changed again.' Section 4 note: 'A merged proposal must settle this before anything is written.' Section 3 also rejects the user's 'earlier confirmation still stands' as not counting as fresh confirmation."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

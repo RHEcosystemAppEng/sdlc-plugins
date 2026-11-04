@@ -1,0 +1,50 @@
+{
+  "assertion_results": [
+    {
+      "text": "The output cites the explicit on-demand trigger for a missing required component pair even when the Container Images section exists, and identifies missing (2.1.2, api-rhel10)",
+      "passed": true,
+      "evidence": "matrix-population.md section 2 quotes the rule: \"...or is missing any required component pair—even when the section and other rows already exist\". Its comparison table marks \"| 2.1.2 | api-rhel10 | yes | **no** | **missing pair, which triggers population** |\"."
+    },
+    {
+      "text": "The proposal preserves the existing api-rhel9 row and proposes only the missing api-rhel10 row without duplicating the existing pair",
+      "passed": true,
+      "evidence": "The section 4 Container Images table has exactly one (2.1.2, api-rhel9) row, which is the existing row with digest sha256:aaaa..., plus one new (2.1.2, api-rhel10) row. The text says \"The only addition is the api-rhel10 Container Images row.\""
+    },
+    {
+      "text": "The Container Images table has separate columns for release tag, resolved full SHA, image reference, immutable digest, and CPE; revision-label comparisons are shown separately from the stored row fields",
+      "passed": true,
+      "evidence": "The table header is \"| Product Version | Component | Konflux Release Tag | Resolved Release Commit SHA | Image Reference | Image Digest | CPE |\". A separate table titled \"Revision-label comparison (reported separately from the table, per rule step 3)\" holds the org.opencontainers.image.revision values."
+    },
+    {
+      "text": "The proposed api-rhel10 row preserves v0.3.14 and the full resolved SHA 0123456789abcdef0123456789abcdef01234567 as distinct values, plus its supplied image reference, digest, and CPE",
+      "passed": true,
+      "evidence": "The proposed row reads \"| 2.1.2 | api-rhel10 | `v0.3.14` | `0123456789abcdef0123456789abcdef01234567` | `registry.example.test/trustify/api:2.1.2-rhel10` | `sha256:bbbb...` | `cpe:2.3:a:example:trustify_api:2.1.2:*:*:*:*:*:*:*` |\". The report also says \"The tag, SHA, reference, and digest are kept as separate values.\""
+    },
+    {
+      "text": "The api-rhel10 revision label is compared with the resolved release SHA and marked verified",
+      "passed": true,
+      "evidence": "Revision comparison row: \"| 2.1.2 | api-rhel10 | `0123456789abcdef...01234567` | `0123456789abcdef...01234567` | yes | VERIFIED |\"."
+    },
+    {
+      "text": "The existing 2.1.2/build 0.3.14/date 2026-06-25/backend source-pin row is preserved",
+      "passed": true,
+      "evidence": "The proposed Supportability Matrix includes \"| 2.1.2 | 0.3.14 | 2026-06-25 | `v0.3.14` | |\"."
+    },
+    {
+      "text": "The proposal preserves the existing Source Pinning Method and Ecosystem Mappings from security-matrix-mock.md",
+      "passed": false,
+      "evidence": "Source Pinning Method is reproduced verbatim. Ecosystem Mappings is not: the proposal shows only the placeholder \"(unchanged — Cargo/backend/`release/0.3.z`; RPM/`rpms.lock.yaml`)\". The fixture table's columns and values are missing, including Lock File `Cargo.lock`, the Check Commands (`git show <tag>:Cargo.lock`, `git show <tag>:rpms.lock.yaml`) and the table structure. Because the proposal was presented as complete, an abbreviated placeholder does not count as preserving the mappings."
+    },
+    {
+      "text": "The report cites the shared write-safety rule as covering fallback saves, format auto-repairs, and population; the final comparison detects the concurrent target, preserves it, and aborts rather than writing stale content",
+      "passed": true,
+      "evidence": "The section 6 table answers Yes for fallback saves (\"saving a Konflux fallback copy\"), format auto-repairs (\"applying Step 2.1.1 format auto-repairs\") and population (\"on-demand population\"; step 6 quote). Section 5 records the detected change (Last-Updated 2026-06-28T10:00:00Z to 2026-10-26T09:15:00Z, plus the CONCURRENT-ROW-KEEP row) and ends with \"**Result:** write aborted. The current file is kept exactly as the concurrent run left it\"."
+    }
+  ],
+  "summary": {
+    "passed": 7,
+    "failed": 1,
+    "total": 8,
+    "pass_rate": 0.875
+  }
+}

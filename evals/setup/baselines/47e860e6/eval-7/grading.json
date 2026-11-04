@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review or changes log identifies docs/templates/security-matrix.template.md as the sole canonical scaffold and does not use docs/templates/security-matrix.md as a template or fallback",
+      "passed": true,
+      "evidence": "security-matrix-review.md lines 25-27: 'Scaffold source: plugin-root `docs/templates/security-matrix.template.md`, the canonical template. `docs/templates/security-matrix.md` is a worked example and was not used as the scaffold.' changes-log.md line 22: 'Built from canonical `docs/templates/security-matrix.template.md`, not the worked example.' No fallback to security-matrix.md is mentioned anywhere."
+    },
+    {
+      "text": "outputs/security-matrix-review.md contains a Container Images table keyed by both Product Version and Component, with separate 2.1.0 api-rhel9 and api-rhel10 rows",
+      "passed": true,
+      "evidence": "security-matrix-review.md line 164 header '| Product Version | Component | Konflux Release Tag | Resolved Release Commit SHA | Image Reference | Image Digest | CPE |'. Line 166 is '| 2.1.0 | api-rhel9 | ...' and line 167 is '| 2.1.0 | api-rhel10 | ...', two separate rows."
+    },
+    {
+      "text": "The proposed Supportability Matrix uses the configured dynamic source-repository columns backend and frontend-ui, with the supplied version/build/date/source-pin rows",
+      "passed": true,
+      "evidence": "security-matrix-review.md lines 157-160: header '| Product Version | Build | Build Date | backend | frontend-ui | Notes |', with rows '| 2.1.0 | 0.3.12 | 2026-06-15 | `v0.3.12` | `bb447eeb` | |' and '| 2.1.1 | 0.3.13 | 2026-06-20 | `v0.3.13` | `deadbeef` | |'. These match the fixture exactly."
+    },
+    {
+      "text": "The expanded Supportability Matrix header, separator, and data rows have the same number of cells for both configured source repositories",
+      "passed": true,
+      "evidence": "Proposed matrix lines 157-160: the header has 6 cells, the separator '|---|---|---|---|---|---|' has 6, and both data rows have 6 (the Notes cell is empty). The scaffold, lines 62-64, also has 6/6/6 cells."
+    },
+    {
+      "text": "The proposed Source Pinning Method section has one entry per configured repository and uses the supplied artifacts.lock.yaml and Git submodule methods",
+      "passed": true,
+      "evidence": "security-matrix-review.md lines 173-174: '- **backend**: `artifacts.lock.yaml` download URL contains the release tag' and '- **frontend-ui**: Git submodule at `components/frontend-ui`'. That is exactly one entry per repository, and both match the fixture."
+    },
+    {
+      "text": "The proposed matrix preserves the supplied Ecosystem Mappings rows for Cargo/backend and npm/frontend-ui rather than replacing or omitting that section",
+      "passed": true,
+      "evidence": "security-matrix-review.md lines 178-181: '| Cargo | backend | `Cargo.lock` | `git show <tag>:Cargo.lock` | `release/0.3.z` |' and '| npm | frontend-ui | `package-lock.json` | `git show <commit>:package-lock.json` | `release/0.3.z` |'. Both rows are verbatim from the fixture."
+    },
+    {
+      "text": "The valid image rows preserve Konflux release tag v0.3.12 and resolved full commit SHA 0123456789abcdef0123456789abcdef01234567 as separate values",
+      "passed": true,
+      "evidence": "Lines 166-167: the 'Konflux Release Tag' column holds '`v0.3.12`' and the separate 'Resolved Release Commit SHA' column holds '`0123456789abcdef0123456789abcdef01234567`' for both 2.1.0 rows. The verification table at lines 121-122 does the same."
+    },
+    {
+      "text": "The valid rows preserve distinct image references and immutable sha256 digests, retain the fixture's trustify_api:2.1.0 CPE on both api-rhel9 and api-rhel10 rows without requiring CPE uniqueness across platforms, and show the OCI revision label matching the resolved release commit SHA",
+      "passed": true,
+      "evidence": "Line 166 has image reference 'registry.example.test/trustify/api:2.1.0-rhel9' with digest 'sha256:aaaa...'. Line 167 has 'registry.example.test/trustify/api:2.1.0-rhel10' with digest 'sha256:bbbb...'. Both rows carry 'cpe:2.3:a:example:trustify_api:2.1.0:*:*:*:*:*:*:*'. Line 136 says the rows share the CPE and adds: 'Their digests differ, so the rows are still distinct. They are recorded exactly as published.' Lines 121-122 show the org.opencontainers.image.revision label '0123456789abcdef...01234567' equal to the resolved SHA, marked 'MATCH (verified)'."
+    },
+    {
+      "text": "The 2.1.1 api-rhel10 mapping is flagged because its OCI revision label fedcba9876543210fedcba9876543210fedcba98 does not match the SHA resolved from v0.3.13, and it is not presented as verified data",
+      "passed": true,
+      "evidence": "Line 123: '| 3 | 2.1.1 | api-rhel10 | `v0.3.13` | `89abcdef...` | `fedcba9876543210fedcba9876543210fedcba98` | **MISMATCH (unresolved)** |'. In the proposed matrix, line 169 marks the row '<!-- ^ UNRESOLVED: image revision label fedcba98... != resolved SHA 89abcdef... -->'. changes-log.md line 27 records it as '**Unresolved mismatch**'. Lines 204 and 28 say 'Evidence verified: **NO**' and 'Blocked: evidence is not verified'."
+    },
+    {
+      "text": "The output presents the completed matrix for user review before writing and states that no matrix is written while the mismatch remains unresolved",
+      "passed": true,
+      "evidence": "Section 3.2, 'Proposed populated matrix (PENDING — NOT WRITTEN)' (lines 139-186), shows the full populated matrix for review. Lines 141-143 say: 'This proposal is shown for review only... a mismatch leaves the matrix unchanged until corrected evidence is verified. Nothing will be written: not the populated content, not a partial subset of the verified rows, and not the `Last-Updated` timestamp.' changes-log.md line 28 says '**Matrix left unchanged.**' The Forward Pointer stays a placeholder because the fixture gives no value for it, and the output asks the user for it (line 223)."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

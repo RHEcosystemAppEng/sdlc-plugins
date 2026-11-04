@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+      "passed": true,
+      "evidence": "scaffold-race.md Timeline: \"1. First existence check (Step 10.5): `security-matrix.md` was **missing**.\" and \"5. Re-read just before writing (this is required): the target now **exists**.\""
+    },
+    {
+      "text": "The current `Last-Updated: 2026-10-26T09:00:00Z` value and `CONCURRENT-ROW-KEEP` content are preserved rather than replaced by the scaffold",
+      "passed": true,
+      "evidence": "Decision section: \"keep the `<!-- Last-Updated: 2026-10-26T09:00:00Z -->` timestamp. It is not reset to the scaffold time\" and \"keep the `CONCURRENT-ROW-KEEP` row and every other piece of content that the concurrent triage-security run wrote.\""
+    },
+    {
+      "text": "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+      "passed": true,
+      "evidence": "\"A confirmed scaffold may only be created with **create-if-absent** semantics.\"; \"keep the current file as it is. The scaffold is not written over it.\"; \"If the Write tool cannot guarantee create-if-absent, the workflow has to abort instead of overwriting.\" The user's overwrite instruction is explicitly refused."
+    },
+    {
+      "text": "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+      "passed": true,
+      "evidence": "Heading \"Decision: scaffold write ABORTED, current file preserved\" with quote \"security-matrix.md already exists at `security-matrix.md` — skipping.\" Merge option 2: \"Setup would show the complete merged result and write only after new, explicit confirmation and one more check that the target has not changed.\""
+    },
+    {
+      "text": "The output states that no project file is written until the changed target is reconciled and confirmed",
+      "passed": true,
+      "evidence": "\"no project file was written\" (header); \"Files written: None in the project.\"; \"Options for the user (each needs fresh confirmation)\"; \"any merge needs a fresh proposal built from the current file and fresh confirmation. A confirmation given before the conflict cannot stand in for that.\""
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

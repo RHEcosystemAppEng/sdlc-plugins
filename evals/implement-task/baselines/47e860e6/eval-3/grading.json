@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "reuse-analysis.md section '## 1. `common/src/db/query.rs::apply_filter`: reused directly' states it 'covers both acceptance criteria (single and multi-value) without a hand-written `split(',')` or IN-clause builder'. plan.md line 139: `select = apply_filter(select, package_license::Column::License, license)?;` with comment 'apply_filter parses \"MIT,Apache-2.0\" into an IN (...) clause'; line 117-118: 'there will be no second, duplicate parser'."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "reuse-analysis.md section '## 2. `modules/fundamental/src/advisory/endpoints/list.rs` (severity filter): followed as the structural template' says package list.rs 'copies this structure'. plan.md line 96-97: 'Add an optional `license` field to the package list Query struct. It mirrors the advisory `severity` field exactly'."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "reuse-analysis.md section '## 3. `entity/src/package_license.rs`: used for the JOIN' states 'No raw SQL and no new entity or relation.' plan.md line 130-136: 'join `package` to `package_license` through the SeaORM relation from `entity::package_license`' with `.join(JoinType::InnerJoin, package_license::Relation::Package.def().rev())`."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md opens with 'The task lists three Reuse Candidates. All three are used.' and has sections 1 (apply_filter), 2 (advisory list.rs), 3 (package_license.rs), each with a 'How it is used' bullet describing application in PackageService::list or package endpoints/list.rs."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": false,
+      "evidence": "plan.md planned changes are limited to the three in-scope files (line 92: 'Scope is limited to the three files listed in the task'), and tests/Cargo.toml and docs/api.md are flagged for approval rather than edited. However, reuse-analysis.md section 1 contradicts this: 'If `apply_filter` were not `pub`, the plan would be to make it `pub` ... and to note the change in the PR description'. That is a conditional edit to common/src/db/query.rs, which is outside Files to Modify/Create, and it is not routed through scope-containment approval. Under the contradictory-evidence rule this fails."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "reuse-analysis.md 'What is deliberately NOT created': 'No new comma-splitting or IN-clause helper, because `apply_filter` covers it.' plan.md line 216-217: 'Do not write a new comma-split parser'. The handler validation (plan.md lines 112-118) is an SPDX character check that uses the existing AppError. It defers to apply_filter for malformed-input handling and adds no new utility function."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.83
+  }
+}

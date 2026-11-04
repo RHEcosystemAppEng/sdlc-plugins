@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md rows 10-11: 'Step 8 Case B: upstream backport task | TC-8100 ... Existing Depend-linked task with the same CVE label, stream and role | SKIPPED (no new task)' and the same for TC-8101. triage-outcome.md: 'Both exist and are Depend-linked ... Step 8 Case B creates no new tasks.' Mutation ledger: 'Remediation Tasks | No'."
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md row 15: 'Post-triage: add `ai-cve-triaged` label | Label `ai-cve-triaged` present | Label already set | SKIPPED'. triage-outcome.md: 'the re-run does not add it again'. Ledger: 'Labels | No'."
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md row 1: 'Step 0.8: transition to Assigned | Status = In Progress (later than Assigned) ... | SKIPPED'. data-extraction.md: 'the skill warns: \"This issue is already in In Progress. It may be actively worked on.\"' Ledger: 'Assign / transition | No'."
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md row 14: 'Description digest comment | `[sdlc-workflow] Description digest: sha256-md:a1b2c3d4…a1b2` by sdlc-workflow/triage-security | ... | SKIPPED'. triage-outcome.md: 'A `[sdlc-workflow] Description digest` comment already exists. No task is created, so no digest comment is posted.' Ledger: 'Comments (correction, cross-stream, digest, summary) | No'."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md row 16: 'Post-triage summary comment | \"Post-triage summary\" comment with Comment Footnote, by sdlc-workflow/triage-security | Summary already posted. Re-posting would duplicate the audit trail | SKIPPED'. triage-outcome.md item 6 repeats this."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

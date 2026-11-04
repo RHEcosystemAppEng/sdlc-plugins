@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md 'How version_filter is handled': \"Removing the VersionMatches filter leaves version_filter with zero references in the body, so it is a dead parameter\" and \"Renaming it to _version_filter or adding #[allow(unused_variables)] would hide the dead code\". Step 6: \"I would delete it, not rename it to _version_filter\". parameter-cleanup.md: \"the filter block was the only reference to version_filter: &str. Once it is gone, the parameter is unused.\""
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md Step 6 #1: \"Remove the version_filter: &str parameter from the signature.\" with new signature `pub async fn list(&self, search: Query, paginated: Paginated, tx: &Transactional<'_>)`. parameter-cleanup.md Procedure step 3 shows before/after signatures."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "parameter-cleanup.md 'Call-site updates' table lists #1 modules/fundamental/src/sbom/endpoints/list.rs -> `service.list(search, paginated, &tx)`, #2 modules/search/src/service/mod.rs -> `sbom_service.list(query, paginated, tx)`, #3 tests/api/sbom.rs -> version argument dropped from all calls. plan.md Step 6 sections 2, 3, 4 cover the same changes (search change made, flagged for approval)."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": true,
+      "evidence": "parameter-cleanup.md 'Rule applied': \"The correct fix is removal, not renaming.\" Ruled out: \"Renaming to _version_filter. This silences the warning but keeps a meaningless parameter in the public API.\""
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "parameter-cleanup.md Procedure step 7 (after updating callers in steps 3-6): \"Re-verify: run cargo check --workspace --all-targets, cargo clippy --all-targets -- -D warnings, and cargo test -p for each affected crate.\" plan.md Step 7: \"cargo test -p <crate> for every affected crate... also run the search tests (tests/api/search.rs), because the search service call site changed.\""
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

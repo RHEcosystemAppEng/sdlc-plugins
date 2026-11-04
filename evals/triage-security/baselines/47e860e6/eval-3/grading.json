@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Duplicate check searches for sibling issues using JQL with the CVE label and excludes the current issue key (Step 4)",
+      "passed": true,
+      "evidence": "duplicate-check.md 'Sibling search (simulated)': jira.search_jql(\"project = TC AND labels = 'CVE-2026-31812' AND issuetype = 10024 AND key != TC-8003\") — uses CVE label and excludes TC-8003."
+    },
+    {
+      "text": "Duplicate check correctly classifies TC-7999 as a same-stream sibling (both have stream suffix [rhtpa-2.2]) and identifies it as a duplicate (Step 4.1)",
+      "passed": true,
+      "evidence": "duplicate-check.md Classification: \"TC-7999's suffix `[rhtpa-2.2]` is the **same** as TC-8003's `[rhtpa-2.2]`, so both are stream 2.2.x\" and \"**TC-7999 is a same-stream sibling.**\"; section '4.1 – Same-stream duplicate: DETECTED'."
+    },
+    {
+      "text": "Triage outcome recommends closing TC-8003 as Duplicate with resolution 'Duplicate', referencing TC-7999 as the original (Step 4.1)",
+      "passed": true,
+      "evidence": "triage-outcome.md: \"## Decision: Close as **Duplicate** of TC-7999\" and proposed mutation 3: \"Transition TC-8003 to **Closed** with resolution **Duplicate**.\" duplicate-check.md calls TC-7999 \"the canonical tracker\"."
+    },
+    {
+      "text": "The close recommendation includes a comment documenting why it is a duplicate — same CVE tracked for the same stream (Step 4.1)",
+      "passed": true,
+      "evidence": "duplicate-check.md proposed comment: \"Duplicate of TC-7999 — same CVE (CVE-2026-31812) tracked for the same stream 2.2.x ([rhtpa-2.2]). Version impact analysis confirms overlap...\"; triage-outcome.md mutation 2 has matching comment text."
+    },
+    {
+      "text": "The analysis does NOT proceed to remediation task creation — duplicate detection short-circuits the triage flow",
+      "passed": true,
+      "evidence": "triage-outcome.md step table: \"8 – Remediation | **No remediation tasks created.** Creating tasks would duplicate the work already under TC-7999.\" duplicate-check.md Result: \"Remediation (Step 8) is not run for TC-8003.\" No output file creates tasks."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

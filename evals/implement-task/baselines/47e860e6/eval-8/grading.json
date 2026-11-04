@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "reuse-decision.md title: 'Reuse Decision — TC-9206: private ingestor functions'; Decision: 'Make `describing_packages()` and `suppliers()` public in `modules/ingestor/src/graph/sbom/mod.rs`'. plan.md Step 6.1: 'Change `fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>` to `pub fn describing_packages(...)`' and same for suppliers."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md Step 4 item 5: '**Check the dependency.** Read `migration/Cargo.toml` and confirm it contains `trustify-module-ingestor = { path = \"../modules/ingestor\" }`... This check matters because the reuse decision depends on it.' reuse-decision.md step 1: 'Is the source crate already a dependency of the target crate? Yes... `migration/Cargo.toml` already contains: trustify-module-ingestor = { path = \"../modules/ingestor\" }'."
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md: 'Do not copy them.' with code showing `pub fn describing_packages` / `pub fn suppliers`; step 2: 'The dependency exists, so the rule says to make the functions public and import them. That is the option chosen here.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md has a section 'Why not copy the functions' and the Decision says 'Do not copy them.' plan.md 6.2: 'None of the extraction logic is duplicated. The migration only calls the ingestor's functions.' Step 8: 'No logic is copied'. No output proposes copying."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md: '**One place to fix bugs.** If the extraction logic is wrong, or changes for new SBOM formats..., a single fix covers both ingestion and migration. Two copies would drift apart.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "assertion_results": [
+    {
+      "text": "Bug parsing correctly extracts all four required sections (Description, Steps to Reproduce, Expected Result, Actual Result) using the heading formats from bug-template-mock.md (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md 'Required sections' table marks Description (`### **Issue Description**`), Steps to Reproduce (`### **Steps to Reproduce**`), Expected Result (`### **Expected Result**`), Actual Result (`### **Actual Result**`) as 'Yes', and the extracted content of each appears under #### Description / Steps to Reproduce / Expected Result / Actual Result (e.g. the '## Migration Patterns  ' reproducer steps, the 'Per CONVENTIONS.md §Migration Patterns' expected result)."
+    },
+    {
+      "text": "Bug validation confirms the issue type ID (10020) matches the Bug issue type ID from Bug Configuration (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md 'Issue type validation': 'Issue type: Bug (ID: 10020)', 'Configured Bug issue type ID: 10020', 'Result: **match** — issue is a Bug.'"
+    },
+    {
+      "text": "Investigation identifies the trailing-whitespace heading extraction as the root cause — line[3:] does not strip whitespace (Steps 2-3)",
+      "passed": false,
+      "evidence": "investigation.md is titled 'Steps 2-3 ... — NOT EXECUTED' and says triage stopped at Step 1 because the description lacks '### **Environment / Version**'. It contains no line[3:] analysis and no root cause."
+    },
+    {
+      "text": "Root cause comment includes: what is broken (heading extraction does not strip trailing whitespace), where it is broken (plan-feature convention lookup), and how to verify the fix (reproducer test with whitespace in heading) (Step 4)",
+      "passed": false,
+      "evidence": "root-cause.md: 'Step 4 (Root Cause Analysis comment on ACME-500) — NOT EXECUTED'. No root cause comment was produced."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": false,
+      "evidence": "task-description.md: 'Step 5 ... — NOT EXECUTED'. It has no Acceptance Criteria section."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST test requirement — with explicit assertion guidance derived from the Steps to Reproduce (Step 5 Test Requirements ordering)",
+      "passed": false,
+      "evidence": "task-description.md has no Test Requirements section; Step 5 was not performed."
+    },
+    {
+      "text": "Task description includes a Bug Context section with Bug key (ACME-500), Steps to Reproduce, Expected/Actual Result, and Root Cause summary (Step 5 Bug Context extension)",
+      "passed": false,
+      "evidence": "task-description.md has no Bug Context section; it only contains the stop message."
+    },
+    {
+      "text": "Task description sets Target Branch to main (Step 5 Target Branch)",
+      "passed": false,
+      "evidence": "task-description.md never mentions Target Branch or 'main'."
+    },
+    {
+      "text": "Task description output includes ai-generated-jira in the Jira API metadata block showing it would be passed as a label to jira.create_issue (Step 5 Task creation)",
+      "passed": false,
+      "evidence": "task-description.md says outright 'no jira.create_issue call made, so no metadata block'. The phrase 'labels [ai-generated-jira] would only apply once the bug is complete' appears only in the heading, not in a metadata block."
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 7,
+    "total": 9,
+    "pass_rate": 0.222
+  }
+}

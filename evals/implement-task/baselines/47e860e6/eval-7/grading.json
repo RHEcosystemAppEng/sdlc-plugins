@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The response describes locating the digest comment using the marker string '[sdlc-workflow] Description digest:' from shared/description-digest-protocol.md",
+      "passed": true,
+      "evidence": "digest-mismatch.md, Step 1.5 section '2. Locate the digest comment': \"The comment body starts with the marker `[sdlc-workflow] Description digest:` defined in `shared/description-digest-protocol.md`. Only one comment matches, so it is the digest comment.\""
+    },
+    {
+      "text": "The response describes detecting a mismatch between the stored digest and the computed digest of the current description",
+      "passed": true,
+      "evidence": "digest-mismatch.md section '4e. Compare hex digests: MISMATCH': \"`0000…0000` (stored) != `<computed-hex>` (current). This means the task description was modified after plan-feature created it.\" Preceded by 4b (extract stored digest) and 4c (compute current digest via scripts/sha256-digest.py)."
+    },
+    {
+      "text": "The response alerts the user that the description was modified after plan-feature created the task and displays the expected vs actual digest values",
+      "passed": true,
+      "evidence": "User-facing message in 4e: \"The task description was modified after plan-feature created it.\" followed by \"**Expected digest** (from the plan-feature digest comment): `sha256-md:0000000000000000000000000000000000000000000000000000000000000000`\" and \"**Actual digest** (computed from the current description via `scripts/sha256-digest.py`): `sha256-md:<computed-hex>`\" (actual shown as a placeholder because the computation is simulated, but both values are presented side by side)."
+    },
+    {
+      "text": "The response offers the user a choice: (1) proceed with the current description, or (2) stop so they can re-run plan-feature",
+      "passed": true,
+      "evidence": "Message in 4e: \"1. **Proceed** with the current description as-is\" / \"2. **Stop** so you can re-run plan-feature to regenerate tasks\" / \"Please choose 1 or 2.\""
+    },
+    {
+      "text": "The response stops execution and does not proceed to Step 2 or implementation planning until the user responds — following the same pause-and-ask pattern as the incomplete description handling",
+      "passed": true,
+      "evidence": "Section 'Execution halted pending user response': \"no later steps run until the user answers\", listing \"Step 2 (verify dependencies): not run\", Step 3 \"not run. Jira is not changed.\", Steps 4-11 not run; \"It is a hard pause that needs an explicit user decision.\" The summary table also says \"Alert user ... offer Proceed/Stop, stop execution\". It does not mention the incomplete-description handling by name, but it follows the same pause-and-ask behavior."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

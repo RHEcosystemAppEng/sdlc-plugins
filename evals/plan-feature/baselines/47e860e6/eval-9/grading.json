@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "At least one task's Acceptance Criteria contains a code-level, testable criterion requiring the gating flow to fail closed (e.g., exit non-zero or report an error rather than skip) when the tracker search returns an empty result from a source that cannot be proven authenticated or healthy.",
+      "passed": true,
+      "evidence": "task-2-fail-closed-verification-gate.md AC (line 48): \"**Fail-closed:** when the tracker search returns an empty result from a source that cannot be proven authenticated or healthy (`TrackerAuthUnprovenError`, or any tracker error), `resolve_gated_issue` does not return `None` (skip). It raises, and the gate exits non-zero.\" Line 49 adds that scripts/pre-verify.sh exits non-zero on the auth-unproven code. Task 1 AC (lines 39-40) similarly requires search_issues to raise TrackerAuthUnprovenError and the CLI to exit with a distinct non-zero code."
+    },
+    {
+      "text": "The same task's Test Requirements include a test that drives the unauthenticated, degraded, or empty-search path and asserts the fail-closed outcome rather than a skip.",
+      "passed": true,
+      "evidence": "task-2 Test Requirements (line 56): \"Test (degraded/empty path): mock `search_issues` to raise `TrackerAuthUnprovenError`, simulating the gateway's successful empty response to an unauthenticated/under-privileged request. Assert `resolve_gated_issue` raises / the gate exits non-zero and does **not** return `None`.\" Line 57: wrapper test with a stubbed client that prints `[]` and exits with the auth-unproven code, asserting the script exits non-zero."
+    },
+    {
+      "text": "That task's Implementation Notes point at the specific gate or skip site where the guard belongs, naming src/gate/resolve_issue.py (resolve_gated_issue) and/or scripts/pre-verify.sh.",
+      "passed": true,
+      "evidence": "task-2 Implementation Notes (line 25): \"**Gate/skip site (primary):** `src/gate/resolve_issue.py::resolve_gated_issue`. This is the line that returns `None` (skip) when `search_issues` returns an empty result. Add the guard here\". Line 29: \"**Gate/skip site (wrapper):** `scripts/pre-verify.sh`.\""
+    },
+    {
+      "text": "The documented silent-empty risk is not covered only by an operational or post-merge mitigation: if a live run after merge is mentioned, it appears alongside the fail-closed Acceptance Criterion and test, not as their replacement.",
+      "passed": true,
+      "evidence": "The post-merge live run appears only in task-3 (line 27: \"This is an **extra operational check only**. The authoritative coverage for the silent-empty risk is the fail-closed ACs and tests in this task and in Tasks 1–2\"; line 46: \"Post-merge (supplementary, not a replacement for the tests above)\"). Task 3 also has its own fail-closed AC (line 40) and degraded-path test (line 45). impact-map.md line 21 says it is \"Not accepted as the only coverage\", and summary-comment.md line 32 says it is \"not the coverage for this risk.\" No output contradicts this."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}
