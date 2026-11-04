@@ -325,6 +325,29 @@ def normalize_issue(issue):
     }
 
 
+def normalize_transitions(transitions):
+    """Reduce a Jira transition catalog to its distinct target statuses (name + category).
+
+    Transition IDs are deliberately dropped: the executor resolves them live at
+    execution time, so the bundle only tells the planner which statuses exist.
+    """
+    transitions = _require_list(transitions, "transitions", allow_empty=True)
+    normalized = []
+    for index, transition in enumerate(transitions):
+        name = "transitions[{}]".format(index)
+        target = _require_mapping(_require_mapping(transition, name).get("to"), name + ".to")
+        status_name = target.get("name")
+        if not isinstance(status_name, str) or not status_name:
+            raise EvidenceError("{}.to.name is required".format(name))
+        category = _require_mapping(target.get("statusCategory"), name + ".to.statusCategory").get("key")
+        if not isinstance(category, str) or not category:
+            raise EvidenceError("{}.to.statusCategory.key is required".format(name))
+        entry = {"name": status_name, "category": category}
+        if entry not in normalized:
+            normalized.append(entry)
+    return normalized
+
+
 def normalize_versions(versions):
     """Reduce Jira version objects to the schema's stable audit fields."""
     versions = _require_list(versions, "versions", allow_empty=True)
@@ -436,8 +459,12 @@ def validate_bundle(bundle, schema_path=None):
 
 def build_bundle(issue, remote_links, configuration, external_evidence, matrix,
                  source_evidence, jira_metadata, idempotency,
-                 mutation_authorized, release_decisions=None):
-    """Build a schema-validated, credential-free triage-security input bundle."""
+                 mutation_authorized, release_decisions=None, transitions=None):
+    """Build a schema-validated, credential-free triage-security input bundle.
+
+    ``transitions`` is the triaged issue's raw ``get_transitions`` catalog; when
+    given, its normalized target statuses are recorded as ``issue.transitions``.
+    """
     configuration = _require_mapping(configuration, "configuration")
     external_evidence = _require_mapping(external_evidence, "external_evidence")
     jira_metadata = _require_mapping(jira_metadata, "jira_metadata")
@@ -455,6 +482,8 @@ def build_bundle(issue, remote_links, configuration, external_evidence, matrix,
         "idempotency": idempotency,
         "authorization": {"mutation_authorized": bool(mutation_authorized)},
     }
+    if transitions is not None:
+        bundle["issue"]["transitions"] = normalize_transitions(transitions)
     if release_decisions is not None:
         bundle["authorization"]["release_decisions"] = release_decisions
     validate_bundle(bundle)
@@ -758,6 +787,7 @@ def collect_bundle(issue_key, project_root, release_decisions=None, mutation_aut
     configuration, lifecycle_url, stream_rows, repository_paths = _runner_configuration(
         _read_text(claude_path, "target project CLAUDE.md"), root)
     issue = _jira_client("get_issue", issue_key, "--fields", "*all")
+    transitions = _jira_client("get_transitions", issue_key)
     cve_id = extract_cve_id(issue)
     escaped_project_key = _jql_escape(configuration["project_key"])
     escaped_cve_id = _jql_escape(cve_id)
@@ -863,6 +893,7 @@ def collect_bundle(issue_key, project_root, release_decisions=None, mutation_aut
             "existing_remediation": related,
         },
         mutation_authorized=mutation_authorized,
+        transitions=transitions,
         **({"release_decisions": release_decisions} if release_decisions is not None else {}),
     )
 

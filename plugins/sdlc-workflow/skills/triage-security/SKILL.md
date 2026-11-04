@@ -196,7 +196,7 @@ branch once from `authorization.mutation_authorized` after trusted-input validat
 | Interactive Jira operation | Mutation-authorized Fullsend action |
 |---|---|
 | Assignment, Affects Versions, VEX Justification, labels, resolution fields | `field-edit` |
-| Assigned, In Progress, or Closed workflow change | `status-transition` |
+| Assigned, In Progress, or Closed workflow change | `status-transition` to a target name from `issue.transitions` (status rules: `jira-triage-operations.md`) |
 | Triage, correction, overlap, reconciliation, cross-stream, and summary comments | `comment` with `body_adf`, preserving required ADF mentions and footnotes |
 | Related, Depend, or Blocks relationship | `link` with the matching `link_type` |
 | Remediation Task creation | `remediation-task` with `ref`, `description_adf`, labels, and optional priority/fix versions |
@@ -463,7 +463,8 @@ recommendation naming the missing trusted assignee identity and required trusted
 configuration. Continue the mutation-authorized plan: serialize every other authorized
 field edit, transition, comment, remediation task, and link in the existing step order.
 If the ID is present and authorization permits it, append the assignment and transition
-actions in order.
+actions in order; take the status name from `issue.transitions` (e.g. `ASSIGNED`)
+and omit the transition when `issue.status` is already Assigned or later.
 
 1. **Retrieve the current user's Jira account ID:**
 

@@ -409,6 +409,179 @@ def test_related_unavailable_transition_in_different_status_still_fails(recorder
     ]
 
 
+# SYNTHETIC TEST DATA — a Bugzilla-style Vulnerability workflow catalog (no "In Progress").
+_BUGZILLA_TRANSITIONS = [
+    {"id": "11", "name": "Assign", "to": {"name": "ASSIGNED", "statusCategory": {"key": "indeterminate"}}},
+    {"id": "21", "name": "Post", "to": {"name": "POST", "statusCategory": {"key": "indeterminate"}}},
+    {"id": "61", "name": "Close", "to": {"name": "Closed", "statusCategory": {"key": "done"}}},
+]
+
+
+def _bugzilla_jira(recorder, monkeypatch, current_status, category):
+    """Serve the Bugzilla-style catalog and a live current status for every issue."""
+    def get_transitions(issue):
+        """Return the Vulnerability workflow's transitions."""
+        recorder.calls.append(("get-transitions", issue))
+        return copy.deepcopy(_BUGZILLA_TRANSITIONS)
+
+    def get_issue(issue, fields="*all"):
+        """Return the issue's live Jira status and category."""
+        recorder.calls.append(("get-issue", issue, fields))
+        return {"fields": {"status": {"name": current_status, "statusCategory": {"key": category}}}}
+
+    monkeypatch.setattr(executor._jira_mod, "get_transitions", get_transitions)
+    monkeypatch.setattr(executor._jira_mod, "get_issue", get_issue)
+
+
+def test_assigned_transition_matches_bugzilla_status_case_insensitively(recorder, monkeypatch):
+    """Reproducer for TC-7400: an `Assigned` target resolves to the workflow's `ASSIGNED` status."""
+    # Given a New Vulnerability on a Bugzilla-style workflow and a plan targeting "Assigned"
+    _bugzilla_jira(recorder, monkeypatch, "New", "new")
+    result = _plan([
+        {"type": "status-transition", "marker": "triage-security:status", "issue": "TC-42", "status": "Assigned"},
+        {"type": "field-edit", "marker": "triage-security:labels", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
+    ])
+    trusted = _trusted_input()
+    trusted["issue"]["status"] = "New"
+
+    # When the executor runs the plan
+    executor.execute_plan(result, trusted)
+
+    # Then it transitions with the ASSIGNED transition ID and runs the later action
+    assert recorder.calls == [
+        ("get-transitions", "TC-42"), ("transition", "TC-42", "11"),
+        ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]}),
+    ]
+
+
+def test_in_progress_is_noop_when_current_status_is_indeterminate(recorder, monkeypatch):
+    """An `In Progress` step is satisfied by a live indeterminate-category status like ASSIGNED."""
+    # Given an issue live in ASSIGNED whose workflow has no "In Progress" status
+    _bugzilla_jira(recorder, monkeypatch, "ASSIGNED", "indeterminate")
+    result = _plan([
+        {"type": "status-transition", "marker": "triage-security:in-progress", "issue": "TC-42", "status": "In Progress"},
+        {"type": "field-edit", "marker": "triage-security:labels", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
+    ])
+    trusted = _trusted_input()
+    trusted["issue"]["status"] = "New"
+
+    # When the executor reaches the In Progress action
+    executor.execute_plan(result, trusted)
+
+    # Then no transition is written and the next action executes
+    assert recorder.calls == [
+        ("get-transitions", "TC-42"), ("get-issue", "TC-42", "status"),
+        ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]}),
+    ]
+
+
+def test_assigned_then_in_progress_runs_on_bugzilla_workflow(recorder, monkeypatch):
+    """The skill's Assigned-then-In-Progress sequence completes on a Bugzilla-style workflow."""
+    # Given a New issue; after the Assigned transition Jira reports ASSIGNED
+    _bugzilla_jira(recorder, monkeypatch, "ASSIGNED", "indeterminate")
+    result = _plan([
+        {"type": "status-transition", "marker": "triage-security:assigned", "issue": "TC-42", "status": "Assigned"},
+        {"type": "status-transition", "marker": "triage-security:in-progress", "issue": "TC-42", "status": "In Progress"},
+        {"type": "field-edit", "marker": "triage-security:labels", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
+    ])
+    trusted = _trusted_input()
+    trusted["issue"]["status"] = "New"
+
+    # When the executor runs the whole plan
+    executor.execute_plan(result, trusted)
+
+    # Then only the ASSIGNED transition is written and every later action runs
+    assert recorder.calls == [
+        ("get-transitions", "TC-42"), ("transition", "TC-42", "11"),
+        ("get-transitions", "TC-42"), ("get-issue", "TC-42", "status"),
+        ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]}),
+    ]
+
+
+@pytest.mark.parametrize("status,current,category", [
+    ("In Progress", "New", "new"),
+    ("In Progress", "Closed", "done"),
+    ("Verified", "ASSIGNED", "indeterminate"),
+])
+def test_unmatched_status_target_still_fails_closed(status, current, category, recorder, monkeypatch):
+    """Only a literal In Progress target on an indeterminate status is satisfied by category."""
+    # Given a target with no matching transition and a current status that does not satisfy it
+    _bugzilla_jira(recorder, monkeypatch, current, category)
+    result = _plan([
+        {"type": "status-transition", "marker": "triage-security:status", "issue": "TC-42", "status": status},
+        {"type": "field-edit", "marker": "triage-security:labels", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
+    ])
+
+    # When the executor looks up the transition
+    with pytest.raises(executor.ActionError, match="no transition named {} for TC-42".format(status)):
+        executor.execute_plan(result, _trusted_input())
+
+    # Then execution stops before any write or later action
+    assert recorder.calls == [("get-transitions", "TC-42"), ("get-issue", "TC-42", "status")]
+
+
+def test_related_status_noop_matches_current_status_case_insensitively(recorder, monkeypatch):
+    """A related issue already in `ASSIGNED` satisfies an `Assigned` action without a transition."""
+    # Given a related issue whose transition catalog no longer offers ASSIGNED
+    def get_transitions(issue):
+        """Return no transition once the issue has reached its status."""
+        recorder.calls.append(("get-transitions", issue))
+        return []
+
+    def get_issue(issue, fields="*all"):
+        """Return the related issue's current Bugzilla-style status."""
+        recorder.calls.append(("get-issue", issue, fields))
+        return {"fields": {"status": {"name": "ASSIGNED", "statusCategory": {"key": "indeterminate"}}}}
+
+    monkeypatch.setattr(executor._jira_mod, "get_transitions", get_transitions)
+    monkeypatch.setattr(executor._jira_mod, "get_issue", get_issue)
+    result = _plan([
+        {"type": "status-transition", "marker": "triage-security:related-status", "issue": "TC-43", "status": "Assigned"},
+        {"type": "field-edit", "marker": "triage-security:labels", "issue": "TC-42", "fields": {"labels": ["ai-cve-triaged"]}},
+    ])
+
+    # When the related action is executed
+    executor.execute_plan(result, _trusted_input(related=[{"key": "TC-43"}]))
+
+    # Then Jira's current status satisfies it and execution continues
+    assert recorder.calls == [
+        ("get-transitions", "TC-43"), ("get-issue", "TC-43", "status"),
+        ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]}),
+    ]
+
+
+@pytest.mark.parametrize("snapshot_status,category,action_status,expected", [
+    ("ASSIGNED", "indeterminate", "Assigned", True),
+    ("ASSIGNED", "indeterminate", "In Progress", True),
+    ("POST", "indeterminate", "Assigned", False),
+    ("New", "new", "In Progress", False),
+    ("Closed", "done", "In Progress", False),
+])
+def test_already_applied_status_uses_casefold_and_trusted_category(snapshot_status, category, action_status, expected):
+    """The retry snapshot check matches status case-insensitively and In Progress by Jira category."""
+    # Given a trusted snapshot carrying Jira's status name and category
+    trusted = _trusted_input()
+    trusted["issue"]["status"] = snapshot_status
+    trusted["issue"]["fields"] = {"status": {"name": snapshot_status, "statusCategory": {"key": category}}}
+    action = {"type": "status-transition", "marker": "triage-security:status", "issue": "TC-42", "status": action_status}
+
+    # When the executor checks whether the transition was already applied
+    # Then only an equivalent snapshot status skips the retry
+    assert executor._already_applied(action, trusted) is expected
+
+
+def test_already_applied_ignores_category_without_trusted_snapshot_status():
+    """An In Progress retry is not skipped when the snapshot has no Jira status category."""
+    # Given a snapshot status name without its Jira category
+    trusted = _trusted_input()
+    trusted["issue"]["status"] = "ASSIGNED"
+    action = {"type": "status-transition", "marker": "triage-security:status", "issue": "TC-42", "status": "In Progress"}
+
+    # When the executor checks the snapshot
+    # Then the category equivalence does not apply
+    assert executor._already_applied(action, trusted) is False
+
+
 def test_unrelated_search_purpose_cannot_expand_trusted_scope(recorder):
     """An arbitrary prefetched search is not a documented triage relationship."""
     # Given a target present only in a search unrelated to triage
