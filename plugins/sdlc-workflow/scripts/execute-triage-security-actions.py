@@ -403,6 +403,32 @@ def _field_value_matches(field_name: str, snapshot_value: Any, action_value: Any
     return snapshot_value == action_value
 
 
+_IN_PROGRESS = "In Progress"
+
+
+def _status_matches(actual: Any, wanted: Any) -> bool:
+    """Compare Jira status names case-insensitively (e.g. ``Assigned`` matches ``ASSIGNED``)."""
+    return isinstance(actual, str) and isinstance(wanted, str) and actual.casefold() == wanted.casefold()
+
+
+def _status_satisfies(name: Any, category: Any, wanted: str) -> bool:
+    """Return whether a Jira-reported status name/category already satisfies a target status.
+
+    Only the literal ``In Progress`` target is satisfied by category: Bugzilla-style
+    workflows have no such status, so any ``indeterminate`` status (``ASSIGNED``,
+    ``POST``, ...) counts. ``category`` must come from Jira, never from the agent.
+    """
+    if _status_matches(name, wanted):
+        return True
+    return _status_matches(wanted, _IN_PROGRESS) and category == "indeterminate"
+
+
+def _status_category(status: Any) -> Any:
+    """Return the ``statusCategory.key`` of a Jira status object, or None."""
+    category = status.get("statusCategory") if isinstance(status, dict) else None
+    return category.get("key") if isinstance(category, dict) else None
+
+
 def _already_applied(action: dict[str, Any], trusted_input: dict[str, Any]) -> bool:
     """Check the trusted Jira snapshot for a mutation already applied on a retry."""
     issue = trusted_input.get("issue", {})
@@ -417,7 +443,7 @@ def _already_applied(action: dict[str, Any], trusted_input: dict[str, Any]) -> b
             for name, value in action_fields.items()
         )
     if action_type == "status-transition":
-        return issue.get("status") == action["status"]
+        return _status_satisfies(issue.get("status"), _status_category(fields.get("status")), action["status"])
     if action_type == "link":
         snapshot_key = issue.get("key")
         if snapshot_key == action["inward"]:
@@ -449,12 +475,15 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
     if action_type == "status-transition":
         transitions = _jira_mod.get_transitions(action["issue"])
         transition = next(
-            (item for item in transitions if item.get("to", {}).get("name") == action["status"]),
+            (item for item in transitions if _status_matches((item.get("to") or {}).get("name"), action["status"])),
             None,
         )
-        if transition is None and action["issue"] != trusted_input["issue"]["key"]:
-            issue = _jira_mod.get_issue(action["issue"], fields="status")
-            if issue.get("fields", {}).get("status", {}).get("name") == action["status"]:
+        if transition is None:
+            # No matching transition: succeed only if Jira's live status already satisfies
+            # the target (a replayed transition, or In Progress on a Bugzilla-style workflow).
+            status = (_jira_mod.get_issue(action["issue"], fields="status").get("fields") or {}).get("status")
+            if isinstance(status, dict) and _status_satisfies(
+                    status.get("name"), _status_category(status), action["status"]):
                 return
         if transition is None or not transition.get("id"):
             raise ActionError("no transition named {} for {}".format(action["status"], action["issue"]))

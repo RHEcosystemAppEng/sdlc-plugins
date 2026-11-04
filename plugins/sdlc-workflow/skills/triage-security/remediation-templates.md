@@ -553,7 +553,11 @@ After creating remediation tasks:
      type: "Related"
    )
    ```
-5. **Transition** the Vulnerability to In Progress (if not already).
+5. **Transition** the Vulnerability to In Progress (if not already). Workflows
+   without an "In Progress" status (e.g. Bugzilla-style `ASSIGNED`/`POST`/`MODIFIED`)
+   treat any `indeterminate`-category status as equivalent: skip this step when the
+   issue is already in one (such as `ASSIGNED`) or a later status. In Fullsend mode,
+   use a target status name from `issue.transitions`.
 6. **Assign** the Vulnerability to the current user (if not already assigned).
 7. **Add comment** to the Vulnerability listing all created tasks:
    - Source dependency: "Remediation tasks created: [upstream-task-key] (upstream

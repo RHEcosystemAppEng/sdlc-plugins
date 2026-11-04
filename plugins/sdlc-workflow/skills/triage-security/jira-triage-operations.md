@@ -24,9 +24,19 @@ existing artifacts mean the action is omitted on retry.
 | Procedure write | Fullsend action |
 |---|---|
 | Affects Versions correction, VEX value, assignment, add/remove label, resolution | `field-edit` |
-| Assigned, In Progress, Closed | `status-transition` |
+| Assigned, In Progress, Closed | `status-transition` (see status names below) |
 | Affects Versions, duplicate, overlap, lifecycle, already-fixed, reconciliation, and skip comments | `comment` with `body_adf` |
 | Related, Depend, Blocks links | `link` with the same `link_type` |
+
+**Status names.** Workflows differ: TC Vulnerabilities use Bugzilla-style `ASSIGNED`,
+`POST`, `MODIFIED`, ... and have no `In Progress`. For the triaged issue, set each
+`status-transition` `status` to the matching target name in the bundle's
+`issue.transitions` (for example `ASSIGNED` for "Assigned"). The executor matches
+names case-insensitively and resolves transition IDs live. Omit an "In Progress" step
+when the issue is already in, or an earlier planned transition moves it to, an
+`indeterminate`- or `done`-category status (for example `ASSIGNED`). The executor
+also treats an unmatched `In Progress` target as satisfied when Jira reports an
+`indeterminate` current status. Any other unmatched target fails the run.
 
 Build all comment bodies as ADF documents, retaining required Comment Footnotes and
 ProdSec mentions. Step 4.4 reconciliation is specifically a `link` action for the

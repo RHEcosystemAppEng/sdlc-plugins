@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for the trusted triage-security evidence transformer."""
 
+import copy
 import io
 import json
 import os
@@ -117,7 +118,7 @@ def test_collect_bundle_escapes_configured_values_in_jql_literals(tmp_path, monk
             return issue
         if command == "get_remote_links":
             return []
-        if command == "get_versions":
+        if command in ("get_versions", "get_transitions"):
             return []
         if command == "search_jql":
             searched_jql.append(arguments[arguments.index("--jql") + 1])
@@ -846,7 +847,7 @@ def _minimal_jira_client():
     def jira_client(command, *arguments):
         if command == "get_issue":
             return {"key": "TC-42", "fields": {}}
-        if command in ("get_remote_links", "get_versions"):
+        if command in ("get_remote_links", "get_versions", "get_transitions"):
             return []
         if command == "search_jql":
             return {"issues": []}
@@ -1198,7 +1199,8 @@ def test_collect_bundle_includes_release_evidence_without_authorizing_writes(tmp
     def jira(command, *_args):
         """Return successful empty release searches alongside the primary CVE."""
         return {"get_issue": issue, "get_remote_links": original["remote_links"],
-                "get_versions": [], "search_jql": {"issues": []}}[command]
+                "get_versions": [], "get_transitions": copy.deepcopy(_BUGZILLA_TRANSITIONS),
+                "search_jql": {"issues": []}}[command]
 
     monkeypatch.setattr(pre_triage_security, "_jira_client", jira)
 
@@ -1210,6 +1212,78 @@ def test_collect_bundle_includes_release_evidence_without_authorizing_writes(tmp
         "family": "1.0", "epics": [], "tasks": [], "remediation": [], "originating_cves": []}]
     assert bundle["authorization"] == {"mutation_authorized": False, "release_decisions": decisions}
     assert bundle["jira_metadata"]["related_issues"] == []
+    # And the issue's live transition targets are recorded without transition IDs
+    assert bundle["issue"]["transitions"] == _BUGZILLA_TARGETS
+
+
+# SYNTHETIC TEST DATA — a raw Bugzilla-style get_transitions response; "Assign" and
+# "Reassign" share a target so the normalized catalog lists ASSIGNED once.
+_BUGZILLA_TRANSITIONS = [
+    {"id": "11", "name": "Assign", "to": {"name": "ASSIGNED", "statusCategory": {"key": "indeterminate"}}},
+    {"id": "12", "name": "Reassign", "to": {"name": "ASSIGNED", "statusCategory": {"key": "indeterminate"}}},
+    {"id": "21", "name": "Post", "to": {"name": "POST", "statusCategory": {"key": "indeterminate"}}},
+    {"id": "61", "name": "Close", "to": {"name": "Closed", "statusCategory": {"key": "done"}}},
+]
+_BUGZILLA_TARGETS = [
+    {"name": "ASSIGNED", "category": "indeterminate"},
+    {"name": "POST", "category": "indeterminate"},
+    {"name": "Closed", "category": "done"},
+]
+
+
+def test_normalize_transitions_keeps_distinct_target_names_and_categories():
+    """A raw transition catalog becomes distinct target statuses with no transition IDs."""
+    # Given Jira's raw transition catalog for a Bugzilla-style Vulnerability
+    transitions = copy.deepcopy(_BUGZILLA_TRANSITIONS)
+
+    # When the runner normalizes it for the bundle
+    normalized = pre_triage_security.normalize_transitions(transitions)
+
+    # Then only each target's status name and category remain
+    assert normalized == _BUGZILLA_TARGETS
+
+
+@pytest.mark.parametrize("transitions,message", [
+    ({"transitions": []}, "transitions must be a list"),
+    (["not-an-object"], r"transitions\[0\] must be an object"),
+    ([{"id": "11", "name": "Assign"}], r"transitions\[0\]\.to must be an object"),
+    ([{"id": "11", "to": {"statusCategory": {"key": "new"}}}], r"transitions\[0\]\.to\.name is required"),
+    ([{"id": "11", "to": {"name": "ASSIGNED"}}], r"transitions\[0\]\.to\.statusCategory must be an object"),
+    ([{"id": "11", "to": {"name": "ASSIGNED", "statusCategory": {}}}],
+     r"transitions\[0\]\.to\.statusCategory\.key is required"),
+])
+def test_normalize_transitions_rejects_malformed_responses(transitions, message):
+    """A malformed get_transitions response fails collection instead of entering the bundle."""
+    # Given a malformed Jira transition response
+    # When the runner normalizes it, then it raises a descriptive evidence error
+    with pytest.raises(pre_triage_security.EvidenceError, match=message):
+        pre_triage_security.normalize_transitions(transitions)
+
+
+@requires_format_extra
+def test_bundle_with_transitions_satisfies_input_contract():
+    """A bundle carrying the issue's normalized transitions validates against the input schema."""
+    # Given a complete bundle extended with normalized transition targets
+    bundle = _complete_bundle()
+    bundle["issue"]["transitions"] = pre_triage_security.normalize_transitions(_BUGZILLA_TRANSITIONS)
+
+    # When the trusted input contract is validated
+    pre_triage_security.validate_bundle(bundle)
+
+    # Then the transition targets reach the sandbox unchanged
+    assert bundle["issue"]["transitions"] == _BUGZILLA_TARGETS
+
+
+@requires_format_extra
+def test_bundle_rejects_transition_ids():
+    """The input schema rejects transition IDs so the executor keeps resolving them live."""
+    # Given a bundle whose transition entry leaks a transition ID
+    bundle = _complete_bundle()
+    bundle["issue"]["transitions"] = [{"name": "ASSIGNED", "category": "indeterminate", "id": "11"}]
+
+    # When the bundle is validated, then the extra property fails closed
+    with pytest.raises(pre_triage_security.EvidenceError, match="triage-security input validation failed"):
+        pre_triage_security.validate_bundle(bundle)
 
 
 @requires_format_extra
