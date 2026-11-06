@@ -839,7 +839,7 @@ Output all four check results to the user before proceeding.
 
 Commit following the Conventional Commits specification (https://www.conventionalcommits.org/en/v1.0.0/):
 
-git commit --trailer="Assisted-by: Claude Code" -m "<type>[optional scope]: <description>
+git commit --trailer="Assisted-by: <tool> (<model>)" -m "<type>[optional scope]: <description>
 
 [optional body]
 
@@ -848,7 +848,8 @@ Implements <JIRA-ID>"
 Where type is one of: feat, fix, refactor, test, docs, chore, etc.
 Use a scope when relevant (e.g. `feat(api): add AIBOM endpoint`).
 The footer MUST reference the Jira issue ID.
-Always include `--trailer="Assisted-by: Claude Code"` to attribute AI assistance.
+Always include `--trailer="Assisted-by: <tool> (<model>)"` to attribute AI assistance.
+Substitute `<tool>` and `<model>` with the name of the AI tool and model you are running as (for example `OpenCode (GPT-6.1 Sol)` or `Claude Code (Claude Opus 4.1)`).
 
 ### Fork detection
 

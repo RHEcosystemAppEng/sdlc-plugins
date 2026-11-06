@@ -134,7 +134,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 |---|---|---|
 | 2.1 | Every commit MUST reference a Jira issue ID in the footer (e.g., `Implements TC-123`). | `implement-task/SKILL.md` — Step 9; `methodology.md` — Traceable Implementation |
 | 2.2 | Commit messages MUST follow the Conventional Commits specification (`<type>[optional scope]: <description>`). | `implement-task/SKILL.md` — Step 9 |
-| 2.3 | Every commit MUST include `--trailer="Assisted-by: Claude Code"` to attribute AI assistance. | `implement-task/SKILL.md` — Step 9 |
+| 2.3 | Every commit MUST include an `Assisted-by:` trailer naming the AI tool and model that produced the change (e.g., `Assisted-by: OpenCode (GPT-6.1 Sol)`). | `implement-task/SKILL.md` — Step 9 |
 
 ---
 

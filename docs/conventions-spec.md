@@ -18,14 +18,14 @@ All commits follow the [Conventional Commits](https://www.conventionalcommits.or
 [optional body]
 
 Implements <JIRA-ID>
-Assisted-by: Claude Code
+Assisted-by: <tool> (<model>)
 ```
 
 **Rules:**
 - **Type** is one of: `feat`, `fix`, `refactor`, `test`, `docs`, `chore`
 - **Scope** is optional but recommended when relevant (e.g., `feat(api): add AIBOM endpoint`)
 - **Footer** MUST include the Jira issue ID (e.g., `Implements TC-123`)
-- **Trailer** MUST include `Assisted-by: Claude Code` (added via `--trailer`)
+- **Trailer** MUST include `Assisted-by: <tool> (<model>)` naming the AI tool and model that produced the change (added via `--trailer`; e.g., `Assisted-by: OpenCode (GPT-6.1 Sol)`)
 
 ### PR Workflow
 
