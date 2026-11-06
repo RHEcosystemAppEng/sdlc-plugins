@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+      "passed": true,
+      "evidence": "scaffold-race.md section 2: 'Initial check: **missing**'; section 3 table: 'File present at initial check | No' and 'File present at pre-write re-read | **Yes** — created by a concurrent `/triage-security` run'."
+    },
+    {
+      "text": "The current `Last-Updated: 2026-10-26T09:00:00Z` value and `CONCURRENT-ROW-KEEP` content are preserved rather than replaced by the scaffold",
+      "passed": true,
+      "evidence": "Section 3: 'Its contents (including the `CONCURRENT-ROW-KEEP` row) and its `Last-Updated: 2026-10-26T09:00:00Z` timestamp are left untouched.' Section 6: '`security-matrix.md` (project) | **Not modified** — concurrent triage-security version preserved'."
+    },
+    {
+      "text": "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+      "passed": true,
+      "evidence": "Section 3: 'the configured path was re-read immediately before writing (create-if-absent semantics)'; 'Create-if-absent satisfied | **No** — target no longer absent'; 'Action: Scaffold write aborted.' Section 4: 'Declined. I will not write the scaffold over the current file'."
+    },
+    {
+      "text": "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+      "passed": true,
+      "evidence": "Section 3: 'Scaffold write aborted. `security-matrix.md` already exists at `security-matrix.md` — preserving current file.' Section 5 option 2: 'I would show you the **complete merged file** and write it only after you confirm again', plus re-read/compare before writing. Section 4: 'a merge needs its own fresh confirmation... \"Do not ask again\" cannot skip that requirement.'"
+    },
+    {
+      "text": "The output states that no project file is written until the changed target is reconciled and confirmed",
+      "passed": true,
+      "evidence": "Header: 'Outcome: Scaffold NOT written. Current file preserved. No project files modified.' Section 5: merge written 'only after you confirm again' and 'If it has changed again, I would stop and send you a new proposal.' Section 6 lists both security-matrix.md and CLAUDE.md as 'Not modified'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

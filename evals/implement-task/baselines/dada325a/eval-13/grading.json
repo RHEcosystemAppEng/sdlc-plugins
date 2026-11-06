@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md field table has rows: '`cves` | `Option<Vec<String>>` | **Yes**', '`affected_packages` | `Option<Vec<AffectedPackage>>` | **Yes**', '`severity_counts` | `Option<HashMap<String, u32>>` | **Yes**'."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md extract_vulnerability_summary: 'result.cves.clone().unwrap_or_default()', 'result.affected_packages.as_ref().map_or(0, Vec::len)', 'result.severity_counts.clone().unwrap_or_default()'. null-guards.md lists '.unwrap(), .expect(..)' as Banned. No .unwrap() on the Option fields anywhere."
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "Every access to result.cves / result.affected_packages / result.severity_counts in plan.md and null-guards.md goes through unwrap_or_default() or as_ref().map_or(). cve_count is computed from the guarded 'cve_list.len()', 'never computed from the raw Option' (null-guards.md). The .join() example applies only to the non-Option output field summary.cve_list."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md 'Why guards are needed': 'AdvisoryIngestResult is produced by a **different crate** (`modules/ingestor`, through `IngestorService::ingest_advisory()`) and consumed in `modules/fundamental`. Data that crosses this module boundary needs guards' and 'The producer's schema explicitly allows absence: every aggregate field is `Option<T>`.'"
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md tests/api/advisory_summary.rs: 'fn extract_summary_all_none_returns_zeroed()' with comment '// Given cves=None, affected_packages=None, severity_counts=None' asserting 'assert_eq!(summary, VulnerabilitySummary::default())'. null-guards.md test coverage item 2: 'All None → == VulnerabilitySummary::default()'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

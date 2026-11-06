@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 detects the absence of the Deployment Context column in the Source Repositories table and defaults all repositories to upstream (§1.78)",
+      "passed": true,
+      "evidence": "data-extraction.md, under '## Step 0: Validate Project Configuration' > '### Source Repositories: deployment context parsing': \"The Source Repositories table has these columns: `Repository | URL | Local Path`. **It has no `Deployment Context` column.** For backward compatibility, every repository defaults to `upstream`\", with a table row 'rhtpa-backend | https://github.com/rhtpa/rhtpa-backend | `upstream` (defaulted: no Deployment Context column)'. That is the only configured repository."
+    },
+    {
+      "text": "Remediation task descriptions do NOT include a Coordination Guidance subsection — the section is omitted entirely when no Deployment Context column exists",
+      "passed": true,
+      "evidence": "remediation.md: the Task 1 description (lines 108-184) has the sections Repository, Target Branch, Description, Implementation Notes (with the Remediation approach subsections), Acceptance Criteria, Test Requirements and Dependencies. The Task 2 description (lines 195-241) has Repository, Target Branch, Description, Implementation Notes, Acceptance Criteria, Test Requirements and Dependencies. Neither contains '### Coordination Guidance'. Line 243 states: \"neither task description contains a `### Coordination Guidance` subsection. This is intentional, because the Source Repositories table has no Deployment Context column.\" The checklist (line 270) repeats this: 'Coordination guidance: omitted because there is no Deployment Context column'."
+    },
+    {
+      "text": "The triage proceeds normally through all steps without errors from the missing Deployment Context column",
+      "passed": true,
+      "evidence": "data-extraction.md line 43: \"The missing column is not an error, and triage continues normally.\" Every step appears in order with no error: Step 0.6, Step 0, Step 0.3, Step 0.8, Step 1 (plus stream scope, ecosystem and deployment context lookup), Step 1.5 and Step 1.7 in data-extraction.md; then Step 2 (version impact table), Step 3 (Affects Versions correction), Steps 4-7.5, Step 8 (two preemptive tasks for 2.1.x), the creation/linkage sequence, the pre-creation checklist and the Post-Triage Summary in remediation.md."
+    },
+    {
+      "text": "Backward compatibility is maintained — existing eval behavior is unaffected by the absence of the Deployment Context column",
+      "passed": true,
+      "evidence": "The standard triage outputs are all produced as normal. The version impact table shows 2.2.0-2.2.2 affected and 2.2.3/2.2.4 fixed at quinn-proto 0.11.14. The Affects Versions correction (RHTPA 2.0.0 -> 2.2.0, 2.2.1, 2.2.2) is present. Step 8 applies Case B for 2.2.x and Case A for 2.1.x. Cargo source dependency remediation creates 2 tasks (upstream backport + downstream propagation) with the standard template sections, the security-preemptive labels and Related/Blocks links, followed by the post-triage summary. data-extraction.md lines 104-107 show deployment context defaulted to 'upstream' with only the Coordination Guidance generation suppressed ('backward-compatibility rule'). No other behavior changes."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

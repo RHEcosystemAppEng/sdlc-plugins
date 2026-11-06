@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "population-race.md Section 2 'Source snapshot retained at the initial read' records Last-Updated 2026-06-28T10:00:00Z and 'No CONCURRENT-ROW-KEEP entry'; Section 4 'Final unchanged-target check (re-read immediately before writing)' states 'I re-read security-matrix.md and compared it with the Section 2 snapshot' with a Snapshot vs Current file table."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "Section 4 table: 'Last-Updated | 2026-06-28T10:00:00Z | 2026-10-26T09:15:00Z' and '2.1.0 / api-rhel10 | No CONCURRENT-ROW-KEEP entry | CONCURRENT-ROW-KEEP entry added by a concurrent /triage-security run'."
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "Header: 'No write performed... will not be written over the concurrent update.' Section 5: 'The current file, including its 2026-10-26T09:15:00Z timestamp and the CONCURRENT-ROW-KEEP entry, is preserved untouched. No write was made and Last-Updated was not set.' Also declines the user's 'earlier confirmation still stands' instruction."
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Section 5 item 3: 'I do not have the entry's complete column values (tag, SHA, image reference, digest, CPE, notes)... It does not allow a merged proposal built on placeholders or guesses' and 'So the merge is aborted.' Section 6 Option A: 'Paste the complete current contents of security-matrix.md, or at least the full CONCURRENT-ROW-KEEP row'. No merged proposal is presented; Section 3 proposal is explicitly labeled 'now STALE, not written'."
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "Final line of Section 6: 'Nothing will be written until the concurrent change is reconciled and you confirm the final merged proposal.' Also: 'I will show you the complete merged matrix and ask for fresh confirmation... Only after that passes will I write'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

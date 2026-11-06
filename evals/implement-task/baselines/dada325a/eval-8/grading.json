@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "reuse-decision.md lines 5-10: 'Both live in `modules/ingestor/src/graph/sbom/mod.rs` ... Both are private (`fn`, not `pub fn`).' plan.md 6.1: '`fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>` becomes `pub fn describing_packages(...)`' and same for suppliers."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "reuse-decision.md line 16-19: '**Is there already a dependency?** Yes. `migration/Cargo.toml` already declares `trustify-module-ingestor = { path = \"../modules/ingestor\" }` ... Before editing, I would confirm this by reading `migration/Cargo.toml`'. plan.md Step 4 item 5: 'Read `migration/Cargo.toml` to confirm the `trustify-module-ingestor` dependency.' This is reasoning step 1, ahead of the reuse rule in step 2."
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md line 12: 'Decision: make them public and import them. Do not duplicate.' Line 20-21: 'Since it exists, reuse is the rule. Making the functions `pub` adds no new coupling between crates, because migration -> ingestor is already a dependency.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md line 12: 'Do not duplicate.' plan.md 6.2: 'Import the shared helpers. Do not copy them'. plan.md Step 9: 'Duplication check: grep the migration crate for any re-implementation ... There should be none.' Nowhere does either file propose copying the bodies."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md line 23-25: '**DRY and keeping one source of truth.** ... If it were copied, a fix in one copy would not reach the other, and the migrated `sbom_supplier` data could drift from what new ingestion produces.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

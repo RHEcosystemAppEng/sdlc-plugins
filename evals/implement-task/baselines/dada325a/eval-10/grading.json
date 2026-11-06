@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md lines 35-37: \"Collections are checked with existence/count-only assertions: `tests/api/advisory.rs`: `.filter(..).any(|_| true)` then `assert!(has_critical)`; `tests/api/sbom.rs`: `.filter(..).count()` then `assert!(matching > 0)`\"."
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md section 'Conflicts between sibling patterns and the skill's quality guidance', table row 1: sibling pattern \"Existence-only assertions: `.filter().any(|_| true)` ... `.filter().count()` + `assert!(n > 0)`\" vs skill guidance \"Step 7, 'Prefer value-based assertions over length-only checks'\"."
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md line 43: \"Per SKILL.md Step 4 ('Skill guidance takes precedence over sibling patterns') and Step 7, the skill guidance wins in each case below... the sibling pattern is **not** adopted.\" Row 1 decision: \"**Follow skill guidance.**\" Line 52 lists sibling conventions kept where there is no conflict."
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md line 64: \"No `.any()`, no `count() > 0`, no length-only checks.\" Test 1 code does `assert_eq!(summary, LicenseSummary { permissive: LicenseCategorySummary { count: 2, licenses: vec![\"Apache-2.0\".into(), \"MIT\".into()] }, ... })`. Test 4 asserts exact `permissive == { count: 2, licenses: [\"Apache-2.0\", \"MIT\"] }` with a full-struct assert_eq!."
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": false,
+      "evidence": "test-plan.md line 62 does follow the siblings on structure, setup and naming (\"same async test attribute and harness/context, real PostgreSQL test DB, fixture SBOM ingestion through the shared helper, snake_case scenario names\"). But the plan overrides more than the assertion style. Line 65 adds \"a `///` doc comment on every test function, plus `// Given` / `// When` / `// Then` sections... Sibling tests lack these, but the skill requires them regardless.\" conventions.md rows 2-3 record these as more sibling overrides. That contradicts \"overriding only the assertion style\"."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 1,
+    "total": 5,
+    "pass_rate": 0.8
+  }
+}

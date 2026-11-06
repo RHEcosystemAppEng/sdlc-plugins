@@ -1,0 +1,85 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review comment about transaction wrapping (id 30001) is classified as a code change request and triggers sub-task creation",
+      "passed": true,
+      "evidence": "review-30001.md: '## Classification: **Code change request**' and 'A sub-task is created (see `subtask-1.md`)'. report.md table: '30001 | ... | Code change request | subtask-1'."
+    },
+    {
+      "text": "The review comment about adding an index (id 30002) is classified as suggestion — the reviewer uses suggestive language ('should also', 'would help') and the classification output (review-30002.md) explains this reasoning",
+      "passed": true,
+      "evidence": "review-30002.md: '## Initial classification: **Suggestion**' with reasoning 'The comment opens with \"should\", but its justification is a performance improvement: \"would help\", \"Something like\". It does not point to a functional defect.' Final: 'Suggestion (no sub-task)'."
+    },
+    {
+      "text": "The nit comment about context message (id 30003) is classified as nit and does NOT trigger sub-task creation",
+      "passed": true,
+      "evidence": "review-30003.md: '## Classification: **Nit**' and 'No sub-task created.' report.md row: '30003 | ... | Nit | —'."
+    },
+    {
+      "text": "The question comment about GET behavior (id 30004) is classified as question and does NOT trigger sub-task creation",
+      "passed": true,
+      "evidence": "review-30004.md: '## Classification: **Question**' and 'No sub-task created from this comment.' report.md row: '30004 | ... | Question | —'. Only one sub-task (subtask-1) listed in 'Sub-tasks to be created'."
+    },
+    {
+      "text": "Each sub-task description follows the task-description-template.md format: contains Repository, Description, Files to Modify, Implementation Notes, and Acceptance Criteria sections (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-1.md (the only sub-task) contains '## Repository', '## Description', '## Files to Modify', '## Implementation Notes', '## Acceptance Criteria' (plus Target Branch, Reuse Candidates, Test Requirements)."
+    },
+    {
+      "text": "Each sub-task description includes a Target PR section with the PR URL https://github.com/trustify/trustify-backend/pull/744 (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-1.md ends with '## Target PR\\nhttps://github.com/trustify/trustify-backend/pull/744'."
+    },
+    {
+      "text": "Each sub-task description includes a Review Context section with the original review comment text (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-1.md '## Review Context' includes 'Original comment: > The `soft_delete` method should run all three UPDATE statements inside a single database transaction...' matching the comment text in review-30001.md."
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, creates sub-task descriptions, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "Outputs contain only report.md, review-3000[1-4].md, and subtask-1.md; no code files or diffs. The transaction fix is delegated to subtask-1 rather than applied."
+    },
+    {
+      "text": "The skill reads and processes all PR review comments before generating findings (constraint 1.10)",
+      "passed": true,
+      "evidence": "report.md 'Review Feedback details': 'Enumeration: 4 inline threads (30001–30004, all top-level, no replies) and 0 review-body items. All 4 threads are unclassified'; a review-3000N.md classification file exists for each of the 4 comments, and review 20001's body is also examined."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR (constraint 1.13)",
+      "passed": true,
+      "evidence": "report.md has 'Overall: FAIL' and contains no merge action or merge statement; it only reports and lists sub-tasks to be created."
+    },
+    {
+      "text": "The report contains a Test Change Classification row with ADDITIVE — only new test files were added (tests/api/sbom_delete.rs is a new file)",
+      "passed": true,
+      "evidence": "report.md: '| Test Change Classification | ADDITIVE | Only a new test file (`tests/api/sbom_delete.rs`, 5 new tests). No modified or deleted test files...'."
+    },
+    {
+      "text": "Convention upgrade eligibility is evaluated for review comment 30002 (index suggestion) — the review classification output (review-30002.md) or the report's Style/Conventions analysis explains whether the suggestion matches a documented or demonstrated project convention",
+      "passed": true,
+      "evidence": "review-30002.md '## Convention upgrade check (Style/Conventions Check 1)' covers 1a CONVENTIONS.md ('None of them mention index creation'), 1b codebase patterns ('Pattern count: 0'), 1c performance scrutiny, 1d decision '**Not upgraded.**'."
+    },
+    {
+      "text": "Review comment 30002 (index suggestion) does NOT result in a sub-task — the suggestion classification is correct (suggestive language, no directive) and no project convention in the fixture data backs an upgrade from suggestion to code change request",
+      "passed": true,
+      "evidence": "review-30002.md: 'Final classification: **Suggestion** (no sub-task)'; 'No sub-task created.' report.md: 'Convention Upgrade: PASS. One suggestion (30002) was examined and none were upgraded.' Sub-task table lists only subtask-1 (30001)."
+    },
+    {
+      "text": "Eval Quality is N/A because no eval result reviews exist in the PR — the 3-criteria detection (author github-actions[bot], marker ## Eval Results, footer sdlc-workflow/run-evals) found no matches, so Eval Quality does not affect the Test Quality combination",
+      "passed": true,
+      "evidence": "report.md 'Eval Quality detection' table evaluates review 20001 against all three checks (all NO); 'Reviews matching all three checks: **0**'; 'Eval Quality verdict: **N/A**'; 'Effect on Test Quality combination: none... An N/A verdict is excluded... Test Quality = PASS'."
+    },
+    {
+      "text": "The sub-task creation for comment 30001 explicitly specifies Issue Type as Sub-task — the subtask-30001.md file, the report's sub-task section, or the review classification output (review-30001.md) indicates the Jira issue is created with issueTypeName Sub-task (not as a standalone Task) to ensure parent-child hierarchy with the parent task",
+      "passed": true,
+      "evidence": "subtask-1.md (the sub-task file for comment 30001, per its Review Context 'Comment ID: 30001') states '- **Issue Type:** Sub-task' and '- **Parent:** TC-9103'."
+    }
+  ],
+  "summary": {
+    "passed": 15,
+    "failed": 0,
+    "total": 15,
+    "pass_rate": 1.0
+  }
+}

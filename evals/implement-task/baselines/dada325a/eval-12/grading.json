@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md section 2a lists `mcp__serena_backend__find_symbol(name_path_pattern=\"SEVERITY_ORDER\", include_body=true)` and `mcp__serena_backend__search_for_pattern(substring_pattern=\"(?i)severity_?order\", relative_path=\"modules/fundamental\")`. The intro says: \"before declaring any new constant ... search the **target package** (not just the file being edited)\"."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md 'Finding': \"**Found:** `SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]` in `modules/fundamental/src/advisory/service/advisory.rs`\"."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md: \"**Reuse it. Do not redeclare it.**\" and \"Add the import `use crate::advisory::service::advisory::SEVERITY_ORDER;`\". The severity_rank helper iterates over SEVERITY_ORDER."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "No `const SEVERITY_ORDER` declaration appears in plan.md's code snippets. The AC table says \"`use crate::advisory::service::advisory::SEVERITY_ORDER`, no new constant\", and the plan states \"Redeclaring the constant is never the fallback.\""
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md names the target package as `modules/fundamental` (crate containing both sbom/ and advisory/). Its search table gives the scopes \"whole repo\", \"target crate\" (relative_path=\"modules/fundamental\") and \"module tree\"."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,55 @@
+{
+  "assertion_results": [
+    {
+      "text": "Bug parsing correctly extracts all four required sections (Description, Steps to Reproduce, Expected Result, Actual Result) using the heading formats from bug-template-mock.md (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md 'Required Sections (from template)' table lists `### **Issue Description**`, `### **Steps to Reproduce**`, `### **Expected Result**`, `### **Actual Result**` all as 'Yes', and the 'Extracted Content' section reproduces each: Description (trailing whitespace on headings like `## Migration Patterns  `), 3 Steps to Reproduce, Expected Result ('Implementation Notes include: \"Per CONVENTIONS.md §Migration Patterns...\"'), Actual Result ('Implementation Notes do NOT reference the Migration Patterns convention')."
+    },
+    {
+      "text": "Bug validation confirms the issue type ID (10020) matches the Bug issue type ID from Bug Configuration (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md 'Issue Type Validation (passed)': 'Issue `issuetype.id` = 10020, which matches the configured Bug issue type ID 10020.'"
+    },
+    {
+      "text": "Investigation identifies the trailing-whitespace heading extraction as the root cause — line[3:] does not strip whitespace (Steps 2-3)",
+      "passed": false,
+      "evidence": "investigation.md: 'Steps 2–3 – Investigation: NOT PERFORMED ... No reproduction, code-path tracing, codebase investigation, or persistence-impact analysis was carried out.' No mention of line[3:] anywhere in the outputs."
+    },
+    {
+      "text": "Root cause comment includes: what is broken (heading extraction does not strip trailing whitespace), where it is broken (plan-feature convention lookup), and how to verify the fix (reproducer test with whitespace in heading) (Step 4)",
+      "passed": false,
+      "evidence": "root-cause.md: 'Step 4 – Root Cause Analysis: NOT PERFORMED ... No root cause comment would be posted on ACME-500.'"
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": false,
+      "evidence": "task-description.md: 'Step 5 – Generate Task: NOT PERFORMED ... No Task was created ... and no task description.' No Acceptance Criteria exist."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST test requirement — with explicit assertion guidance derived from the Steps to Reproduce (Step 5 Test Requirements ordering)",
+      "passed": false,
+      "evidence": "task-description.md states no task description was generated; no Test Requirements section exists."
+    },
+    {
+      "text": "Task description includes a Bug Context section with Bug key (ACME-500), Steps to Reproduce, Expected/Actual Result, and Root Cause summary (Step 5 Bug Context extension)",
+      "passed": false,
+      "evidence": "task-description.md contains no Bug Context section; it states 'no task description' was produced."
+    },
+    {
+      "text": "Task description sets Target Branch to main (Step 5 Target Branch)",
+      "passed": false,
+      "evidence": "No Target Branch appears in any output file; task-description.md says Step 5 was NOT PERFORMED."
+    },
+    {
+      "text": "Task description output includes ai-generated-jira in the Jira API metadata block showing it would be passed as a label to jira.create_issue (Step 5 Task creation)",
+      "passed": false,
+      "evidence": "task-description.md: 'No `jira.create_issue` call would be made ... there is no Jira API metadata block (project key, issue type, labels)'. The string 'ai-generated-jira' does not appear in any output."
+    }
+  ],
+  "summary": {
+    "passed": 2,
+    "failed": 7,
+    "total": 9,
+    "pass_rate": 0.2222
+  }
+}

@@ -1,0 +1,85 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan determines feature-branch workflow mode (not direct-to-main) based on the atomicity constraints in the feature description",
+      "passed": true,
+      "evidence": "impact-map.md 'Workflow mode decision (Step 4.5)': 'Mode: `feature-branch`', citing atomicity indicators 'Coordinated schema migrations' and 'Cross-cutting refactor' and quoting the Feature NFR 'All changes must land together'. workflow-mode-comment.md: 'Selected mode: `feature-branch`'."
+    },
+    {
+      "text": "A bookend task with Bookend Type create-branch is generated as the first task in the plan",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md contains '## Bookend Type\\ncreate-branch'; it is task #1 in the impact-map.md task list ('1 | Create feature branch TC-9005 from main')."
+    },
+    {
+      "text": "A bookend task with Bookend Type merge-branch is generated as the last task in the plan",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md contains '## Bookend Type\\nmerge-branch'; it is task #7, the last row of the impact-map.md task list ('7 | Merge feature branch TC-9005 to main')."
+    },
+    {
+      "text": "All intermediate tasks (between the create-branch and merge-branch bookend tasks) have Target Branch set to TC-9005",
+      "passed": true,
+      "evidence": "task-2, task-3, task-4, task-5 and task-6 files each contain '## Target Branch\\nTC-9005'; impact-map.md: 'Intermediate tasks (2–6) target branch `TC-9005`'."
+    },
+    {
+      "text": "The create-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-1-create-feature-branch.md: '## Target Branch\\nmain'."
+    },
+    {
+      "text": "The merge-branch bookend task has Target Branch set to main",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md: '## Target Branch\\nmain'."
+    },
+    {
+      "text": "All non-documentation intermediate tasks list the create-branch bookend task as a dependency. Documentation tasks may list implementation tasks as dependencies instead of the create-branch bookend task, since documentation depends on implementation completion",
+      "passed": true,
+      "evidence": "Tasks 2, 3, 4, 5 each list 'Depends on: Task 1 — Create feature branch TC-9005 from main'. Documentation task 6 lists Tasks 2, 3, 4, 5 (implementation tasks). task-creation-log.md Depend links confirm TC-NEW-2..5 -> TC-NEW-1."
+    },
+    {
+      "text": "The merge-branch bookend task lists all non-documentation intermediate tasks as dependencies",
+      "passed": true,
+      "evidence": "task-7-merge-feature-branch.md Dependencies: 'Depends on: Task 2', 'Task 3', 'Task 4', 'Task 5' (plus Task 6); task-creation-log.md links TC-NEW-7 -> TC-NEW-2..6."
+    },
+    {
+      "text": "Each non-documentation task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements. Documentation tasks are exempt from requiring Files to Modify, Files to Create, and Implementation Notes — they must still include Repository, Target Branch, Description, Acceptance Criteria, and Test Requirements",
+      "passed": false,
+      "evidence": "Tasks 2–5 contain all required sections, and documentation task 6 has its required ones. But the non-documentation bookend task files task-1-create-feature-branch.md and task-7-merge-feature-branch.md have no '## Files to Modify', '## Files to Create' or '## Implementation Notes' section. They contain only Repository, Target Branch, Bookend Type, Description, Acceptance Criteria, Test Requirements and Dependencies. The assertion exempts only documentation tasks, not bookends."
+    },
+    {
+      "text": "The plan includes a workflow:feature-branch label decision to be applied to the feature issue",
+      "passed": true,
+      "evidence": "impact-map.md: 'The `workflow:feature-branch` label will be added to TC-9005 in Step 6a'; task-creation-log.md: 'jira.edit_issue(\"TC-9005\", fields={\"labels\": [\"ai-generated-jira\", \"workflow:feature-branch\"]})'."
+    },
+    {
+      "text": "For each task created, a description digest is produced — evidenced by a separate digest file (e.g., task-N-digest.md), a digest entry in the impact map, or a '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' marker in any output file. The digest must contain a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:'",
+      "passed": true,
+      "evidence": "task-1-digest.md through task-7-digest.md exist, one per created task (7 tasks). Each contains '[sdlc-workflow] Description digest: sha256-md:<hex>' with exactly 64 lowercase hex characters (verified lengths: 64 x7), e.g. task-1: 'sha256-md:90033ddbc1756589f2c77c54a9fa75a1fef0535c22317dad1eb8b28066fd04bd'."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": false,
+      "evidence": "No output file contains an 'Applies: task modifies ...' rationale. impact-map.md says CONVENTIONS.md 'contents were not available in this eval' and that tasks cite Key Conventions instead. The task files mention conventions only in free-form prose, e.g. task-5: 'Follow the error-handling convention: return `Result<T, AppError>`...'. There is no evidence of applicability validation against convention-applicability-rules.md."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), the plan documents that the Feature's priority is inherited by created tasks — evidenced by priority field values in the impact map, task creation log, or task description files. When the Feature's priority is 'Undefined', the plan documents that priority inheritance is skipped (not propagated as null or 'Undefined')",
+      "passed": true,
+      "evidence": "impact-map.md: 'Feature priority: **High** (set, not \"Undefined\"), so it is propagated' with additional_fields '\"priority\": {\"name\": \"High\"}'. task-creation-log.md: 'Priority: inherited from the Feature (High), so it is propagated.'"
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), the plan documents that fixVersions are inherited by created tasks — evidenced by fixVersion values in the impact map, task creation log, or task description files. When fixVersion scope is 'feature' or the Feature has no fixVersions, the plan documents that fixVersion inheritance is skipped",
+      "passed": true,
+      "evidence": "impact-map.md: 'Feature fixVersions: **RHTPA 2.0.0**. `fixVersion scope: both` in Jira Field Defaults, so it is propagated', with '\"fixVersions\": [{\"name\": \"RHTPA 2.0.0\"}]'. task-creation-log.md says the same for all 7 tasks."
+    },
+    {
+      "text": "A summary of inherited field propagation is produced — evidenced by a summary-comment.md file in the outputs directory, or a summary section in the impact map that includes the inherited priority and fixVersion values propagated to tasks, or states they were omitted and why",
+      "passed": true,
+      "evidence": "summary-comment.md is not in the outputs directory, although task-creation-log.md refers to it. impact-map.md does have a summary section, '## Inherited field values (`additional_fields` for every created task)', listing priority High and fixVersions RHTPA 2.0.0 as propagated to tasks, which satisfies the alternative evidence path."
+    }
+  ],
+  "summary": {
+    "passed": 13,
+    "failed": 2,
+    "total": 15,
+    "pass_rate": 0.8667
+  }
+}
