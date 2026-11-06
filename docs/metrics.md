@@ -64,7 +64,7 @@ pattern (e.g., `TC-1234`), cross-referenced with commit authors.
    gh pr list --state merged --search "head:TC-"
    ```
 2. For each PR, check whether all commits are authored by the agent
-   (trailer `Assisted-by: Claude Code`). If a human added fix-up commits
+   (`Assisted-by:` trailer). If a human added fix-up commits
    after the agent's PR, the PR required rework.
 
 **Calculation:** `(PRs merged without human commits / total agent PRs merged) * 100`
@@ -138,7 +138,7 @@ authors before merge).
    ```
    gh pr view <PR-NUMBER> --json commits
    ```
-3. Check for commits without the `Assisted-by: Claude Code` trailer — these
+3. Check for commits without the `Assisted-by:` trailer — these
    are human rework commits.
 
 **Calculation:** `(PRs with human rework commits / total agent PRs) * 100`
@@ -255,7 +255,7 @@ convention set.
 | Jira issues | Task counts, timestamps (`created`), status transitions, labels (`ai-generated-jira`, `review-feedback`, `root-cause`) |
 | Jira transitions | Status change history with timestamps |
 | GitHub PRs | PR creation time, merge status, commit authors |
-| Git trailers | `Assisted-by: Claude Code` identifies agent commits |
+| Git trailers | `Assisted-by:` trailers (tool and model) identify agent commits |
 | Agent conversation logs | Digest verification outcomes (mismatch/match), convention applicability filtering decisions |
 
 ---
