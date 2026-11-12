@@ -455,9 +455,9 @@ active work.
 
 **Fullsend mode:** obtain the current issue state from `issue` and existing markers
 from `idempotency`; do not retrieve a user, assignment, or transition from Jira. An
-assignment `field-edit` is allowed only when the validated input contains the
-current triager's account ID in trusted `issue.fields`. Never infer an account ID
-from a name or look one up. If assignment is required but that trusted ID is absent,
+assignment `field-edit` is allowed only to `authorization.runner_account_id`; never
+use another account ID or look one up. Self-assignment and disabled transitions:
+`jira-triage-operations.md`. If assignment is required but that trusted ID is absent,
 withhold **only** the assignment and append a blocked, evidence-backed `report-only`
 recommendation naming the missing trusted assignee identity and required trusted-input
 configuration. Continue the mutation-authorized plan: serialize every other authorized
@@ -978,7 +978,8 @@ Follow the concurrent triage detection protocol in
 
 **Fullsend mode:** determine concurrent or existing triage solely from the validated
 `jira_metadata` and `idempotency` entries. Do not run JQL; report a missing trusted
-match as no known match, not permission to search externally.
+match as no known match, not permission to search externally. Issues assigned to
+`authorization.runner_account_id` are not concurrent triage.
 
 If the Upstream Affected Component custom field is not configured, skip this
 step entirely.

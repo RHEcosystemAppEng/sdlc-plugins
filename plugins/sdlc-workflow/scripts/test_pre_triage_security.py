@@ -114,6 +114,8 @@ def test_collect_bundle_escapes_configured_values_in_jql_literals(tmp_path, monk
 
     def jira_client(command, *arguments):
         """Return minimal runner evidence while retaining each JQL search."""
+        if command == "verify_identity":
+            return {"accountId": "runner-account"}
         if command == "get_issue":
             return issue
         if command == "get_remote_links":
@@ -845,6 +847,8 @@ def test_parse_security_configuration_rejects_blank_repository():
 def _minimal_jira_client():
     """Return a _jira_client stub sufficient to reach collect_bundle's stream loop."""
     def jira_client(command, *arguments):
+        if command == "verify_identity":
+            return {"accountId": "runner-account"}
         if command == "get_issue":
             return {"key": "TC-42", "fields": {}}
         if command in ("get_remote_links", "get_versions", "get_transitions"):
@@ -1200,7 +1204,8 @@ def test_collect_bundle_includes_release_evidence_without_authorizing_writes(tmp
         """Return successful empty release searches alongside the primary CVE."""
         return {"get_issue": issue, "get_remote_links": original["remote_links"],
                 "get_versions": [], "get_transitions": copy.deepcopy(_BUGZILLA_TRANSITIONS),
-                "search_jql": {"issues": []}}[command]
+                "search_jql": {"issues": []},
+                "verify_identity": {"accountId": "runner-account", "displayName": "Runner"}}[command]
 
     monkeypatch.setattr(pre_triage_security, "_jira_client", jira)
 
@@ -1210,7 +1215,9 @@ def test_collect_bundle_includes_release_evidence_without_authorizing_writes(tmp
     # Then an empty release search is proven evidence, not authorization to mutate
     assert bundle["jira_metadata"]["release_jira"] == [{
         "family": "1.0", "epics": [], "tasks": [], "remediation": [], "originating_cves": []}]
-    assert bundle["authorization"] == {"mutation_authorized": False, "release_decisions": decisions}
+    # And the runner's own /myself identity is recorded as trusted authorization data
+    assert bundle["authorization"] == {"mutation_authorized": False, "release_decisions": decisions,
+                                       "runner_account_id": "runner-account"}
     assert bundle["jira_metadata"]["related_issues"] == []
     # And the issue's live transition targets are recorded without transition IDs
     assert bundle["issue"]["transitions"] == _BUGZILLA_TARGETS
@@ -1717,3 +1724,129 @@ def test_discover_rejects_non_positive_cap(tmp_path, monkeypatch, capsys, max_re
     # Then it exits 1 with an error
     assert status == 1
     assert "ERROR: max_results must be a positive integer" in capsys.readouterr().err
+
+
+_TRANSITIONS_CLAUDE_MD = """# Project Configuration
+
+## Jira Configuration
+
+- Project key: TC
+
+## Security Configuration
+
+### Product Lifecycle
+
+- Product pages URL: https://example.com/lifecycle
+- Jira version prefix: PRODUCT
+- Vulnerability issue type ID: 10016
+- Component label pattern: pscomponent:
+{setting}
+### Version Streams
+
+| Stream | Konflux Release Repo | Local Path | Security Matrix Path |
+|---|---|---|---|
+| 1.0.x | release-repo | /repos/release | docs/matrix.md |
+
+### Source Repositories
+
+| Repository | URL | Deployment Context |
+|---|---|---|
+| component | https://github.com/org/component | upstream |
+"""
+
+
+@pytest.mark.parametrize("setting,expected", [
+    ("", None),
+    ("- Triage status transitions: {{triage-status-transitions}}\n", None),
+    ("- Triage status transitions: enabled\n", True),
+    ("- Triage status transitions: disabled\n", False),
+    ("- Triage status transitions: Disabled\n", False),
+])
+def test_parse_security_configuration_reads_triage_status_transitions(setting, expected):
+    """The optional transitions setting maps absent/enabled/disabled to the bundle's configuration."""
+    # Given a Security Configuration with the setting absent, a placeholder, or a value
+    claude_md = _TRANSITIONS_CLAUDE_MD.format(setting=setting)
+
+    # When the runner parses the configuration
+    configuration = pre_triage_security.parse_security_configuration(claude_md)
+
+    # Then an absent setting leaves today's default and a value becomes a boolean
+    assert configuration.get("status_transitions_enabled", "absent") == (
+        "absent" if expected is None else expected)
+
+
+def test_parse_security_configuration_rejects_unknown_triage_status_transitions():
+    """A typo in the transitions setting fails closed instead of silently picking a mode."""
+    # Given a Security Configuration with an unrecognized value
+    claude_md = _TRANSITIONS_CLAUDE_MD.format(setting="- Triage status transitions: off\n")
+
+    # When the runner parses it, then the value is rejected
+    with pytest.raises(pre_triage_security.EvidenceError, match="Triage status transitions"):
+        pre_triage_security.parse_security_configuration(claude_md)
+
+
+@pytest.mark.parametrize("response", [{}, {"accountId": ""}, {"accountId": None}, []])
+def test_runner_identity_requires_a_jira_account_id(monkeypatch, response):
+    """Collection aborts when /myself does not yield the runner's accountId."""
+    # Given a verify_identity response without a usable accountId
+    monkeypatch.setattr(pre_triage_security, "_jira_client", lambda *_args: response)
+
+    # When the runner resolves its identity, then collection fails closed
+    with pytest.raises(pre_triage_security.EvidenceError):
+        pre_triage_security._runner_identity()
+
+
+def test_runner_identity_comes_from_verify_identity(monkeypatch):
+    """The runner identity is the accountId Jira returns for the run's own credential."""
+    # Given a Jira client that records commands
+    commands = []
+
+    def jira(command, *args):
+        """Answer verify_identity with the Service Account's identity."""
+        commands.append((command, args))
+        return {"accountId": "sa-account", "displayName": "Service Account"}
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira)
+
+    # When the runner resolves its identity
+    account_id = pre_triage_security._runner_identity()
+
+    # Then it is taken from /myself (verify_identity), not from configuration
+    assert account_id == "sa-account"
+    assert commands == [("verify_identity", ())]
+
+
+@requires_format_extra
+@pytest.mark.parametrize("extra", [
+    {},
+    {"authorization": {"runner_account_id": "sa-account"}},
+    {"configuration": {"status_transitions_enabled": False}},
+    {"authorization": {"runner_account_id": "sa-account"},
+     "configuration": {"status_transitions_enabled": True}},
+])
+def test_bundle_schema_accepts_bundles_with_and_without_runner_fields(extra):
+    """Bundles validate with and without the optional runner identity and transitions fields."""
+    # Given a complete bundle with or without the new optional fields
+    bundle = _complete_bundle()
+    for section, values in extra.items():
+        bundle[section].update(values)
+
+    # When the bundle is schema-validated, then it is accepted
+    pre_triage_security.validate_bundle(bundle)
+
+
+@requires_format_extra
+@pytest.mark.parametrize("section,field,value", [
+    ("authorization", "runner_account_id", ""),
+    ("authorization", "runner_account_id", 42),
+    ("configuration", "status_transitions_enabled", "disabled"),
+])
+def test_bundle_schema_rejects_malformed_runner_fields(section, field, value):
+    """Malformed runner identity or transitions values cannot enter the bundle."""
+    # Given a complete bundle with a malformed new field
+    bundle = _complete_bundle()
+    bundle[section][field] = value
+
+    # When the bundle is schema-validated, then it is rejected
+    with pytest.raises(pre_triage_security.EvidenceError, match="triage-security input validation failed"):
+        pre_triage_security.validate_bundle(bundle)

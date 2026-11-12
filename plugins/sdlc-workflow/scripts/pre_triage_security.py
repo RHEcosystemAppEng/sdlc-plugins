@@ -230,7 +230,29 @@ def parse_security_configuration(claude_md):
     for source, destination in optional_fields.items():
         if values.get(source):
             configuration[destination] = values[source]
+    transitions = parse_status_transitions(values.get("Triage status transitions"))
+    if transitions is not None:
+        configuration["status_transitions_enabled"] = transitions
     return configuration
+
+
+def parse_status_transitions(value):
+    """Map the optional ``Triage status transitions`` setting to a bool, failing closed.
+
+    Returns ``None`` when the setting is absent (callers keep today's default of
+    planning transitions), ``True`` for ``enabled`` and ``False`` for
+    ``disabled``. Any other value is rejected so a typo never silently changes
+    whether Fullsend runs move the Vulnerability out of its current status.
+    """
+    if value is None:
+        return None
+    normalized = value.strip().casefold()
+    if normalized == "enabled":
+        return True
+    if normalized == "disabled":
+        return False
+    raise EvidenceError(
+        "Triage status transitions must be 'enabled' or 'disabled', got {!r}".format(value))
 
 
 def _runner_configuration(claude_md, project_root):
@@ -459,11 +481,15 @@ def validate_bundle(bundle, schema_path=None):
 
 def build_bundle(issue, remote_links, configuration, external_evidence, matrix,
                  source_evidence, jira_metadata, idempotency,
-                 mutation_authorized, release_decisions=None, transitions=None):
+                 mutation_authorized, release_decisions=None, transitions=None,
+                 runner_account_id=None):
     """Build a schema-validated, credential-free triage-security input bundle.
 
     ``transitions`` is the triaged issue's raw ``get_transitions`` catalog; when
     given, its normalized target statuses are recorded as ``issue.transitions``.
+    ``runner_account_id`` is the Jira account the run's own credential resolves
+    to (``/myself``); when given it is recorded as
+    ``authorization.runner_account_id``, the only assignee the executor accepts.
     """
     configuration = _require_mapping(configuration, "configuration")
     external_evidence = _require_mapping(external_evidence, "external_evidence")
@@ -486,6 +512,8 @@ def build_bundle(issue, remote_links, configuration, external_evidence, matrix,
         bundle["issue"]["transitions"] = normalize_transitions(transitions)
     if release_decisions is not None:
         bundle["authorization"]["release_decisions"] = release_decisions
+    if runner_account_id is not None:
+        bundle["authorization"]["runner_account_id"] = runner_account_id
     validate_bundle(bundle)
     return bundle
 
@@ -769,6 +797,20 @@ def _jql_escape(value):
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
 
+def _runner_identity():
+    """Return the Jira accountId the run's own credential resolves to (``/myself``).
+
+    This is the account that authors every write the executor performs (in CI,
+    the deployment's Service Account). It comes only from Jira, never from the
+    agent or from configuration, and a missing ID aborts collection.
+    """
+    user = _require_mapping(_jira_client("verify_identity"), "Jira identity")
+    account_id = user.get("accountId")
+    if not isinstance(account_id, str) or not account_id:
+        raise EvidenceError("Jira identity has no accountId")
+    return account_id
+
+
 def collect_bundle(issue_key, project_root, release_decisions=None, mutation_authorized=False):
     """Collect all credentialed evidence for one poller-dispatched security issue.
 
@@ -786,6 +828,7 @@ def collect_bundle(issue_key, project_root, release_decisions=None, mutation_aut
         raise EvidenceError("target project CLAUDE.md is required")
     configuration, lifecycle_url, stream_rows, repository_paths = _runner_configuration(
         _read_text(claude_path, "target project CLAUDE.md"), root)
+    runner_account_id = _runner_identity()
     issue = _jira_client("get_issue", issue_key, "--fields", "*all")
     transitions = _jira_client("get_transitions", issue_key)
     cve_id = extract_cve_id(issue)
@@ -894,6 +937,7 @@ def collect_bundle(issue_key, project_root, release_decisions=None, mutation_aut
         },
         mutation_authorized=mutation_authorized,
         transitions=transitions,
+        runner_account_id=runner_account_id,
         **({"release_decisions": release_decisions} if release_decisions is not None else {}),
     )
 

@@ -296,6 +296,59 @@ def _trusted_targets(trusted_input: dict[str, Any]) -> set[str]:
     return targets
 
 
+def _runner_account_id(trusted_input: dict[str, Any]) -> str | None:
+    """Return the runner's own Jira accountId recorded by the pre-script, if any."""
+    value = (trusted_input.get("authorization") or {}).get("runner_account_id")
+    return value if isinstance(value, str) and value else None
+
+
+def _transitions_disabled(trusted_input: dict[str, Any]) -> bool:
+    """Return whether the trusted configuration turns off triaged-issue transitions.
+
+    Only an explicit ``false`` disables them; an absent setting keeps the
+    default of executing planned transitions.
+    """
+    return (trusted_input.get("configuration") or {}).get("status_transitions_enabled") is False
+
+
+def _account_id(value: Any) -> str | None:
+    """Extract an accountId from a Jira user object or a compact ``{"id"|"accountId": ...}`` value."""
+    if not isinstance(value, dict):
+        return None
+    account_id = value.get("accountId", value.get("id"))
+    return account_id if isinstance(account_id, str) and account_id else None
+
+
+def _check_existing_assignee(current: Any, runner: str, issue_key: str) -> None:
+    """Refuse to replace an assignee who is not the runner (concurrent human triage)."""
+    current_id = _account_id(current)
+    if current is not None and current_id != runner:
+        raise ActionError(
+            "refusing to replace the existing assignee of {} with the runner identity".format(issue_key))
+
+
+def _authorize_assignment(action: dict[str, Any], trusted_input: dict[str, Any]) -> None:
+    """Allow an ``assignee`` field-edit only to the trusted runner identity, on the triaged issue.
+
+    The account must equal ``authorization.runner_account_id`` (resolved by the
+    pre-script from ``/myself``); an issue already assigned to anyone else is
+    never overwritten. An issue already assigned to the runner is a retry of
+    this runner's own triage, not concurrent triage, and proceeds.
+    """
+    if "assignee" not in action["fields"]:
+        return
+    runner = _runner_account_id(trusted_input)
+    if runner is None:
+        raise ActionError("assignee field-edit requires the trusted runner identity")
+    issue = trusted_input["issue"]
+    if action["issue"] != issue["key"]:
+        raise ActionError("assignee field-edit is allowed only on the triaged issue")
+    value = action["fields"]["assignee"]
+    if not isinstance(value, dict) or set(value) not in ({"id"}, {"accountId"}) or _account_id(value) != runner:
+        raise ActionError("assignee field-edit must assign the trusted runner identity")
+    _check_existing_assignee((issue.get("fields") or {}).get("assignee"), runner, action["issue"])
+
+
 def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> None:
     """Authorize every target and reference before Jira reads, writes, or retry repair.
 
@@ -330,6 +383,11 @@ def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> No
             if identity in planned_releases:
                 raise ActionError("duplicate planned release identity")
             planned_releases.add(identity)
+        if action_type == "field-edit":
+            _authorize_assignment(action, trusted_input)
+        if (action_type == "status-transition" and action["issue"] == trusted_input["issue"]["key"]
+                and _transitions_disabled(trusted_input)):
+            raise ActionError("status transitions of {} are disabled by the trusted configuration".format(action["issue"]))
         if action_type == "field-edit" and action["issue"] in release_identities and "labels" in action["fields"]:
             if not isinstance(action["fields"]["labels"], list) or not all(isinstance(label, str) for label in action["fields"]["labels"]):
                 raise ActionError("release labels must be strings")
@@ -437,6 +495,10 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
         if existing and "labels" in action["fields"]:
             action = copy.deepcopy(action)
             action["fields"]["labels"] = list(dict.fromkeys(existing["labels"] + action["fields"]["labels"]))
+        if "assignee" in action["fields"]:
+            # Re-check live: a human may have taken the issue while the sandbox ran.
+            live = (_jira_mod.get_issue(action["issue"], fields="assignee").get("fields") or {}).get("assignee")
+            _check_existing_assignee(live, _runner_account_id(trusted_input), action["issue"])
         _jira_mod.update_issue(action["issue"], action["fields"])
         return
     if action_type == "status-transition":
