@@ -38,6 +38,39 @@ when the issue is already in, or an earlier planned transition moves it to, an
 also treats an unmatched `In Progress` target as satisfied when Jira reports an
 `indeterminate` current status. Any other unmatched target fails the run.
 
+**Runner identity and assignment.** `authorization.runner_account_id` is the Jira
+account the run's own credential resolves to (`/myself`, recorded by the pre-script;
+in CI, the deployment's Service Account). Manual dispatches and scheduled poller runs
+use the same pre-script, executor and credential, so both assign to this identity.
+For Step 0.8, emit the assignment as the first action, before any comment, so the
+triage summary reflects it: a `field-edit` on the triaged issue with
+`fields: {"assignee": {"id": "<runner_account_id>"}}`. The executor rejects any other
+account ID, an assignee edit on any other issue, and an edit that would replace an
+existing assignee who is not the runner. Therefore:
+
+- `issue.fields.assignee` empty: plan the assignment.
+- `issue.fields.assignee.accountId` equals `runner_account_id`: the assignment is
+  already applied (for example a poller retry that failed before `ai-cve-triaged`
+  was added); omit it and continue the triage. This is not concurrent triage.
+- Assigned to anyone else: another engineer owns the issue. Plan no assignment,
+  and report the existing assignee as concurrent triage in the report.
+- `runner_account_id` absent (older pre-script): withhold the assignment as Step
+  0.8 describes.
+
+**Status transitions setting.** `configuration.status_transitions_enabled` comes
+from the optional Security Configuration line `Triage status transitions: enabled |
+disabled`. When it is `false`, plan no `status-transition` for the triaged
+Vulnerability (Step 0.8 Assigned, In Progress, Closed). The issue stays in its
+current status while the assignment, comments, links, remediation tasks and the
+`ai-cve-triaged` label still apply; name each omitted transition in the report as
+disabled by configuration. The executor rejects a `status-transition` on the
+triaged issue when the setting is `false`. When the setting is absent or `true`,
+plan transitions as above. Transitions on other issues are not affected.
+
+**Concurrent triage and the runner.** In Step 7, an issue whose trusted assignee is
+`runner_account_id` was triaged by this runner, not by someone else; do not report it
+as concurrent triage. An issue assigned to any other account still counts.
+
 Build all comment bodies as ADF documents, retaining required Comment Footnotes and
 ProdSec mentions. Step 4.4 reconciliation is specifically a `link` action for the
 new `Depend` relationship and a `field-edit` action that removes
