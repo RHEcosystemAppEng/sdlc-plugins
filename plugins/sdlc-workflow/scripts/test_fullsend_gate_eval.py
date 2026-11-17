@@ -455,7 +455,7 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     assert all("on-demand" in c["prompt"].lower() for c in new_cases)
     assert all("FULLSEND_OUTPUT_DIR" not in c["prompt"] and "agent-result.json" not in c["prompt"]
                for c in new_cases)
-    assert len(verify) == 6 and sum(len(c["assertions"]) for c in verify) == 68
+    assert len(verify) == 7 and sum(len(c["assertions"]) for c in verify) == 76
     # TC-6820 appends exactly two release assertions and one prompt suffix to case1.
     # Hash the retained 1–32 prefix and all other original cases against the baseline.
     baseline = json.loads(json.dumps(triage[:32]))
@@ -476,7 +476,8 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
                   "b3f9e9d4f4ab1eb92f053c0c0e4199a36eabb12ab9589e9d27e9c59509eee501"}),
         (verify, {"251863edaed38f0b133c0cf0981ddffe80692f5d0655b51f7bfe214be38f69b1",
                   "cf587edf1e94e6a1a210d5c97788f33b3336a0818a86551e364ec056bd1a3be1",
-                  "501a5fd500ff19ad460e9b1c65f7c4422b743ab6db6b58ba331b50197b45aabd"}),
+                  "501a5fd500ff19ad460e9b1c65f7c4422b743ab6db6b58ba331b50197b45aabd",
+                  "e96e1749fdf66cec94d9a28b9c1fa848c535ad235e40389f2b0abae74e1d2e03"}),
     ]:
         assert hashlib.sha256(json.dumps(cases, sort_keys=True, separators=(",", ":")).encode()).hexdigest() in digests
     assert not (FIXTURES / "fullsend-gate-tools.py").exists()

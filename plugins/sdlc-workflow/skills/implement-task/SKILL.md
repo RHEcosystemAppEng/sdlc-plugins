@@ -106,11 +106,7 @@ Set `task_type` using these checks in priority order:
 2. **`performance`**: The issue labels include `performance-optimization`, OR the description contains **Baseline Metrics**, **Target Metrics**, and **Performance Test Requirements** sections
 3. **`standard`**: Otherwise
 
-`db-migration` is a specialization of `performance` — it runs all performance steps (including Step 9-Perf) plus migration-specific implementation and self-verification substeps. db-migration tasks carry the `performance-optimization` label for Epic grouping.
-
-Label-based detection covers tasks created by `performance-plan-optimization`. Description-based detection is the fallback for manually created tasks.
-
-Performance and db-migration tasks follow the same implementation flow as standard tasks, with additional performance testing after functional tests (Step 9-Perf) and performance-aware commit/PR formatting.
+`db-migration` is a specialization of `performance` — all performance steps (including Step 9-Perf) plus migration-specific implementation and self-verification substeps; it carries the `performance-optimization` label for Epic grouping. Label-based detection covers tasks from `performance-plan-optimization`; description-based detection is the fallback for manual tasks. Performance / db-migration tasks follow the standard flow plus performance testing after functional tests (Step 9-Perf) and performance-aware commit/PR formatting.
 
 Also capture the issue's `webUrl` field from the API response (e.g. `https://redhat.atlassian.net/browse/PROJ-231`). This URL will be used later to create a clickable link in the PR description.
 
@@ -535,13 +531,13 @@ Include a code comment referencing the backend source file for each verified man
 
 When `task_type = db-migration`: the task description contains both raw SQL (for manual verification) and framework migration code (for implementation). Write the **framework-level code**, not the raw SQL.
 
-1. **Read CONVENTIONS.md** — mandatory for `db-migration` tasks. Extract migration conventions: naming patterns, file structure, index naming, transaction handling, registration patterns. If CONVENTIONS.md is missing → halt with: "CONVENTIONS.md is required for db-migration tasks. Document migration patterns before proceeding."
-2. **Validate task migration against conventions** — compare the migration script from the task's **Migration Script (Source Code)** section against CONVENTIONS.md patterns. If the task script deviates from documented conventions, adapt the script to match conventions rather than writing it verbatim. Log any adaptations made.
-3. **Scan existing migrations for pattern consistency** — read 2-3 recent migration files in the repository. If CONVENTIONS.md and existing practice diverge, follow existing practice and flag the convention gap.
-4. **Create migration file** at the convention-aligned path. Register with the framework (e.g., add to SeaORM's `lib.rs` migration list, chain Alembic revision, register in TypeORM config).
-5. **Apply ORM/query builder rewrites** if the task includes query changes (not just index additions) — translate the Before/After SQL into equivalent framework code at the source locations specified in Files to Modify.
+1. **Read CONVENTIONS.md** (mandatory for `db-migration`) — extract migration conventions: naming, file structure, index naming, transaction handling, registration. If missing → halt: "CONVENTIONS.md is required for db-migration tasks. Document migration patterns before proceeding."
+2. **Validate task migration against conventions** — compare the task's **Migration Script (Source Code)** against CONVENTIONS.md patterns; if it deviates, adapt it to match rather than writing it verbatim, and log any adaptations.
+3. **Scan existing migrations for pattern consistency** — read 2-3 recent migration files. If CONVENTIONS.md and existing practice diverge, follow existing practice and flag the gap.
+4. **Create migration file** at the convention-aligned path and register it with the framework (e.g., SeaORM `lib.rs` list, Alembic revision chain, TypeORM config).
+5. **Apply ORM/query builder rewrites** if the task includes query changes (not just index additions) — translate the Before/After SQL into equivalent framework code at the Files to Modify locations.
 6. **Run test suite** to verify no regressions. Run migration locally if a dev database is available.
-7. **Present manual verification to user (BLOCKING)** — extract the Before/After SQL, Migration Up/Down SQL, EXPLAIN ANALYZE verification command, and **Storage Impact** queries from the task description's **Database Migration** section. Present all available artifacts to the user in a single block so they can run them against their database to validate the change. If any artifacts are missing from the task description, warn about the missing artifacts but still present what is available. This step is mandatory — prompt the user to confirm before proceeding: (1) Verified — proceed, (2) Need to run queries — pause, (3) Skip verification. Do not continue to code quality checks, self-verification, or commit without the user's explicit response.
+7. **Present manual verification to user (BLOCKING, mandatory)** — extract the Before/After SQL, Migration Up/Down SQL, EXPLAIN ANALYZE command, and **Storage Impact** queries from the task's **Database Migration** section and present all available artifacts in a single block for the user to run against their database; warn about any that are missing. Prompt to confirm before proceeding: (1) Verified — proceed, (2) Need to run queries — pause, (3) Skip. Do not continue to code quality, self-verification, or commit without an explicit response.
 
 ### Code quality practices
 
@@ -679,13 +675,9 @@ If any criterion cannot be met, stop and explain to the user.
 
 ## Step 8.5 – Run Functional Tests (Performance Tasks)
 
-**If `task_type = standard`:** Skip — tests were already run in Step 7.
+**If `task_type = standard`:** skip — tests already ran in Step 7. Otherwise run functional tests to verify the optimization doesn't break existing behavior.
 
-**If `task_type = performance`:** Run functional tests to verify the optimization doesn't break existing behavior.
-
-**Test command resolution (in priority order):**
-1. **CONVENTIONS.md CI checks section** (extracted in Step 4) — use these commands first if available. CONVENTIONS.md is mandatory for performance tasks, so this section should exist.
-2. **Framework fallback** — if CONVENTIONS.md has no test command, determine from `metadata.analysis_scope` and backend framework: Frontend/Node.js: `npm test`, Rust: `cargo test`, Java: `./gradlew test` or `mvn test`, Python: `pytest`.
+**Test command (priority order):** (1) CONVENTIONS.md CI checks (from Step 4; mandatory for performance tasks, so present); (2) framework fallback from `metadata.analysis_scope` + backend framework — Node.js `npm test`, Rust `cargo test`, Java `./gradlew test`/`mvn test`, Python `pytest`.
 
 **Do not proceed to Step 9-Perf until functional tests pass.** Fix failures and re-run.
 
@@ -902,46 +894,25 @@ When `task_type = db-migration`, verify each migration file created:
 2. **Rollback/down exists** — verify the migration has a corresponding rollback (SeaORM `down()`, Diesel `down.sql`, Alembic `downgrade()`, TypeORM `down()`, Flyway: note rollback is not natively supported — document as known limitation).
 3. **Naming convention** — verify migration file name and index names follow CONVENTIONS.md patterns and match existing migration naming in the repository.
 4. **Query equivalence** — if query rewrites were applied (not just index additions), verify the new query produces equivalent results: same columns, same filtering logic, same ordering. Cross-reference with the Before/After SQL from the task description.
-5. **Regression test execution (MANDATORY)** — run the existing test suite (unit, integration, e2e) that covers the affected table(s). If CI check commands from CONVENTIONS.md already include test execution, no separate run is needed. If they do not, run the project's test suite explicitly. This is a hard stop — do not proceed to commit if any test fails.
+5. **Regression test execution (MANDATORY, hard stop)** — run the existing test suite (unit, integration, e2e) covering the affected table(s), unless CONVENTIONS.md CI checks already run tests. Do not proceed to commit if any test fails.
 
 Do NOT require `CONCURRENTLY` in framework migration files — most migration runners wrap in transactions where `CONCURRENTLY` is invalid. `CONCURRENTLY` belongs in the manual verification SQL only.
 
 ### Root cause elimination check (performance tasks only)
 
-When `task_type = performance` or `task_type = db-migration`, verify that the specific
-root cause described in the task is actually eliminated:
+For `performance` / `db-migration` tasks, verify the task's stated root cause is actually eliminated:
 
-1. **Extract root cause pattern**: re-read the task's **Description** section and identify
-   the stated root cause (e.g., "iterates sequentially over all matched SBOM rows",
-   "loads ALL matching nodes into memory then slices", "per-node DB query in loop").
-   Extract the concrete code pattern described (function name, loop structure, query
-   call site).
-2. **Search for root cause pattern**: search for the root cause pattern in the files
-   named in the task's **Files to Modify** section and any files matching the root
-   cause function name — not only files in `git diff --name-only`. The failure mode
-   this check catches is precisely the case where the root cause loop was *not*
-   modified (new batch code was added elsewhere while the original sequential code
-   remained untouched). Use Grep or Serena `search_for_pattern`.
-3. **Evaluate**:
-   - **Pattern eliminated**: proceed silently.
-   - **Pattern still present**: flag to the user: "The root cause pattern described in
-     the task — `{pattern}` at `{file}:{line}` — still exists after implementation.
-     The implementation added optimizations inside the pattern but did not eliminate
-     the pattern itself. This may mean the optimization is incomplete." Present
-     options: (1) Refactor to eliminate the pattern, (2) Proceed — the remaining
-     pattern is acceptable, (3) Stop for review.
-   - **Pattern moved/renamed**: if the pattern was refactored but an equivalent
-     sequential structure exists, flag it the same way.
+1. **Extract root cause pattern** from the task's **Description** (e.g., "iterates sequentially over all matched rows", "loads ALL matching nodes then slices", "per-node DB query in loop") — the concrete code pattern (function name, loop structure, query call site).
+2. **Search for it** in the task's **Files to Modify** and any file matching the root cause function name — not only files in `git diff --name-only` (use Grep or Serena `search_for_pattern`). This catches the failure mode where new batch code is added elsewhere while the original sequential code remains untouched.
+3. **Evaluate:** eliminated → proceed silently. Still present — or moved/renamed to an equivalent sequential structure — → flag to the user: "The root cause pattern `{pattern}` at `{file}:{line}` still exists; the implementation optimized inside it but did not eliminate it — the optimization may be incomplete." Options: (1) Refactor to eliminate, (2) Proceed — remaining pattern acceptable, (3) Stop for review.
 
-Do not auto-block — present the finding and let the user decide. This check catches
-the class of error where batch helpers are added inside a sequential loop without
-eliminating the loop itself.
+Do not auto-block — present the finding and let the user decide.
 
 ## Step 9-Perf – Performance Testing Phase
 
-**Runs after Step 9 when `task_type = performance` or `task_type = db-migration`.** Standard tasks skip this section. Performance and db-migration tasks complete Step 9 (self-verification, CI checks, scope containment) first, then continue here for metric verification.
+**Non-standard tasks only** (`performance` / `db-migration`); standard tasks skip. Run after completing Step 9 (self-verification, CI checks, scope containment), then do metric verification here.
 
-**CONVENTIONS.md cross-reference:** The regression thresholds, performance test commands, and CI check commands extracted from CONVENTIONS.md in Step 4 apply throughout this phase. If CONVENTIONS.md defines custom regression thresholds (e.g., under a "Performance Thresholds" or "Regression Limits" section), use those instead of the defaults in Step 9-Perf.4. If CONVENTIONS.md defines performance test commands, run them after functional tests and before metrics capture.
+**CONVENTIONS.md cross-reference:** the regression thresholds, performance test commands, and CI checks extracted in Step 4 apply throughout. Custom thresholds (a "Performance Thresholds"/"Regression Limits" section) override the Step 9-Perf.4 defaults; run any defined performance test commands after functional tests and before metrics capture.
 
 ### Step 9-Perf.0 – Baseline Freshness Check
 
@@ -960,7 +931,7 @@ if [ -z "$plugin_root" ] || [ ! -d "$plugin_root" ]; then echo "❌ sdlc-workflo
 **Frontend/hybrid (Playwright):** Copy `capture-baseline.template.mjs` from plugin cache to baseline directory. Read `metadata.capture_target` from config before `dev_environment.frontend.port`.
 
 - **null/missing/`localhost`:** use `--port` from `dev_environment.frontend.port` (backward compatible with pre-hosted configs)
-- **`hosted`:** read `metadata.capture_base_url`. If null/empty → halt: "Re-run `/sdlc-workflow:performance-baseline` or `perf-config.py set metadata.capture_base_url <url>`." If present → **blocking prompt**: "Baseline captured against hosted environment (`{url}`). (1) Continue with hosted target — will prompt for auth, (2) Switch to localhost — uses `dev_environment.frontend.port`, metrics may not be comparable to hosted baseline, (3) Cancel." If switch: use localhost for this capture only, do NOT overwrite `metadata.capture_target`. Prompt for auth (`--storage-state` or `--user`/`--pass`) and `--insecure` when continuing with hosted.
+- **`hosted`:** read `metadata.capture_base_url`. If null/empty → halt: "Re-run `/sdlc-workflow:performance-baseline` or `perf-config.py set metadata.capture_base_url <url>`." Else **blocking prompt** (baseline is hosted, `{url}`): (1) Continue hosted (prompts for auth), (2) Switch to localhost for this capture only — uses `dev_environment.frontend.port`, not comparable to a hosted baseline, do NOT overwrite `metadata.capture_target`, (3) Cancel. For hosted, prompt for auth (`--storage-state` or `--user`/`--pass`) and `--insecure`.
 
 Construct command mirroring performance-baseline Step 9.3 — absolute `--config` path, `--storage-state`/`--user`/`--pass` mutual exclusivity, omit auth for public hosted apps, `BASELINE_PASS` env var. Parse JSON output for LCP, FCP, DOM Interactive, Total Load Time.
 
@@ -1015,7 +986,7 @@ Check CONVENTIONS.md first — if it defines a "Performance Thresholds" or "Regr
 
 ### Step 9-Perf.5 – Create Optimization Result Report
 
-Read template from `${plugin_root}skills/performance/optimization-result.template.md`. Populate with: jira_key, workflow, timestamp, branch, commit SHA, baseline commit SHA, capture mode, capture target (`localhost` or `hosted`), capture base URL (URL only, null for localhost), status (`pending_verification` or `regression_acknowledged`), before/after metrics, scenarios measured, files changed. Write to `{opt_results_dir}/{jira_key}-{timestamp}.md`.
+Read `${plugin_root}skills/performance/optimization-result.template.md`. Populate: jira_key, workflow, timestamp, branch, commit SHA, baseline commit SHA, capture mode, capture target (`localhost`/`hosted`), capture base URL (null for localhost), status (`pending_verification` or `regression_acknowledged`), before/after metrics, scenarios measured, files changed. Write to `{opt_results_dir}/{jira_key}-{timestamp}.md`.
 
 ## Step 10 – Commit and Push
 
