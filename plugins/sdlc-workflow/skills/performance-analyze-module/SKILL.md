@@ -749,7 +749,7 @@ Apply the Anti-Pattern Severity Reference table using actual quantified values f
 | **Confirmed** | Passed 9.1-B and 9.1-B2, confidence ≥ Medium |
 | **Confirmed (Low Confidence)** | Passed both, confidence = Low → report with "requires manual verification" flag |
 | **Downgraded** | Passed both, but impact corrected downward |
-| **Discarded** | Failed any check in 9.1-B or 9.1-B2 → exclude from report (log with reason) |
+| **Discarded** | Failed any check in 9.1-B or 9.1-B2 → keep out of the analysis sections; log the reason in `findings-validation.json` (9.1-H) and the report's Discarded Findings audit trail |
 
 #### Step 9.1-G – Validation Summary
 
@@ -757,7 +757,7 @@ Produce summary table: Finding, Anti-Pattern, Disposition, Confidence, Severity,
 
 Include statistics: submitted, confirmed, low-confidence, downgraded, discarded (with percentages).
 
-Only Confirmed, Confirmed (Low Confidence), and Downgraded findings proceed to the report.
+Only Confirmed, Confirmed (Low Confidence), and Downgraded findings proceed to the report's analysis sections. A discarded finding appears in exactly one place in the report — the "Discarded Findings (Audit Trail)" table. Do NOT name it in an anti-pattern section, a service-chain subsection, or the Executive Summary, and do NOT add "candidate", "batch-loader note" or "considered but discarded" asides there.
 
 #### Step 9.1-H – Persist Validation Artifact
 
