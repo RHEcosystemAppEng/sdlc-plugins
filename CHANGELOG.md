@@ -15,7 +15,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `performance-baseline` skill for workflow discovery, browser-based metric capture, and baseline reporting
 - `performance-analyze-module` skill for source-level anti-pattern detection (bundle, API, component, resource, backend)
 - `performance-plan-optimization` skill for optimization planning with Jira Epic/Task generation
-- `performance-implement-optimization` and `performance-verify-optimization` skills
 - Backend anti-pattern detection: N+1 queries, missing pagination/caching, inefficient queries, cross-repo over-fetching
 - Deep service chain analysis, wasted computation detection, and missing index detection
 - Migration SQL analysis (Steps 7.8.1–7.8.4): missing ANALYZE, non-materialized CTEs, uniform processing, expensive PL/pgSQL patterns
@@ -23,7 +22,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Scale-oriented detection steps (staleTime, spread-in-reduce, zero-result, redundant index, recursive CTE)
 - `db-migration` and `migration-sql-optimization` task types with Jira label support
 - DOM Interactive metric and config path normalization
-- Shared templates: baseline capture script, analysis report, optimization task, common patterns
+- Shared templates: baseline capture script, analysis report, optimization task, finding validation
 - Eval infrastructure for performance skills with mock fixtures
 - Performance workflow documentation and conventions
 
