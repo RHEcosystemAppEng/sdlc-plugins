@@ -264,8 +264,17 @@ Parse the structured description expecting these sections:
 - **Test Requirements** — tests to write or update
 - **Verification Commands** — commands with expected outcomes (optional)
 - **Dependencies** — prerequisite tasks (verify they are Done)
+- **Baseline Metrics**, **Target Metrics**, **Performance Test Requirements** — performance tasks only (optional)
 
-If any required section is missing or the description doesn't follow the template, stop and ask the user for clarification.
+### Task Type Detection
+
+Set `task_type` (priority order):
+
+1. **`db-migration`** — label `db-migration`, OR description has a **Database Migration** section with **Migration Script (Source Code)** and **Before/After SQL** subsections.
+2. **`performance`** — label `performance-optimization`, OR description has **Baseline Metrics**, **Target Metrics**, and **Performance Test Requirements** sections.
+3. **`standard`** — otherwise.
+
+`db-migration` runs all `performance` steps (4.5–4.7, 10) plus Step 4.8. If a required section is missing or the description doesn't follow the template, stop and ask the user. Non-standard tasks additionally use the **performance addendum** — `${CLAUDE_PLUGIN_ROOT}/skills/performance/verify-performance-steps.md` (referenced below).
 
 ## Step 2 – Identify PR
 
@@ -423,8 +432,9 @@ inform classification decisions.
    sub-agent dispatch; exhaustive codebase analysis happens later in the
    Style/Conventions sub-agent.
 
-If `CONVENTIONS.md` does not exist, proceed normally — the Style/Conventions sub-agent
-will check for implicit conventions demonstrated by codebase usage patterns.
+**Performance / `db-migration` tasks:** CONVENTIONS.md is **required** — apply the addendum's
+"CONVENTIONS.md precondition" (halt if missing; else extract any "Performance Thresholds" /
+"Regression Limits" section for Step 4.6).
 
 ### Step 4c – Classify Feedback
 
@@ -445,6 +455,12 @@ as a standalone item.
 Record all classifications. Only **code change requests** trigger sub-task creation
 in Step 6. Convention upgrades from Step 6b may later elevate suggestions to code
 change requests before sub-task creation.
+
+## Steps 4.5–4.8 – Performance & Migration Verification (non-standard tasks)
+
+**If `task_type = standard`:** skip to Step 5. Otherwise run Steps 4.5–4.8 from the
+performance addendum (4.8 is `db-migration` only), carry the results into the Step 8 report,
+then continue with Step 5.
 
 ## Step 5 – Dispatch Domain Sub-Agents
 
@@ -1155,6 +1171,10 @@ are assembled from sub-agent results (Step 6a) and orchestrator checks (Steps 6g
 | Test Change Classification | Style/Conventions sub-agent |
 | Verification Commands | Correctness sub-agent |
 
+**Performance / `db-migration` tasks:** also apply the addendum's "Step 8 report additions"
+(extra table rows + their verdict sources, the Performance Results section, and their effect
+on Overall).
+
 When eval results are present (Eval Quality is not N/A), include the eval pass
 rate and any failing assertion details in the Test Quality Details column of
 the report table. When Eval Quality is N/A, include "Eval Quality: N/A" in the
@@ -1301,6 +1321,11 @@ Verify it is valid JSON:
 ```bash
 python3 -m json.tool $FULLSEND_OUTPUT_DIR/agent-result.json > /dev/null && echo "Output validated"
 ```
+
+## Step 10 – Update Optimization Result Report (Performance Tasks Only)
+
+**If `task_type = standard`:** skip this step. Otherwise execute Step 10 (10.1–10.4) from the
+performance addendum.
 
 ## Important Rules
 

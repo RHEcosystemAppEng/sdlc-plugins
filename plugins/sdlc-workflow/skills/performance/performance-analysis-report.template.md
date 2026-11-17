@@ -1,0 +1,747 @@
+# Performance Analysis Report
+
+**Generated:** {iso-8601-timestamp}  
+**Workflow:** {workflow-name}  
+**Baseline Date:** {baseline-capture-date}  
+**Validation Artifact:** `{analysis_dir}/findings-validation.json`  
+**Validation Status:** {not validated | passed}
+
+---
+
+## Workflow Metrics
+
+| Metric | Current (p95) | Target | Status |
+|---|---|---|---|
+| LCP (Largest Contentful Paint) | {lcp-p95} ms | 2500 ms | {status} |
+| FCP (First Contentful Paint) | {fcp-p95} ms | 1800 ms | {status} |
+| DOM Interactive | {domInteractive-p95} ms | 3500 ms | {status} |
+| Total Load Time | {total-p95} ms | 4000 ms | {status} |
+
+---
+
+## Bundle Composition
+
+**Total JavaScript Size:** {total-js-size} KB  
+**Third-Party Libraries:** {third-party-size} KB ({third-party-percentage}%)  
+**Application Code:** {application-code-size} KB ({application-code-percentage}%)
+
+**Top Third-Party Libraries by Size:**
+
+| Library | Size | Used In |
+|---|---|---|
+| {library-1} | {size-1} KB | {scenarios-1} |
+| {library-2} | {size-2} KB | {scenarios-2} |
+| ... | ... | ... |
+
+---
+
+## Finding Validation Summary
+
+**Validation Step:** Step 9.1 re-verified all findings against source code before report generation.
+
+| # | Finding | Anti-Pattern | Step | Disposition | Confidence | Severity | Timeline | Notes |
+|---|---|---|---|---|---|---|---|---|
+| F1 | {description} | {type} | {step} | {Confirmed / Confirmed (Low Confidence) / Downgraded} | {High / Medium / Low} | {Critical / High / Medium / Low} | {estimate} | {reason chain or correction notes} |
+| ... | ... | ... | ... | ... | ... | ... | ... | ... |
+
+**Validation Statistics:**
+- Findings submitted: {total}
+- Confirmed: {confirmed} ({pct}%)
+- Confirmed (Low Confidence): {low_conf} ({pct}%)
+- Downgraded: {downgraded} ({pct}%)
+- Discarded: {discarded} ({pct}%)
+
+{if discarded > 0}
+
+### Discarded Findings (Audit Trail)
+
+| # | Original Claim | Step | File:Line | Discard Reason |
+|---|---|---|---|---|
+| {id} | {original-description} | {step} | {file}:{line} | {FAILED: code not found / FAILED: pattern mismatch — {details}} |
+
+{end if}
+
+---
+
+## Anti-Pattern Analysis
+
+### {Anti-Pattern-Name}
+
+**Severity:** {High / Medium / Low}  
+**Confidence:** {High (Serena MCP) / Medium (Grep — good pattern) / Low (Grep — requires manual verification)}  
+**Instances Found:** {count}  
+**Estimated Impact:** {quantified-impact}
+
+**Description:**
+{brief-explanation-of-anti-pattern}
+
+**Detected Instances:**
+
+1. **{file-path}:{line-number}**
+   **Finding ID:** F{n}
+   ```{language}
+   {code-snippet}
+   ```
+   **Issue:** {specific-issue-description}
+   **Recommended Fix:** {actionable-recommendation}
+   **Verification Checklist:**
+   - [ ] {verification-step-1 from detection step}
+   - [ ] {verification-step-2 from detection step}
+   **Validation Status:** {Confirmed / Confirmed (Low Confidence) / Downgraded}
+   **Confidence:** {High / Medium / Low} — {reason chain: "Detection: X, Evidence: Y, Risk: Z => Final: result"}
+   **Severity:** {Critical / High / Medium / Low}
+   **Timeline:** {< 1 hour / 1-4 hours / 0.5-1 day / 1-3 days / 3-5 days / > 5 days}
+
+{... repeat for each anti-pattern ...}
+
+---
+
+## Backend Source Code Analysis
+
+**Note:** This section is included only if backend repository is configured (`backend_available = true`). Otherwise, omit this section entirely.
+
+**Backend Repository:** {backend-repo-name} ({backend-framework})  
+**Analysis Coverage:** {endpoints-analyzed} endpoints analyzed  
+**Serena Status:** {serena-instance-name or "Grep fallback"}
+
+### Backend Anti-Patterns Detected
+
+#### Database N+1 Queries
+
+**Severity:** {High / Medium / Low}  
+**Instances Found:** {count}  
+**Estimated Latency Impact:** {(n_queries - 1) * 10ms}
+
+**Detected Instances:**
+
+1. **{handler-file-path}:{line-number}**
+   ```{language}
+   {code-snippet-showing-loop-with-queries}
+   ```
+   **Issue:** {count} queries executed sequentially in loop  
+   **Recommended Fix:**
+   - **SQL:** Use batch query: `SELECT * FROM table WHERE id IN (...)`
+   - **SeaORM:** Use `.find()` with `filter(column.is_in(ids))` or `.find_with_related()` for eager loading
+   - **Diesel:** Use `.filter(id.eq_any(ids))` for batch query
+   - **JPA/Hibernate:** Use `@EntityGraph`, `JOIN FETCH` in JPQL, or `findAllById(ids)`
+   - **SQLAlchemy:** Use `.filter(Model.id.in_(ids))` for batch query
+   - **Django ORM:** Use `Model.objects.filter(id__in=ids)` or `.select_related()`
+
+{... repeat for each N+1 instance ...}
+
+#### Missing Pagination
+
+**Severity:** {High / Medium / Low}  
+**Instances Found:** {count}  
+**Estimated Payload Waste:** {(total_items - 20) * avg_item_size}
+
+**Detected Instances:**
+
+1. **Endpoint:** GET {endpoint-path}
+   **Handler:** {handler-file-path}  
+   **Issue:** Returns {item-count} items without pagination  
+   **Recommended Fix:** Add `page` and `limit` query parameters, implement `.limit()` and `.offset()` in query
+
+{... repeat for each pagination issue ...}
+
+#### Missing Caching
+
+**Severity:** {High / Medium / Low}  
+**Instances Found:** {count}  
+**Estimated Latency Reduction:** {operation_time × analysis_cache_hit_rate}
+
+**Detected Instances:**
+
+1. **Endpoint:** GET {endpoint-path}
+   **Handler:** {handler-file-path}  
+   **Issue:** {expensive-operation-description} on every request (no cache detected)  
+   **Data Change Frequency:** {static / slow-changing / fast-changing}  
+   **Recommended Fix:** Implement cache layer (Redis, in-memory) with appropriate TTL
+
+{... repeat for each caching issue ...}
+
+#### Inefficient Queries
+
+**Severity:** {High / Medium / Low}  
+**Instances Found:** {count}  
+**Estimated Impact:** 30-50% query time reduction
+
+**Detected Instances:**
+
+1. **Query:** {query-snippet}
+   **Handler:** {handler-file-path}:{line-number}  
+   **Issue:** SELECT * fetches {column-count} columns but only {used-count} used in response  
+   **Recommended Fix:** Specify exact columns: `SELECT id, name, price FROM products WHERE ...`
+
+{... repeat for each inefficient query ...}
+
+#### Unused Table Joins
+
+**Severity:** {Critical / High / Medium / Low}  
+**Instances Found:** {count}  
+**Estimated Impact:** {total_latency_saved}ms saved per request
+
+**Description:** Database queries that JOIN tables but never access fields from the joined tables, wasting database CPU, I/O, and memory resources.
+
+**Detected Instances:**
+
+1. **Endpoint:** {endpoint_method} {endpoint_path}
+   **Handler:** {handler-file-path}:{line-number}  
+   **Query:**
+   ```{language}
+   {full_query_with_highlighted_join}
+   ```
+   **Unused Join:** `{joined_table}` (alias: `{alias}`)  
+   **Reason:** No fields from `{joined_table}` accessed in SELECT, WHERE, or response schema  
+   **Join Type:** {INNER/LEFT/RIGHT JOIN}  
+   **Table Size:** {estimated_row_count} rows  
+   **Index Status:** {Indexed/Not Indexed} on foreign key  
+   **Estimated Overhead:** {overhead_ms}ms per query  
+   **Call Frequency:** {single/N+1 with count calls}  
+   **Total Impact:** {total_impact}ms per request  
+   **Recommended Fix:**
+   ```{language}
+   {optimized_query_without_unused_join}
+   ```
+
+{... repeat for each unused join instance ...}
+
+**Total Estimated Impact:** {sum_of_all_impacts}ms reduction across {count} endpoints
+
+#### Service Chain Analysis (Deep Call Graph)
+
+**Depth Analyzed:** {chain_depth} levels  
+**Total Handlers Traced:** {handler_count}  
+**Analysis Method:** {Serena MCP (High Confidence) / Grep (Fallback - Medium Confidence)}
+
+{... for each handler with call chain findings ...}
+
+##### Endpoint: {endpoint_method} {endpoint_path}
+
+**Call Graph:**
+```
+{endpoint_method} {endpoint_path}
+  └─ {callee_1}          [{file}:{line}]
+       ├─ {callee_2}     [{file}:{line}]    ← {query_annotation}
+       └─ {callee_3}     [{file}:{line}]
+            ├─ {callee_4}  [{file}:{line}]  ← {query_annotation}
+            └─ {callee_5}  [{file}:{line}]  ← {query_annotation}
+```
+
+**Query Ledger:**
+
+| # | Query | Source | Depth | Loop Mult. | Cond? | Cache? | Effective Count |
+|---|---|---|---|---|---|---|---|
+| {n} | {description} | {file:line} | {depth} | {multiplier} | | | {effective} |
+| **Total (all)** | | | | | | | **{total}** |
+| **Total (warm)** | | | | | | | **{warm_total}** |
+| **Total (cold)** | | | | | | | **{cold_total}** |
+
+**Estimated Total DB Latency:** {total_queries * db_latency_ms}ms  
+
+**Anti-Patterns Found at Depth:**
+- Depth {N}: {anti-pattern-description} in `{symbol_name}` ({file}:{line})
+
+{... end for each handler ...}
+
+---
+
+#### Wasted Computation
+
+**Severity:** {High / Medium / Low}  
+**Instances Found:** {count}
+
+**Description:** Handlers that call service methods returning substantial data but only use a subset of the result. The unused portion may involve database queries that execute needlessly.
+
+**Detected Instances:**
+
+1. **Endpoint:** {endpoint_method} {endpoint_path}
+   **Handler:** {handler-file-path}:{line-number}  
+   **Service Call:** `{service.method_name(...)}`  
+   **Returns:** `{ReturnType}` with {total_field_count} fields  
+   **Handler Uses:** {used_field_count} fields ({used_field_list})  
+   **Wasted Fields:** {unused_field_list}  
+   **Wasted Queries:** {count} queries ({wasted_query_latency}ms estimated)  
+   **Recommended Fix:** Create `{optimized_method_name}()` that returns only needed data, or add a field projection parameter
+
+{... repeat for each wasted computation instance ...}
+
+---
+
+#### Conditional Query Patterns (Memo/Option)
+
+**Severity:** {High / Medium / Low}
+**Instances Found:** {count}
+**Estimated Impact:** {total_conditional_queries} additional queries per request
+
+**Description:** Functions that accept lazy-load parameters (`Memo<T>`, `Option<T>`) and fire
+database queries when callers pass the un-provided variant instead of pre-loading the data.
+
+**Detected Instances:**
+
+1. **Function:** `{function_name}` ({file}:{line})
+   **Parameter:** `{param_name}: Memo<{Type}>`
+   **Conditional Query:** `{query_description}` — fires when `Memo::NotProvided` is passed
+   **Callers passing NotProvided:**
+   - `{caller_1}` ({file}:{line}) — inside loop (×{iterations}) = {effective_count} queries
+   - `{caller_2}` ({file}:{line}) — single call = 1 query
+   **Total Impact:** {sum_effective} conditional queries per request
+   **Recommended Fix:** Pre-load `{Type}` in batch at the caller level and pass via `Memo::Provided`
+
+{... repeat for each instance ...}
+
+---
+
+#### Inter-Query SQL Duplication
+
+**Severity:** {High / Medium / Low}
+**Instances Found:** {count}
+**Estimated Impact:** {redundant_executions} redundant CTE/subquery executions per request
+
+**Description:** Multiple queries within the same handler chain that contain identical or
+semantically equivalent CTEs/subqueries, causing the database to compute the same intermediate
+results multiple times.
+
+**Detected Instances:**
+
+1. **Duplicated CTE:** `{cte_name}`
+   **Appears in:** {count} queries within handler for {endpoint}
+   **Queries:**
+   - Query #{n1}: {description_1} ({source_1})
+   - Query #{n2}: {description_2} ({source_2})
+   **Shared SQL:**
+   ```sql
+   {shared_sql_fragment}
+   ```
+   **Estimated Overhead:** {(count-1)} redundant executions × {est_time}ms = {total_overhead}ms
+   **Recommended Fix:** {Extract to materialized temp table / Refactor to single query}
+
+{... repeat for each instance ...}
+
+---
+
+#### Missing Database Indexes
+
+**Severity:** {High / Medium / Low}  
+**Instances Found:** {count}  
+**Migration Directory:** {migration_path}
+
+**Description:** Query WHERE/JOIN columns (found at any depth in the call chain) that lack database indexes, causing sequential scans instead of index lookups.
+
+**Detected Instances:**
+
+1. **Table:** `{table_name}`  
+   **Column:** `{column_name}`  
+   **Table Source:** `{migration_file_path}` or "Not found in migration files — verify manually"  
+   **Used In:** {query_description} (`{source_file}:{line}`)  
+   **Query Type:** {WHERE filter / JOIN condition / ORDER BY}  
+   **Loop Multiplier:** {from query_ledger — how many times this query fires per request}  
+   **Estimated Impact:** Sequential scan on {estimated_rows} rows vs. index lookup  
+   **Recommended Fix:**
+   ```sql
+   CREATE INDEX idx_{table}_{column} ON {table}({column});
+   ```
+
+{... repeat for each missing index ...}
+
+---
+
+#### Cache Effectiveness Analysis
+
+**Severity:** {High / Medium / Low}
+**Instances Found:** {count}
+**Estimated Impact:** Fixing bypass queries is a prerequisite for {improvement}ms cache benefit
+
+**Note:** Requires baseline cache data from Step 4. If no baseline exists, record:
+"No baseline data; run `/sdlc-workflow:performance-baseline` first."
+
+**Description:** Endpoints where an application-level cache exists but provides minimal
+improvement because cache-bypass queries dominate warm-cache response time.
+
+**Detected Instances:**
+
+1. **Endpoint:** {method} {path}
+   **Cache Type:** {description}
+   **Baseline Improvement:** {improvement_pct}% ({cold_ms}ms → {warm_ms}ms)
+   **Query Breakdown:**
+   | Category | Queries | Estimated Latency |
+   |---|---|---|
+   | Cache-gated (cold only) | {count} | {latency}ms |
+   | Cache-bypass (every request) | {count} | {latency}ms |
+   | **Total** | **{total}** | **{total_latency}ms** |
+   **Bypass Dominance:** {bypass_pct}% of queries fire regardless of cache state
+   **Blocking Findings:** {finding_names_and_ids}
+   **Recommendation:** {actionable_recommendation}
+
+{... repeat for each instance ...}
+
+---
+
+#### Migration SQL Anti-Patterns
+
+**Migration Directory:** {migration_path}
+**Migration Files Scanned:** {file_count}
+**DML-Containing Migrations:** {dml_file_count}
+
+**Description:** Performance anti-patterns detected in migration file DML (backfill queries, function definitions). These affect deployment time and database load during migration execution.
+
+{if any 7.8.x findings}
+
+##### Missing Statistics Refresh
+
+{if 7.8.1 findings}
+
+**Finding ID:** F{n}
+**Severity:** {severity}
+**Migration File:** `{migration_file_path}`
+
+```sql
+{backfill_query_snippet}
+```
+
+**Issue:** Bulk {INSERT/UPDATE} operates on `{table_name}` without preceding ANALYZE. Stale statistics may cause planner to misestimate row counts, leading to suboptimal query plans (e.g., nested loops instead of hash joins).
+**Tables Affected:** {table_list}
+**Recommended Fix:** Add `ANALYZE {table_name};` before the backfill query.
+**Validation Status:** {disposition}
+
+{... repeat for each instance ...}
+
+{end if}
+
+##### Non-Materialized CTE Re-evaluation
+
+{if 7.8.2 findings}
+
+**Finding ID:** F{n}
+**Severity:** {severity}
+**Migration File:** `{migration_file_path}`
+
+```sql
+{cte_query_snippet}
+```
+
+**Issue:** CTE `{cte_name}` contains {expensive_operation_description} and is referenced {ref_count} times without MATERIALIZED keyword. PostgreSQL 12+ may inline the CTE, causing the expensive operations to be evaluated {ref_count} times instead of once.
+**Recommended Fix:** Add MATERIALIZED keyword: `WITH {cte_name} AS MATERIALIZED (...)`
+**Validation Status:** {disposition}
+
+{... repeat for each instance ...}
+
+{end if}
+
+##### Uniform Processing of Partitionable Data
+
+{if 7.8.3 findings}
+
+**Finding ID:** F{n}
+**Severity:** {severity}
+**Confidence:** {confidence}
+**Migration File:** `{migration_file_path}`
+
+```sql
+{uniform_query_snippet}
+```
+
+**Issue:** Function `{function_name}` is applied to all rows, but its early-exit guard (`{guard_condition}`) indicates most rows are returned unchanged. The expensive path (JOIN + function evaluation) could be limited to rows matching `{partition_predicate}`.
+**Guard Condition:** `{guard_condition_in_function}`
+**Recommended Fix:** Split into two passes — one for rows matching `{partition_predicate}` (with JOIN + function), one for the rest (direct insert without JOIN/function).
+**Validation Status:** {disposition}
+
+{... repeat for each instance ...}
+
+{end if}
+
+##### Expensive PL/pgSQL Function Patterns
+
+{if 7.8.4 findings}
+
+**Finding ID:** F{n}
+**Severity:** {severity}
+**Migration File:** `{migration_file_path}`
+**Function:** `{function_name}`
+
+```sql
+{function_snippet}
+```
+
+**Issue:** {pattern_description — e.g., "regexp_replace() with dynamically concatenated pattern inside FOREACH loop — regex is recompiled on every iteration"}
+**Recommended Fix:** {fix_description — e.g., "Replace regexp_replace() with boundary-aware replace() calls using SPDX delimiter pairs (space, parentheses, +)"}
+**Estimated Speedup:** {speedup_estimate if available, otherwise "Benchmark required"}
+**Validation Status:** {disposition}
+
+{... repeat for each instance ...}
+
+{end if}
+
+{else: "No migration SQL anti-patterns detected."}
+
+---
+
+### Cross-Repository Over-Fetching Analysis
+
+**Note:** This analysis cross-references backend response schemas with frontend field usage.
+
+#### Per-Endpoint Analysis
+
+##### Endpoint: GET {endpoint-path}
+
+**Backend Handler:** {handler-file-path}  
+**Response Type:** {ResponseStructName}  
+**Total Fields:** {total-field-count}  
+**Used by Frontend:** {used-field-count}  
+**Unused Fields:** {unused-field-list}  
+**Over-Fetching Percentage:** {waste-percentage}%  
+**Call Pattern:** {Single call / N+1 (count calls)}  
+**Payload Waste:** {waste-bytes} KB per request × {call-count if N+1} calls = {total-waste} KB  
+**Recommendation:** {Create specialized DTO / Use GraphQL / Field projection}
+
+{... repeat for each endpoint ...}
+
+---
+
+### Cross-Layer Computation Waste
+
+**Note:** This section is included only when `analysis_scope` is `full-stack` or `full-stack-monorepo`
+AND backend chain analysis (Step 7.6.2) completed successfully.
+
+**Severity:** {Critical / High / Medium / Low}
+**Instances Found:** {count}
+**Estimated Impact:** {total_wasted_queries} wasted queries per dashboard load
+
+**Description:** Backend endpoints compute expensive response fields (requiring database queries)
+that the frontend never reads. Unlike handler-level waste (Wasted Computation section above),
+this detects waste at the HTTP API boundary — where the backend serves fields the frontend discards.
+
+**Detected Instances:**
+
+1. **Endpoint:** {method} {path}
+   **Total Backend Query Cost:** {total_queries} queries ({total_latency}ms)
+   **Frontend-Used Fields:** {field_list} — Cost: {used_queries} queries
+   **Frontend-Unused Fields:** {field_list} — Cost: {wasted_queries} queries
+   **Cross-Layer Waste:** {waste_pct}% of backend computation serves no frontend purpose
+   **Call Pattern:** {single / N+1 (×count)}
+   **Total Wasted Queries:** {wasted × call_count}
+   **Recommended Fix:** {recommendation}
+
+{... repeat for each instance ...}
+
+---
+
+## Dynamic Performance Testing
+
+**Note:** This section is included only if dynamic testing was executed (backend running + test data manifest exists).
+
+**Status:** Service running on localhost:{port}  
+**Methodology:** curl loop — cold-cache first request + {iterations} warm-cache requests for p50/p95/p99 percentiles  
+**Iterations:** {iterations} requests per endpoint
+
+### Endpoint Performance Metrics
+
+{... for each endpoint in dynamic_results ...}
+
+#### Endpoint: {endpoint_method} {endpoint_path}
+
+**Test URL:** {test_url}
+
+**Response Time (milliseconds)**:
+| Metric | Value |
+|---|---|
+| p50 (Median) | {p50}ms |
+| p95 | {p95}ms |
+| p99 | {p99}ms |
+| Mean | {mean}ms |
+
+**Cache Effectiveness**:
+- First request: {first_request_ms}ms (cache miss)
+- Subsequent mean: {mean}ms (cache hits)
+- Improvement: {cache_improvement_pct}% faster
+- **Status**: {cache_status} ✅/⚠️
+
+**Dynamic vs Static Comparison**:
+| Source | Estimate | Notes |
+|---|---|---|
+| Static Analysis | **[Manual: See Backend Source Code Analysis section]** | Check N+1 query findings, estimated overhead |
+| Dynamic Actual | {p95}ms (p95) | Measured with curl loop |
+| Variance | **[Manual: Calculate]** | If >200ms: Database profiling needed |
+
+**Recommendation**: Review static analysis estimates. If variance >200ms, database query optimization is critical priority.
+
+{... end for each endpoint ...}
+
+### Summary
+
+**Total Endpoints Tested:** {count}  
+**Cache-Effective Endpoints:** {count with "Effective" status}  
+**Slow Endpoints (p95 > 500ms):** {count}  
+**Recommended Actions:**
+- Endpoints with >200ms variance: Profile with database query analyzer
+- Minimal cache effectiveness: Review caching strategy
+- Slow endpoints: Prioritize for optimization
+
+---
+
+## Live SQL Analysis (EXPLAIN ANALYZE)
+
+**Note:** This section is included only when live SQL analysis was performed (Step 9.7). If the user skipped live analysis, omit this section entirely.
+
+**Database:** {database_name} (connection details redacted)
+**Queries Analyzed:** {analyzed_count}
+**Queries Skipped:** {skipped_count}
+**Skip Reasons:** {ORM derivation not yet supported: {orm_skip_count}, Mutation query: {mutation_skip_count}, Dynamic SQL: {dynamic_skip_count}}
+**Analysis Method:** EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT) for SELECT queries; EXPLAIN (FORMAT TEXT) for mutation queries
+
+### SQL Query Ledger
+
+| # | Query Description | Source | Query Type | Derived SQL | Execution Time | Planning Time |
+|---|---|---|---|---|---|---|
+| {n} | {description} | {file}:{line} | {SELECT/INSERT/...} | `{sql_snippet_truncated}` | {exec_time}ms | {plan_time}ms |
+
+### Execution Plan Bottlenecks
+
+{... for each bottleneck found ...}
+
+#### Query #{n}: {query_description}
+
+**Source:** {file}:{line}
+**Finding ID:** F{n}
+**Execution Time:** {exec_time}ms (Planning: {plan_time}ms)
+
+**Derived SQL:**
+```sql
+{derived_sql}
+```
+
+**EXPLAIN Output:**
+```
+{full_explain_output}
+```
+
+**Bottlenecks Detected:**
+
+| Bottleneck | Node | Table | Est. Rows | Actual Rows | Mismatch | Impact |
+|---|---|---|---|---|---|---|
+| {type} | {node_description} | {table} | {est} | {actual} | {ratio}x | {impact_description} |
+
+**Recommended Fix:**
+```sql
+{recommended_sql_or_index}
+```
+
+**Validation Status:** {Confirmed / Downgraded}
+**Confidence:** High — live execution plan evidence
+**Severity:** {Critical / High / Medium / Low}
+**Timeline:** {estimate}
+
+{... end for each bottleneck ...}
+
+### Heuristic vs Measured Comparison
+
+**Method:** Static estimates use `db_latency_ms` ({db_latency_ms}ms) × effective query count from the query ledger. Measured values are actual EXPLAIN ANALYZE execution times. These are not comparable methodologies — the heuristic is a rough cost model, not a per-query prediction.
+
+| Query # | Heuristic Estimate | Formula | Measured Time | Notes |
+|---|---|---|---|---|
+| {n} | {heuristic_ms}ms | {db_latency_ms}ms × {effective_count} | {measured_ms}ms | {notes} |
+
+**Summary:** {N} of {total} analyzed queries show >10x variance between heuristic and measured — indicating the heuristic under/overestimates for those query shapes.
+
+### Phase 1 Limitations
+
+- ORM-derived queries (SeaORM builders, SQLAlchemy chains, TypeORM QueryBuilder) were skipped. Only queries with literal SQL in source code were analyzed.
+- Mutation queries (INSERT/UPDATE/DELETE) used EXPLAIN without ANALYZE (plan only, no execution) or were skipped.
+- Query parameters were substituted with representative values — actual runtime parameters may produce different execution plans due to data distribution.
+
+---
+
+## Candidates for Manual Review (Low Confidence)
+
+> Findings below were detected via grep-based pattern matching without semantic analysis.
+> They have a high false-positive rate and require manual verification with browser DevTools
+> or runtime profiling before investing optimization effort.
+
+### Over-Fetching (Grep-Based)
+
+{if over-fetching grep findings exist}
+
+| # | Endpoint | Unused Fields (Estimated) | Response Size | Confidence | Verification |
+|---|---|---|---|---|---|
+| {n} | {endpoint} | {field_list} | {size} | Low | Requires destructuring/prop-drilling review |
+
+{else: "No grep-based over-fetching candidates detected."}
+
+### Layout Thrashing (Grep-Based)
+
+{if layout thrashing grep findings exist}
+
+| # | File:Line | Pattern | Loop Context | Confidence | Verification |
+|---|---|---|---|---|---|
+| {n} | {file}:{line} | {read} → {write} | {loop_info} | Low | Requires Chrome DevTools Performance profiling |
+
+{else: "No grep-based layout thrashing candidates detected."}
+
+---
+
+## Recommended Optimizations
+
+**Note:** Optimizations are categorized by layer (Frontend / Backend / Integration) when backend analysis is available.
+
+Tactical optimizations are prioritized by estimated impact (time or size savings) and ordered
+so that prerequisite fixes appear before the optimizations that depend on them.
+Strategic optimizations are listed separately and represent architectural changes that set
+the long-term performance ceiling.
+
+### Tactical Optimizations
+
+| Priority | Optimization | Confidence | Severity | Timeline | Prerequisite | Estimated Impact | Effort |
+|---|---|---|---|---|---|---|---|
+| 1 | {optimization-1} | {confidence-1} | {severity-1} | {timeline-1} | {prerequisite-1 or —} | {impact-1} | {effort-1} |
+| 2 | {optimization-2} | {confidence-2} | {severity-2} | {timeline-2} | {prerequisite-2 or —} | {impact-2} | {effort-2} |
+| 3 | {optimization-3} | {confidence-3} | {severity-3} | {timeline-3} | {prerequisite-3 or —} | {impact-3} | {effort-3} |
+| ... | ... | ... | ... | ... | ... | ... | ... |
+
+### Strategic / Architectural Optimizations
+
+> These changes define the long-term performance ceiling. They require more coordination
+> but are the only path to guaranteeing target SLAs at production dataset sizes.
+
+| Priority | Optimization | Confidence | Severity | Timeline | Prerequisite | Estimated Impact | Effort |
+|---|---|---|---|---|---|---|---|
+| S1 | {optimization} | {confidence} | {severity} | {timeline} | {prerequisite or —} | {impact} | {effort} |
+| ... | ... | ... | ... | ... | ... | ... | ... |
+
+{if no strategic optimizations: "No strategic/architectural optimizations identified — tactical fixes are sufficient to reach target SLAs."}
+
+**Effort Legend (shared with Executive Summary):**
+- **Low:** < 1 day of work
+- **Medium:** 1-3 days of work
+- **High:** > 3 days of work
+
+**Timeline Legend (per-finding implementation estimate):**
+- **< 1 hour:** Single-line or config change
+- **1–4 hours:** Single-file straightforward refactor
+- **0.5–1 day:** Multi-file change within one module
+- **1–3 days:** Cross-module refactor or new service method
+- **3–5 days:** Architectural change or new infrastructure
+- **> 5 days:** Major restructuring
+
+---
+
+## Executive Summary
+
+**Overall Performance Rating:** {rating} (Excellent / Good / Needs Improvement / Poor)
+
+**Key Findings:**
+- {summary-bullet-1}
+- {summary-bullet-2}
+- {summary-bullet-3}
+
+**Top 3 Optimization Opportunities:**
+1. {opportunity-1} — Estimated impact: {impact-1}
+2. {opportunity-2} — Estimated impact: {impact-2}
+3. {opportunity-3} — Estimated impact: {impact-3}
+
+---
+
+## Next Steps
+
+1. Review this report with the team and prioritize optimizations
+2. Create optimization plan and Jira Epic/Tasks using `/sdlc-workflow:performance-plan-optimization`
+3. After implementing optimizations, re-run `/sdlc-workflow:performance-baseline` to capture new baseline and measure improvements

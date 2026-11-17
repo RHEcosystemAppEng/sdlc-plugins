@@ -172,3 +172,46 @@ comments, labels, links, transitions, and remediation tasks idempotent across re
 When evidence is missing, malformed, or contradictory, the prefetch/validation path
 fails closed before mutation. Operators should repair the trusted bundle or its matrix
 and lock-file evidence, not grant the sandbox new access or use an interactive fallback.
+
+---
+
+## Playwright
+
+**Purpose:** Browser automation for performance baseline capture.
+
+**Installation:**
+
+```bash
+npm install -D @playwright/test
+npx playwright install
+```
+
+**Used By:** performance-baseline skill
+
+### How It Works
+
+The `performance-baseline` skill uses Playwright to:
+1. Launch a headless Chromium browser
+2. Navigate to each scenario in the selected workflow
+3. Measure Web Vitals (LCP, FCP, DOM Interactive) and total load time
+4. Capture resource timing (scripts, stylesheets, images)
+5. Generate a baseline report with metrics and waterfall visualization
+
+**Baseline Capture Mode:**
+
+Baseline capture uses **cold-start mode**: direct URL navigation with empty browser cache using Playwright. This measures worst-case (first-visit) performance and provides stable, reproducible baseline metrics.
+
+### Requirements
+
+- **Application running:** The target application must be running on localhost before capturing baseline
+- **Test data loaded:** Scenarios must have test data available for accurate measurements
+- **Valid URLs:** Scenario URLs must be valid localhost addresses (e.g., `http://localhost:3000/home`)
+
+### Graceful Degradation
+
+If Playwright is not installed or cannot run, the skill:
+1. Detects the missing dependency
+2. Provides installation instructions
+3. Offers to exit gracefully and resume after installation
+
+**Alternative:** Manual performance testing using browser DevTools and manual metric recording (skill does not support this flow, but users can capture baseline manually if needed).
