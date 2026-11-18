@@ -160,6 +160,123 @@ def parse_security_matrix(stream_name, matrix_path, content):
     }, mappings
 
 
+_DEPENDENCY_POLICY_FIELDS = {
+    "ecosystem", "strategy", "update_command", "targeted_fallback_command", "graph_command",
+    "constraint_changes", "verification",
+}
+
+
+def _parse_dependency_updates(section):
+    """Parse the single structured JSON policy from a Dependency Updates section."""
+    uncommented = re.sub(r"<!--.*?-->", "", section, flags=re.DOTALL)
+    matches = list(re.finditer(r"^```json\s*\n(.*?)^```\s*$", uncommented, re.MULTILINE | re.DOTALL))
+    blocks = [match.group(1) for match in matches]
+    if len(blocks) != 1:
+        raise EvidenceError("Dependency Updates section must contain exactly one fenced json policy")
+    remainder = uncommented[:matches[0].start()] + uncommented[matches[0].end():]
+    if remainder.strip():
+        raise EvidenceError("Dependency Updates section may contain only the JSON policy and HTML comments")
+    try:
+        document = json.loads(blocks[0])
+    except json.JSONDecodeError as error:
+        raise EvidenceError("Dependency Updates policy must contain valid JSON: {}".format(error)) from error
+    if not isinstance(document, dict) or set(document) != {"policies"}:
+        raise EvidenceError("Dependency Updates policy must be an object containing only policies")
+    policies = document["policies"]
+    if not isinstance(policies, list):
+        raise EvidenceError("Dependency Updates policy policies must be an array")
+
+    normalized = []
+    seen_ecosystems = set()
+    for index, policy in enumerate(policies):
+        if not isinstance(policy, dict):
+            raise EvidenceError("Dependency Updates policy {} must be an object".format(index))
+        if set(policy) != _DEPENDENCY_POLICY_FIELDS:
+            raise EvidenceError(
+                "Dependency Updates policy {} must contain exactly {}".format(
+                    index, ", ".join(sorted(_DEPENDENCY_POLICY_FIELDS)))
+            )
+        ecosystem = policy["ecosystem"]
+        if not isinstance(ecosystem, str) or not ecosystem.strip() or ecosystem != ecosystem.strip():
+            raise EvidenceError("Dependency Updates policy {} has an invalid ecosystem".format(index))
+        identity = ecosystem.casefold()
+        if identity in seen_ecosystems:
+            raise EvidenceError("Dependency Updates policy has duplicate ecosystem {!r}".format(ecosystem))
+        seen_ecosystems.add(identity)
+        if policy["strategy"] not in ("batch", "targeted"):
+            raise EvidenceError("Dependency Updates policy {} strategy must be batch or targeted".format(index))
+        for command_name in ("update_command", "graph_command"):
+            command = policy[command_name]
+            if not isinstance(command, str) or not command.strip() or command != command.strip():
+                raise EvidenceError(
+                    "Dependency Updates policy {} {} must be a non-empty string".format(index, command_name))
+        targeted_fallback = policy["targeted_fallback_command"]
+        if not isinstance(targeted_fallback, str) or targeted_fallback != targeted_fallback.strip():
+            raise EvidenceError(
+                "Dependency Updates policy {} targeted_fallback_command must be a string".format(index))
+        if not isinstance(policy["constraint_changes"], bool):
+            raise EvidenceError("Dependency Updates policy {} constraint_changes must be boolean".format(index))
+        checks = policy["verification"]
+        if not isinstance(checks, list) or any(
+                not isinstance(check, str) or not check.strip() or check != check.strip()
+                for check in checks):
+            raise EvidenceError("Dependency Updates policy {} verification must be an array of non-empty strings".format(index))
+        normalized.append(dict(policy))
+    return normalized
+
+
+def _dependency_update_evidence(repository, repository_path):
+    """Capture one repository's dependency policy, distinguishing absence from invalid data."""
+    if repository_path is None:
+        return {
+            "repository": repository,
+            "status": "malformed",
+            "reason": "Repository Registry has no path for this configured repository",
+            "policies": [],
+        }
+    repository_path = Path(repository_path)
+    if not repository_path.is_dir():
+        return {
+            "repository": repository,
+            "status": "malformed",
+            "reason": "configured repository path is missing or is not a directory",
+            "policies": [],
+        }
+    convention_path = repository_path / "CONVENTIONS.md"
+    if not convention_path.is_file():
+        return {
+            "repository": repository,
+            "status": "missing",
+            "reason": "CONVENTIONS.md or its Dependency Updates section is absent",
+            "policies": [],
+        }
+    try:
+        document = _read_text(convention_path, "{} CONVENTIONS.md".format(repository))
+    except EvidenceError as error:
+        return {"repository": repository, "status": "malformed", "reason": str(error), "policies": []}
+    try:
+        section = _markdown_section(document, "Dependency Updates", 2)
+    except EvidenceError:
+        return {
+            "repository": repository,
+            "status": "missing",
+            "reason": "CONVENTIONS.md has no Dependency Updates section",
+            "policies": [],
+        }
+    try:
+        policies = _parse_dependency_updates(section)
+    except EvidenceError as error:
+        return {"repository": repository, "status": "malformed", "reason": str(error), "policies": []}
+    if not policies:
+        return {
+            "repository": repository,
+            "status": "missing",
+            "reason": "Dependency Updates section declares no policies",
+            "policies": [],
+        }
+    return {"repository": repository, "status": "valid", "reason": "", "policies": policies}
+
+
 def parse_security_configuration(claude_md):
     """Parse target-project Jira and Security Configuration into schema fields."""
     if not isinstance(claude_md, str):
@@ -403,7 +520,7 @@ def _validate_matrix(matrix):
 
 
 def _validate_source_evidence(source_evidence):
-    """Reject missing lock-file or development-stream runner evidence."""
+    """Reject incomplete source reads or convention evidence before sandbox delivery."""
     source_evidence = _require_mapping(source_evidence, "source_evidence")
     for name in ("lock_files", "development_streams"):
         reads = _require_list(source_evidence.get(name), "source_evidence.{}".format(name))
@@ -414,6 +531,30 @@ def _validate_source_evidence(source_evidence):
                     raise EvidenceError("source_evidence.{}[{}].{} is required".format(name, index, field))
             if not read["command"].startswith("git show "):
                 raise EvidenceError("source evidence commands must use git show")
+    conventions = _require_list(
+        source_evidence.get("conventions"), "source_evidence.conventions", allow_empty=True)
+    seen_repositories = set()
+    for index, evidence in enumerate(conventions):
+        evidence = _require_mapping(evidence, "source_evidence.conventions[{}]".format(index))
+        repository = evidence.get("repository")
+        status = evidence.get("status")
+        reason = evidence.get("reason")
+        policies = evidence.get("policies")
+        if not isinstance(repository, str) or not repository:
+            raise EvidenceError("source_evidence.conventions[{}].repository is required".format(index))
+        if repository in seen_repositories:
+            raise EvidenceError("duplicate dependency convention evidence for {}".format(repository))
+        seen_repositories.add(repository)
+        if status not in ("missing", "valid", "malformed"):
+            raise EvidenceError("source_evidence.conventions[{}].status is invalid".format(index))
+        if not isinstance(reason, str) or not isinstance(policies, list):
+            raise EvidenceError("source_evidence.conventions[{}] needs reason and policies".format(index))
+        if status == "valid" and (not policies or reason):
+            raise EvidenceError("valid dependency convention evidence needs policies and an empty reason")
+        if status != "valid" and policies:
+            raise EvidenceError("missing or malformed dependency convention evidence cannot include policies")
+        if status == "malformed" and not reason:
+            raise EvidenceError("malformed dependency convention evidence needs a reason")
     return source_evidence
 
 
@@ -441,6 +582,36 @@ def _format_checker():
     return checker
 
 
+def _validate_convention_associations(bundle):
+    """Ensure convention records are unique and bound to configured repositories."""
+    configured = {
+        repository.get("name")
+        for repository in bundle.get("configuration", {}).get("source_repositories", [])
+    }
+    seen_repositories = set()
+    for evidence in bundle.get("source_evidence", {}).get("conventions", []):
+        repository = evidence["repository"]
+        if repository not in configured:
+            raise EvidenceError("dependency convention evidence references unconfigured repository {}".format(
+                repository))
+        if repository in seen_repositories:
+            raise EvidenceError("duplicate dependency convention evidence for {}".format(repository))
+        seen_repositories.add(repository)
+        if evidence["status"] == "valid":
+            seen_ecosystems = set()
+            for policy in evidence["policies"]:
+                identity = policy["ecosystem"].casefold()
+                if identity in seen_ecosystems:
+                    raise EvidenceError(
+                        "dependency convention for {} has duplicate ecosystem {!r}".format(
+                            repository, policy["ecosystem"]))
+                seen_ecosystems.add(identity)
+    missing = configured - seen_repositories
+    if missing:
+        raise EvidenceError("dependency convention evidence is missing repositories: {}".format(
+            ", ".join(sorted(missing))))
+
+
 def validate_bundle(bundle, schema_path=None):
     """Validate a completed bundle against the sandbox's exact JSON schema."""
     path = Path(schema_path or _SCHEMA_PATH)
@@ -449,6 +620,7 @@ def validate_bundle(bundle, schema_path=None):
         with path.open() as schema_file:
             schema = json.load(schema_file)
         validate(instance=bundle, schema=schema, format_checker=format_checker)
+        _validate_convention_associations(bundle)
         decisions = bundle.get("authorization", {}).get("release_decisions")
         if decisions is not None:
             families = {entry["family"] for entry in bundle["jira_metadata"].get("release_jira", [])}
@@ -471,7 +643,7 @@ def build_bundle(issue, remote_links, configuration, external_evidence, matrix,
     idempotency = _require_mapping(idempotency, "idempotency")
 
     bundle = {
-        "schema_version": "1",
+        "schema_version": "2",
         "issue": normalize_issue(issue),
         "remote_links": normalize_remote_links(remote_links),
         "configuration": configuration,
@@ -870,6 +1042,11 @@ def collect_bundle(issue_key, project_root, release_decisions=None, mutation_aut
             read = _git_show(repository_paths[repository], mapping["upstream_branch"], mapping["lock_file"])
             development_streams.append({"repository": repository, **read})
 
+    conventions = [
+        _dependency_update_evidence(repository["name"], repository_paths.get(repository["name"]))
+        for repository in configuration.get("source_repositories", [])
+    ]
+
     jira_metadata = {
         "versions": normalize_versions(versions),
         "sibling_searches": [{
@@ -886,7 +1063,11 @@ def collect_bundle(issue_key, project_root, release_decisions=None, mutation_aut
         configuration=configuration,
         external_evidence=external_evidence,
         matrix={"streams": matrix_streams},
-        source_evidence={"lock_files": lock_files, "development_streams": development_streams},
+        source_evidence={
+            "lock_files": lock_files,
+            "development_streams": development_streams,
+            "conventions": conventions,
+        },
         jira_metadata=jira_metadata,
         idempotency={
             "action_markers": _action_markers(issue),

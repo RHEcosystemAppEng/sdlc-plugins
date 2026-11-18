@@ -20,7 +20,7 @@
   "properties": {
     "schema_version": {
       "type": "string",
-      "const": "1"
+      "const": "2"
     },
     "issue": {
       "$ref": "#/$defs/issue"
@@ -263,7 +263,7 @@
     "source_evidence": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["lock_files", "development_streams"],
+      "required": ["lock_files", "development_streams", "conventions"],
       "properties": {
         "lock_files": {
           "type": "array",
@@ -274,6 +274,71 @@
           "type": "array",
           "minItems": 1,
           "items": { "$ref": "#/$defs/source_read" }
+        },
+        "conventions": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dependency_convention" }
+        }
+      }
+    },
+    "dependency_convention": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "status", "reason", "policies"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "enum": ["missing", "valid", "malformed"] },
+        "reason": { "type": "string" },
+        "policies": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/dependency_update_policy" }
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "status": { "const": "valid" } } },
+          "then": {
+            "properties": {
+              "reason": { "const": "" },
+              "policies": { "minItems": 1 }
+            }
+          }
+        },
+        {
+          "if": { "properties": { "status": { "enum": ["missing", "malformed"] } } },
+          "then": { "properties": { "policies": { "maxItems": 0 } } }
+        },
+        {
+          "if": { "properties": { "status": { "const": "malformed" } } },
+          "then": { "properties": { "reason": { "minLength": 1 } } }
+        }
+      ]
+    },
+    "dependency_update_policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "ecosystem",
+        "strategy",
+        "update_command",
+        "targeted_fallback_command",
+        "graph_command",
+        "constraint_changes",
+        "verification"
+      ],
+      "properties": {
+        "ecosystem": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "strategy": { "type": "string", "enum": ["batch", "targeted"] },
+        "update_command": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "targeted_fallback_command": {
+          "type": "string",
+          "anyOf": [{ "const": "" }, { "pattern": "\\S" }]
+        },
+        "graph_command": { "type": "string", "minLength": 1, "pattern": "\\S" },
+        "constraint_changes": { "type": "boolean" },
+        "verification": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1, "pattern": "\\S" }
         }
       }
     },

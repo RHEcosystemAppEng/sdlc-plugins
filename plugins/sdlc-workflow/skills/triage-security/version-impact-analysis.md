@@ -364,7 +364,13 @@ to give the engineer remediation context.
 
 The investigation method depends on the ecosystem:
 
-#### Source-level dependencies (Cargo, npm)
+#### Source-level dependencies (configured source ecosystems)
+
+The `graph_command` in `CONVENTIONS.md` is implementation-only: triage records it in
+the remediation task and never runs it against pinned commits. Use the configured
+lock-file check command and static manifest/lock-file evidence for triage-time chain
+classification. If that evidence is insufficient, report the limitation; do not
+preflight with a resolver or dependency-graph command.
 
 Inspect the lock file and manifest files to determine:
 
@@ -379,11 +385,10 @@ Inspect the lock file and manifest files to determine:
    (e.g., `workspace-root → reqwest → hyper → h2 → vulnerable-lib`). Record the
    full chain — remediation tasks for transitive dependencies must include it so
    the engineer knows which direct dependency to bump first.
-3. **Profile/scope** — whether the dependency is included in all build profiles or
-   only specific ones:
-   - **Cargo**: `[dev-dependencies]` (test/bench only, not shipped),
-     `[build-dependencies]` (build scripts only), feature-gated optional deps
-   - **npm**: `devDependencies` (build/test only), `optionalDependencies`
+3. **Profile/scope** — use the repository's manifests and configuration to determine
+   whether the dependency is required in production, only for development/build/test,
+   or behind an optional feature. Ecosystem-specific manifest terminology is evidence
+   about scope, not an update command or a new plugin-level dependency type.
 
    If the dependency is only present in a non-production profile (e.g., dev-only),
    note this — it changes the risk assessment and remediation handling per the
@@ -399,7 +404,8 @@ Dependency chain for serde:
   Type: direct dependency
   Profile: production (serde is a runtime dependency)
 
-Remediation: bump serde to >= [fixed-version] in Cargo.toml
+Remediation: use the applicable project dependency-update policy to move serde to
+>= [fixed-version] and verify the resolved dependency graph
 ```
 
 Example output (transitive dependency):
@@ -412,8 +418,9 @@ Dependency chain for vulnerable-lib:
 First appeared: 2.2.0 (commit 05a3af91 added reqwest http3 feature)
 Not present in: 2.1.x (reqwest used without http3 feature)
 
-Remediation: bump reqwest if a version with fixed vulnerable-lib is
-available; otherwise pin vulnerable-lib directly via cargo add
+Remediation: prefer a project-policy-approved update of reqwest if a version with the
+fixed vulnerable-lib is available; otherwise use only a constraint/update mechanism
+permitted by both the task and the project policy
 ```
 
 #### Dependency scope decision tree
@@ -426,10 +433,8 @@ dependency, apply the following decision tree to determine remediation handling:
 These are dependencies that do not appear in the production binary or container
 image:
 
-- **Cargo** `[dev-dependencies]` — used for tests and benchmarks only; NOT shipped
-- **Cargo** `[build-dependencies]` — used in build scripts only; NOT shipped
-- **npm** `devDependencies` — used for build/test only; NOT shipped (unless
-  bundled by the build tool — verify bundler configuration if uncertain)
+- Project-defined development, build, or test scopes — generally not shipped in the
+  production artifact; verify the project's build configuration if uncertain
 
 Even though dev-only dependencies are not shipped, they still represent a supply
 chain risk (compromised dev deps can inject malicious code during builds). Still
@@ -444,9 +449,8 @@ create remediation tasks, but with these modifications:
 
 **Feature-gated optional dependencies:**
 
-These are dependencies declared in `[dependencies]` with `optional = true` and
-gated behind a non-default feature flag in Cargo, or `optionalDependencies`
-in npm that are not enabled by default.
+These are dependencies declared as optional by the project's manifest or gated behind
+a feature that is not enabled by default.
 
 Before creating remediation tasks, present the user with a VEX justification
 option:

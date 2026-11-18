@@ -378,6 +378,42 @@ def test_conditional_fullsend_inputs_are_valid_and_subject_bound(source_id):
     assert "SYNTHETIC TEST DATA" in bundle["issue"]["fields"]["fixture_purpose"]
 
 
+@requires_format_extra
+def test_fullsend_dependency_convention_states_preserve_missing_valid_and_malformed():
+    """Trusted input distinguishes absent policy, usable project policy, and invalid policy."""
+    # Given independent trusted bundles for each convention state
+    missing = _trusted_input("fullsend-eval-2-trusted-input.json")
+    valid = _trusted_input("fullsend-eval-1-trusted-input.json")
+    malformed = _trusted_input("fullsend-malformed-convention-trusted-input.json")
+
+    # When the strict host validator checks each bundle
+    for bundle in (missing, valid, malformed):
+        pre_triage.validate_bundle(bundle)
+
+    # Then the sandbox receives explicit state and project-owned commands without defaults
+    assert missing["source_evidence"]["conventions"][0]["status"] == "missing"
+    assert valid["source_evidence"]["conventions"][0]["policies"][0]["update_command"] == "cargo update"
+    invalid = malformed["source_evidence"]["conventions"][0]
+    assert invalid["status"] == "malformed"
+    assert "duplicate ecosystem" in invalid["reason"]
+    assert invalid["policies"] == []
+
+
+@requires_format_extra
+def test_fullsend_rejects_duplicate_policy_scope_even_in_schema_valid_bundle():
+    """A duplicate ecosystem policy cannot create an ambiguous convention selection."""
+    # Given an otherwise schema-valid bundle with two policies for one ecosystem
+    bundle = _trusted_input("fullsend-eval-1-trusted-input.json")
+    duplicate = dict(bundle["source_evidence"]["conventions"][0]["policies"][0])
+    duplicate["strategy"] = "targeted"
+    bundle["source_evidence"]["conventions"][0]["policies"].append(duplicate)
+
+    # When host-side semantic validation checks the bundle
+    # Then duplicate scopes fail closed rather than letting the sandbox choose one
+    with pytest.raises(pre_triage.EvidenceError, match="duplicate ecosystem"):
+        pre_triage.validate_bundle(bundle)
+
+
 def test_conditional_retry_input_has_an_existing_task_without_a_digest():
     """The new partial retry is distinct from the retained fully triaged interactive case."""
     # Given a trusted snapshot of an interrupted remediation creation

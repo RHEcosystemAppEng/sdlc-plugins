@@ -111,3 +111,16 @@
      - Pin exact versions in Cargo.toml -->
 
 {{dependencies}}
+
+## Dependency Updates
+
+<!-- Add project-approved CVE dependency update and verification commands here.
+     Leave policies empty only when no strategy has been approved yet. Do not
+     infer commands from the programming language or package manager. See the
+     SDLC plugin's shared/dependency-update-conventions.md for the contract. -->
+
+```json
+{
+  "policies": []
+}
+```

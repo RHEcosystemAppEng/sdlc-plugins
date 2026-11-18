@@ -37,6 +37,7 @@ None.
 
 ## Implementation Notes
 
+- Ecosystem: Cargo.
 - `backend/Cargo.toml` currently declares
   `quinn-proto = "=0.11.12"`, which excludes the fixed 0.11.14 release.
 - The task scope includes the direct dependency requirement in

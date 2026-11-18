@@ -34,6 +34,7 @@ None.
 
 ## Implementation Notes
 
+- Ecosystem: Cargo.
 - The workspace root `Cargo.toml` lists `backend` and `client` as members.
 - `backend/Cargo.toml` declares `quinn-proto = "0.11"`. This compatible
   requirement already admits fixed version 0.11.14; no manifest change is

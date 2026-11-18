@@ -221,7 +221,8 @@ empty trusted collection by reading the network, Jira, GitHub, local configurati
 or a repository. Use `configuration` for Step 0 and deployment settings; `issue` and
 `remote_links` for Step 1; `external_evidence.mitre` and `.osv` for Step 1.5;
 `configuration.embargo_policy_url` plus issue/evidence severity for Step 1.7;
-`matrix.streams` and `source_evidence` for Step 2; `jira_metadata` for Steps 3–7;
+`matrix.streams` and `source_evidence` (including `source_evidence.conventions`) for
+Steps 1–2 and remediation strategy; `jira_metadata` for Steps 3–7;
 `external_evidence.lifecycle` for Step 5; and `idempotency` for every duplicate,
 existing-action, comment, link, and remediation check. `authorization` controls the
 result mode. An empty schema-required collection means "no trusted match"; it never
@@ -704,49 +705,19 @@ flowchart TD
 
 ### Ecosystem detection
 
-Determine the ecosystem from the vulnerable library name and component context.
-The supported ecosystems are defined in each stream's `security-matrix.md` Ecosystem
-Mappings table — the skill reads available ecosystems from configuration rather than
-assuming a fixed set. Common ecosystems include:
+Select the ecosystem and repository from the affected stream's existing `Ecosystem
+Mappings` row. Use its configured lock file, check command, and upstream branch as
+impact evidence; never infer support from a language name. RPM/system-package
+mappings retain their separate release-repository remediation path. For configured
+source repositories, use the established source-task path. If mapping or source/system
+classification is ambiguous, interactive triage asks and Fullsend reports the ambiguity.
 
-- **Cargo** — Rust crates (e.g., quinn-proto, tokio, serde)
-- **npm** — JavaScript/TypeScript packages (e.g., axios, webpack, react)
-- **RPM** — System packages in container images (e.g., openssl, curl, glibc)
-
-The ecosystem classification determines remediation task structure:
-
-| Category | Ecosystems | Remediation tasks per stream |
-|---|---|---|
-| Source dependency | Cargo, npm | 2 — upstream backport + downstream propagation |
-| Source dependency (fix available) | Cargo, npm | 2 — dependency bump + downstream propagation (when Step 2.5 confirms upstream already ships the fix) |
-| System package | RPM | 1 — Konflux release repo fix only |
-
-When a new ecosystem is added to a stream's Ecosystem Mappings table, update this
-classification table to define its category. All downstream rules (Case B, checklist,
-guardrails) reference this table rather than listing ecosystems individually.
-
-If the detected ecosystem is not listed in the stream's Ecosystem Mappings table (e.g.,
-Go modules), inform the user and stop automated triage for that ecosystem:
-
-> "**Unsupported ecosystem**: <ecosystem> is not yet supported for automated triage.
-> Manual assessment is required."
-
-The ecosystem determines which lock file to inspect and which parsing command to use.
-Both the lock file path and check command are configured per ecosystem in each stream's
-`security-matrix.md` Ecosystem Mappings table.
-
-```mermaid
-flowchart TD
-    A["Identify ecosystem\nfrom library + component"] --> B{"Source dependency\necosystem?\n(see classification table)"}
-    B -->|Yes| C["Lock file inspection\n(git show commit:lock-file)"]
-    B -->|No| D{"RPM / system\npackage?"}
-    D -->|Yes| E{"RPM lock file\nconfigured?"}
-    E -->|Yes| F["Lock file + SBOM\ninspection"]
-    E -->|No| G["SBOM-only +\nDockerfile analysis"]
-    C --> H["Remediation: 2 tasks\n(upstream + downstream)"]
-    F --> I["Remediation: 1 task\n(Konflux repo)"]
-    G --> I
-```
+When Step 2 shows that source remediation is needed, follow
+`shared/dependency-update-conventions.md` before any Jira mutation. That reference
+covers policy selection, missing/malformed policy behavior, Fullsend's targeted-task
+fallback, and task/convention scope. Triage records project commands in task guidance;
+it does not run update, graph, or resolver commands. If no configured mapping matches,
+stop and ask/report rather than adding an ecosystem-specific branch.
 
 ### Deployment context lookup
 
@@ -945,7 +916,7 @@ flowchart TD
     C -->|Yes| E["Case A: Post cross-stream\nimpact comment"]
     C -->|No| F
     E --> F
-    F --> G{"Source dependency\necosystem?\n(see classification table)"}
+    F --> G{"Configured source\nrepository mapping?"}
     G -->|"Yes (fix available)"| BUMP["2 tasks: dependency\nbump + downstream\npropagation"]
     G -->|"Yes (fix not available)"| H["2 tasks: upstream\nbackport + downstream\npropagation"]
     G -->|No| I["1 task: Konflux\nrepo fix"]
@@ -1019,7 +990,7 @@ The protocol covers three sub-steps:
 
 **Scope**: per release family (not per stream). All non-preemptive remediation types
 are linked to release Jira. The same release Jira is used regardless of ecosystem
-(Cargo vs npm).
+(any configured source ecosystem).
 
 If the engineer skips release Jira creation for a stream, proceed to Step 8 without
 release Jira for that stream — remediation tasks are still created but not linked
@@ -1085,9 +1056,9 @@ are affected:
   (existing remediation Task already covers the Upstream Affected Component),
   skip task creation for that stream.
 - Create remediation tasks for each non-dedup'd affected stream within the
-  issue's scope. The number of tasks depends on the ecosystem — see the
-  **ecosystem classification table** in the Ecosystem detection section above.
-  Source dependency ecosystems produce two tasks per stream: upstream backport +
+  issue's scope. The task shape follows the configured source-versus-system mapping
+  in the Ecosystem detection section above. Configured source ecosystems produce
+  the existing two-task structure: upstream backport +
   downstream propagation when the upstream fix is not yet available, or
   dependency bump + downstream propagation when Step 2.5 confirms the fix is
   already on the upstream branch. System package ecosystems produce one task
@@ -1135,7 +1106,7 @@ rationale) to the engineer for confirmation before executing any Jira mutations.
 
 **Pre-creation checklist** — verify before presenting the recommendation:
 
-- [ ] **Task count per stream**: matches the ecosystem classification table
+- [ ] **Task count per stream**: matches the configured source-versus-system mapping
   (source dependency → 2 tasks; system package → 1 task).
 - [ ] **Cross-stream coverage**: for scoped issues, all affected streams outside the
   issue's scope have either a preemptive task or an existing sibling CVE Jira.
@@ -1175,8 +1146,8 @@ The key distinction:
 - **Source dependency ecosystems (fix not available upstream)**: create **two**
   tasks — upstream backport + downstream propagation (blocked).
 - **Source dependency ecosystems (fix available upstream)**: create **two**
-  tasks — dependency bump (`cargo update`/`npm update`) + downstream propagation
-  (blocked). Use when Step 2.5 confirms the upstream branch already ships the
+  tasks — project-policy dependency update + downstream propagation (blocked). Use
+  when Step 2.5 confirms the upstream branch already ships the
   fixed version.
 - **System package ecosystems**: create **one** task — Konflux release repo fix.
 
@@ -1244,10 +1215,10 @@ MUST include the Comment Footnote (see above).
 7. **Never create Vulnerability issues.** PSIRT owns Vulnerability issue creation.
    This skill only creates remediation Tasks. Cross-stream impact is reported via
    comment on the current issue.
-8. **Task count per stream depends on the ecosystem** — see the ecosystem
-   classification table in the Ecosystem detection section. Source dependency
-   ecosystems produce two tasks (upstream backport or dependency bump, plus
-   downstream propagation), system packages produce one. Use the dependency
+8. **Task count per stream follows the configured source-versus-system mapping**
+   in the Ecosystem detection section. Configured source ecosystems use the
+   existing two-task structure (upstream backport or project-policy dependency
+   update, plus downstream propagation); system packages produce one. Use the dependency
    bump variant when Step 2.5 confirms the upstream branch already ships the
    fix. A single Task spanning multiple streams would be unimplementable
    by `/implement-task`. For dev-only or build-only dependencies (identified
