@@ -45,8 +45,9 @@ Advisory: [advisory URL from remote links]
   update does not select the fixed version, make any permitted task-scoped
   constraint adjustment needed to admit [fixed-version], then run full
   `cargo update` again. Use `cargo update -p [library]` only as a last resort
-  if both full updates fail to select the required fix, and record why the
-  full-batch attempts and constraint adjustment were insufficient.
+  if the initial full update and, when applicable, the adjusted full update
+  fail to select the required fix. Record why the full-batch attempt(s) and any
+  constraint adjustment were insufficient.
 - If the vulnerable dependency is dev-only or build-only (identified
   in Step 2.3.5), the remediation priority is Normal regardless of CVE
   severity. Add `dev-dependency` label to the task.
@@ -262,9 +263,10 @@ Advisory: [advisory URL from remote links]
     batch, and verify [library] is >= [fixed-version]. If it does not select
     the fixed version, make any permitted task-scoped constraint adjustment
     needed to admit [fixed-version], then run full `cargo update` again. Use
-    `cargo update -p [library]` only as a last resort if both full updates fail
-    to select the required fix, and record why the full-batch attempts and
-    constraint adjustment were insufficient.
+    `cargo update -p [library]` only as a last resort if the initial full update
+    and, when applicable, the adjusted full update fail to select the required
+    fix. Record why the full-batch attempt(s) and any constraint adjustment were
+    insufficient.
   - **npm**: `npm update [library]` to pull in the latest compatible version
 - If the update pulls a version that still falls within the affected range,
   pin explicitly: `cargo add [library]@[fixed-version]` or update `package.json`
