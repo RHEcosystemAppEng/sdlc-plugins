@@ -584,7 +584,7 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     # Then native cases remain separate, existing ordinary cases are unchanged,
     # and only the two interactive on-demand image-population evals are appended.
     assert [c["id"] for c in triage] == list(range(1, 35))
-    assert sum(len(c["assertions"]) for c in triage) == 181
+    assert sum(len(c["assertions"]) for c in triage) == 185
     new_cases = triage[32:]
     assert [c["id"] for c in new_cases] == [33, 34]
     assert [len(c["assertions"]) for c in new_cases] == [8, 7]
