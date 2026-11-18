@@ -40,14 +40,14 @@ Advisory: [advisory URL from remote links]
 
 - Target branch: [upstream-branch from Ecosystem Mappings]
 - **Dependency type**: [direct | transitive (chain: [dependency-chain])]
-- For Cargo, start with a full `cargo update` to resolve the complete
-  dependency batch and verify [library] is >= [fixed-version]. If the full
-  update does not select the fixed version, make any permitted task-scoped
-  constraint adjustment needed to admit [fixed-version], then run full
-  `cargo update` again. Use `cargo update -p [library]` only as a last resort
-  if the initial full update and, when applicable, the adjusted full update
-  fail to select the required fix. Record why the full-batch attempt(s) and any
-  constraint adjustment were insufficient.
+- For Cargo, run full `cargo update` first to resolve the complete dependency
+  batch and verify [library] is >= [fixed-version]. Only if a permitted
+  task-scoped requirement excludes [fixed-version] should the task adjust that
+  requirement to admit the fixed release and rerun full `cargo update`. Use
+  targeted `cargo update -p [library]` only as a last resort after the initial
+  full `cargo update` fails to select the required fix and, if a permitted
+  task-scoped requirement adjustment was made, the adjusted full `cargo update`
+  also fails. Record why each applicable full-batch attempt was insufficient.
 - If the vulnerable dependency is dev-only or build-only (identified
   in Step 2.3.5), the remediation priority is Normal regardless of CVE
   severity. Add `dev-dependency` label to the task.
@@ -259,19 +259,20 @@ Advisory: [advisory URL from remote links]
 - Target branch: [upstream-branch from Ecosystem Mappings]
 - **Dependency type**: [direct | transitive (chain: [dependency-chain])]
 - **Remediation action**: run the appropriate package manager update command:
-  - **Cargo**: start with full `cargo update` to resolve the complete dependency
-    batch, and verify [library] is >= [fixed-version]. If it does not select
-    the fixed version, make any permitted task-scoped constraint adjustment
-    needed to admit [fixed-version], then run full `cargo update` again. Use
-    `cargo update -p [library]` only as a last resort if the initial full update
-    and, when applicable, the adjusted full update fail to select the required
-    fix. Record why the full-batch attempt(s) and any constraint adjustment were
+  - **Cargo**: run full `cargo update` first to resolve the complete dependency
+    batch and verify [library] is >= [fixed-version]. Only if a permitted
+    task-scoped requirement excludes [fixed-version] should the task adjust
+    that requirement to admit the fixed release and rerun full `cargo update`.
+    Use targeted `cargo update -p [library]` only as a last resort after the
+    initial full `cargo update` fails to select the required fix and, if a
+    permitted task-scoped requirement adjustment was made, the adjusted full
+    `cargo update` also fails. Record why each applicable full-batch attempt was
     insufficient.
   - **npm**: `npm update [library]` to pull in the latest compatible version
 - If the update pulls a version that still falls within the affected range,
-  pin explicitly: `cargo add [library]@[fixed-version]` or update `package.json`
-- For Cargo, treat `cargo add [library]@[fixed-version]` only as the permitted
-  task-scoped constraint adjustment above, then repeat full `cargo update`
+  update `package.json` for npm. For Cargo, use `cargo add [library]@[fixed-version]`
+  only as the permitted task-scoped adjustment above when a requirement excludes
+  the fixed release, then repeat full `cargo update`.
 - Verify the lock file reflects >= [fixed-version] after the update
 - If the vulnerable dependency is dev-only or build-only (identified
   in Step 2.3.5), the remediation priority is Normal regardless of CVE
