@@ -584,6 +584,7 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     # Then native cases remain separate, existing ordinary cases are unchanged,
     # and only the two interactive on-demand image-population evals are appended.
     assert [c["id"] for c in triage] == list(range(1, 35))
+    # The four Task 1 Cargo-update assertions raise the triage total from 181 to 185.
     assert sum(len(c["assertions"]) for c in triage) == 185
     new_cases = triage[32:]
     assert [c["id"] for c in new_cases] == [33, 34]
@@ -592,12 +593,13 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     assert all("FULLSEND_OUTPUT_DIR" not in c["prompt"] and "agent-result.json" not in c["prompt"]
                for c in new_cases)
     assert len(verify) == 6 and sum(len(c["assertions"]) for c in verify) == 68
-    # TC-6820 appends exactly two release assertions and one prompt suffix to case1.
+    # TC-6820 adds two release assertions and a prompt suffix. Task 1 adds four
+    # Cargo-update assertions, raising case1's assertion count from 13 to 17.
     # Hash the retained 1–32 prefix and all other original cases against the baseline.
     baseline = json.loads(json.dumps(triage[:32]))
     suffix = ' In outputs/remediation.md also explain the Step 7.5 release orchestration confirmations and dedup decision before proposing remediation; retain all existing outputs and do not claim any Jira operation was performed.'
     assert baseline[0]["prompt"].endswith(suffix)
-    assert len(baseline[0]["assertions"]) == 13
+    assert len(baseline[0]["assertions"]) == 17
     assert baseline[0]["assertions"][-2].startswith("Release orchestration preserves")
     assert baseline[0]["assertions"][-1].startswith("Release dedup is skipped")
     baseline[0]["prompt"] = baseline[0]["prompt"].removesuffix(suffix)
