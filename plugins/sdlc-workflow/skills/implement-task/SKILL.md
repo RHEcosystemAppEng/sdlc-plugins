@@ -411,13 +411,13 @@ Follow the **Implementation Notes** for patterns and code references on how to i
 
 Use this procedure only when the task is a Cargo dependency/CVE remediation and identifies both the affected package and its fixed version. For other tasks, continue with the normal implementation workflow. Do not guess a package or version.
 
-1. From the workspace root, run full `cargo update` first. Verify the fixed version in `Cargo.lock`, then inspect the resolved graph, for example:
+1. From the workspace root, run full `cargo update` first. Verify that `Cargo.lock` resolves the affected package to version `>= [fixed-version]` and that the selected release is outside the task's vulnerable range, then inspect the resolved graph, for example:
 
    ```bash
    cargo tree --workspace --target all --all-features --invert <affected-package> --locked
    ```
 
-   Check every resolved version and dependency path, including duplicate instances. Proceed only when the fixed version is selected and no reachable vulnerable instance remains; a successful command exit or a fixed lockfile entry alone is insufficient.
+   Check every resolved version and dependency path, including duplicate instances. Proceed only when the package resolves to a non-vulnerable version `>= [fixed-version]` and no reachable vulnerable instance remains; a successful command exit or a qualifying lockfile entry alone is insufficient.
 
 2. If full `cargo update` does not select the fixed version because a task-scoped Cargo requirement excludes it, adjust that requirement only when the task permits the adjustment and only as much as needed to admit the fixed release. Then rerun full `cargo update` and repeat the lockfile and graph checks. Do not change unrelated or out-of-scope requirements.
 
