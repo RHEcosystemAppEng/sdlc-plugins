@@ -383,6 +383,24 @@ Step 9 scope flag, not a plan expansion. Only artifacts from a documented code-g
 command run in Step 9 are staged without approval.
 Follow the **Implementation Notes** for patterns and code references on how to implement the changes.
 
+### Cargo dependency/CVE remediation
+
+Use this procedure only when the task is a Cargo dependency/CVE remediation and identifies both the affected package and its fixed version. For other tasks, continue with the normal implementation workflow. Do not guess a package or version.
+
+1. From the workspace root, run full `cargo update` first. Verify the fixed version in `Cargo.lock`, then inspect the resolved graph, for example:
+
+   ```bash
+   cargo tree --workspace --target all --all-features --invert <affected-package> --locked
+   ```
+
+   Check every resolved version and dependency path, including duplicate instances. Proceed only when the fixed version is selected and no reachable vulnerable instance remains; a successful command exit or a fixed lockfile entry alone is insufficient.
+
+2. If full `cargo update` does not select the fixed version because a task-scoped Cargo requirement excludes it, adjust that requirement only when the task permits the adjustment and only as much as needed to admit the fixed release. Then rerun full `cargo update` and repeat the lockfile and graph checks. Do not change unrelated or out-of-scope requirements.
+
+3. Use a package-targeted update only as the last resort: after the initial full update and, when a permitted requirement adjustment was needed, its full-update retry have failed to select the required fix. A deadline, minimal-diff preference, or sunk cost does not justify targeting. Record why the full-batch attempt(s) and any permitted adjustment were insufficient in the implementation plan and PR description. After a targeted update, repeat the lockfile and graph checks; it is not a fix if any reachable vulnerable instance remains.
+
+4. If no permitted update path removes every reachable vulnerable instance, stop before tests that depend on the fix, commit, PR, and normal Step 11 Jira completion flow. Keep the issue open in its current status; do not transition or close it or set/change its resolution. Add `waiting-for-fix` while preserving every existing label (read the current labels and update with that full list plus `waiting-for-fix`, without duplicates). Do not post a Jira comment. Report the blocker to the user with the attempted update sequence and the remaining vulnerable version/path; do not claim the remediation or dependent tests succeeded.
+
 **Follow conventions:** Apply the conventions discovered during Step 4's convention conformance
 analysis. When writing new code, match the patterns found in sibling files rather than inventing
 new approaches. If any Implementation Notes or task instructions conflict with a discovered
