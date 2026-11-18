@@ -707,6 +707,8 @@ flowchart TD
 
 ### Ecosystem detection
 
+For CVE remediation terms used here, consult `shared/GLOSSARY.md`.
+
 Select the ecosystem and repository from the affected stream's existing `Ecosystem
 Mappings` row. Use its configured lock file, check command, and upstream branch as
 impact evidence; never infer support from a language name. RPM/system-package

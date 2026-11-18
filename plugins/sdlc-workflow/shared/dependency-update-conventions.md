@@ -3,6 +3,8 @@
 This contract is shared by `triage-security` and `implement-task`. It defines how a
 project supplies dependency-update and verification policy without adding a central
 package-manager command catalog to the SDLC workflow.
+Use `GLOSSARY.md` for the shared meanings of batch update, targeted update, resolved
+dependency graph, and waiting for fix.
 
 ## Project convention format
 
