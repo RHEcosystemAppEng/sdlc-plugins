@@ -426,6 +426,8 @@ Follow the **Implementation Notes** for patterns and code references on how to i
 
 ### Source dependency/CVE remediation
 
+For shared remediation terminology, consult `shared/GLOSSARY.md`.
+
 Use this procedure only when the task identifies the affected package, vulnerable
 range, fixed version, ecosystem, and target repository. Do not guess any of these
 values. RPM/system-package remediation retains its separate task path.
