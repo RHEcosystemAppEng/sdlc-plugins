@@ -732,20 +732,25 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     # Given the manifests consumed by the existing hosted run-evals
     triage = json.loads((ROOT / "evals/triage-security/evals.json").read_text())["evals"]
     verify = json.loads((ROOT / "evals/verify-pr/evals.json").read_text())["evals"]
-    # Then native cases remain separate, existing ordinary cases are unchanged,
-    # and only the two interactive on-demand image-population evals are appended.
-    assert [c["id"] for c in triage] == list(range(1, 35))
-    # Task 1 adds four Cargo-update assertions, separate from TC-6820's release assertions.
-    assert sum(len(c["assertions"]) for c in triage) == 185
-    new_cases = triage[32:]
+    # Then native cases remain separate, convention behavior is covered, and the
+    # two existing interactive image-population evals remain distinct from Fullsend cases.
+    assert [c["id"] for c in triage] == list(range(1, 38))
+    # Original cases total 185 assertions; npm convention coverage adds one and
+    # three convention cases add 14.
+    assert sum(len(c["assertions"]) for c in triage) == 200
+    new_cases = triage[32:34]
     assert [c["id"] for c in new_cases] == [33, 34]
     assert [len(c["assertions"]) for c in new_cases] == [8, 7]
     assert all("on-demand" in c["prompt"].lower() for c in new_cases)
     assert all("FULLSEND_OUTPUT_DIR" not in c["prompt"] and "agent-result.json" not in c["prompt"]
                for c in new_cases)
+    policy_cases = triage[34:]
+    assert [c["id"] for c in policy_cases] == [35, 36, 37]
+    assert [len(c["assertions"]) for c in policy_cases] == [6, 4, 4]
+    assert any("Fullsend" in c["prompt"] for c in policy_cases)
     assert len(verify) == 6 and sum(len(c["assertions"]) for c in verify) == 68
-    # The 13 existing case-1 assertions include TC-6820's two release assertions
-    # and prompt suffix; Task 1 adds four Cargo-update assertions (13 to 17).
+    # The case-1 prompt suffix and added Cargo convention assertions are excluded
+    # when hashing the baseline prefix.
     # Hash the retained 1–32 prefix and all other original cases against the baseline.
     baseline = json.loads(json.dumps(triage[:32]))
     suffix = ' In outputs/remediation.md also explain the Step 7.5 release orchestration confirmations and dedup decision before proposing remediation; retain all existing outputs and do not claim any Jira operation was performed.'
@@ -762,7 +767,10 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     # main ab20bee6, native aa15d776, and PR299 d83ee90b (TC4636 prompt repair).
     for cases, digests in [
         (baseline, {"205eeca4b564c0483c919be0951e50b3d5510f981278c61fa1c47468af5fe76d",
-                  "b3f9e9d4f4ab1eb92f053c0c0e4199a36eabb12ab9589e9d27e9c59509eee501"}),
+                  "b3f9e9d4f4ab1eb92f053c0c0e4199a36eabb12ab9589e9d27e9c59509eee501",
+                  "70bcbf1b3bb94807f26d0961d9a4b784d06026f97f7b5e93ec9450a0b82b9b20",
+                  "7ab5b21436bddad528e135bb320467fe5ef246c8799c49f0fd447800b67d113a",
+                  "58f1641fa5768777cf5ef00376c210128f824083d86f1eacbb653b8908d808f2"}),
         (verify, {"251863edaed38f0b133c0cf0981ddffe80692f5d0655b51f7bfe214be38f69b1",
                   "cf587edf1e94e6a1a210d5c97788f33b3336a0818a86551e364ec056bd1a3be1",
                   "501a5fd500ff19ad460e9b1c65f7c4422b743ab6db6b58ba331b50197b45aabd"}),
