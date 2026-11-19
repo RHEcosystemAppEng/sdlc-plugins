@@ -374,21 +374,28 @@ each drawn from the allowlist `successful`, `not-observed`, `tool-error`,
 `unexpected-output`, `invalid-transcript` and `conflicting-results`. No command text,
 stdout/stderr, path, transcript line or judge rationale is exported.
 
-- `successful` — a genuine paired Step0.6/0.7 Bash call for the case returned a
-  non-error result whose stdout contains the required line.
-- `tool-error` — the matched result reported a tool error (`is_error: true`). This is an
-  observed behavior failure, never a missing measurement.
+- `successful` — a genuine paired Bash call for the case returned a non-error result
+  whose stdout contains the required line; for `skill_invocation`, the matching Skill
+  call has a paired result that confirms the launch.
+- `tool-error` — the matched result reported a tool error (`is_error: true`), or the
+  paired Skill launch failed. This is an observed behavior failure, never a missing
+  measurement.
 - `unexpected-output` — the matched result succeeded but lacked the required stdout line.
 - `conflicting-results` — the same step produced both a successful and a failing result.
 - `not-observed` — no matching paired call exists for the case.
-- `invalid-transcript` — evidence was found but is unreadable: malformed, truncated,
-  empty or symlinked, or a matched result is unbound.
+- `invalid-transcript` — evidence was found but is unusable: the transcript is malformed,
+  truncated, empty or symlinked, a gate-step result has a missing or non-Boolean
+  `is_error`, or a matched result has an unbound/duplicate `tool_use_id`.
 
 The extractor recognizes only the exact Step0.6/0.7 Bash instructions in the trusted
 eval source (with the native plugin mount substituted). Narration, quoted commands and
 unmatched results cannot establish success and stay `not-observed`; command variants
-are unrecognized. Because categories are case-scoped, another case's transcript cannot
-satisfy the requirement.
+are unrecognized. A Skill `tool_use` is not evidence on its own: `skill_invocation`
+becomes `successful` only when the paired result confirms the launch, and the two gate
+Bash steps count only when they occur in the same transcript **after** that successful
+Skill launch. A repeated `tool_result` id is unpaired evidence and fails the transcript
+closed. Because categories are case-scoped, another case's transcript cannot satisfy
+the requirement.
 
 ### Gate/assertion consistency
 
@@ -417,10 +424,12 @@ are published as fixed categories and fail the trusted check. Only `consistent` 
 ### Evaluability of dependent assertions
 
 `execution.evaluability` records, per case, whether the required setup was established:
-gate/input `successful`, the Skill actually invoked, and the gate assertion not judged
-`False`. When it was not established, `evaluable` is `false` and
-`not_evaluable_assertions` lists the assertions whose scores must not be read as
-evidence about the analyzed behavior:
+gate/input `successful`, the Skill actually invoked, the case's runtime output completed,
+and the gate assertion not judged `False`. The runtime and Skill conditions come from the
+checker's own `observe_case()` evidence, not from `gate_input` alone, so a missing
+`output.jsonl` or failed Skill launch cannot leave a case marked evaluable. When it was
+not established, `evaluable` is `false` and `not_evaluable_assertions` lists the
+assertions whose scores must not be read as evidence about the analyzed behavior:
 
 - `036-valid`: `assertion_1` and `assertion_3`–`assertion_7`.
 - `037-release`: `assertion_2`–`assertion_7` — the release-path assertions. A failed

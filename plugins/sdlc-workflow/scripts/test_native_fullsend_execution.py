@@ -500,6 +500,38 @@ def test_unvalidated_gate_input_blocks_even_with_complete_outcomes(tmp_path, dam
     assert result["passed"] == 24 and result["complete"] is True
 
 
+def test_runtime_completion_is_required_for_evaluability(tmp_path):
+    """Successful gate categories cannot label a case evaluable when runtime output is missing."""
+    # Given successful gate/input evidence and a passing verdict but no runtime output
+    private, run, safe, source, status = synthetic_run(tmp_path, 24)
+    (run / "cases/036-valid/output/native/synthetic/iteration-1/output.jsonl").unlink()
+    # When the trusted checker publishes evaluability
+    assert checker().assess(private, safe, status, source) == 1
+    # Then the run is invalid and the case is not presented as evaluated
+    result = json.loads(safe.read_text())
+    assert result["execution_valid"] is False
+    assert result["execution"]["consistency"]["036-valid"] == "consistent"
+    assert result["execution"]["evaluability"]["036-valid"] == {
+        "evaluable": False, "not_evaluable_assertions": DEPENDENTS["036-valid"]}
+
+
+def test_paired_skill_launch_is_required_for_evaluability(tmp_path):
+    """A gate transcript alone cannot establish setup when the runtime Skill launch failed."""
+    # Given complete runtime output whose Skill metadata reports a failed launch
+    private, run, safe, source, status = synthetic_run(tmp_path, 24)
+    path = run / "cases/037-release/output/native/synthetic/iteration-1/output.jsonl"
+    records = [json.loads(line) for line in path.read_text().splitlines()]
+    records[1]["tool_use_result"]["success"] = False
+    path.write_text("".join(json.dumps(record) + "\n" for record in records))
+    # When the trusted checker publishes evaluability
+    assert checker().assess(private, safe, status, source) == 1
+    # Then the release case is not presented as evaluated
+    result = json.loads(safe.read_text())
+    assert result["execution_valid"] is False
+    assert result["execution"]["cases"]["037-release"]["skill_invoked"] is False
+    assert result["execution"]["evaluability"]["037-release"]["evaluable"] is False
+
+
 def test_non_gated_cases_stay_evaluable_without_gate_evidence(tmp_path):
     """Former behavior of the two bootstrap cases is preserved by the new contract."""
     # Given a complete, otherwise execution-valid run

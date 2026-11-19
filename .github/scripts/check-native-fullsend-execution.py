@@ -153,7 +153,7 @@ def gate_input(report):
     return published
 
 
-def reconcile(outcomes, case, categories):
+def reconcile(outcomes, case, categories, observations):
     """Cross-check a case's gate verdict against observed gate/input evidence.
 
     Returns the fixed consistency category and whether the required setup was
@@ -174,7 +174,12 @@ def reconcile(outcomes, case, categories):
             return "consistent", False
         # Without usable evidence, even a failed verdict is not a behavior result.
         return ("inconclusive" if verdict is False else "not-evaluable"), False
-    established = categories["skill_invocation"] == "successful" and verdict is True
+    # Gate evidence alone is not enough: the runtime and paired Skill launch must
+    # also have completed, or the dependent scores are uninterpretable.
+    established = bool(categories["skill_invocation"] == "successful"
+                       and observations["runtime_completed"] is True
+                       and observations["skill_invoked"] is True
+                       and verdict is True)
     return "consistent", established
 
 
@@ -217,7 +222,7 @@ def assess(private_root, report_path, runner_exit, expected_source):
                 # Unvalidated or absent safe categories cannot establish the setup.
                 state, established = "invalid-input", False
             else:
-                state, established = reconcile(outcomes, case, published[case])
+                state, established = reconcile(outcomes, case, published[case], observations[case])
             consistency[case] = state
             evaluability[case] = {
                 "evaluable": bool(established),

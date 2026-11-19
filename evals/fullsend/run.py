@@ -302,12 +302,14 @@ def pipeline(python, source, config, workspace, run_dir, run_id, environment, di
 def valid_case_tool_observations(run_dir, case="036-valid"):
     """Observe matched native gate/input tools without exporting text or replacing judgments."""
     observations = dict.fromkeys([
-        "transcript_found", "transcript_readable", "skill_invoked",
-        "presence_gate_succeeded", "presence_gate_failed",
-        "presence_gate_tool_error", "presence_gate_unexpected_output",
-        "input_validation_succeeded", "input_validation_failed",
-        "input_validation_tool_error", "input_validation_unexpected_output",
+        "transcript_found", "transcript_readable",
+        "skill_invoked", "skill_tool_error", "skill_invalid",
     ], False)
+    for kind in GATE_STEPS:
+        observations.update(dict.fromkeys([
+            kind + "_succeeded", kind + "_failed", kind + "_tool_error",
+            kind + "_unexpected_output", kind + "_invalid",
+        ], False))
     try:
         paths = list(run_dir.glob(f"cases/{case}/output/native/*/iteration-*/transcripts/*.jsonl"))
         observations["transcript_found"] = bool(paths)
@@ -324,6 +326,8 @@ def valid_case_tool_observations(run_dir, case="036-valid"):
     for path in paths:
         pending = {}
         identities = set()
+        results_seen = set()
+        skill_ready = False
         observed = dict.fromkeys(observations, False)
         try:
             if any(parent.is_symlink() for parent in [path, *path.parents]):
@@ -358,14 +362,42 @@ def valid_case_tool_observations(run_dir, case="036-valid"):
                                 continue
                             if (block.get("name") == "Skill" and inputs.get("skill") == "sdlc-workflow:triage-security"
                                     and inputs.get("args") == "TC-8101"):
-                                observed["skill_invoked"] = True
+                                pending[identity] = "skill"
+                                continue
                             command = inputs.get("command")
-                            if block.get("name") == "Bash" and isinstance(identity, str) and isinstance(command, str):
+                            if block.get("name") == "Bash" and isinstance(command, str):
                                 pending[identity] = commands.get(command.strip())
                         elif record["type"] == "user" and block.get("type") == "tool_result":
                             identity = block.get("tool_use_id")
-                            kind = pending.pop(identity, None) if isinstance(identity, str) else None
+                            if not isinstance(identity, str):
+                                continue
+                            # A repeated result id cannot be paired unambiguously.
+                            if identity in results_seen:
+                                raise ValueError("Duplicate tool result")
+                            results_seen.add(identity)
+                            kind = pending.pop(identity, None)
                             if kind is None:
+                                continue
+                            if kind == "skill":
+                                error = block.get("is_error")
+                                if "is_error" in block and not isinstance(error, bool):
+                                    observed["skill_invalid"] = True
+                                    continue
+                                launch = record.get("tool_use_result")
+                                launched = error is not True
+                                if isinstance(launch, dict):
+                                    launched = launched and launch.get("success") is True
+                                    if "commandName" in launch:
+                                        launched = launched and launch.get("commandName") == (
+                                            "sdlc-workflow:triage-security")
+                                if launched:
+                                    observed["skill_invoked"] = True
+                                    skill_ready = True
+                                else:
+                                    observed["skill_tool_error"] = True
+                                continue
+                            # Gate/input steps only count after the Skill actually launched.
+                            if not skill_ready:
                                 continue
                             content = block.get("content", "")
                             if isinstance(content, list):
@@ -373,12 +405,14 @@ def valid_case_tool_observations(run_dir, case="036-valid"):
                                                     if isinstance(item, dict) and item.get("type") == "text"
                                                     and isinstance(item.get("text"), str))
                             error = block.get("is_error")
-                            success = (error is False and isinstance(content, str)
-                                       and expected[kind] in content.splitlines())
+                            if not isinstance(error, bool) or not isinstance(content, str):
+                                observed[kind + "_invalid"] = True
+                                continue
+                            success = error is False and expected[kind] in content.splitlines()
                             observed[kind + ("_succeeded" if success else "_failed")] = True
                             if error is True:
                                 observed[kind + "_tool_error"] = True
-                            elif error is False and not success:
+                            elif not success:
                                 observed[kind + "_unexpected_output"] = True
                 if not seen:
                     raise ValueError("Empty transcript")
@@ -388,7 +422,7 @@ def valid_case_tool_observations(run_dir, case="036-valid"):
         for key, value in observed.items():
             observations[key] = observations[key] or value
     if not observations["transcript_readable"]:
-        for key in ["skill_invoked", "presence_gate_succeeded", "input_validation_succeeded"]:
+        for key in ["skill_invoked", *[kind + "_succeeded" for kind in GATE_STEPS]]:
             observations[key] = False
     return observations
 
@@ -400,7 +434,13 @@ def evidence_category(observed, kind):
     if not observed["transcript_readable"]:
         return "invalid-transcript"
     if kind == "skill_invocation":
-        return "successful" if observed["skill_invoked"] else "not-observed"
+        if observed["skill_invoked"]:
+            return "successful"
+        if observed["skill_tool_error"]:
+            return "tool-error"
+        return "invalid-transcript" if observed["skill_invalid"] else "not-observed"
+    if observed[kind + "_invalid"]:
+        return "invalid-transcript"
     if observed[kind + "_succeeded"] and observed[kind + "_failed"]:
         return "conflicting-results"
     if observed[kind + "_tool_error"]:
@@ -409,8 +449,7 @@ def evidence_category(observed, kind):
         return "unexpected-output"
     if observed[kind + "_succeeded"]:
         return "successful"
-    # An unpaired, malformed or unreadable result cannot be bound to the step.
-    return "invalid-transcript" if observed[kind + "_failed"] else "not-observed"
+    return "not-observed"
 
 
 def gate_input_observations(run_dir):
