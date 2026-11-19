@@ -626,6 +626,8 @@ or fall back to Read/Grep/Glob.
 
 Determine:
 - Which file(s) need modification
+- Which repository and layer owns the defect — the PR's repo or another repo /
+  data layer (DB query, ingestion, API contract)
 - What the fix should achieve
 - Whether the fix is scoped to the current task or represents a broader concern
 - For upgraded suggestions: confirm the convention evidence gathered in Step 6b
@@ -634,12 +636,14 @@ Determine:
 
 ### Step 6d – Create Sub-Tasks
 
-Create Jira sub-tasks for two categories of issues:
+Create Jira tasks for these categories of issues:
 
 #### Review feedback sub-tasks
 
 For each code change request (including upgraded suggestions) that requires a fix,
-create a Jira sub-task:
+create a Jira sub-task — unless Step 6c found the fix belongs to a different
+repository or data layer, which uses a standalone Task (see
+**Cross-repository review feedback tasks** below):
 
 jira.create_issue with:
 - **Issue Type:** Sub-task
@@ -687,6 +691,29 @@ Use incrementing refs (`subtask-1`, `subtask-2`, …). The `{{subtask-N.key}}` (
 replies, `{{subtask-N.url}}`) placeholders are resolved by the `post_script` once the
 sub-task is created. Set `<category-label>` to `review-feedback` for review-feedback and
 CI-failure sub-tasks, or `eval-failure` for eval-failure sub-tasks.
+
+#### Cross-repository review feedback tasks
+
+When Step 6c finds the fix belongs to another repository or data layer
+(e.g. `ORDER BY` in the backend query, not a client-side sort),
+create a **standalone Task, not a Sub-task** — Sub-tasks inherit the parent's
+repository scope.
+
+jira.create_issue with:
+- **Issue Type:** Task
+- **Labels:** `["ai-generated-jira", "review-feedback"]`
+- **Summary:** the required fix, stated concisely
+- **Description:** template structure with **Repository** set to the owning
+  repository, **Review Context**, and **Target PR** only if that repository has a
+  PR; no `## Root Cause Layer` deferral is needed because the task fixes the defect
+  itself.
+
+Link it to the parent without setting `Parent`:
+
+jira.create_issue_link(type="Relates", inwardIssue=<cross-repo-task-id>, outwardIssue=<parent-task-id>)
+
+**Sandbox mode:** use the Step 7b `create_root_cause_task` + `create_link` pattern
+(`xrepo-N`, `link_type: "Related"`).
 
 #### CI failure sub-tasks
 
@@ -774,10 +801,12 @@ feedback sandbox-mode block above, with labels `["ai-generated-jira", "eval-fail
 Reply to **every** classified review comment thread with the classification label and
 reasoning, so the decision is transparent to the reviewer.
 
-**For code change requests that resulted in a sub-task:**
+**For code change requests that resulted in a sub-task or a routed standalone Task:**
+link the created issue; when the fix was routed to another repository, name the
+owning repository and layer:
 
 ```
-gh api repos/<owner/repo>/pulls/<pr-number>/comments/<comment_id>/replies -f body="[sdlc-workflow/verify-pr] Classified as **code change request** — sub-task [<SUB-TASK-KEY>](<sub-task-webUrl>) created to address this feedback."
+gh api repos/<owner/repo>/pulls/<pr-number>/comments/<comment_id>/replies -f body="[sdlc-workflow/verify-pr] Classified as **code change request** — <sub-task|task> [<KEY>](<url>) created to address this feedback<; the fix belongs to <owning-repo> (<layer>) and was routed there>."
 ```
 
 **For suggestions upgraded to code change requests via convention check (Step 6b):**
@@ -1315,6 +1344,7 @@ python3 -m json.tool $FULLSEND_OUTPUT_DIR/agent-result.json > /dev/null && echo 
 - Use `gh` CLI for all GitHub interactions.
 - Include the Comment Footnote on all Jira comments.
 - Sub-tasks created from review feedback or CI failures use labels `["ai-generated-jira", "review-feedback"]` and "Blocks" issue links.
+- Cross-repository review-feedback fixes create a standalone Task with a "Relates" link, never a Sub-task.
 - Root-cause tasks use labels `["ai-generated-jira", "root-cause"]` and "Relates" issue links.
 - If the structured description is incomplete, ask the user rather than improvising.
 - Keep verification scoped to what the task describes — do not evaluate unrelated code.
