@@ -1775,10 +1775,16 @@ def test_parse_security_configuration_reads_triage_status_transitions(setting, e
         "absent" if expected is None else expected)
 
 
-def test_parse_security_configuration_rejects_unknown_triage_status_transitions():
-    """A typo in the transitions setting fails closed instead of silently picking a mode."""
-    # Given a Security Configuration with an unrecognized value
-    claude_md = _TRANSITIONS_CLAUDE_MD.format(setting="- Triage status transitions: off\n")
+@pytest.mark.parametrize("setting", [
+    "- Triage status transitions: off\n",
+    "- Triage status transitions:\n",
+    "- Triage status transitions:   \n",
+    "- Triage status transitions:\n- Embargo policy URL: https://example.com/embargo\n",
+], ids=["unknown-value", "blank", "whitespace-only", "blank-before-another-setting"])
+def test_parse_security_configuration_rejects_unknown_triage_status_transitions(setting):
+    """A typo or a blank value in the transitions setting fails closed instead of silently picking a mode."""
+    # Given a Security Configuration with an unrecognized or blank value
+    claude_md = _TRANSITIONS_CLAUDE_MD.format(setting=setting)
 
     # When the runner parses it, then the value is rejected
     with pytest.raises(pre_triage_security.EvidenceError, match="Triage status transitions"):

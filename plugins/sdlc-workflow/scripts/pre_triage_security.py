@@ -230,7 +230,13 @@ def parse_security_configuration(claude_md):
     for source, destination in optional_fields.items():
         if values.get(source):
             configuration[destination] = values[source]
-    transitions = parse_status_transitions(values.get("Triage status transitions"))
+    transitions_value = values.get("Triage status transitions")
+    if transitions_value is None and re.search(
+            r"^- Triage status transitions:\s*$", lifecycle, re.MULTILINE):
+        # Present but blank: the values map only holds non-empty entries, so pass an
+        # empty string to fail closed instead of treating the line as absent.
+        transitions_value = ""
+    transitions = parse_status_transitions(transitions_value)
     if transitions is not None:
         configuration["status_transitions_enabled"] = transitions
     return configuration
