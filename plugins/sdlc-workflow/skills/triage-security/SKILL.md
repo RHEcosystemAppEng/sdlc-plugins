@@ -466,6 +466,8 @@ when `configuration.status_transitions_enabled` is not `false`; take the status 
 from `issue.transitions` (e.g. `ASSIGNED`) and omit it when `issue.status` is already
 Assigned or later.
 
+**Interactive mode only** (Fullsend never runs these calls):
+
 1. **Retrieve the current user's Jira account ID:**
 
    ```
