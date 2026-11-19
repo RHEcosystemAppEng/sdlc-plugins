@@ -82,12 +82,16 @@ class _JiraRecorder:
         return {"key": "TC-900{}".format(self.created), "self": "https://jira.example/issue/900{}".format(self.created)}
 
     def get_issue(self, issue, fields="*all"):
-        """Return the stored description and live assignee Jira would return."""
-        self.calls.append(("get-issue", issue))
-        return {"fields": {"assignee": self.live_assignee, "description": {
+        """Return only the requested field projection, as Jira does, and record it."""
+        self.calls.append(("get-issue", issue, fields))
+        stored = {"assignee": self.live_assignee, "description": {
             "type": "doc", "version": 1,
             "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Stored by Jira."}]}],
-        }}}
+        }}
+        if fields == "*all":
+            return {"fields": stored}
+        requested = {name.strip() for name in fields.split(",")}
+        return {"fields": {name: value for name, value in stored.items() if name in requested}}
 
     def create_link(self, inward, outward, link_type):
         """Record an issue-link operation."""
@@ -795,7 +799,7 @@ def test_remediation_digest_precedes_links_and_resolves_references(recorder):
     assert recorder.calls[0][1]["labels"] == ["ai-generated-jira", "security-preemptive"]
     assert recorder.calls[0][1]["priority"] == "Major"
     assert recorder.calls[0][1]["fix_versions"] == ["1.2"]
-    assert recorder.calls[1] == ("get-issue", "TC-9001")
+    assert recorder.calls[1] == ("get-issue", "TC-9001", "*all")
     assert recorder.calls[2][0] == "digest"
     stored = recorder.get_issue("TC-9001")["fields"]["description"]
     expected = hashlib.sha256(json.dumps(stored, separators=(",", ":")).encode("utf-8")).hexdigest()
@@ -920,7 +924,7 @@ def test_existing_object_fields_skip_retried_field_edits(recorder):
     executor.execute_plan(result, trusted)
 
     # Then only the live ownership read runs; current Jira field values are not clobbered
-    assert recorder.calls == [("get-issue", "TC-42")]
+    assert recorder.calls == [("get-issue", "TC-42", "assignee")]
 
 
 def test_empty_field_edit_is_not_treated_as_already_applied():
@@ -1538,8 +1542,8 @@ def test_assignment_to_the_runner_identity_is_applied(recorder):
 
     # Then it checks live ownership before any write, re-checks before assigning, and continues
     assert recorder.calls == [
-        ("get-issue", "TC-42"),
-        ("get-issue", "TC-42"),
+        ("get-issue", "TC-42", "assignee"),
+        ("get-issue", "TC-42", "assignee"),
         ("field-edit", "TC-42", {"assignee": {"id": _RUNNER}}),
         ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]}),
     ]
@@ -1594,8 +1598,8 @@ def test_live_non_runner_assignee_is_not_overwritten(recorder):
     with pytest.raises(executor.ActionError, match="existing assignee"):
         executor.execute_plan(result, trusted)
 
-    # Then it stops after the live read, before any write
-    assert recorder.calls == [("get-issue", "TC-42")]
+    # Then it stops after the live read, which requested the assignee field, before any write
+    assert recorder.calls == [("get-issue", "TC-42", "assignee")]
 
 
 @pytest.mark.parametrize("assignee,proceeds", [
@@ -1617,7 +1621,7 @@ def test_runner_self_assignment_is_not_concurrent_triage(assignee, proceeds, rec
             executor.execute_plan(result, trusted)
 
     # Then self-assignment is treated as already applied and the run continues
-    expected = ([("get-issue", "TC-42"), ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]})]
+    expected = ([("get-issue", "TC-42", "assignee"), ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]})]
                 if proceeds else [])
     assert recorder.calls == expected
 
@@ -1684,7 +1688,7 @@ def test_live_human_owner_aborts_retry_whose_snapshot_shows_the_runner(recorder)
         executor.execute_plan(result, trusted)
 
     # Then only the live ownership read happened; no Jira write was issued
-    assert recorder.calls == [("get-issue", "TC-42")]
+    assert recorder.calls == [("get-issue", "TC-42", "assignee")]
 
 
 def test_live_human_owner_aborts_before_comment_link_or_transition(recorder):
@@ -1704,7 +1708,7 @@ def test_live_human_owner_aborts_before_comment_link_or_transition(recorder):
         executor.execute_plan(result, trusted)
 
     # Then no comment, link, or transition was recorded
-    assert recorder.calls == [("get-issue", "TC-42")]
+    assert recorder.calls == [("get-issue", "TC-42", "assignee")]
 
 
 def test_live_runner_owner_lets_retry_proceed(recorder):
@@ -1719,4 +1723,23 @@ def test_live_runner_owner_lets_retry_proceed(recorder):
     executor.execute_plan(result, trusted)
 
     # Then the ownership read passes and the remaining action runs
-    assert recorder.calls == [("get-issue", "TC-42"), ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]})]
+    assert recorder.calls == [("get-issue", "TC-42", "assignee"), ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]})]
+
+
+@pytest.mark.parametrize("fields,expected", [
+    ("*all", {"assignee", "description"}),
+    ("assignee", {"assignee"}),
+    ("status", set()),
+    ("description,assignee", {"assignee", "description"}),
+])
+def test_recorder_returns_only_the_requested_projection(fields, expected, recorder):
+    """The recorder honours Jira field projections, so a wrong projection cannot hide a live assignee."""
+    # Given a live assignee recorded on the issue
+    recorder.live_assignee = {"accountId": "engineer"}
+
+    # When a projection is requested
+    response = executor._jira_mod.get_issue("TC-42", fields=fields)
+
+    # Then only the requested fields come back and the projection is recorded
+    assert set(response["fields"]) == expected
+    assert recorder.calls == [("get-issue", "TC-42", fields)]
