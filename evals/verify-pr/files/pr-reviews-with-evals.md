@@ -1,6 +1,6 @@
 <!-- SYNTHETIC TEST DATA — mock GitHub PR reviews for eval testing; simulates `gh api repos/{owner}/{repo}/pulls/{number}/reviews` and `gh api repos/{owner}/{repo}/pulls/{number}/comments` output -->
 
-## Reviews (`gh api repos/mrizzi/sdlc-plugins/pulls/747/reviews`)
+## Reviews (`gh api repos/RHEcosystemAppEng/sdlc-plugins/pulls/747/reviews`)
 
 ```json
 [
@@ -28,7 +28,7 @@
 ]
 ```
 
-## Review Comments (`gh api repos/mrizzi/sdlc-plugins/pulls/747/comments`)
+## Review Comments (`gh api repos/RHEcosystemAppEng/sdlc-plugins/pulls/747/comments`)
 
 ```json
 [
