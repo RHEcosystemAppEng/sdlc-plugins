@@ -460,11 +460,11 @@ use another account ID or look one up. Self-assignment and disabled transitions:
 `jira-triage-operations.md`. If assignment is required but that trusted ID is absent,
 withhold **only** the assignment and append a blocked, evidence-backed `report-only`
 recommendation naming the missing trusted assignee identity and required trusted-input
-configuration. Continue the mutation-authorized plan: serialize every other authorized
-field edit, transition, comment, remediation task, and link in the existing step order.
-If the ID is present and authorization permits it, append the assignment and transition
-actions in order; take the status name from `issue.transitions` (e.g. `ASSIGNED`)
-and omit the transition when `issue.status` is already Assigned or later.
+configuration, and serialize every other authorized action in step order. If the ID is
+present and authorization permits it, append the assignment, then the transition only
+when `configuration.status_transitions_enabled` is not `false`; take the status name
+from `issue.transitions` (e.g. `ASSIGNED`) and omit it when `issue.status` is already
+Assigned or later.
 
 1. **Retrieve the current user's Jira account ID:**
 
