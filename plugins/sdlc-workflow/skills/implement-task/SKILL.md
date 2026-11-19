@@ -305,12 +305,14 @@ dependency/CVE remediation task, also resolve `## Dependency Updates` according 
 `shared/dependency-update-conventions.md`, using the task's Ecosystem and target
 repository. An ecosystem entry overrides `"*"`. If no applicable policy exists, proceed
 only when the task explicitly records Fullsend's missing-policy targeted-update
-fallback; otherwise ask the engineer for an approved policy and stop before updating.
+fallback; otherwise report the missing policy and ask the engineer for the approved
+update strategy, command, graph command, and verification checks. Return only that gap
+and question, then end the turn; do not produce a conditional or hypothetical plan.
 If a present policy is malformed or conflicts with the task scope/notes, ask the
 engineer to reconcile it and stop. Do not resolve the conflict by guessing.
 
 **Completion criterion for this gate:** when policy, command, or scope clarification is
-needed, report the gap, ask one specific question, and end the turn. Resume planning
+needed, return only the gap and one specific question, then end the turn. Resume planning
 only after the engineer answers.
 
 #### Verification commands extraction
@@ -412,8 +414,12 @@ values. RPM/system-package remediation retains its separate task path.
    as described in Step 4 and `shared/dependency-update-conventions.md`. Never choose
    a command from a central ecosystem list. An ecosystem policy overrides `"*"`.
    A Fullsend task may provide the explicit targeted strategy only when the policy was
-   missing; use a project-local established command if one is discoverable. If a
-   usable command cannot be identified without guessing, ask and stop.
+   missing; use a project-local established command if one is discoverable. Run the
+   selected `update_command` exactly as written, substituting only its declared
+   placeholders with the task's package and fixed-version values. Preserve the
+   convention's version and package spelling; if the approved command cannot be used
+   as supplied, ask for policy correction rather than adapting it from ecosystem
+   assumptions. If a usable command cannot be identified without guessing, ask and stop.
 
 2. Respect the task's file and constraint scope. A constraint adjustment is allowed
    only when the task authorizes it **and** the applicable project policy has
@@ -435,11 +441,13 @@ values. RPM/system-package remediation retains its separate task path.
    `targeted` policy or explicit Fullsend fallback, follow the selected targeted
    strategy; do not silently broaden it to a batch update.
 
-4. Run the policy's declared graph command and verification checks. Inspect the
-   complete resolved graph, including duplicate instances and every relevant path.
-   Success requires every relevant instance to be at least `[fixed-version]`, outside
-   the vulnerable range, and no vulnerable path to remain. A command exit code or a
-   single lockfile entry alone is insufficient.
+4. Run the policy's declared graph command first. Inspect the complete resolved graph,
+   including duplicate instances and every relevant path. Success requires every
+   relevant instance to be at least `[fixed-version]`, outside the vulnerable range,
+   and no vulnerable path to remain. A command exit code or a single lockfile entry
+   alone is insufficient. Only after this graph check passes, run the policy's declared
+   `verification` checks; do not run tests or capture a pre-update test baseline before
+   graph verification.
 
 5. If no permitted update path removes every vulnerable dependency path, stop before
    dependent tests, commit, PR, and normal Step 11 Jira completion. Keep the issue in
