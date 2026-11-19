@@ -65,7 +65,8 @@ path or a shell environment variable.
 
 Detect the Fullsend gate by **presence**, not truthiness. An exported-but-empty gate
 is a configuration error and must fail closed rather than reaching the credentialed
-interactive workflow:
+interactive workflow. Copy the complete fenced Bash block into one Bash call exactly
+as written; its successful output is part of the gate evidence:
 
 ```bash
 if [ "${FULLSEND_OUTPUT_DIR+x}" = x ]; then
@@ -710,9 +711,10 @@ For CVE remediation terms used here, consult `shared/GLOSSARY.md`.
 Select the ecosystem and repository from the affected stream's existing `Ecosystem
 Mappings` row. Use its configured lock file, check command, and upstream branch as
 impact evidence; never infer support from a language name. RPM/system-package
-mappings retain their separate release-repository remediation path. For configured
-source repositories, use the established source-task path. If mapping or source/system
-classification is ambiguous, interactive triage asks and Fullsend reports the ambiguity.
+mappings retain their separate release-repository remediation path and bypass the
+source dependency-update policy gate. For configured source repositories, use the
+established source-task path. If mapping or source/system classification is ambiguous,
+interactive triage asks and Fullsend reports the ambiguity.
 
 When Step 2 shows that source remediation is needed, follow
 `shared/dependency-update-conventions.md` before any Jira mutation. That reference
@@ -990,9 +992,9 @@ The protocol covers three sub-steps:
   an existing remediation Task linked to the release Task, skip task creation and
   link the new CVE to the existing remediation Task instead.
 
-**Scope**: per release family (not per stream). All non-preemptive remediation types
-are linked to release Jira. The same release Jira is used regardless of ecosystem
-(any configured source ecosystem).
+**Scope**: per release family (not per stream). Every non-preemptive remediation path,
+including source dependency and RPM/system-package remediation, uses release Jira.
+Ecosystem-specific remediation remains on its established path.
 
 If the engineer skips release Jira creation for a stream, proceed to Step 8 without
 release Jira for that stream — remediation tasks are still created but not linked
