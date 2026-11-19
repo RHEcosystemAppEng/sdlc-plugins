@@ -94,6 +94,34 @@
         "Task description Acceptance Criteria includes a criterion that existing assessments with incorrect persisted risk_score values are corrected by the migration (Step 5 data migration)",
         "Task description has reproducer test as the FIRST acceptance criterion — before the data migration criterion and any fix criteria (Step 5 Acceptance Criteria ordering)"
       ]
+    },
+    {
+      "id": 8,
+      "prompt": "Triage Bug issue ACME-530. The issue details are in bug-issue-cross-repo-root-cause.md, the bug template is in bug-template-mock.md, and the project CLAUDE.md is in claude-md-bug-config.md. During the codebase investigation you determine that the handler get_advisories() in acme-backend (the target repository from the Repository Registry) sorts the rows in memory, while the missing ordering lives in the shared query builder advisories() in the acme-data-client library that acme-backend depends on — the query returns rows without an ORDER BY. acme-data-client is NOT registered in the Repository Registry. The engineer chooses option 2 (two linked Tasks) at the Root Cause Layer Check. Do NOT actually call Jira MCP, Serena, or any external tools. Instead, write your analysis to the workspace outputs/ directory: write outputs/layer-check.md with the Root Cause Layer Check from Step 4.6 (owning-layer classification and the layer-choice prompt you would present), write outputs/investigation.md with the codebase investigation findings from Steps 2-3, write outputs/root-cause.md with the root cause analysis from Step 4, and write outputs/task-description.md with the two Task descriptions you would create in Step 5 — the owning-repository task first, then the symptom-repository task, each following shared/task-description-template.md format.",
+      "expected_output": "A complete triage demonstrating: Step 4.6 classifies the owning layer as a different repository (acme-data-client) rather than the Step 3 target repository (acme-backend), presents the three-option layer choice, and — under option 2 — produces an owning-repository Task for the missing ORDER BY in advisories() plus a symptom-repository Task for acme-backend whose description carries a Root Cause Layer section naming acme-data-client, Fix location: symptom, and the owning-repository Task key.",
+      "files": ["files/bug-issue-cross-repo-root-cause.md", "files/bug-template-mock.md", "files/claude-md-bug-config.md"],
+      "assertions": [
+        "Root Cause Layer Check classifies the owning layer as a different repository (acme-data-client) — not the Step 3 target repository acme-backend (Step 4.6.1)",
+        "The layer-choice prompt presents all three options: owning-repository Task only, two linked Tasks, and workaround only with a Root Cause Layer waiver (Step 4.6.2)",
+        "The symptom-repository task description for acme-backend contains a `## Root Cause Layer` section (Step 4.6 option 2; template Root Cause Layer rule)",
+        "That Root Cause Layer section records the owning repository acme-data-client and `Fix location: symptom` (template Root Cause Layer rule)",
+        "That Root Cause Layer section names the owning-repository Task as the deferred root-cause task rather than leaving the deferral unnamed (template Root Cause Layer rule)",
+        "The owning-repository task sets Repository to acme-data-client and targets the missing ORDER BY in the advisories() query — it is not scoped to acme-backend (Step 4.6 option 2)",
+        "Each of the two tasks targets exactly one repository — the single-repository-per-task rule is not relaxed (template Rules)",
+        "The two tasks are linked to each other with a Related link (Step 5b)"
+      ]
+    },
+    {
+      "id": 9,
+      "prompt": "Triage Bug issue ACME-520. The issue details are in bug-issue-persistence-impact.md, the bug template is in bug-template-mock.md, the repository context is in repo-context-persistence-mock.md, and the project CLAUDE.md is in claude-md-bug-config.md. During the codebase investigation you confirm that the root cause — the swapped operands in compute_risk_score() — lives in acme-backend, the same repository selected in Step 3. Do NOT actually call Jira MCP, Serena, or any external tools. Instead, write your analysis to the workspace outputs/ directory: write outputs/layer-check.md with the Root Cause Layer Check result from Step 4.6 (owning-layer classification and whether the layer-choice prompt applies), and write outputs/task-description.md with the Task description you would create in Step 5 (following shared/task-description-template.md format).",
+      "expected_output": "A complete triage demonstrating that an in-repository root cause does not trigger the layer choice: Step 4.6.1 classifies the owning layer as the target repository, no three-option prompt is presented, and the generated Task description contains no Root Cause Layer deferral section while keeping the reproducer-first acceptance criteria and the data migration requirement.",
+      "files": ["files/bug-issue-persistence-impact.md", "files/bug-template-mock.md", "files/repo-context-persistence-mock.md", "files/claude-md-bug-config.md"],
+      "assertions": [
+        "Root Cause Layer Check classifies the owning layer as the target repository acme-backend — the root cause is in compute_risk_score() in that repository (Step 4.6.1)",
+        "No layer-choice prompt is presented because the root cause is not owned by a different repository or the data layer (Step 4.6.1)",
+        "outputs/task-description.md does NOT contain a `## Root Cause Layer` section (Step 4.6.1; template Root Cause Layer rule)",
+        "The task description still places the reproducer test as the FIRST acceptance criterion and retains the data migration for persisted risk_score values (Step 5 unchanged flow)"
+      ]
     }
   ]
 }

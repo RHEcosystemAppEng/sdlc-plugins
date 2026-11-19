@@ -570,6 +570,28 @@ Rules:
 - Each change should be a short, concrete statement of what needs to happen (not how)
 - The map is the basis for task generation in Step 5 — every change listed here will become part of a Jira task
 
+### Root-cause repository inclusion
+
+A requirement can be reported against one repository while its root cause lives in
+another repository or data layer (database query, ingestion path, or API contract
+owned elsewhere). The impact map must route the fix to the owning layer.
+
+1. Determine whether the requirement originates from a Bug — the Feature references
+   a Bug key, remediates reported bug behavior, or describes a symptom with a
+   stated upstream cause.
+2. When the root-cause layer differs from the reported repository, add a row for the
+   **root-cause repository** with the root-cause change, even when only the symptom
+   repository was reported or investigated.
+3. When the requirement originates from a Bug, Step 5 MUST generate a task for the
+   owning repository. A symptom-repository change alone does not satisfy the
+   requirement unless the symptom task records a user-approved
+   `## Root Cause Layer` deferral naming the owning repository and the deferred
+   root-cause task or Bug.
+
+Each change still becomes a single-repository task. If the owning repository is
+absent from the **Repository Registry**, record it from the evidence and note in
+Implementation Notes that its conventions were unavailable.
+
 When a requirement from the Feature description cannot be planned due to missing inputs (no design mockups available, no target repository for that requirement's domain, insufficient specification to decompose into tasks), explicitly document it in the impact map under an "Excluded requirements" section. For each excluded requirement, state the requirement and the specific missing input that prevents planning. Do not silently omit requirements — the engineer needs to know what was excluded and why so they can provide the missing inputs. This applies to MVP and non-MVP requirements alike — any requirement that cannot be decomposed into actionable tasks should be flagged rather than silently dropped.
 
 Present the map to the user for review before proceeding to task generation.
