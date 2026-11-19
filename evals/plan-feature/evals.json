@@ -182,6 +182,20 @@
         "That task's Implementation Notes point at the specific gate or skip site where the guard belongs, naming src/gate/resolve_issue.py (resolve_gated_issue) and/or scripts/pre-verify.sh.",
         "The documented silent-empty risk is not covered only by an operational or post-merge mitigation: if a live run after merge is mentioned, it appears alongside the fail-closed Acceptance Criterion and test, not as their replacement."
       ]
+    },
+    {
+      "id": 10,
+      "prompt": "Plan the implementation for feature TC-9009. The feature description, the linked Bug TC-9050 triage findings, the project Repository Registry excerpt, and the repository structures for acme-ui and acme-backend are in feature-bug-root-cause.md. Write all outputs to the workspace outputs/ directory. For each task you would create, write a markdown file named task-N-slug.md with the full task description. Write the impact map to impact-map.md. When the skill would post a Jira comment (description digest, summary comment, impact map comment), write it as a separate file in the outputs directory (e.g., `task-N-digest.md`, `summary-comment.md`). When the skill would set `additional_fields` on created issues, document the field values in the impact map or a task creation log.",
+      "expected_output": "A plan that routes the ordering fix to the layer that owns the root cause. Because the Feature originates from Bug TC-9050, whose triage findings place the root cause in the shared query builder in acme-data-client, the impact map contains a change row for acme-data-client even though the Feature names only acme-ui and acme-backend, a task targets the missing ORDER BY in advisories(), any acme-ui change carries a Root Cause Layer deferral to that task, and the unregistered repository is recorded from the Bug evidence with a note that its conventions and structure were unavailable.",
+      "files": ["files/feature-bug-root-cause.md"],
+      "assertions": [
+        "The impact map contains a change row for the root-cause repository `acme-data-client` when the triage findings in the Feature place the missing `ORDER BY` in its `advisories()` query builder, even though the Feature and Repository Registry name only `acme-ui` and `acme-backend` (Step 4 Root-cause repository inclusion, constraint 1.110)",
+        "A generated task sets Repository to `acme-data-client` and its scope is the missing `ORDER BY` in the `advisories()` query with test coverage — the plan does not satisfy the requirement with acme-ui or acme-backend tasks alone (Step 4 Root-cause repository inclusion; Step 5)",
+        "The `acme-data-client` task's Implementation Notes record that the repository is absent from the Repository Registry, so its conventions and file structure were unavailable for enrichment (Step 4 Root-cause repository inclusion)",
+        "Every task that changes `acme-ui` (removing the in-memory sort) contains a `## Root Cause Layer` section naming `acme-data-client` as the owning repository and the `acme-data-client` task as the deferred root-cause task; a plan that changes nothing in `acme-ui` also satisfies this assertion (template Root Cause Layer rule)",
+        "Each generated task names exactly one repository — the cross-repository requirement does not relax the single-repository-per-task rule (template Rules, constraint 4.1)",
+        "No task's Acceptance Criteria make the in-memory `AdvisoryTable` sort the source of ordering — the ordering is delivered by the query builder/API (Step 4 Root-cause repository inclusion)"
+      ]
     }
   ]
 }
