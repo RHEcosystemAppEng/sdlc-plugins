@@ -729,7 +729,7 @@ def test_authorized_actions_execute_in_order_and_post_comment_body_verbatim(reco
     executor.execute_plan(result, _trusted_input(runner="owner"))
 
     # Then the operations run deterministically and the comment carries exactly its body_adf
-    assert [call[0] for call in recorder.calls] == ["get-issue", "field-edit", "get-transitions", "transition", "comment"]
+    assert [call[0] for call in recorder.calls] == ["get-issue", "get-issue", "field-edit", "get-transitions", "transition", "comment"]
     assert recorder.calls[-1] == (
         "comment", "TC-42",
         executor._action_helpers.adf_to_markdown(comment["body_adf"]),
@@ -919,8 +919,8 @@ def test_existing_object_fields_skip_retried_field_edits(recorder):
     # When the same object-valued field edit is retried
     executor.execute_plan(result, trusted)
 
-    # Then the executor avoids clobbering the current Jira field values
-    assert recorder.calls == []
+    # Then only the live ownership read runs; current Jira field values are not clobbered
+    assert recorder.calls == [("get-issue", "TC-42")]
 
 
 def test_empty_field_edit_is_not_treated_as_already_applied():
@@ -1536,8 +1536,9 @@ def test_assignment_to_the_runner_identity_is_applied(recorder):
     # When the executor runs the plan
     executor.execute_plan(result, trusted)
 
-    # Then it re-checks the live assignee, assigns the runner, and continues
+    # Then it checks live ownership before any write, re-checks before assigning, and continues
     assert recorder.calls == [
+        ("get-issue", "TC-42"),
         ("get-issue", "TC-42"),
         ("field-edit", "TC-42", {"assignee": {"id": _RUNNER}}),
         ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]}),
@@ -1589,7 +1590,7 @@ def test_live_non_runner_assignee_is_not_overwritten(recorder):
     trusted = _trusted_input(runner=_RUNNER)
     trusted["issue"]["fields"] = {"assignee": None}
 
-    # When the executor reaches the assignment
+    # When the executor checks live ownership before running the plan
     with pytest.raises(executor.ActionError, match="existing assignee"):
         executor.execute_plan(result, trusted)
 
@@ -1616,7 +1617,8 @@ def test_runner_self_assignment_is_not_concurrent_triage(assignee, proceeds, rec
             executor.execute_plan(result, trusted)
 
     # Then self-assignment is treated as already applied and the run continues
-    expected = [("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]})] if proceeds else []
+    expected = ([("get-issue", "TC-42"), ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]})]
+                if proceeds else [])
     assert recorder.calls == expected
 
 
@@ -1667,3 +1669,54 @@ def test_disabled_transitions_do_not_affect_other_issues(recorder):
 
     # Then the related issue's transition still runs
     assert recorder.calls == [("get-transitions", "TC-43"), ("transition", "TC-43", "31")]
+
+
+def test_live_human_owner_aborts_retry_whose_snapshot_shows_the_runner(recorder):
+    """A human who took the issue after collection aborts a retry even though the assignment is skipped."""
+    # Given a retry snapshot assigned to the runner, but a human owns the issue live
+    recorder.live_assignee = {"accountId": "engineer"}
+    result = _plan([_assign(), copy.deepcopy(_LABEL)])
+    trusted = _trusted_input(runner=_RUNNER)
+    trusted["issue"]["fields"] = {"assignee": {"accountId": _RUNNER}}
+
+    # When the executor runs the retried plan
+    with pytest.raises(executor.ActionError, match="existing assignee"):
+        executor.execute_plan(result, trusted)
+
+    # Then only the live ownership read happened; no Jira write was issued
+    assert recorder.calls == [("get-issue", "TC-42")]
+
+
+def test_live_human_owner_aborts_before_comment_link_or_transition(recorder):
+    """With an unassigned snapshot, a live human owner stops the plan before its first mutation."""
+    # Given an unassigned snapshot, a live human assignee, and a plan with no assignment
+    recorder.live_assignee = {"accountId": "engineer"}
+    result = _plan([
+        _comment_action(),
+        {"type": "link", "marker": "triage-security:link", "link_type": "Related", "inward": "TC-42", "outward": "TC-43"},
+        {"type": "status-transition", "marker": "triage-security:status", "issue": "TC-42", "status": "In Progress"},
+    ])
+    trusted = _trusted_input(runner=_RUNNER, related=[{"key": "TC-43"}])
+    trusted["issue"]["fields"] = {"assignee": None}
+
+    # When the executor runs the plan
+    with pytest.raises(executor.ActionError, match="existing assignee"):
+        executor.execute_plan(result, trusted)
+
+    # Then no comment, link, or transition was recorded
+    assert recorder.calls == [("get-issue", "TC-42")]
+
+
+def test_live_runner_owner_lets_retry_proceed(recorder):
+    """A live assignee equal to the runner identity is this runner's retry and proceeds."""
+    # Given a retry where both snapshot and live Jira show the runner as assignee
+    recorder.live_assignee = {"accountId": _RUNNER}
+    result = _plan([_assign(), copy.deepcopy(_LABEL)])
+    trusted = _trusted_input(runner=_RUNNER)
+    trusted["issue"]["fields"] = {"assignee": {"accountId": _RUNNER}}
+
+    # When the executor runs the retried plan
+    executor.execute_plan(result, trusted)
+
+    # Then the ownership read passes and the remaining action runs
+    assert recorder.calls == [("get-issue", "TC-42"), ("field-edit", "TC-42", {"labels": ["ai-cve-triaged"]})]

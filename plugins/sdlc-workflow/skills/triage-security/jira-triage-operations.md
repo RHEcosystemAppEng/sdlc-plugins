@@ -57,6 +57,13 @@ existing assignee who is not the runner. Therefore:
 - `runner_account_id` absent (older pre-script): withhold the assignment as Step
   0.8 describes.
 
+The snapshot can be stale, so before executing any mutating action the executor
+re-reads the triaged issue's live assignee. If someone other than the runner now owns
+it, the run aborts before any write, even when the assignment was omitted because the
+snapshot showed the runner. The executor checks again right before writing an
+assignment. Jira has no conditional update, so a reassignment between that check
+and the write is still possible; the checks narrow that window but cannot close it.
+
 **Status transitions setting.** `configuration.status_transitions_enabled` comes
 from the optional Security Configuration line `Triage status transitions: enabled |
 disabled`. When it is `false`, plan no `status-transition` for the triaged

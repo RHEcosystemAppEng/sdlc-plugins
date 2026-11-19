@@ -349,6 +349,28 @@ def _authorize_assignment(action: dict[str, Any], trusted_input: dict[str, Any])
     _check_existing_assignee((issue.get("fields") or {}).get("assignee"), runner, action["issue"])
 
 
+def _live_assignee(issue_key: str) -> Any:
+    """Read the issue's current assignee from Jira (the ``assignee`` field projection)."""
+    return (_jira_mod.get_issue(issue_key, fields="assignee").get("fields") or {}).get("assignee")
+
+
+def _verify_live_ownership(actions: list[Any], trusted_input: dict[str, Any]) -> None:
+    """Abort before any mutation when someone other than the runner now owns the triaged issue.
+
+    The snapshot can be stale: a human may take the issue after collection, and a
+    retry whose snapshot already shows the runner skips the assignment as already
+    applied, so the per-action check alone would never run. Jira REST has no
+    conditional update, so a reassignment between this read and a later write is
+    still possible; the per-assignment re-check narrows, but cannot close, that window.
+    """
+    runner = _runner_account_id(trusted_input)
+    mutating = any(isinstance(action, dict) and action.get("type") != "report-only" for action in actions)
+    if runner is None or not mutating:
+        return
+    issue_key = trusted_input["issue"]["key"]
+    _check_existing_assignee(_live_assignee(issue_key), runner, issue_key)
+
+
 def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> None:
     """Authorize every target and reference before Jira reads, writes, or retry repair.
 
@@ -496,9 +518,9 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
             action = copy.deepcopy(action)
             action["fields"]["labels"] = list(dict.fromkeys(existing["labels"] + action["fields"]["labels"]))
         if "assignee" in action["fields"]:
-            # Re-check live: a human may have taken the issue while the sandbox ran.
-            live = (_jira_mod.get_issue(action["issue"], fields="assignee").get("fields") or {}).get("assignee")
-            _check_existing_assignee(live, _runner_account_id(trusted_input), action["issue"])
+            # Re-check immediately before the write to narrow the race left after
+            # the pre-mutation ownership check in execute_plan.
+            _check_existing_assignee(_live_assignee(action["issue"]), _runner_account_id(trusted_input), action["issue"])
         _jira_mod.update_issue(action["issue"], action["fields"])
         return
     if action_type == "status-transition":
@@ -595,6 +617,7 @@ def execute_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> dict[
         return {}
 
     _preflight_plan(result, trusted_input)
+    _verify_live_ownership(actions, trusted_input)
     markers = set(trusted_input.get("idempotency", {}).get("action_markers", []))
     registry: dict[str, dict[str, str]] = {}
     release_labels = {key: item["labels"] for key, item in _release_graph(trusted_input).items()}
