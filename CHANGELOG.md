@@ -7,10 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-11-19
+
 ### Added
 
 - Fullsend dual-mode execution for `triage-security`, with validated trusted input,
   tokenless sandbox analysis, and structured authorized or report-only Jira output
+- Fullsend-native execution for `verify-pr`, with agent, policy, input/result schemas,
+  and pre/post runner scripts
+- `discover` entry point in `triage-security` for untriaged Vulnerabilities
+- Runner-side mutation authorization opt-in in `triage-security`
+- Verified container image identity capture in `setup` — new Container Images table in
+  the security matrix (release commit SHA, image digest, CPE, revision-label check)
+- Fail-closed coverage requirement for documented fail-open risks in `plan-feature`
+- Shared-artifact writer path mapping and scope boundaries in `plan-feature`
+- Eval assertion checks against requirements and fixtures in `implement-task`
+
+### Changed
+
+- Fullsend agents run on `claude-opus-5-5` at explicit medium effort; CLI and sandbox
+  image bumped together to v0.52.0
+- Fullsend runner Jira access moved to the Atlassian API gateway
+- AI commit trailer convention is now harness-agnostic
+
+### Fixed
+
+- `triage-security`: status-transition targets resolved against the live Jira workflow
+- `triage-security`: `discover` fails closed when Jira identity or access is unverified,
+  and names the failing check
+- `triage-security`: redundant executor comment footer removed
+- `triage-security`: all matrix write paths secured; image identity verified on population
+- `triage-security`: CLAUDE.md read errors reported as ERROR diagnostics
+- `triage-security`: `FULLSEND_OUTPUT_DIR` created in sandbox mode
+- `verify-pr`: fails closed when the Jira identity cannot be verified; requires Browse
+  Projects before trusting an empty search
+- `verify-pr`: waits on and reports commit statuses in the dispatch gate and CI Status
+- Security matrix updates protected from concurrent writes
+- `setup`: product-neutral matrix version header and aligned dynamic source columns
 
 ## [0.13.10] - 2026-10-07
 
