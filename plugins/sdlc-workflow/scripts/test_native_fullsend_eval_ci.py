@@ -19,7 +19,17 @@ def synthetic_execution(cases):
     """SYNTHETIC TEST DATA — fixed observations, never authentic runtime evidence."""
     return {"phases_completed": True, "cases": {case: dict.fromkeys([
         "case_result_valid", "transcript_readable", "runtime_completed", "skill_invoked", "tools_completed"], True)
-        for case in cases}}
+        for case in cases},
+        "consistency": {case: "consistent" if case in ("036-valid", "037-release") else "not-applicable"
+                        for case in cases},
+        "evaluability": {case: {"evaluable": True, "not_evaluable_assertions": []} for case in cases}}
+
+
+def synthetic_gate_input():
+    """SYNTHETIC TEST DATA — allowlisted gate/input categories, never live evidence."""
+    return {case: {"transcript": "successful", "skill_invocation": "successful",
+                   "presence_gate": "successful", "input_validation": "successful"}
+            for case in ("036-valid", "037-release")}
 
 
 def test_incomplete_grading_reports_unavailable_score_and_allowlisted_failure():
@@ -301,7 +311,7 @@ def test_native_job_requires_collaborator_or_current_run_approval(trusted, gate,
     assert json.loads(result.stdout) is expected
 
 
-@pytest.mark.parametrize("defect", [None, "wrong-source", "wrong-eval-source", "missing-outcome", "null", "false", "scorer-failed", "missing-report", "execution-failed", "missing-execution", "old-inventory", "release-execution-failed"])
+@pytest.mark.parametrize("defect", [None, "wrong-source", "wrong-eval-source", "missing-outcome", "null", "false", "scorer-failed", "missing-report", "execution-failed", "missing-execution", "old-inventory", "release-execution-failed", "missing-gate-input", "unknown-gate-category", "contradictory-judgment", "malformed-evaluability"])
 def test_reporting_verifies_source_and_boolean_outcomes(defect):
     """Execution and report integrity block CI while quality outcomes remain advisory."""
     source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
@@ -310,7 +320,7 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
                 for case,n in {"034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}
     report = {"source": source, "outcomes": outcomes, "complete": True, "total": 24, "exit_code": 0,
               "rationale": "SECRET /tmp/gha-creds-evil", "execution_valid": True,
-              "execution": synthetic_execution(outcomes)}
+              "gate_input": synthetic_gate_input(), "execution": synthetic_execution(outcomes)}
     if defect == "wrong-source": source["head_sha"] = "d" * 40
     elif defect == "wrong-eval-source": source["eval_source_sha"] = "d" * 40
     elif defect == "missing-outcome": del outcomes["034-empty"]["assertion_1"]
@@ -325,6 +335,16 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
         del report["execution"]["cases"]["037-release"]
         report["total"] = 17
     elif defect == "release-execution-failed": report["execution"]["cases"]["037-release"]["tools_completed"] = False
+    elif defect == "missing-gate-input": del report["gate_input"]
+    elif defect == "unknown-gate-category":
+        report["gate_input"]["036-valid"]["presence_gate"] = "UNKNOWN SECRET"
+    elif defect == "contradictory-judgment":
+        report["gate_input"]["037-release"]["input_validation"] = "tool-error"
+        report["execution"]["consistency"]["037-release"] = "contradiction"
+        report["execution"]["evaluability"]["037-release"] = {
+            "evaluable": False, "not_evaluable_assertions": [f"assertion_{i}" for i in range(2, 8)]}
+        report["execution_valid"] = False
+    elif defect == "malformed-evaluability": report["execution"]["evaluability"]["037-release"] = "SECRET"
     elif defect == "missing-report": report = None
     if defect == "false": report["exit_code"] = 1
     env = {"PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
@@ -345,6 +365,34 @@ def test_reporting_verifies_source_and_boolean_outcomes(defect):
         assert "SECRET" not in result["reviews"][0]["body"]
         if report is not None:
             assert "quality score (advisory)" in result["reviews"][0]["body"]
+
+
+def test_report_displays_safe_gate_categories_and_evaluability():
+    """Gate/input categories and not-evaluable assertions publish without raw evidence."""
+    # Given a genuine behavior failure with no usable release-path setup
+    source = {"pr_number": 299, "head_sha": "a" * 40, "merge_sha": "c" * 40,
+              "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
+    outcomes = {case: {f"assertion_{i}": True for i in range(1, n+1)}
+                for case, n in {"034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}
+    report = {"source": source, "outcomes": outcomes, "complete": True, "total": 24, "exit_code": 0,
+              "execution_valid": True, "gate_input": synthetic_gate_input(),
+              "execution": synthetic_execution(outcomes)}
+    report["gate_input"]["037-release"]["presence_gate"] = "tool-error"
+    report["execution"]["evaluability"]["037-release"] = {
+        "evaluable": False, "not_evaluable_assertions": [f"assertion_{i}" for i in range(2, 8)]}
+    # When the actual trusted workflow publishes the report
+    result = run_js(script_step("report-status", "Publish native result alongside ordinary review")["with"]["script"],
+                    {"report": report}, {"PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,
+                                         "BASE_SHA": "b" * 40, "TRUSTED_SHA": "e" * 40,
+                                         "EVAL_SOURCE_SHA": "f" * 40, "NATIVE_RESULT": "success"})
+    # Then the fixed categories and evaluability are displayed, with no raw evidence
+    assert result["errors"] == []
+    body = result["reviews"][0]["body"]
+    assert "| Case | Gate/input evidence (transcript / Skill / gate / input) | Judge consistency | Evaluability |" in body
+    assert "| 036-valid | successful / successful / successful / successful | consistent | evaluable |" in body
+    assert ("| 037-release | successful / successful / tool-error / successful | consistent | "
+            "not evaluable (assertion_2, assertion_3, assertion_4, assertion_5, assertion_6, assertion_7) |") in body
+    assert "SECRET" not in body and "/tmp/" not in body
 
 
 
@@ -424,7 +472,8 @@ def test_review_reruns_reuse_only_matching_bot_head_review(native, existing_kind
               "base_sha": "b" * 40, "trusted_sha": "e" * 40, "eval_source_sha": "f" * 40}
     report = {"source": source, "complete": True, "total": 24, "exit_code": 0,
               "outcomes": {case: {f"assertion_{i}": True for i in range(1, n+1)}
-                           for case,n in {"034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()}}
+                           for case,n in {"034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}.items()},
+              "gate_input": synthetic_gate_input()}
     report.update(execution_valid=True, execution=synthetic_execution(report["outcomes"]))
     result = run_js(script, {"report": report, "existingReviews": stored, "repeat": 2}, {
         "PR_NUMBER": "299", "HEAD_SHA": "a" * 40, "MERGE_SHA": "c" * 40,

@@ -9,6 +9,21 @@ from pathlib import Path
 
 CASES = {"034-empty": 5, "035-malformed": 5, "036-valid": 7, "037-release": 7}
 FIELDS = ("case_result_valid", "transcript_readable", "runtime_completed", "skill_invoked", "tools_completed")
+# Only these cases must establish the Step 0.6/0.7 setup before their analysis is meaningful.
+GATE_CASES = ("036-valid", "037-release")
+GATE_ASSERTIONS = {"036-valid": "assertion_2", "037-release": "assertion_1"}
+# Evidence each gate assertion is allowed to claim as its own. Assertion 1 for the
+# release case also requires the actual Skill invocation, not just the two Bash steps.
+GATE_ASSERTION_STEPS = {"036-valid": ("presence_gate", "input_validation"),
+                        "037-release": ("skill_invocation", "presence_gate", "input_validation")}
+# Assertions that carry no evidence unless the case's required setup was established.
+DEPENDENT_ASSERTIONS = {"036-valid": tuple(f"assertion_{i}" for i in (1, 3, 4, 5, 6, 7)),
+                        "037-release": tuple(f"assertion_{i}" for i in (2, 3, 4, 5, 6, 7))}
+GATE_OBSERVATIONS = ("transcript", "skill_invocation", "presence_gate", "input_validation")
+# Fixed allowlist reproduced from evals/fullsend/run.py; raw transcript text never arrives here.
+EVIDENCE_CATEGORIES = frozenset(["successful", "not-observed", "tool-error", "unexpected-output",
+                                 "invalid-transcript", "conflicting-results"])
+OBSERVED_FAILURES = frozenset(["tool-error", "unexpected-output", "conflicting-results"])
 # Pinned agent-eval-harness score.py text fallback: an unusable judge reply is
 # recorded as passed=false with this rationale prefix instead of an error.
 JUDGE_UNPARSED = "Could not parse judge response:"
@@ -117,6 +132,52 @@ def judge_errors(report, run):
     return count
 
 
+def gate_input(report):
+    """Validate the published per-case gate/input categories; None when unusable."""
+    published = report.get("gate_input")
+    if not isinstance(published, dict) or set(published) != set(GATE_CASES):
+        return None
+    for case in GATE_CASES:
+        categories = published[case]
+        if not isinstance(categories, dict) or set(categories) != set(GATE_OBSERVATIONS):
+            return None
+        if any(value not in EVIDENCE_CATEGORIES for value in categories.values()):
+            return None
+        # Missing or unreadable transcripts cannot carry step-level evidence; a
+        # producer that pairs them with successes is not a trustworthy report.
+        transcript = categories["transcript"]
+        if transcript != "successful":
+            steps = [categories[step] for step in GATE_OBSERVATIONS if step != "transcript"]
+            if any(value != transcript for value in steps):
+                return None
+    return published
+
+
+def reconcile(outcomes, case, categories):
+    """Cross-check a case's gate verdict against observed gate/input evidence.
+
+    Returns the fixed consistency category and whether the required setup was
+    established, so dependent assertions are not published as behavior findings.
+    """
+    verdict = outcomes.get(case, {}).get(GATE_ASSERTIONS[case])
+    verdict = verdict if type(verdict) is bool else None
+    required = [categories[step] for step in GATE_ASSERTION_STEPS[case]]
+    observed = all(value == "successful" for value in required)
+    if not observed:
+        failed = any(value in OBSERVED_FAILURES for value in required)
+        if verdict is True:
+            # A passing judgment cannot outrank a genuine error or wrong output;
+            # missing, malformed or unreadable evidence is inconclusive instead.
+            return ("contradiction" if failed else "inconclusive"), False
+        if verdict is False and failed:
+            # A real observed failure keeps the failed verdict a behavior result.
+            return "consistent", False
+        # Without usable evidence, even a failed verdict is not a behavior result.
+        return ("inconclusive" if verdict is False else "not-evaluable"), False
+    established = categories["skill_invocation"] == "successful" and verdict is True
+    return "consistent", established
+
+
 def assess(private_root, report_path, runner_exit, expected_source):
     """Add fixed observations to the safe report; never rewrite scores or raw records."""
     try:
@@ -147,9 +208,26 @@ def assess(private_root, report_path, runner_exit, expected_source):
             observations = {case: observe_case(runs[0] / "cases" / case) for case in CASES}
         # Judge errors are not failed verdicts: they invalidate the run (fail-closed).
         errors = judge_errors(report, runs[0] if len(runs) == 1 else None)
+        published = gate_input(report)
+        consistency, evaluability = {}, {}
+        for case in CASES:
+            if case not in GATE_CASES:
+                state, established = "not-applicable", True
+            elif published is None:
+                # Unvalidated or absent safe categories cannot establish the setup.
+                state, established = "invalid-input", False
+            else:
+                state, established = reconcile(outcomes, case, published[case])
+            consistency[case] = state
+            evaluability[case] = {
+                "evaluable": bool(established),
+                "not_evaluable_assertions": [] if established else list(DEPENDENT_ASSERTIONS.get(case, ())),
+            }
+        reconciled = all(state in ("consistent", "not-applicable") for state in consistency.values())
         report["execution"] = {"phases_completed": bool(phases_completed), "judge_errors": errors,
-                               "cases": observations}
-        report["execution_valid"] = bool(phases_completed and errors == 0
+                               "cases": observations, "consistency": consistency,
+                               "evaluability": evaluability}
+        report["execution_valid"] = bool(phases_completed and errors == 0 and reconciled
                                          and all(all(e.values()) for e in observations.values()))
         report_path.write_text(json.dumps(report, indent=2) + "\n")
         return int(not report["execution_valid"])
@@ -170,8 +248,18 @@ def main():
     status = assess(args.private_root, args.report, args.runner_exit, source)
     detail = ""
     try:
-        errors = json.loads(args.report.read_text())["execution"]["judge_errors"]
-        detail = f" ({errors} judge errors)" if errors else ""
+        execution = json.loads(args.report.read_text())["execution"]
+        if not isinstance(execution, dict):
+            raise ValueError("Invalid execution record")
+        parts = []
+        if execution.get("judge_errors"):
+            parts.append(f"{execution['judge_errors']} judge errors")
+        consistency = execution.get("consistency", {})
+        flagged = sorted({state for state in consistency.values()
+                          if state not in ("consistent", "not-applicable")}) if isinstance(consistency, dict) else []
+        if flagged:
+            parts.append("gate/assertion " + ", ".join(flagged))
+        detail = f" ({'; '.join(parts)})" if parts else ""
     except (OSError, ValueError, KeyError, TypeError):
         pass
     print("Native execution evidence: " + ("valid; quality score is advisory" if status == 0

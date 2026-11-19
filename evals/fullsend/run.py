@@ -21,6 +21,13 @@ ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 CASES = ["034-empty", "035-malformed", "036-valid", "037-release"]
 ASSERTION_COUNTS = dict(zip(CASES, [5, 5, 7, 7]))
+# Only these cases require a successful Step 0.6/0.7 setup before their analysis runs.
+GATE_CASES = ("036-valid", "037-release")
+GATE_STEPS = {"presence_gate": ("0.6", "sandbox mode: /sandbox/workspace/output"),
+              "input_validation": ("0.7", "Trusted triage-security input available")}
+# Fixed allowlist of published gate/input evidence categories; never raw transcript text.
+EVIDENCE_CATEGORIES = ("successful", "not-observed", "tool-error", "unexpected-output",
+                       "invalid-transcript", "conflicting-results")
 
 
 def pins():
@@ -292,27 +299,28 @@ def pipeline(python, source, config, workspace, run_dir, run_id, environment, di
     return 0
 
 
-def valid_case_tool_observations(run_dir):
-    """Observe matched native tools without exporting text or replacing judgments."""
+def valid_case_tool_observations(run_dir, case="036-valid"):
+    """Observe matched native gate/input tools without exporting text or replacing judgments."""
     observations = dict.fromkeys([
         "transcript_found", "transcript_readable", "skill_invoked",
         "presence_gate_succeeded", "presence_gate_failed",
+        "presence_gate_tool_error", "presence_gate_unexpected_output",
         "input_validation_succeeded", "input_validation_failed",
+        "input_validation_tool_error", "input_validation_unexpected_output",
     ], False)
     try:
-        paths = list(run_dir.glob("cases/036-valid/output/native/*/iteration-*/transcripts/*.jsonl"))
+        paths = list(run_dir.glob(f"cases/{case}/output/native/*/iteration-*/transcripts/*.jsonl"))
         observations["transcript_found"] = bool(paths)
         observations["transcript_readable"] = bool(paths)
         skill = (ROOT / "plugins/sdlc-workflow/skills/triage-security/SKILL.md").read_text()
         commands = {}
-        for step, kind in [("0.6", "presence_gate"), ("0.7", "input_validation")]:
+        for kind, (step, _) in GATE_STEPS.items():
             command = skill.split(f"### Step {step}", 1)[1].split("```bash\n", 1)[1].split("\n```", 1)[0]
             commands[command.replace("${CLAUDE_PLUGIN_ROOT}", "/sandbox/claude-config/plugins/sdlc-workflow")] = kind
     except (OSError, UnicodeError, IndexError):
         observations["transcript_readable"] = False
         return observations
-    expected = {"presence_gate": "sandbox mode: /sandbox/workspace/output",
-                "input_validation": "Trusted triage-security input available"}
+    expected = {kind: line for kind, (_, line) in GATE_STEPS.items()}
     for path in paths:
         pending = {}
         identities = set()
@@ -364,9 +372,14 @@ def valid_case_tool_observations(run_dir):
                                 content = "\n".join(item["text"] for item in content
                                                     if isinstance(item, dict) and item.get("type") == "text"
                                                     and isinstance(item.get("text"), str))
-                            success = (block.get("is_error") is False and isinstance(content, str)
+                            error = block.get("is_error")
+                            success = (error is False and isinstance(content, str)
                                        and expected[kind] in content.splitlines())
                             observed[kind + ("_succeeded" if success else "_failed")] = True
+                            if error is True:
+                                observed[kind + "_tool_error"] = True
+                            elif error is False and not success:
+                                observed[kind + "_unexpected_output"] = True
                 if not seen:
                     raise ValueError("Empty transcript")
         except (OSError, UnicodeError, ValueError, RecursionError):
@@ -380,8 +393,47 @@ def valid_case_tool_observations(run_dir):
     return observations
 
 
+def evidence_category(observed, kind):
+    """Collapse one step's Boolean observations into a fixed evidence category."""
+    if not observed["transcript_found"]:
+        return "not-observed"
+    if not observed["transcript_readable"]:
+        return "invalid-transcript"
+    if kind == "skill_invocation":
+        return "successful" if observed["skill_invoked"] else "not-observed"
+    if observed[kind + "_succeeded"] and observed[kind + "_failed"]:
+        return "conflicting-results"
+    if observed[kind + "_tool_error"]:
+        return "tool-error"
+    if observed[kind + "_unexpected_output"]:
+        return "unexpected-output"
+    if observed[kind + "_succeeded"]:
+        return "successful"
+    # An unpaired, malformed or unreadable result cannot be bound to the step.
+    return "invalid-transcript" if observed[kind + "_failed"] else "not-observed"
+
+
+def gate_input_observations(run_dir):
+    """Publish only fixed per-case gate/input categories for the setup-dependent cases."""
+    observations = {}
+    for case in GATE_CASES:
+        observed = valid_case_tool_observations(run_dir, case)
+        transcript = ("not-observed" if not observed["transcript_found"]
+                      else "successful" if observed["transcript_readable"] else "invalid-transcript")
+        observations[case] = {
+            "transcript": transcript,
+            "skill_invocation": evidence_category(observed, "skill_invocation"),
+            "presence_gate": evidence_category(observed, "presence_gate"),
+            "input_validation": evidence_category(observed, "input_validation"),
+        }
+    if any(value not in EVIDENCE_CATEGORIES for categories in observations.values()
+           for value in categories.values()):
+        raise ValueError("Invalid safe gate/input category")
+    return observations
+
+
 def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
-    """Export source pins, Boolean outcomes and fixed observations; raw evidence stays private."""
+    """Export source pins, Boolean outcomes and fixed gate/input categories; raw evidence stays private."""
     sha_keys = {"head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"}
     if (set(source) != sha_keys | {"pr_number"} or type(source["pr_number"]) is not int
             or source["pr_number"] <= 0
@@ -399,7 +451,7 @@ def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
         exit_code = exit_code or 1
     report = {"source": source, "exit_code": exit_code, "complete": complete, "outcomes": outcomes,
               "passed": sum(value is True for case in outcomes.values() for value in case.values()), "total": sum(ASSERTION_COUNTS.values()),
-              "valid_case_tools": valid_case_tool_observations(run_dir)}
+              "gate_input": gate_input_observations(run_dir)}
     if summary_failures:
         report["summary_failures"] = summary_failures
     if diagnostics is not None:
