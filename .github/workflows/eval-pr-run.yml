@@ -689,8 +689,29 @@ jobs:
                 Object.keys(execution.cases || {}).length === Object.keys(counts).length && Object.keys(counts).every(k =>
                   Object.keys(execution.cases?.[k] || {}).length === fields.length &&
                   fields.every(f => execution.cases?.[k]?.[f] === true));
-              // Quality scores are advisory; actual execution and source integrity remain blocking.
-              valid = complete && executed && report.execution_valid === true;
+              // Gate/input evidence stays on a fixed allowlist; only these terms are rendered.
+              const gateCases = ['036-valid', '037-release'];
+              const gateFields = ['transcript', 'skill_invocation', 'presence_gate', 'input_validation'];
+              const evidenceCategories = ['successful', 'not-observed', 'tool-error', 'unexpected-output',
+                'invalid-transcript', 'conflicting-results'];
+              const consistencyValues = ['consistent', 'contradiction', 'inconclusive', 'invalid-input',
+                'not-evaluable', 'not-applicable'];
+              const assertionPattern = /^assertion_[1-7]$/;
+              const safeGate = c => Boolean(c) && typeof c === 'object' &&
+                gateFields.every(f => evidenceCategories.includes(c[f]));
+              const gateInput = report.gate_input;
+              const gateInputOk = Boolean(gateInput) && gateCases.every(k => safeGate(gateInput[k]));
+              const consistency = execution?.consistency;
+              const consistencyOk = Boolean(consistency) && gateCases.every(k =>
+                consistencyValues.includes(consistency[k]));
+              const evaluability = execution?.evaluability;
+              const evaluabilityOk = Boolean(evaluability) && Object.keys(counts).every(k =>
+                evaluability[k] && typeof evaluability[k].evaluable === 'boolean' &&
+                Array.isArray(evaluability[k].not_evaluable_assertions) &&
+                evaluability[k].not_evaluable_assertions.every(a => assertionPattern.test(a)));
+              // Quality scores are advisory; actual execution, gate/input evidence and source integrity remain blocking.
+              valid = complete && executed && gateInputOk && consistencyOk && evaluabilityOk &&
+                report.execution_valid === true;
               body += `Native job: ${process.env.NATIVE_RESULT}; complete: ${complete}.\n`;
               const quality = complete ? `${passed}/${total} passed` :
                 `unavailable (grading incomplete; ${judgments.length}/${total} judgments available, ${passed} passed / ${judgments.length - passed} failed)`;
@@ -712,6 +733,21 @@ jobs:
                 }
                 body += '\n';
               }
+              body += '| Case | Gate/input evidence (transcript / Skill / gate / input) | Judge consistency | Evaluability |\n|---|---|---|---|\n';
+              for (const k of gateCases) {
+                const gateCategories = gateInput?.[k];
+                const evidence = safeGate(gateCategories)
+                  ? gateFields.map(f => gateCategories[f]).join(' / ') : 'unavailable';
+                const state = consistencyValues.includes(consistency?.[k]) ? consistency[k] : 'unavailable';
+                const item = evaluability?.[k];
+                const assertions = item && Array.isArray(item.not_evaluable_assertions)
+                  ? item.not_evaluable_assertions.filter(a => assertionPattern.test(a)) : [];
+                const evaluated = !item ? 'unavailable'
+                  : item.evaluable === true ? 'evaluable'
+                  : `not evaluable${assertions.length ? ' (' + assertions.join(', ') + ')' : ''}`;
+                body += `| ${k} | ${evidence} | ${state} | ${evaluated} |\n`;
+              }
+              body += '\n';
               body += '| Case | Execution evidence | Quality score (advisory) |\n|---|---|---|\n';
               for (const [k,n] of Object.entries(counts)) {
                 const evidence = fields.every(f => execution?.cases?.[k]?.[f] === true);

@@ -21,6 +21,13 @@ ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
 CASES = ["034-empty", "035-malformed", "036-valid", "037-release"]
 ASSERTION_COUNTS = dict(zip(CASES, [5, 5, 7, 7]))
+# Only these cases require a successful Step 0.6/0.7 setup before their analysis runs.
+GATE_CASES = ("036-valid", "037-release")
+GATE_STEPS = {"presence_gate": ("0.6", "sandbox mode: /sandbox/workspace/output"),
+              "input_validation": ("0.7", "Trusted triage-security input available")}
+# Fixed allowlist of published gate/input evidence categories; never raw transcript text.
+EVIDENCE_CATEGORIES = ("successful", "not-observed", "tool-error", "unexpected-output",
+                       "invalid-transcript", "conflicting-results")
 
 
 def pins():
@@ -292,30 +299,35 @@ def pipeline(python, source, config, workspace, run_dir, run_id, environment, di
     return 0
 
 
-def valid_case_tool_observations(run_dir):
-    """Observe matched native tools without exporting text or replacing judgments."""
+def valid_case_tool_observations(run_dir, case="036-valid"):
+    """Observe matched native gate/input tools without exporting text or replacing judgments."""
     observations = dict.fromkeys([
-        "transcript_found", "transcript_readable", "skill_invoked",
-        "presence_gate_succeeded", "presence_gate_failed",
-        "input_validation_succeeded", "input_validation_failed",
+        "transcript_found", "transcript_readable",
+        "skill_invoked", "skill_tool_error", "skill_invalid",
     ], False)
+    for kind in GATE_STEPS:
+        observations.update(dict.fromkeys([
+            kind + "_succeeded", kind + "_failed", kind + "_tool_error",
+            kind + "_unexpected_output", kind + "_invalid",
+        ], False))
     try:
-        paths = list(run_dir.glob("cases/036-valid/output/native/*/iteration-*/transcripts/*.jsonl"))
+        paths = list(run_dir.glob(f"cases/{case}/output/native/*/iteration-*/transcripts/*.jsonl"))
         observations["transcript_found"] = bool(paths)
         observations["transcript_readable"] = bool(paths)
         skill = (ROOT / "plugins/sdlc-workflow/skills/triage-security/SKILL.md").read_text()
         commands = {}
-        for step, kind in [("0.6", "presence_gate"), ("0.7", "input_validation")]:
+        for kind, (step, _) in GATE_STEPS.items():
             command = skill.split(f"### Step {step}", 1)[1].split("```bash\n", 1)[1].split("\n```", 1)[0]
             commands[command.replace("${CLAUDE_PLUGIN_ROOT}", "/sandbox/claude-config/plugins/sdlc-workflow")] = kind
     except (OSError, UnicodeError, IndexError):
         observations["transcript_readable"] = False
         return observations
-    expected = {"presence_gate": "sandbox mode: /sandbox/workspace/output",
-                "input_validation": "Trusted triage-security input available"}
+    expected = {kind: line for kind, (_, line) in GATE_STEPS.items()}
     for path in paths:
         pending = {}
         identities = set()
+        results_seen = set()
+        skill_ready = False
         observed = dict.fromkeys(observations, False)
         try:
             if any(parent.is_symlink() for parent in [path, *path.parents]):
@@ -350,23 +362,58 @@ def valid_case_tool_observations(run_dir):
                                 continue
                             if (block.get("name") == "Skill" and inputs.get("skill") == "sdlc-workflow:triage-security"
                                     and inputs.get("args") == "TC-8101"):
-                                observed["skill_invoked"] = True
+                                pending[identity] = "skill"
+                                continue
                             command = inputs.get("command")
-                            if block.get("name") == "Bash" and isinstance(identity, str) and isinstance(command, str):
+                            if block.get("name") == "Bash" and isinstance(command, str):
                                 pending[identity] = commands.get(command.strip())
                         elif record["type"] == "user" and block.get("type") == "tool_result":
                             identity = block.get("tool_use_id")
-                            kind = pending.pop(identity, None) if isinstance(identity, str) else None
+                            if not isinstance(identity, str):
+                                continue
+                            # A repeated result id cannot be paired unambiguously.
+                            if identity in results_seen:
+                                raise ValueError("Duplicate tool result")
+                            results_seen.add(identity)
+                            kind = pending.pop(identity, None)
                             if kind is None:
+                                continue
+                            if kind == "skill":
+                                error = block.get("is_error")
+                                if "is_error" in block and not isinstance(error, bool):
+                                    observed["skill_invalid"] = True
+                                    continue
+                                launch = record.get("tool_use_result")
+                                launched = error is not True
+                                if isinstance(launch, dict):
+                                    launched = launched and launch.get("success") is True
+                                    if "commandName" in launch:
+                                        launched = launched and launch.get("commandName") == (
+                                            "sdlc-workflow:triage-security")
+                                if launched:
+                                    observed["skill_invoked"] = True
+                                    skill_ready = True
+                                else:
+                                    observed["skill_tool_error"] = True
+                                continue
+                            # Gate/input steps only count after the Skill actually launched.
+                            if not skill_ready:
                                 continue
                             content = block.get("content", "")
                             if isinstance(content, list):
                                 content = "\n".join(item["text"] for item in content
                                                     if isinstance(item, dict) and item.get("type") == "text"
                                                     and isinstance(item.get("text"), str))
-                            success = (block.get("is_error") is False and isinstance(content, str)
-                                       and expected[kind] in content.splitlines())
+                            error = block.get("is_error")
+                            if not isinstance(error, bool) or not isinstance(content, str):
+                                observed[kind + "_invalid"] = True
+                                continue
+                            success = error is False and expected[kind] in content.splitlines()
                             observed[kind + ("_succeeded" if success else "_failed")] = True
+                            if error is True:
+                                observed[kind + "_tool_error"] = True
+                            elif not success:
+                                observed[kind + "_unexpected_output"] = True
                 if not seen:
                     raise ValueError("Empty transcript")
         except (OSError, UnicodeError, ValueError, RecursionError):
@@ -375,13 +422,57 @@ def valid_case_tool_observations(run_dir):
         for key, value in observed.items():
             observations[key] = observations[key] or value
     if not observations["transcript_readable"]:
-        for key in ["skill_invoked", "presence_gate_succeeded", "input_validation_succeeded"]:
+        for key in ["skill_invoked", *[kind + "_succeeded" for kind in GATE_STEPS]]:
             observations[key] = False
     return observations
 
 
+def evidence_category(observed, kind):
+    """Collapse one step's Boolean observations into a fixed evidence category."""
+    if not observed["transcript_found"]:
+        return "not-observed"
+    if not observed["transcript_readable"]:
+        return "invalid-transcript"
+    if kind == "skill_invocation":
+        if observed["skill_invoked"]:
+            return "successful"
+        if observed["skill_tool_error"]:
+            return "tool-error"
+        return "invalid-transcript" if observed["skill_invalid"] else "not-observed"
+    if observed[kind + "_invalid"]:
+        return "invalid-transcript"
+    if observed[kind + "_succeeded"] and observed[kind + "_failed"]:
+        return "conflicting-results"
+    if observed[kind + "_tool_error"]:
+        return "tool-error"
+    if observed[kind + "_unexpected_output"]:
+        return "unexpected-output"
+    if observed[kind + "_succeeded"]:
+        return "successful"
+    return "not-observed"
+
+
+def gate_input_observations(run_dir):
+    """Publish only fixed per-case gate/input categories for the setup-dependent cases."""
+    observations = {}
+    for case in GATE_CASES:
+        observed = valid_case_tool_observations(run_dir, case)
+        transcript = ("not-observed" if not observed["transcript_found"]
+                      else "successful" if observed["transcript_readable"] else "invalid-transcript")
+        observations[case] = {
+            "transcript": transcript,
+            "skill_invocation": evidence_category(observed, "skill_invocation"),
+            "presence_gate": evidence_category(observed, "presence_gate"),
+            "input_validation": evidence_category(observed, "input_validation"),
+        }
+    if any(value not in EVIDENCE_CATEGORIES for categories in observations.values()
+           for value in categories.values()):
+        raise ValueError("Invalid safe gate/input category")
+    return observations
+
+
 def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
-    """Export source pins, Boolean outcomes and fixed observations; raw evidence stays private."""
+    """Export source pins, Boolean outcomes and fixed gate/input categories; raw evidence stays private."""
     sha_keys = {"head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"}
     if (set(source) != sha_keys | {"pr_number"} or type(source["pr_number"]) is not int
             or source["pr_number"] <= 0
@@ -399,7 +490,7 @@ def publish_report(run_dir, destination, source, exit_code, diagnostics=None):
         exit_code = exit_code or 1
     report = {"source": source, "exit_code": exit_code, "complete": complete, "outcomes": outcomes,
               "passed": sum(value is True for case in outcomes.values() for value in case.values()), "total": sum(ASSERTION_COUNTS.values()),
-              "valid_case_tools": valid_case_tool_observations(run_dir)}
+              "gate_input": gate_input_observations(run_dir)}
     if summary_failures:
         report["summary_failures"] = summary_failures
     if diagnostics is not None:

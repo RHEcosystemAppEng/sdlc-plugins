@@ -20,7 +20,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[3]
 SUITE = ROOT / "evals/fullsend/triage-security"
 FIXTURES = ROOT / "evals/triage-security/files"
-# Pin of the triage-security Step 0.6/0.7 gate commands that valid_case_tools diagnostics match against.
+# Pin of the triage-security Step 0.6/0.7 gate commands that gate_input diagnostics match against.
 GATE_COMMANDS_SHA256 = "330702b7cd14df099e7bdc7e9da5dac5b6e182854ad3dfe55273d8ad21bf75c8"
 
 
@@ -138,33 +138,34 @@ def synthetic_valid_tool_records():
     return records
 
 
-def write_synthetic_valid_transcript(run_dir, records):
+def write_synthetic_valid_transcript(run_dir, records, case="036-valid"):
     """Write explicitly synthetic native-format test records inside the case layout."""
-    path = run_dir / "cases/036-valid/output/native/synthetic/iteration-1/transcripts/test.jsonl"
+    path = run_dir / f"cases/{case}/output/native/synthetic/iteration-1/transcripts/test.jsonl"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(json.dumps(record) + "\n" for record in records))
     return path
 
 
 def test_safe_report_observes_matched_valid_tools_without_changing_scores(tmp_path):
-    """Actual paired records yield fixed observations while false judgments stay false."""
-    # Given synthetic native-format tool records and an unchanged failed summary
+    """Actual paired records yield fixed categories while false judgments stay false."""
+    # Given synthetic native-format tool records for both setup-dependent cases
     common = load_script(ROOT / "evals/fullsend/run.py")
     run_dir = tmp_path / "synthetic"
-    transcript = write_synthetic_valid_transcript(run_dir, synthetic_valid_tool_records())
+    transcripts = [write_synthetic_valid_transcript(run_dir, synthetic_valid_tool_records(), case)
+                   for case in ["036-valid", "037-release"]]
     (run_dir / "summary.yaml").write_text(yaml.safe_dump(synthetic_judge_summary(False)))
-    original = {path: path.read_bytes() for path in [transcript, run_dir / "summary.yaml"]}
+    original = {path: path.read_bytes() for path in [*transcripts, run_dir / "summary.yaml"]}
     source = {key: "a" * 40 for key in ["head_sha", "merge_sha", "base_sha", "trusted_sha", "eval_source_sha"]}
     source["pr_number"] = 299
     # When publishing the real safe artifact without executing an agent
     common.publish_report(run_dir, tmp_path / "safe", source, 7)
     report = json.loads((tmp_path / "safe/native-result.json").read_text())
-    # Then only fixed Boolean observations leave the host, with scores and bytes intact
-    assert report.get("valid_case_tools") == {
-        "transcript_found": True, "transcript_readable": True, "skill_invoked": True,
-        "presence_gate_succeeded": True, "presence_gate_failed": False,
-        "input_validation_succeeded": True, "input_validation_failed": False,
-    }
+    # Then only fixed categories leave the host, with scores and bytes intact
+    assert report["gate_input"] == {
+        case: {"transcript": "successful", "skill_invocation": "successful",
+               "presence_gate": "successful", "input_validation": "successful"}
+        for case in ["036-valid", "037-release"]}
+    assert "valid_case_tools" not in report
     assert report["source"] == source and report["exit_code"] == 7
     assert report["complete"] is True and report["passed"] == 0 and report["total"] == 24
     assert all(value is False for case in report["outcomes"].values() for value in case.values())
@@ -233,7 +234,8 @@ def test_valid_tool_observations_do_not_infer_gate_success(tmp_path, defect):
     assert observed["transcript_found"] is (defect != "missing")
     assert observed["transcript_readable"] is (defect not in {
         "malformed", "truncated", "empty", "missing", "symlink-file", "symlink-directory"})
-    assert observed["presence_gate_failed"] is (defect in {"missing-error", "error", "wrong-output"})
+    assert observed["presence_gate_failed"] is (defect in {"error", "wrong-output"})
+    assert observed["presence_gate_invalid"] is (defect == "missing-error")
 
 
 @pytest.mark.parametrize("kind,index", [("presence_gate", 3), ("input_validation", 5)])
@@ -255,6 +257,140 @@ def test_valid_tool_observations_preserve_mixed_success_and_failure(tmp_path, ki
     assert observed[kind + "_succeeded"] is True
     assert observed[kind + "_failed"] is True
     assert "SECRET" not in json.dumps(observed)
+
+
+@pytest.mark.parametrize("defect,presence,input_validation,transcript", [
+    (None, "successful", "successful", "successful"),
+    ("missing", "not-observed", "not-observed", "not-observed"),
+    ("empty", "invalid-transcript", "invalid-transcript", "invalid-transcript"),
+    ("malformed", "invalid-transcript", "invalid-transcript", "invalid-transcript"),
+    ("symlink", "invalid-transcript", "invalid-transcript", "invalid-transcript"),
+    ("tool-error", "tool-error", "successful", "successful"),
+    ("wrong-output", "unexpected-output", "successful", "successful"),
+    ("missing-error", "invalid-transcript", "successful", "successful"),
+    ("conflicting", "conflicting-results", "successful", "successful"),
+])
+def test_gate_input_categories_separate_behavior_failures_from_unusable_evidence(
+        tmp_path, defect, presence, input_validation, transcript):
+    """Fixed categories keep an observed failure distinct from missing or invalid evidence."""
+    # Given ADVERSARIAL TEST FIXTURES derived from explicitly synthetic records
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    records = synthetic_valid_tool_records()
+    call, result = records[2], records[3]
+    output = result["message"]["content"][0]
+    if defect == "tool-error":
+        output["is_error"] = True
+    elif defect == "wrong-output":
+        output["content"] = "sandbox mode: /wrong SECRET"
+    elif defect == "missing-error":
+        output.pop("is_error")
+    elif defect == "conflicting":
+        repeated = json.loads(json.dumps([call, result]))
+        repeated[0]["message"]["content"][0]["id"] = "repeated"
+        repeated[1]["message"]["content"][0].update(tool_use_id="repeated", is_error=True, content="SECRET")
+        records.extend(repeated)
+    path = write_synthetic_valid_transcript(tmp_path, records, "037-release")
+    if defect == "missing":
+        path.unlink()
+    elif defect == "malformed":
+        path.write_text(path.read_text() + '{"SECRET":\n')
+    elif defect == "empty":
+        path.write_text("")
+    elif defect == "symlink":
+        outside = tmp_path / "private.jsonl"
+        path.rename(outside)
+        path.symlink_to(outside)
+    # When mapping case-scoped evidence onto the published allowlist
+    observations = common.gate_input_observations(tmp_path)
+    categories = observations["037-release"]
+    # Then only fixed categories leave the host and the other case is untouched
+    assert categories == {"transcript": transcript, "skill_invocation": (
+        "successful" if transcript == "successful" else transcript),
+        "presence_gate": presence, "input_validation": input_validation}
+    assert observations["036-valid"]["presence_gate"] == "not-observed"
+    assert set(categories.values()) <= set(common.EVIDENCE_CATEGORIES)
+    assert "SECRET" not in json.dumps(observations)
+
+
+@pytest.mark.parametrize("defect,category", [
+    ("unpaired", "not-observed"), ("failed", "tool-error"),
+    ("malformed", "invalid-transcript"), ("launch-failed", "tool-error"),
+    ("absent-error", "successful")])
+def test_skill_invocation_requires_a_successful_paired_result(tmp_path, defect, category):
+    """A Skill tool_use is not evidence until its paired result confirms the launch."""
+    # Given synthetic records whose Skill call has no trustworthy paired outcome
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    records = synthetic_valid_tool_records()
+    result = records[1]["message"]["content"][0]
+    if defect == "unpaired":
+        del records[1]
+    elif defect == "failed":
+        result["is_error"] = True
+    elif defect == "malformed":
+        result["is_error"] = "false"
+    elif defect == "absent-error":
+        result.pop("is_error")
+    else:
+        records[1]["tool_use_result"] = {"success": False}
+    write_synthetic_valid_transcript(tmp_path, records)
+    # When extracting case-scoped evidence
+    observed = common.valid_case_tool_observations(tmp_path)
+    # Then only a confirmed paired launch counts, and later Bash steps require it
+    assert observed["skill_invoked"] is (defect == "absent-error")
+    assert common.evidence_category(observed, "skill_invocation") == category
+    assert common.gate_input_observations(tmp_path)["036-valid"]["skill_invocation"] == category
+    assert observed["presence_gate_succeeded"] is (defect == "absent-error")
+    assert observed["input_validation_succeeded"] is (defect == "absent-error")
+
+
+def test_gate_steps_before_the_skill_do_not_establish_setup(tmp_path):
+    """Gate Bash calls executed before the Skill invocation are not its setup evidence."""
+    # Given synthetic records with both Bash steps ahead of the Skill pair
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    records = synthetic_valid_tool_records()
+    write_synthetic_valid_transcript(tmp_path, records[2:] + records[:2])
+    # When extracting case-scoped evidence
+    observed = common.valid_case_tool_observations(tmp_path)
+    # Then the invocation succeeds but its preceding Bash steps do not count
+    assert observed["skill_invoked"] is True
+    assert observed["presence_gate_succeeded"] is False
+    assert observed["input_validation_succeeded"] is False
+    assert common.evidence_category(observed, "presence_gate") == "not-observed"
+
+
+def test_duplicate_tool_result_invalidates_gate_evidence(tmp_path):
+    """A repeated tool_result id cannot be paired unambiguously, so it fails closed."""
+    # Given a successful gate pair followed by a duplicate result id
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    records = synthetic_valid_tool_records()
+    records.insert(4, json.loads(json.dumps(records[3])))
+    write_synthetic_valid_transcript(tmp_path, records)
+    # When extracting case-scoped evidence
+    observed = common.valid_case_tool_observations(tmp_path)
+    # Then no success is published and the whole transcript is unusable
+    assert observed["transcript_readable"] is False
+    assert observed["presence_gate_succeeded"] is False
+    assert common.gate_input_observations(tmp_path)["036-valid"]["presence_gate"] == "invalid-transcript"
+
+
+def test_malformed_gate_result_beside_success_is_unusable_not_conflicting(tmp_path):
+    """A malformed result is not an observed failure just because another call succeeded."""
+    # Given one successful gate pair and one matched result without a Boolean error flag
+    common = load_script(ROOT / "evals/fullsend/run.py")
+    records = synthetic_valid_tool_records()
+    repeated = json.loads(json.dumps(records[2:4]))
+    repeated[0]["message"]["content"][0]["id"] = "malformed"
+    repeated[1]["message"]["content"][0].update(tool_use_id="malformed")
+    repeated[1]["message"]["content"][0].pop("is_error")
+    records.extend(repeated)
+    write_synthetic_valid_transcript(tmp_path, records)
+    # When extracting case-scoped evidence
+    observed = common.valid_case_tool_observations(tmp_path)
+    # Then the malformed result is unusable rather than a behavior failure
+    assert observed["presence_gate_succeeded"] is True
+    assert observed["presence_gate_failed"] is False
+    assert observed["presence_gate_invalid"] is True
+    assert common.evidence_category(observed, "presence_gate") == "invalid-transcript"
 
 
 @pytest.mark.parametrize("skill,args", [("different-skill", "TC-8101"), ("sdlc-workflow:triage-security", "TC-9999")])
@@ -422,7 +558,7 @@ def test_summary_integrity_rejects_missing_invalid_or_duplicate_yaml(tmp_path, r
     assert path.read_bytes() == raw if raw is not None else not path.exists()
 
 
-def test_gate_commands_match_valid_case_tools_pin():
+def test_gate_commands_match_gate_input_pin():
     """Tripwire: Step 0.6/0.7 gate command changes are flagged because native evidence uses main's commands."""
     # Given the gate blocks, parsed exactly like valid_case_tool_observations in evals/fullsend/run.py
     # (keep this parsing in sync with run.py)
@@ -435,8 +571,8 @@ def test_gate_commands_match_valid_case_tools_pin():
 
     # Then they match the pinned commands
     assert digest == GATE_COMMANDS_SHA256, (
-        "Step 0.6/0.7 gate commands changed. Native valid_case_tools evidence for this PR compares against "
-        "main's commands, so presence_gate_* / input_validation_* will read unrecognized (false/false). "
+        "Step 0.6/0.7 gate commands changed. Native gate_input evidence for this PR compares against "
+        "main's commands, so presence_gate / input_validation will not read successful. "
         f"Check the native transcript manually, then update GATE_COMMANDS_SHA256 to {digest} in this PR.")
 
 

@@ -215,10 +215,14 @@ Fullsend release (bare `vertex-ai`). Only the selected PR plugin is sandbox test
 
 Cases 034–036 retain their 17 original assertion texts (033-absent and its four
 were dropped by TC-7300). Case 037 adds seven release assertions, for 24 total. Missing, null, skipped applicable judgments, errors or
-failed infrastructure block reporting and the combined check. Complete False
-judgments are advisory when genuine runtime execution and provenance are valid. Expected negative native exits remain intact.
-Only source pins, Boolean outcomes, counts and exit/completeness status are
-published as `native-result.json`, retained14days. Raw logs, arbitrary rationale,
+failed infrastructure block reporting and the combined check. A passing judgment
+that contradicts the gate/input evidence is a contradiction, not a quality
+signal, and invalidates the run. Complete False judgments are advisory when
+genuine runtime execution and provenance are valid. Expected negative native
+exits remain intact.
+Only source pins, Boolean outcomes, counts, exit/completeness status, and the
+gate/input evidence categories and evaluability described below are published as
+`native-result.json`, retained for 14 days. Raw logs, arbitrary rationale,
 transcripts, configs and credentials stay private in runner temporary storage.
 Reporting writes use a separate job without inference credentials.
 
@@ -363,24 +367,79 @@ records; a complete summary alone does not prove correct Skill execution.
 No task/bug closure follows from static tests, host schema validation or a
 successful dependency preflight.
 
-The source-bound `native-result.json` also includes `valid_case_tools`, containing
-only Boolean flags: `transcript_found`, `transcript_readable`, `skill_invoked`,
-`presence_gate_succeeded`, `presence_gate_failed`, `input_validation_succeeded`,
-and `input_validation_failed`. These observations concern only `036-valid`.
-The extractor recognizes the exact Step0.6/0.7 Bash instructions in the trusted
-eval source (with the native plugin mount substituted), pairs actual user tool
-results with preceding assistant Bash calls by ID, and requires a non-error result
-with the expected stdout line for success. Skill invocation requires the actual
-`sdlc-workflow:triage-security` tool call for `TC-8101`. Narration, quoted commands
-and unmatched results cannot establish success. Command variants are unrecognized.
+The source-bound `native-result.json` also includes `gate_input`, a per-case map for
+the two setup-dependent cases (`036-valid`, `037-release`). Each case carries only four
+fixed fields — `transcript`, `skill_invocation`, `presence_gate`, `input_validation` —
+each drawn from the allowlist `successful`, `not-observed`, `tool-error`,
+`unexpected-output`, `invalid-transcript` and `conflicting-results`. No command text,
+stdout/stderr, path, transcript line or judge rationale is exported.
 
-Conflicting observed results retain both success and failure flags. Missing,
-empty, malformed, truncated, unreadable or symlinked transcripts cannot establish
-success; incomplete evidence sets `transcript_readable=false` and clears success
-and invocation flags. A false flag means no qualifying observation, not proof
-that the step was skipped, that the Skill is correct, or that Fullsend has a bug.
-These flags do not change any judge assertion, outcome or exit code. Raw logs,
-commands, paths, stdout, credentials and judge rationales remain private.
+- `successful` — a genuine paired Bash call for the case returned a non-error result
+  whose stdout contains the required line; for `skill_invocation`, the matching Skill
+  call has a paired result that confirms the launch.
+- `tool-error` — the matched result reported a tool error (`is_error: true`), or the
+  paired Skill launch failed. This is an observed behavior failure, never a missing
+  measurement.
+- `unexpected-output` — the matched result succeeded but lacked the required stdout line.
+- `conflicting-results` — the same step produced both a successful and a failing result.
+- `not-observed` — no matching paired call exists for the case.
+- `invalid-transcript` — evidence was found but is unusable: the transcript is malformed,
+  truncated, empty or symlinked, a gate-step result has a missing or non-Boolean
+  `is_error`, or a matched result has an unbound/duplicate `tool_use_id`.
+
+The extractor recognizes only the exact Step0.6/0.7 Bash instructions in the trusted
+eval source (with the native plugin mount substituted). Narration, quoted commands and
+unmatched results cannot establish success and stay `not-observed`; command variants
+are unrecognized. A Skill `tool_use` is not evidence on its own: `skill_invocation`
+becomes `successful` only when the paired result confirms the launch, and the two gate
+Bash steps count only when they occur in the same transcript **after** that successful
+Skill launch. A repeated `tool_result` id is unpaired evidence and fails the transcript
+closed. Because categories are case-scoped, another case's transcript cannot satisfy
+the requirement.
+
+### Gate/assertion consistency
+
+`check-native-fullsend-execution.py` validates `gate_input` against the allowlist —
+including that a `not-observed` or `invalid-transcript` transcript never carries
+step-level successes — and reconciles it with the graded verdict for the gate assertion
+of each setup-dependent case: `036-valid / assertion_2` (the two Bash steps) and
+`037-release / assertion_1` (the Skill invocation plus the two Bash steps). The
+invariant is:
+
+- A passing gate verdict requires every step named by that assertion to be `successful`.
+  A judge may not overrule observed execution.
+- A passing verdict while any required step reported `tool-error`, `unexpected-output`
+  or `conflicting-results` is a `contradiction`.
+- A passing verdict while any required step is `not-observed` or `invalid-transcript` is
+  `inconclusive`: the evidence supports neither the judgment nor a behavior finding.
+- A failing gate verdict against `successful` evidence, or against an observed failure,
+  is `consistent` — it stays a genuine behavior result and only lowers the advisory score.
+- A failing verdict with no usable evidence is `inconclusive`, not a behavior result.
+- A malformed, unknown, incoherent or incomplete `gate_input` map is `invalid-input`.
+
+`contradiction`, `inconclusive` and `invalid-input` all set `execution_valid: false`,
+are published as fixed categories and fail the trusted check. Only `consistent` (and
+`not-applicable` for `034-empty`/`035-malformed`) is publishable.
+
+### Evaluability of dependent assertions
+
+`execution.evaluability` records, per case, whether the required setup was established:
+gate/input `successful`, the Skill actually invoked, the case's runtime output completed,
+and the gate assertion not judged `False`. The runtime and Skill conditions come from the
+checker's own `observe_case()` evidence, not from `gate_input` alone, so a missing
+`output.jsonl` or failed Skill launch cannot leave a case marked evaluable. When it was
+not established, `evaluable` is `false` and `not_evaluable_assertions` lists the
+assertions whose scores must not be read as evidence about the analyzed behavior:
+
+- `036-valid`: `assertion_1` and `assertion_3`–`assertion_7`.
+- `037-release`: `assertion_2`–`assertion_7` — the release-path assertions. A failed
+  `assertion_1`, or missing/invalid gate evidence, means the release path was never
+  meaningfully exercised.
+
+`034-empty` and `035-malformed` stay `evaluable: true`: they intentionally exercise
+absent and malformed input, so a failing validator is expected behavior rather than a
+broken precondition. The native result never rewrites judge outcomes, assertion text or
+thresholds; evaluability only labels which scores are interpretable.
 
 ## Deterministic development checks
 
