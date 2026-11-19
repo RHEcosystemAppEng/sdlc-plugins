@@ -116,6 +116,21 @@
         "The skill does NOT modify any code files — it only reads, verifies, creates sub-task descriptions, and reports (constraint 1.11)",
         "Non-eval checks (Scope Containment, Sensitive Patterns, Acceptance Criteria) are unaffected by eval processing — Scope Containment compares the diff files against the task's Files to Modify, Sensitive Patterns scans the diff for secrets, and Acceptance Criteria evaluates each criterion against the diff content independently of the eval results"
       ]
+    },
+    {
+      "id": 7,
+      "prompt": "Verify PR #1450 for task TC-9110. The task description is in task-cross-repo-review.md, the PR diff is in pr-diff-cross-repo-review.md, the review comments are in pr-review-comments-cross-repo.md, and the target repository structure is in repo-ui.md. All CI checks pass. Write your verification report to outputs/report.md. For each review comment, write your classification reasoning to outputs/review-N.md (where N is the comment id). For each Jira issue the skill would create, write its full description to outputs/task-N-slug.md following the task-description-template.md format and record the Issue Type, Repository, and issue link type it would use. Do not call live GitHub or Jira.",
+      "expected_output": "A verification report where the advisory-ordering comment (id 60001) is classified as a code change request and routed to the repository that owns the defect. Because the fix belongs to the shared query builder in trustify/trustify rather than the PR's trustify-ui, the skill creates a standalone Task (not a Sub-task) with Repository trustify/trustify and an ORDER BY scope, links it to TC-9110 with a Relates link and no Parent field, and replies on the thread naming the owning repository and the data layer.",
+      "files": ["files/task-cross-repo-review.md", "files/pr-diff-cross-repo-review.md", "files/pr-review-comments-cross-repo.md", "files/repo-ui.md"],
+      "assertions": [
+        "The advisory-ordering comment (id 60001) is classified as a code change request and triggers issue creation, recorded in outputs/review-60001.md or the report (Step 6c)",
+        "The fix is routed to the owning repository `trustify/trustify`: the created task description sets Repository to `trustify/trustify`, not `trustify-ui` (Step 6c owning-layer detection, Step 6d Cross-repository review feedback tasks, constraint 1.109)",
+        "The issue created for comment 60001 is a standalone Task — the output records Issue Type Task and does not create a Sub-task for this fix (Step 6d Cross-repository review feedback tasks)",
+        "The task is linked to parent task TC-9110 with a Relates link and does not set `Parent` on the issue — it is not described as a Sub-task and not linked with Blocks (Step 6d; sandbox mode uses link_type Related)",
+        "The fix task's scope is the missing `ORDER BY` in the `advisories()` query builder in `trustify/trustify` with backend test coverage — it is not scoped to `AdvisoryTable.tsx` or to any trustify-ui file (Step 6c)",
+        "The reply recorded for comment 60001 names the owning repository `trustify/trustify` and the data layer (shared query builder) and states the fix was routed there instead of a sub-task in this PR's repository (Step 6e)",
+        "The fix task description keeps the template sections: Repository, Description, Implementation Notes naming `advisories()` in the query builder, Acceptance Criteria, Test Requirements, and a Review Context section quoting comment 60001; Target PR is omitted or marked absent because `trustify/trustify` has no PR for this fix (template Rules, constraint 1.12)"
+      ]
     }
   ]
 }
