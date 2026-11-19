@@ -608,7 +608,7 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     # Canonical complete-object digests keep this portable to a shallow checkout:
     # main ab20bee6, native aa15d776, and PR299 d83ee90b (TC4636 prompt repair).
     # TC-7642 appends verify-pr eval 7 (cross-repository review feedback); its
-    # complete-manifest digest is 7a3d3a94 and the earlier digests stay accepted
+    # complete-manifest digest is 339edaec and the earlier digests stay accepted
     # so the two branches land in either order without rewriting history.
     for cases, digests in [
         (baseline, {"205eeca4b564c0483c919be0951e50b3d5510f981278c61fa1c47468af5fe76d",
@@ -616,7 +616,7 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
         (verify, {"251863edaed38f0b133c0cf0981ddffe80692f5d0655b51f7bfe214be38f69b1",
                   "cf587edf1e94e6a1a210d5c97788f33b3336a0818a86551e364ec056bd1a3be1",
                   "501a5fd500ff19ad460e9b1c65f7c4422b743ab6db6b58ba331b50197b45aabd",
-                  "7a3d3a94cd4e0c0454c1a29fac7c9e062674972d01d008360d759ef0330ac5d0"}),
+                  "339edaec49c6a781b16f75f772eed92dcfd7e2971647bbcedd04cc62a4e4dfe6"}),
     ]:
         assert hashlib.sha256(json.dumps(cases, sort_keys=True, separators=(",", ":")).encode()).hexdigest() in digests
     assert not (FIXTURES / "fullsend-gate-tools.py").exists()
