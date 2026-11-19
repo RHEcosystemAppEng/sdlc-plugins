@@ -949,7 +949,16 @@ def collect_bundle(issue_key, project_root, release_decisions=None, mutation_aut
 
 
 def untriaged_jql(configuration):
-    """Build the SKILL.md Discovery-mode "Untriaged issues" query (keep in sync)."""
+    """Build the poller's untriaged-issue query.
+
+    Keep in sync with the SKILL.md Discovery-mode "Untriaged issues" query, except
+    for one intentional difference: the poller also skips issues assigned to anyone
+    other than the runner (``currentUser()`` is the credential running the search).
+    The executor would abort a plan for a human-owned issue, so discovering it
+    would only fail on every scheduled run. Unassigned issues and the runner's own
+    partially triaged retries are still returned. Interactive Discovery keeps
+    listing colleagues' issues.
+    """
     issue_type_id = configuration["vulnerability_issue_type_id"]
     # The issue type is interpolated unquoted, as in the skill's query, so only
     # a numeric ID is accepted; anything else could alter the JQL.
@@ -957,6 +966,7 @@ def untriaged_jql(configuration):
         raise EvidenceError("Vulnerability issue type ID must be numeric")
     return (
         'project = "{}" AND issuetype = {} AND labels NOT IN (ai-cve-triaged) '
+        'AND (assignee IS EMPTY OR assignee = currentUser()) '
         'ORDER BY status ASC, created DESC'
         .format(_jql_escape(configuration["project_key"]), issue_type_id)
     )

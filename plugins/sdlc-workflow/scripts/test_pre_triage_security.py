@@ -1364,7 +1364,7 @@ def _skill_untriaged_query():
 
 
 def test_discover_jql_matches_skill_discovery_query(tmp_path, monkeypatch):
-    """The discover JQL is the SKILL.md untriaged query with the project key quoted and escaped."""
+    """The discover JQL is the SKILL.md untriaged query plus the runner-ownership clause, project key escaped."""
     # Given a configured project key containing JQL metacharacters
     root = _discovery_project(tmp_path, monkeypatch, project_key='TC"\\OPS')
     searched = []
@@ -1380,10 +1380,12 @@ def test_discover_jql_matches_skill_discovery_query(tmp_path, monkeypatch):
     # When discovering untriaged issues
     pre_triage_security.discover_untriaged(root)
 
-    # Then the JQL equals the skill's query 1 (filter and ordering) after substitution
+    # Then the JQL equals the skill's query 1 after substitution, with only the
+    # intentional runner-ownership clause inserted before the ordering
     expected = (_skill_untriaged_query()
                 .replace("<project-key>", '"TC\\"\\\\OPS"')
-                .replace("<vulnerability-issue-type-id>", "10016"))
+                .replace("<vulnerability-issue-type-id>", "10016")
+                .replace(" ORDER BY", " AND (assignee IS EMPTY OR assignee = currentUser()) ORDER BY"))
     assert searched == [("search_jql", (
         "--jql", expected, "--fields", "key", "--max-results", "20"))]
 
@@ -1856,3 +1858,19 @@ def test_bundle_schema_rejects_malformed_runner_fields(section, field, value):
     # When the bundle is schema-validated, then it is rejected
     with pytest.raises(pre_triage_security.EvidenceError, match="triage-security input validation failed"):
         pre_triage_security.validate_bundle(bundle)
+
+
+def test_untriaged_jql_skips_issues_owned_by_someone_other_than_the_runner():
+    """The poller query keeps unassigned and runner-assigned issues and skips human-owned ones."""
+    # Given a valid Security Configuration
+    configuration = {"project_key": "TC", "vulnerability_issue_type_id": "10016"}
+
+    # When the poller's discovery query is built
+    jql = pre_triage_security.untriaged_jql(configuration)
+
+    # Then it is exactly the Discovery query plus the runner-ownership clause
+    assert jql == (
+        'project = "TC" AND issuetype = 10016 AND labels NOT IN (ai-cve-triaged) '
+        'AND (assignee IS EMPTY OR assignee = currentUser()) '
+        'ORDER BY status ASC, created DESC'
+    )

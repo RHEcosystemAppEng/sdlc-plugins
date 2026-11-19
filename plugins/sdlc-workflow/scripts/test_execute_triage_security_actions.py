@@ -1743,3 +1743,19 @@ def test_recorder_returns_only_the_requested_projection(fields, expected, record
     # Then only the requested fields come back and the projection is recorded
     assert set(response["fields"]) == expected
     assert recorder.calls == [("get-issue", "TC-42", fields)]
+
+
+def test_report_only_result_for_human_owned_issue_makes_no_jira_call(recorder):
+    """A report-only result for an issue a human owns passes without any Jira read or write."""
+    # Given a mutation-authorized bundle for an issue a human owns, in the snapshot and live
+    recorder.live_assignee = {"accountId": "engineer"}
+    trusted = _trusted_input(runner=_RUNNER)
+    trusted["issue"]["fields"] = {"assignee": {"accountId": "engineer"}}
+    result = _plan([{"type": "report-only", "marker": "triage-security:tc-42:report-only"}], mode="report-only")
+
+    # When the executor runs the report-only result
+    registry = executor.execute_plan(result, trusted)
+
+    # Then nothing is executed, no ownership read happens, and nothing is raised
+    assert registry == {}
+    assert recorder.calls == []

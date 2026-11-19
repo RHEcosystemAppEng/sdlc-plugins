@@ -52,8 +52,10 @@ existing assignee who is not the runner. Therefore:
 - `issue.fields.assignee.accountId` equals `runner_account_id`: the assignment is
   already applied (for example a poller retry that failed before `ai-cve-triaged`
   was added); omit it and continue the triage. This is not concurrent triage.
-- Assigned to anyone else: another engineer owns the issue. Plan no assignment,
-  and report the existing assignee as concurrent triage in the report.
+- Assigned to anyone else: another engineer owns the issue. Return a `report-only`
+  result with exactly one `report-only` action and no mutations. The report names
+  the current assignee as concurrent triage. The executor would reject any mutating
+  plan for this issue, and the poller doesn't discover human-owned issues.
 - `runner_account_id` absent (older pre-script): withhold the assignment as Step
   0.8 describes.
 
