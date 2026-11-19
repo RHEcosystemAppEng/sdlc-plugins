@@ -42,6 +42,10 @@ The generated task's Implementation Notes should include:
 The generated task's Implementation Notes do NOT reference the Migration Patterns convention.
 No warning or error is shown — the convention is silently dropped.
 
+### **Environment / Version**
+
+Not specified.
+
 ### **Attachments**
 
 None.

@@ -40,6 +40,10 @@ Two distinct problems occur when running `/plan-feature`:
 - Implementation Notes reference conventions as `§migration-patterns` (kebab-case, not matching the heading).
 - The created issue is of type Feature (ID 10142) instead of Task.
 
+### **Environment / Version**
+
+Not specified.
+
 ### **Attachments**
 
 None.
