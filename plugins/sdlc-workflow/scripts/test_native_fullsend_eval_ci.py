@@ -378,6 +378,8 @@ def test_report_displays_safe_gate_categories_and_evaluability():
               "execution_valid": True, "gate_input": synthetic_gate_input(),
               "execution": synthetic_execution(outcomes)}
     report["gate_input"]["037-release"]["presence_gate"] = "tool-error"
+    # A genuine failed verdict beside an observed failure is consistent and advisory.
+    outcomes["037-release"]["assertion_1"] = False
     report["execution"]["evaluability"]["037-release"] = {
         "evaluable": False, "not_evaluable_assertions": [f"assertion_{i}" for i in range(2, 8)]}
     # When the actual trusted workflow publishes the report
