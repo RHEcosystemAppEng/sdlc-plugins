@@ -372,7 +372,7 @@ def test_source_evidence_accepts_rpm_system_package_reads():
     }], "development_streams": [{
         "repository": "component", "ref": "main", "path": "rpms.lock.yaml",
         "command": "git show main:rpms.lock.yaml", "content": "openssl: 3.0.8",
-    }]}
+    }], "conventions": []}
 
     # When the runner validates the system-package evidence
     result = pre_triage_security._validate_source_evidence(evidence)
@@ -380,6 +380,95 @@ def test_source_evidence_accepts_rpm_system_package_reads():
     # Then it preserves the RPM reads for the sandbox rather than assuming Cargo or npm
     assert result["lock_files"][0]["path"] == "rpms.lock.yaml"
     assert result["development_streams"][0]["content"] == "openssl: 3.0.8"
+
+
+def test_dependency_update_policy_parses_project_owned_commands():
+    """A structured convention captures generic strategy and commands without plugin defaults."""
+    # Given a project policy with a repository default and an ecosystem override
+    section = '''
+<!-- Use these approved dependency commands. -->
+
+```json
+{"policies": [
+  {"ecosystem":"*","strategy":"batch","update_command":"make deps-update",
+   "targeted_fallback_command":"make deps-update-package {package}",
+   "graph_command":"make deps-tree","constraint_changes":false,"verification":["make test"]},
+  {"ecosystem":"Go","strategy":"targeted","update_command":"go get {package}@{fixed_version}",
+   "targeted_fallback_command":"",
+   "graph_command":"go mod graph","constraint_changes":true,"verification":[]}
+]}
+```
+'''
+
+    # When the convention section is normalized for trusted input
+    policies = pre_triage_security._parse_dependency_updates(section)
+
+    # Then commands remain project-owned and the per-ecosystem policy is preserved
+    assert policies[0]["update_command"] == "make deps-update"
+    assert policies[1]["ecosystem"] == "Go"
+    assert policies[1]["constraint_changes"] is True
+
+
+@pytest.mark.parametrize("document, message", [
+    ("```json\n{\"policies\": [\"bad\"]}\n```", "must be an object"),
+    ("```json\n{\"policies\":[{\"ecosystem\":\"Go\",\"strategy\":\"auto\","
+     "\"update_command\":\"go get\",\"targeted_fallback_command\":\"\","
+     "\"graph_command\":\"go mod graph\","
+     "\"constraint_changes\":false,\"verification\":[]}]}\n```", "strategy must be batch or targeted"),
+    ("```json\n{\"policies\":[{\"ecosystem\":\"Go\",\"strategy\":\"targeted\","
+     "\"update_command\":\"   \",\"targeted_fallback_command\":\"\","
+     "\"graph_command\":\"go mod graph\",\"constraint_changes\":false,\"verification\":[]}]}\n```",
+     "update_command must be a non-empty string"),
+    ("```json\n{\"policies\": ["
+     "{\"ecosystem\":\"Go\",\"strategy\":\"batch\",\"update_command\":\"go get\","
+     "\"targeted_fallback_command\":\"\",\"graph_command\":\"go mod graph\","
+     "\"constraint_changes\":false,\"verification\":[]},"
+     "{\"ecosystem\":\"go\",\"strategy\":\"targeted\",\"update_command\":\"go get\","
+     "\"targeted_fallback_command\":\"\",\"graph_command\":\"go mod graph\","
+     "\"constraint_changes\":false,\"verification\":[]}]}\n```",
+     "duplicate ecosystem"),
+    ("```json\n{not json}\n```", "valid JSON"),
+])
+def test_dependency_update_policy_rejects_malformed_or_contradictory_sections(document, message):
+    """Malformed structured policy is rejected instead of becoming a missing-policy fallback."""
+    # Given malformed, incomplete, or contradictory project-owned update policy
+    section = "\n" + document + "\n"
+
+    # When the trusted runner parses the section
+    # Then it reports the policy defect rather than silently selecting defaults
+    with pytest.raises(pre_triage_security.EvidenceError, match=message):
+        pre_triage_security._parse_dependency_updates(section)
+
+
+def test_dependency_update_evidence_distinguishes_missing_and_malformed(tmp_path):
+    """An absent policy is a fallback case, while a broken present policy is invalid."""
+    # Given a repository with no convention file
+    repository = tmp_path / "component"
+    repository.mkdir()
+    absent = pre_triage_security._dependency_update_evidence("component", repository)
+
+    # When a present convention has an invalid structured policy
+    (repository / "CONVENTIONS.md").write_text(
+        "## Dependency Updates\n\n```json\n{not json}\n```\n")
+    malformed = pre_triage_security._dependency_update_evidence("component", repository)
+
+    # And a valid project policy is captured as normalized, repository-bound data
+    (repository / "CONVENTIONS.md").write_text(
+        "## Dependency Updates\n\n```json\n"
+        '{"policies":[{"ecosystem":"Go","strategy":"targeted",'
+        '"update_command":"go get {package}@{fixed_version}",'
+        '"targeted_fallback_command":"","graph_command":"go mod graph",'
+        '"constraint_changes":false,"verification":["go test ./..."]}]}\n'
+        "```\n")
+    valid = pre_triage_security._dependency_update_evidence("component", repository)
+
+    # Then the trusted evidence keeps absence distinct from fail-closed invalid data
+    assert absent["status"] == "missing"
+    assert malformed["status"] == "malformed"
+    assert malformed["reason"]
+    assert malformed["policies"] == []
+    assert valid["status"] == "valid"
+    assert valid["policies"][0]["ecosystem"] == "Go"
 
 
 def test_action_markers_collect_prior_trusted_runner_actions():
@@ -515,6 +604,12 @@ def _complete_bundle():
             "path": "Cargo.lock",
             "command": "git show main:Cargo.lock",
             "content": 'name = "library"\\nversion = "1.2.3"',
+        }],
+        "conventions": [{
+            "repository": "component",
+            "status": "missing",
+            "reason": "CONVENTIONS.md has no Dependency Updates section",
+            "policies": [],
         }],
     }
 

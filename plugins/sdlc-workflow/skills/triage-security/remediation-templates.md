@@ -4,13 +4,13 @@ These templates define the Jira Task descriptions created during CVE triage
 (Step 8, Case A). Tasks follow `task-description-template.md` so that
 `/implement-task` can parse them directly.
 
-The number of tasks depends on the ecosystem type:
+The task structure depends on the configured source-versus-system mapping:
 
-- **Source dependency ecosystems** (Cargo, npm): create **two** tasks —
+- **Configured source repositories**: create **two** tasks —
   an upstream backport task (fix in the source repo) and a downstream propagation
   subtask (update the reference in the Konflux release repo). The downstream subtask
   is blocked by the upstream task.
-- **System package ecosystems** (RPM): create **one** task — the fix happens directly
+- **System package mappings** (RPM): create **one** task — the fix happens directly
   in the Konflux release repo (Dockerfiles, lock files). No upstream step needed.
 
 ## Upstream backport task (source dependency ecosystems)
@@ -39,7 +39,25 @@ Advisory: [advisory URL from remote links]
 ## Implementation Notes
 
 - Target branch: [upstream-branch from Ecosystem Mappings]
+- Ecosystem: [ecosystem from the affected stream's Ecosystem Mappings]
+- Dependency update strategy: [selected strategy and CONVENTIONS.md policy scope; for missing-policy Fullsend, explicitly state targeted-update fallback]
 - **Dependency type**: [direct | transitive (chain: [dependency-chain])]
+- Dependency update policy: use the applicable strategy, update command, graph command,
+  constraint-change permission, and verification checks from the target repository's
+  `CONVENTIONS.md` (see `shared/dependency-update-conventions.md`). A missing-convention
+  Fullsend task must explicitly identify the targeted-update fallback and must not
+  invent a package-manager command.
+- A constraint change requires authorization in both this task's scope and the
+  applicable project policy. The generated template does not itself authorize a
+  constraint change: the task must list the affected manifest/requirement in its
+  Files to Modify or Acceptance Criteria, and the policy must set
+  `constraint_changes: true`. For a batch policy, try the declared batch command first;
+  retry it after an authorized minimal constraint change if needed. A targeted retry
+  is allowed only after applicable batch attempts fail and only if the policy supplies
+  a targeted fallback command. Follow an explicit targeted policy as written.
+- Verify every relevant resolved dependency path with the declared graph command;
+  require all instances to be at or above [fixed-version] and outside the vulnerable
+  range. A lock-file entry alone is insufficient.
 - If the vulnerable dependency is dev-only or build-only (identified
   in Step 2.3.5), the remediation priority is Normal regardless of CVE
   severity. Add `dev-dependency` label to the task.
@@ -68,10 +86,9 @@ through intermediate packages), use a two-tier approach:
 **Fallback: pin the transitive dependency directly**
 If bumping the direct dependency is not viable (breaking API changes,
 no release available with the fix):
-- Cargo: `cargo add [library]@[fixed-version]` to add as a direct
-  dependency, overriding the transitive resolution
-- npm: add `"[library]": ">=[fixed-version]"` to `overrides` (npm)
-  or `resolutions` (yarn/pnpm) in `package.json`
+- Use only a project-convention-approved mechanism to constrain or select the
+  transitive dependency. Any constraint change must be permitted by both this task
+  and the applicable project policy; then follow that policy's update sequence.
 - Document why the direct dep bump was not viable in the PR description
 
 ## Acceptance Criteria
@@ -218,8 +235,8 @@ Remediate CVE-YYYY-XXXXX: update [package-name] to [fixed-version].
 
 ## Dependency bump task (source dependency ecosystems)
 
-When the upstream fix is already available and the remediation is a straightforward
-`cargo update` or `npm update` (no source code changes required), create a single
+When the upstream fix is already available and the applicable project policy indicates
+that a dependency update (with no source code changes) is sufficient, create a single
 dependency bump task instead of the two-task upstream backport + downstream propagation
 pair. This template applies when Step 2.5 confirms the upstream branch already ships
 the fixed version.
@@ -248,13 +265,18 @@ Advisory: [advisory URL from remote links]
 ## Implementation Notes
 
 - Target branch: [upstream-branch from Ecosystem Mappings]
+- Ecosystem: [ecosystem from the affected stream's Ecosystem Mappings]
+- Dependency update strategy: [selected strategy and CONVENTIONS.md policy scope; for missing-policy Fullsend, explicitly state targeted-update fallback]
 - **Dependency type**: [direct | transitive (chain: [dependency-chain])]
-- **Remediation action**: run the appropriate package manager update command:
-  - **Cargo**: `cargo update -p [library]` to pull in the latest compatible version
-  - **npm**: `npm update [library]` to pull in the latest compatible version
-- If the update pulls a version that still falls within the affected range,
-  pin explicitly: `cargo add [library]@[fixed-version]` or update `package.json`
-- Verify the lock file reflects >= [fixed-version] after the update
+- **Remediation action**: follow the applicable update and verification policy in the
+  target repository's `CONVENTIONS.md`. Record its selected strategy and commands in
+  the implementation plan; do not infer commands from the ecosystem name.
+- If no policy applies in Fullsend, state that this is the targeted-update fallback
+  because project policy was absent. Ask the implementer to use the repository's
+  established package tooling; do not supply an invented command or claim resolution.
+- A constraint change requires authorization from both this task and the project
+  policy. Verify the complete resolved graph using the declared graph command; the
+  lock file must not contain any relevant vulnerable path.
 - If the vulnerable dependency is dev-only or build-only (identified
   in Step 2.3.5), the remediation priority is Normal regardless of CVE
   severity. Add `dev-dependency` label to the task.

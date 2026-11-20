@@ -96,6 +96,12 @@ Parse the structured description expecting these sections:
 
 Also capture the issue's `webUrl` field from the API response (e.g. `https://redhat.atlassian.net/browse/PROJ-231`). This URL will be used later to create a clickable link in the PR description.
 
+For a source dependency/CVE task, also parse the **Ecosystem**, affected package,
+vulnerable range, fixed version, and dependency-update strategy from the task
+Implementation Notes. Do not infer the ecosystem from the package name. Store these
+values for Step 4's repository-policy resolution and Step 6's update/verification
+sequence; if any are missing or contradictory, ask and stop before implementation.
+
 ### Target PR extraction
 
 If the task description contains a **Target PR** section, extract the PR URL. Parse the
@@ -283,7 +289,20 @@ Registry (e.g., `<Path>/CONVENTIONS.md`). If present, read it and follow its con
 throughout implementation. This includes naming rules, directory structure for new files,
 code patterns, and test conventions.
 
-This step is optional — if `CONVENTIONS.md` does not exist, proceed normally.
+For ordinary implementation tasks this lookup remains optional. For a source
+dependency/CVE remediation task, also resolve `## Dependency Updates` according to
+`shared/dependency-update-conventions.md`, using the task's Ecosystem and target
+repository. An ecosystem entry overrides `"*"`. If no applicable policy exists, proceed
+only when the task explicitly records Fullsend's missing-policy targeted-update
+fallback; otherwise report the missing policy and ask the engineer for the approved
+update strategy, command, graph command, and verification checks. Return only that gap
+and question, then end the turn; do not produce a conditional or hypothetical plan.
+If a present policy is malformed or conflicts with the task scope/notes, ask the
+engineer to reconcile it and stop. Do not resolve the conflict by guessing.
+
+**Completion criterion for this gate:** when policy, command, or scope clarification is
+needed, return only the gap and one specific question, then end the turn. Resume planning
+only after the engineer answers.
 
 #### Verification commands extraction
 
@@ -406,6 +425,60 @@ Do not plan or implement changes to files outside these sections — if you disc
 file that seems to need modification, flag it in Step 9's scope containment check
 instead of adding it to your plan.
 Follow the **Implementation Notes** for patterns and code references on how to implement the changes.
+
+### Source dependency/CVE remediation
+
+For shared remediation terminology, consult `shared/GLOSSARY.md`.
+
+Use this procedure only when the task identifies the affected package, vulnerable
+range, fixed version, ecosystem, and target repository. Do not guess any of these
+values. RPM/system-package remediation retains its separate task path.
+
+1. Resolve the applicable project policy from the target repository's `CONVENTIONS.md`
+   as described in Step 4 and `shared/dependency-update-conventions.md`. Never choose
+   a command from a central ecosystem list. An ecosystem policy overrides `"*"`.
+   A Fullsend task may provide the explicit targeted strategy only when the policy was
+   missing; use a project-local established command if one is discoverable. Run the
+   selected `update_command` exactly as written, substituting only its declared
+   placeholders with the task's package and fixed-version values. Preserve the
+   convention's version and package spelling; if the approved command cannot be used
+   as supplied, ask for policy correction rather than adapting it from ecosystem
+   assumptions. If a usable command cannot be identified without guessing, ask and stop.
+
+2. Respect the task's file and constraint scope. A constraint adjustment is allowed
+   only when the task authorizes it **and** the applicable project policy has
+   `constraint_changes: true`; change only the minimum constraint needed to admit the
+   fixed version. The task must explicitly include the affected manifest/requirement
+   in Files to Modify or Acceptance Criteria; project-policy permission alone is not
+   task authorization. If either authorization is absent and the fixed version is
+   excluded by the current constraint, ask for scope clarification and stop before
+   running an update command that would change the constraint. This restriction is
+   about altering an existing requirement/range that excludes the fix; it does not
+   prohibit the task-authorized normal dependency/lockfile update when the current
+   requirement already admits the fixed version.
+
+3. For a `batch` policy, run its declared update command first. If an authorized
+   constraint adjustment was needed, rerun the same batch command afterward. A
+   package-targeted retry is allowed only after the initial batch and any authorized
+   adjusted batch both fail to select the fix, and only if the policy supplies a
+   `targeted_fallback_command`. Record why each batch attempt was insufficient. For a
+   `targeted` policy or explicit Fullsend fallback, follow the selected targeted
+   strategy; do not silently broaden it to a batch update.
+
+4. Run the policy's declared graph command first. Inspect the complete resolved graph,
+   including duplicate instances and every relevant path. Success requires every
+   relevant instance to be at least `[fixed-version]`, outside the vulnerable range,
+   and no vulnerable path to remain. A command exit code or a single lockfile entry
+   alone is insufficient. Only after this graph check passes, run the policy's declared
+   `verification` checks; do not run tests or capture a pre-update test baseline before
+   graph verification.
+
+5. If no permitted update path removes every vulnerable dependency path, stop before
+   dependent tests, commit, PR, and normal Step 11 Jira completion. Keep the issue in
+   its current status and resolution, preserve all existing labels while adding
+   `waiting-for-fix` without duplicates, and do not post a Jira comment. Report the
+   attempts and remaining vulnerable version/path; do not claim remediation or
+   dependent tests succeeded.
 
 **Reuse first:** Before writing new logic, check whether the Implementation Notes list reusable
 code (utilities, helpers, shared modules). If they do, use or extend the existing code. If you
