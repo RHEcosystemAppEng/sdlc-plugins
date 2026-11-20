@@ -46,6 +46,14 @@ Product version: 0.9.0
 
 None.
 
+### **Comments**
+
+**reporter (2026-11-12):** traced it during triage — `acme-backend` only calls
+`advisories()` in the shared query builder that lives in `acme-data-client`; that
+query has no `ORDER BY`, which is why every consumer sees a different order.
+`acme-data-client` is a separate library repository and is not in this project's
+Repository Registry.
+
 ### **Suggested Fix**
 
 The in-memory sort in the handler hides the problem but does not fix it. The
