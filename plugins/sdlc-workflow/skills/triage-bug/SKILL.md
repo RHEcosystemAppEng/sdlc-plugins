@@ -546,14 +546,14 @@ Apply the chosen option in Step 5 and record it on the Bug with a comment
   the **Repository Registry**, record the owning repository name and the Step 4
   evidence in the Implementation Notes and note that its conventions were not
   available. Do not fall back to a symptom-repository Task.
-- **Option 2 — Two linked Tasks:** create the owning-repository Task first and post
-  its digest (Step 5c) before creating the symptom-repository Task, then post that
-  digest. Link both Tasks to the Bug and to each other with a `Related`/`Relates`
-  issue link, and give the symptom-repository Task a
+- **Option 2 — Two linked Tasks:** create the owning-repository Task, post its
+  digest (Step 5c), then link it to the Bug; create the symptom-repository Task,
+  post its digest, then link it to the Bug. Finally link the two Tasks to each
+  other with a `Related`/`Relates` issue link, and give the symptom-repository Task a
   [`## Root Cause Layer`](../../shared/task-description-template.md#root-cause-layer-rule)
   section that names the owning repository and the created owning-repository
-  Task key. On retry after a partial run, reuse the Task already linked to the Bug
-  instead of creating a second one.
+  Task key. Because each Task is linked to the Bug as soon as it exists, a retry
+  after a partial run finds and reuses it instead of creating a second one.
 - **Option 3 — Workaround only:** the generated Task MUST contain a
   `## Root Cause Layer` section with:
   - `Root cause owned by: <owning-repository> / <layer>`
@@ -703,10 +703,10 @@ The link direction depends on the configured link type. For "Blocks":
 
 Consult the Jira link type's inward/outward semantics to set the direction correctly.
 
-Repeat the link for each Task created under Step 4.6 **option 2** (both the
-owning-repository and the symptom-repository Task block the Bug) only after both
-digests are posted (Step 5c), then link the two Tasks to each other with a
-`Related` link:
+For each Task created under Step 4.6 **option 2**, create it, post its digest
+(Step 5c), then apply the blocking link before creating the next Task (both Tasks
+block the Bug); link the two Tasks to each other with a `Related` link once both
+exist:
 
 ```
 jira.create_issue_link(

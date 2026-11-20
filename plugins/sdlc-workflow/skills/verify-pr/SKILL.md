@@ -706,20 +706,20 @@ duplicate (**sandbox:** read `idempotency.related_issues`).
 jira.create_issue with:
 - **Issue Type:** Task
 - **Labels:** `["ai-generated-jira", "review-feedback"]`
-- **Summary:** the required fix, stated concisely
+- **Summary:** the required fix
 - **Description:** template structure with **Repository** set to the owning
-  repository, **Target Branch** set to that repository's default branch (or the
-  branch named in the review comment), **Review Context**, and **Target PR** only if
-  that repository has a PR; no `## Root Cause Layer` deferral is needed because the
-  task fixes the defect itself.
+  repository, **Target Branch** set to its default branch (or the branch named in
+  the review comment), **Review Context**, and **Target PR** only if that repository
+  has a PR; no `## Root Cause Layer` deferral: the task fixes the defect itself.
 
 Link it to the parent without setting `Parent`:
 
 jira.create_issue_link(type="Relates", inwardIssue=<cross-repo-task-id>, outwardIssue=<parent-task-id>)
 
 **Sandbox mode:** use the Step 7b `create_root_cause_task` + `create_link` pattern
-(`xrepo-N`, `link_type: "Related"`). Reference the Task in replies and reports as
-`{{xrepo-N.key}}`/`{{xrepo-N.url}}`, never as a literal placeholder.
+(`xrepo-N`, `link_type: "Related"`); set `project` when the owning repository's Jira
+project differs from `JIRA_PROJECT_KEY`. Reference the Task in replies and reports as
+`{{xrepo-N.key}}`/`{{xrepo-N.url}}`, never a literal placeholder.
 
 #### CI failure sub-tasks
 
@@ -912,14 +912,14 @@ Record the Review Feedback check result:
 
 ## Step 7 – Root-Cause Investigation
 
-Investigate the root cause of each defect Step 6d turned into a sub-task or routed
-Task, to identify systemic improvements that prevent similar mistakes.
+Investigate each defect Step 6d turned into a sub-task or routed Task, to prevent
+similar mistakes.
 
 ### Step 7a – Sub-agent Investigation
 
-If Step 6d created any sub-tasks or standalone cross-repository Tasks, spawn a
-sub-agent to investigate the root cause of each defect. If it created neither,
-record Root-Cause Investigation as N/A and skip to Step 8.
+If Step 6d created any sub-tasks or cross-repository Tasks, spawn a sub-agent to
+investigate each defect's root cause; if it created neither, record N/A and skip
+to Step 8.
 
 Eval failure sub-tasks (from Step 6d) are included alongside review feedback
 sub-tasks and CI failure sub-tasks as inputs to root-cause investigation. The
