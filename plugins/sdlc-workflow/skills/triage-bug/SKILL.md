@@ -658,7 +658,7 @@ after the standard template sections:
 
 - Root cause owned by: <owning-repository> / <layer>
 - Fix location: <root-cause | symptom>
-- Deferred root-cause task: <owning-repository Task or Bug key>
+- Deferred root-cause task: <owning-repository Task key>
 ```
 
 Use `Fix location: symptom` for the symptom-repository Task in option 2 and for

@@ -586,7 +586,7 @@ owned elsewhere). The impact map must route the fix to the owning layer.
    owning repository. A symptom-repository change alone does not satisfy the
    requirement unless the symptom task records a user-approved
    `## Root Cause Layer` deferral naming the owning repository and the deferred
-   root-cause task or Bug.
+   owning-repository task.
 
 Each change still becomes a single-repository task. If the owning repository is
 absent from the **Repository Registry**, record it from the evidence and note in
