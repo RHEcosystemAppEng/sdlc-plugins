@@ -38,6 +38,7 @@ Do **not** use for:
 | 3 | Codebase Investigation | Repository Registry | Affected files, symbols, patterns |
 | 4 | Root Cause Analysis | Investigation findings | Root cause comment on Bug |
 | 4.5 | Affects Version Resolution | Version section + Jira versions | Affects Version set or gap flagged |
+| 4.6 | Root Cause Layer Check | Root-cause location vs target repository | Layer decision recorded or waiver |
 | 5 | Generate Task | Root cause + template | Linked Task with reproducer test |
 | 5b | Link Task to Bug | Task key, Bug key | Issue link (Task blocks Bug) |
 | 5c | Post Digest | Task description | Integrity digest comment |
@@ -146,7 +147,7 @@ Extract the following from the configuration for use in later steps:
 
 ## Step 0.5 – JIRA Access Initialization
 
-Before attempting any JIRA operations (Steps 1, 4, 5, 5b, 5c), determine the access method.
+Before attempting any JIRA operations (Steps 1, 4, 4.6, 5, 5b, 5c), determine the access method.
 
 **For every JIRA operation:**
 1. **Attempt MCP first** (preferred method)
@@ -388,14 +389,14 @@ augment:
 Affects Version/s is already set: [RHTPA 0.9.0]
 
 Options:
-1. Keep — leave the current value and skip to Step 5
+1. Keep — leave the current value and skip to Step 4.6
 2. Replace — clear and set a new value
 3. Augment — add additional versions alongside the current ones
 
 Choose (1/2/3):
 ```
 
-If the user chooses "1. Keep", skip the remaining sub-steps and proceed to Step 5.
+If the user chooses "1. Keep", skip the remaining sub-steps and proceed to Step 4.6.
 
 ### 4.5.2 – Extract version from description
 
@@ -461,7 +462,7 @@ Set this as the Affects Version on <bug-key>? (yes/no/skip)
 - **yes**: proceed to set the field.
 - **no**: ask the user to select from the available versions list, or enter a
   version manually.
-- **skip**: skip Affects Version setting entirely and proceed to Step 5.
+- **skip**: skip Affects Version setting entirely and proceed to Step 4.6.
 
 After confirmation, update the Affects Version field:
 
@@ -488,9 +489,91 @@ bug description — please set manually.")
 
 Append the Comment Footnote.
 
+## Step 4.6 – Root Cause Layer Check
+
+Compare the root-cause location identified in Step 4 with the target repository
+selected in Step 3. The fix belongs at the layer that owns the defect: a root
+cause in another repository or in the data layer must not be silently reduced to
+a downstream workaround in the reporting repository.
+
+### 4.6.1 – Classify the owning layer
+
+Use the Step 4 findings (file paths and symbols) to determine which layer owns
+the defect:
+
+- **Target repository** — the defective file or symbol lives in the Step 3
+  target repository.
+- **Different repository** — the defective file or symbol lives in another
+  repository, library, shared component, or upstream service consumed by the
+  target repository.
+- **Data layer** — the defect is in a database query, ingestion path, or API
+  contract owned by another layer, even when the calling code lives in the
+  target repository (e.g., a backend query returning rows without an
+  `ORDER BY` that a client-side sort only masks).
+
+If the owning layer is the target repository, skip this step and continue with
+Step 5 — no Root Cause Layer section is needed.
+
+### 4.6.2 – Present the layer choice
+
+When the owning layer is a different repository or the data layer, present the
+choice before generating any Task:
+
+> "The root cause for <bug-key> is owned by <owning-repository> (<file> /
+> <symbol>), not by the target repository <target-repository>. Fixing it only
+> in <target-repository> would address the symptom, not the root cause.
+>
+> Options:
+> 1. **Owning repository** — create the fix Task in <owning-repository> only
+> 2. **Two linked Tasks** — create one Task in <owning-repository> for the root
+>    cause and one in <target-repository> for the symptom, linked to each other
+> 3. **Workaround only** — fix <target-repository> only, recording a
+>    `## Root Cause Layer` waiver that names the owning repository and the
+>    deferred owning-repository Task
+>
+> Choose (1/2/3):"
+
+Do not proceed to Step 5 until the user chooses.
+
+### 4.6.3 – Record the decision
+
+Apply the chosen option in Step 5 and record it on the Bug with a comment
+(append the Comment Footnote):
+
+- **Option 1 — Owning repository:** generate a single Task whose **Repository**
+  is the owning repository. Step 3's repository analysis cannot cover a
+  repository that was not investigated; when the owning repository is not in
+  the **Repository Registry**, record the owning repository name and the Step 4
+  evidence in the Implementation Notes and note that its conventions were not
+  available. Do not fall back to a symptom-repository Task.
+- **Option 2 — Two linked Tasks:** create the owning-repository Task, post its
+  digest (Step 5c), then link it to the Bug; create the symptom-repository Task,
+  post its digest, then link it to the Bug. Finally link the two Tasks to each
+  other with a `Related`/`Relates` issue link, and give the symptom-repository Task a
+  [`## Root Cause Layer`](../../shared/task-description-template.md#root-cause-layer-rule)
+  section that names the owning repository and the created owning-repository
+  Task key. Because each Task is linked to the Bug as soon as it exists, a retry
+  after a partial run finds and reuses it instead of creating a second one.
+- **Option 3 — Workaround only:** the generated Task MUST contain a
+  `## Root Cause Layer` section with:
+  - `Root cause owned by: <owning-repository> / <layer>`
+  - `Fix location: symptom`
+  - `Deferred root-cause task: <owning-repository Task key>`
+
+  The deferred key MUST be a Task in the owning repository, never the Bug being
+  triaged: the symptom Task blocks that Bug, so deferring to it lets a workaround
+  close the root cause. When no owning-repository Task exists yet, ask the user to
+  create one or to approve an explicit waiver. Only an explicit user approval
+  permits the value `none — waiver approved by <user>`, and the waiver must be
+  restated in the Bug comment.
+
+Each Task remains scoped to a single repository — this step routes work to the
+owning layer, it does not permit multi-repository Tasks.
+
 ## Step 5 – Generate Task
 
-Create a single Task issue following
+Create the Task(s) selected in Step 4.6 — one Task for options 1 and 3, two
+linked Tasks for option 2 — following
 [`shared/task-description-template.md`](../../shared/task-description-template.md).
 Read the template before generating the task description.
 
@@ -564,13 +647,31 @@ implement-task can understand the bug being fixed:
 - **Root Cause**: <root cause summary from Step 4>
 ```
 
+### Root Cause Layer extension section
+
+When Step 4.6 selected **option 2** (two linked Tasks) or **option 3**
+(workaround only), add a **Root Cause Layer** section to the task description,
+after the standard template sections:
+
+```
+## Root Cause Layer
+
+- Root cause owned by: <owning-repository> / <layer>
+- Fix location: <root-cause | symptom>
+- Deferred root-cause task: <owning-repository Task key>
+```
+
+Use `Fix location: symptom` for the symptom-repository Task in option 2 and for
+the workaround-only Task in option 3. Omit this section entirely when the root
+cause is owned by the target repository (Step 4.6.1).
+
 ### Target Branch
 
 Set Target Branch to `main` (triage-bug produces direct-to-main tasks).
 
 ### Task creation
 
-Create the task in Jira:
+Create the task(s) in Jira:
 
 jira.create_issue
 
@@ -580,7 +681,8 @@ Every created issue **must** include the `ai-generated-jira` label:
 additional_fields: { "labels": ["ai-generated-jira"] }
 ```
 
-Record the created task's Jira key for use in Steps 5b and 5c.
+Record each created task's Jira key for use in Steps 5b and 5c — under Step 4.6
+option 2 this is two tasks (owning repository and symptom repository).
 
 ## Step 5b – Link Task to Bug
 
@@ -601,11 +703,24 @@ The link direction depends on the configured link type. For "Blocks":
 
 Consult the Jira link type's inward/outward semantics to set the direction correctly.
 
+For each Task created under Step 4.6 **option 2**, create it, post its digest
+(Step 5c), then apply the blocking link before creating the next Task (both Tasks
+block the Bug); link the two Tasks to each other with a `Related` link once both
+exist:
+
+```
+jira.create_issue_link(
+  link_type="Related",
+  inward_issue_key=<symptom-task-key>,
+  outward_issue_key=<owning-repository-task-key>
+)
+```
+
 ## Step 5c – Post digest comment
 
-Immediately after creating the task (before any other operations on the created
+Immediately after creating each task (before any other operations on the created
 issue), post a description digest comment on the created task following the
-description-digest-protocol.
+description-digest-protocol. Repeat for every Task created in Step 5.
 
 #### Digest computation steps
 
@@ -661,7 +776,8 @@ See `shared/description-digest-protocol.md` for the full protocol specification.
 
 During the investigation (Steps 2–4), if the bug appears to need **multiple
 independent fixes** across different files or modules — where each fix addresses a
-distinct root cause rather than a single defect — flag this to the user rather than
+distinct root cause rather than a single defect — or if the root cause is owned by a
+different repository or the data layer (Step 4.6), flag this to the user rather than
 silently creating a single Task that bundles unrelated fixes.
 
 Present:
@@ -682,12 +798,23 @@ If the user chooses "2. Split", stop and suggest the user create separate Bug is
 If the bug has a single root cause that manifests across multiple files, this is
 **not** a decomposition trigger — a single Task is appropriate.
 
+**Cross-repository root cause is a decomposition trigger.** When the root cause is
+owned by a different repository or the data layer (Step 4.6.1), a single Task scoped
+to the symptom repository would bundle a workaround while the defect stays in the
+owning layer. Treat it as a decomposition trigger and resolve it with the Step 4.6
+layer choice: option 1 (owning-repository Task) or option 2 (two linked Tasks)
+satisfy the guard; option 3 (workaround only) is permitted only with the recorded
+`## Root Cause Layer` waiver. Never create a symptom-only Task without either an
+owning-repository Task or a recorded waiver.
+
 ## Step 7 – Report Result
 
 Present the outcome to the user:
 
-- The created Task key and a link to it
-- A brief summary of the root cause and planned fix
+- The created Task key and a link to it (for Step 4.6 option 2, both the
+  owning-repository and the symptom-repository Task)
+- A brief summary of the root cause and planned fix — including the owning layer
+  and, for a symptom-level Task, the deferred root-cause Task or approved waiver
 - The reproducer test strategy
 - Suggest the next step:
 
@@ -699,6 +826,8 @@ Present the outcome to the user:
 - Do not modify any source code — this skill is read-only + Jira.
 - If the Bug description is incomplete (missing required sections), stop and inform the user — do not attempt to investigate without structured input.
 - Keep the generated Task scoped to a single fix — use the Decomposition Guard (Step 6) when multiple independent fixes are needed.
+- When Step 4's root cause is owned by a different repository or the data layer, run the Root Cause Layer Check (Step 4.6) before generating any Task — never emit a symptom-only Task without either a linked owning-repository Task or a user-approved `## Root Cause Layer` waiver.
+- Every generated Task must target a single repository — the Root Cause Layer Check routes work to the owning layer, it does not permit multi-repository Tasks.
 - The reproducer test must always be the first acceptance criterion and first test requirement.
 - Every Jira comment must include the Comment Footnote, except for the description digest comment defined in Step 5c.
 - Every created task must include the `ai-generated-jira` label.

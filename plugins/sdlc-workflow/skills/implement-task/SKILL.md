@@ -93,6 +93,7 @@ Parse the structured description expecting these sections:
 - **Review Context** — the original review comment that triggered this task (optional)
 - **Bookend Type** — `create-branch` or `merge-branch` for feature branch bookend tasks (optional)
 - **Dependencies** — prerequisite tasks (verify they are Done)
+- **Root Cause Layer** — a deliberate symptom-level fix whose owning-repository Task is tracked elsewhere (optional)
 
 Also capture the issue's `webUrl` field from the API response (e.g. `https://redhat.atlassian.net/browse/PROJ-231`). This URL will be used later to create a clickable link in the PR description.
 
@@ -121,6 +122,15 @@ If the task description contains a **Bookend Type** section, extract the value
 When Bookend Type is present, the task is a feature-branch bookend — it performs
 branch or PR operations only and skips normal implementation steps. See
 **Step 5.5 – Bookend Task Handling** for the full skip logic.
+
+### Root Cause Layer handling
+
+If the task description contains a **Root Cause Layer** section, this is a
+deliberate symptom-level fix: implement it here and do not widen scope to the
+owning repository or layer named in that section. Before Step 10, confirm the
+section names an owning-repository Task (or a restated user waiver); if the
+deferral is missing, ask the user before continuing, and record the deferral in the
+PR description.
 
 If any required section is missing or the description doesn't follow the template, list the
 gaps, ask the user for clarification, and **stop execution immediately** — do not proceed

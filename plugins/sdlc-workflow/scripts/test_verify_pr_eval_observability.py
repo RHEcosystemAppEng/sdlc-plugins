@@ -106,4 +106,4 @@ def test_case6_human_classification_allows_an_explicit_non_eval_explanation():
     assert "classification is grounded in the human reviewer's substantive feedback" in assertion
     assert "Explicitly explaining that the comment is not an eval result is allowed" in assertion
     assert "treated as an automated eval result or classified using eval metrics" in assertion
-    assert len(cases) == 6 and sum(len(item["assertions"]) for item in cases) == 68
+    assert len(cases) == 7 and sum(len(item["assertions"]) for item in cases) == 75

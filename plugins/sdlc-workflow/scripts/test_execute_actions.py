@@ -345,6 +345,100 @@ def test_schema_post_comment_rejects_non_key_issue():
             pass
 
 
+def _root_cause_task_action(**overrides):
+    """Build a minimal schema-valid create_root_cause_task action."""
+    action = {
+        "type": "create_root_cause_task",
+        "ref": "rc-1",
+        "summary": "Root-cause: scope the sandbox action",
+        "labels": ["ai-generated-jira", "root-cause"],
+        "description_adf": {"type": "doc", "version": 1, "content": []},
+    }
+    action.update(overrides)
+    return action
+
+
+def test_schema_root_cause_task_accepts_optional_project():
+    """A routed cross-repository Task can target a different Jira project than the
+    parent, so the action carries an optional project key that must survive
+    fullsend's validation_loop."""
+    # Given a root-cause task action naming another project
+    action = _root_cause_task_action(project="OTHER")
+    # When validating it against the result schema's action definition
+    # Then validation passes (validate raises ValidationError on failure)
+    validate(instance=action, schema=_ACTION_SCHEMA)
+
+
+def test_schema_root_cause_task_rejects_malformed_project():
+    """Malformed project keys are rejected at the schema boundary instead of
+    reaching create_issue and failing the whole run."""
+    # Given root-cause task actions with malformed project keys
+    malformed = ["other", "OTHER1x", "1OTHER", "OT-HER", ""]
+    for project in malformed:
+        # When validating each against the schema
+        # Then validation fails before the action can reach the executor
+        with pytest.raises(ValidationError):
+            validate(instance=_root_cause_task_action(project=project), schema=_ACTION_SCHEMA)
+
+
+def test_execute_root_cause_task_uses_action_project(monkeypatch):
+    """When the action carries a project, the Task is created there and the
+    registered URL follows the created key."""
+    # Given a Jira that creates OTHER-5 and an action naming project OTHER
+    captured = {}
+
+    def fake_create_issue(**kwargs):
+        captured.update(kwargs)
+        return {"key": "OTHER-5"}
+
+    monkeypatch.setattr(execute_actions._jira_mod, "create_issue", fake_create_issue)
+    monkeypatch.setattr(execute_actions._jira_mod, "get_server_info",
+                        lambda: {"baseUrl": "https://jira.example.com"})
+    monkeypatch.setenv("JIRA_PROJECT_KEY", "TC")
+    registry = {}
+    # When executing the action
+    execute_actions.execute_create_root_cause_task(
+        _root_cause_task_action(project="OTHER"), registry)
+    # Then the action's project wins over the configured one
+    assert captured["project_key"] == "OTHER"
+    assert captured["issue_type"] == "Task"
+    assert registry["rc-1"] == {
+        "key": "OTHER-5",
+        "url": "https://jira.example.com/browse/OTHER-5",
+    }
+
+
+def test_execute_root_cause_task_falls_back_to_env_project(monkeypatch):
+    """Without a project field the executor keeps the previous behaviour and uses
+    JIRA_PROJECT_KEY, so existing producers are unchanged."""
+    # Given a Jira that creates TC-900 and an action without a project field
+    captured = {}
+
+    def fake_create_issue(**kwargs):
+        captured.update(kwargs)
+        return {"key": "TC-900"}
+
+    monkeypatch.setattr(execute_actions._jira_mod, "create_issue", fake_create_issue)
+    monkeypatch.setattr(execute_actions._jira_mod, "get_server_info",
+                        lambda: {"baseUrl": "https://jira.example.com"})
+    monkeypatch.setenv("JIRA_PROJECT_KEY", "TC")
+    # When executing the action
+    execute_actions.execute_create_root_cause_task(_root_cause_task_action(), {})
+    # Then the configured project is used
+    assert captured["project_key"] == "TC"
+
+
+def test_execute_root_cause_task_requires_a_project(monkeypatch):
+    """With neither the action field nor JIRA_PROJECT_KEY, the executor stops
+    instead of creating the Task in an unknown project."""
+    # Given no configured project and an action without one
+    monkeypatch.delenv("JIRA_PROJECT_KEY", raising=False)
+    # When executing the action
+    # Then it exits before any write
+    with pytest.raises(SystemExit):
+        execute_actions.execute_create_root_cause_task(_root_cause_task_action(), {})
+
+
 def test_adf_to_markdown_renders_blocks_and_marks():
     """adf_to_markdown renders headings, lists, code blocks, rules, and inline marks."""
     doc = {

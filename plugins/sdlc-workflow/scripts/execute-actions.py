@@ -648,7 +648,10 @@ def execute_post_pr_comment(action: dict, registry: dict) -> None:
 
 
 def execute_create_root_cause_task(action: dict, registry: dict) -> None:
-    project_key = os.environ.get("JIRA_PROJECT_KEY", "")
+    # A routed cross-repository Task can belong to a different Jira project than
+    # the parent task, so the producer may carry the owning repository's project.
+    # When it does not, fall back to the configured JIRA_PROJECT_KEY.
+    project_key = action.get("project") or os.environ.get("JIRA_PROJECT_KEY", "")
     if not project_key:
         print("JIRA_PROJECT_KEY is required for root-cause task creation", file=sys.stderr)
         sys.exit(1)
