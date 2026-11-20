@@ -39,6 +39,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `triage-security`: all matrix write paths secured; image identity verified on population
 - `triage-security`: CLAUDE.md read errors reported as ERROR diagnostics
 - `triage-security`: `FULLSEND_OUTPUT_DIR` created in sandbox mode
+- `triage-security` and `verify-pr`: Fullsend presence gates rewritten to the `test`
+  builtin so Tirith no longer blocks the `[ ... ]` test form and the gate runs
 - `verify-pr`: fails closed when the Jira identity cannot be verified; requires Browse
   Projects before trusting an empty search
 - `verify-pr`: waits on and reports commit statuses in the dispatch gate and CI Status

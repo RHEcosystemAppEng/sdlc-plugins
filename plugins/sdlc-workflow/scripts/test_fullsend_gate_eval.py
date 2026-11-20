@@ -7,6 +7,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import signal
 import subprocess
@@ -21,7 +22,12 @@ ROOT = Path(__file__).resolve().parents[3]
 SUITE = ROOT / "evals/fullsend/triage-security"
 FIXTURES = ROOT / "evals/triage-security/files"
 # Pin of the triage-security Step 0.6/0.7 gate commands that gate_input diagnostics match against.
-GATE_COMMANDS_SHA256 = "330702b7cd14df099e7bdc7e9da5dac5b6e182854ad3dfe55273d8ad21bf75c8"
+GATE_COMMANDS_SHA256 = "c41f32eae044fc94998e2e71ca8b9c1a34e0d37d5b01d4c787ee5018d5e4927f"
+# Fullsend's mandatory Tirith PreToolUse hook cannot parse the `[ ... ]` / `[[ ... ]]`
+# test form: it reports `analysis_incomplete` at HIGH and always blocks the call, so a
+# delivered gate written that way never executes and reads `presence_gate: tool-error`.
+# Delivered gate blocks must stay in Tirith's accepted `test ...` dialect.
+BRACKET_TEST = re.compile(r"(^|[\s;&|(!])\[\[?\s", re.MULTILINE)
 
 
 def load_script(path):
@@ -574,6 +580,57 @@ def test_gate_commands_match_gate_input_pin():
         "Step 0.6/0.7 gate commands changed. Native gate_input evidence for this PR compares against "
         "main's commands, so presence_gate / input_validation will not read successful. "
         f"Check the native transcript manually, then update GATE_COMMANDS_SHA256 to {digest} in this PR.")
+
+
+def delivered_gate_blocks():
+    """Extract both Fullsend-delivered presence gates the way the native eval tooling does."""
+    triage = (ROOT / "plugins/sdlc-workflow/skills/triage-security/SKILL.md").read_text()
+    triage_gate = triage.split("### Step 0.6", 1)[1].split("```bash\n", 1)[1].split("\n```", 1)[0]
+    verify = (ROOT / "plugins/sdlc-workflow/skills/verify-pr/SKILL.md").read_text()
+    verify_gate = next(block for block in re.findall(r"```bash\n(.*?)\n```", verify, re.S)
+                       if "FULLSEND_OUTPUT_DIR+x" in block)
+    return {"triage-security": triage_gate, "verify-pr": verify_gate}
+
+
+@pytest.mark.parametrize("skill", ["triage-security", "verify-pr"])
+def test_delivered_gate_blocks_use_tirith_accepted_test_dialect(skill):
+    """Tirith blocks bracket tests, so a delivered gate must use the `test` builtin."""
+    # Given the gate bash block Fullsend delivers to the sandbox for the skill
+    block = delivered_gate_blocks()[skill]
+    # When scanning that block for a bracket test token
+    match = BRACKET_TEST.search(block)
+    # Then the gate stays in Tirith's accepted dialect
+    assert match is None, (
+        f"{skill} delivers a bracket test ({match.group(0)!r}) in its Fullsend gate. Tirith cannot "
+        "parse `[ ... ]` / `[[ ... ]]`, reports `analysis_incomplete` at HIGH, and blocks the call, "
+        "so the gate reads `presence_gate: tool-error` instead of running. Use Tirith's accepted "
+        "`test ...` form (fullsend docs/contributing/runtime-implementation.md).")
+
+
+@pytest.mark.parametrize("skill,creates_directory", [("triage-security", True), ("verify-pr", False)])
+def test_delivered_gate_blocks_keep_presence_semantics(tmp_path, skill, creates_directory):
+    """Presence-not-truthiness semantics survive the `test` rewrite in every environment state."""
+    # Given a delivered gate block and an environment without FULLSEND_OUTPUT_DIR
+    block = delivered_gate_blocks()[skill]
+    environment = {name: value for name, value in os.environ.items() if name != "FULLSEND_OUTPUT_DIR"}
+    output_dir = tmp_path / "sandbox-output"
+
+    def run_gate(**extra):
+        """Execute the delivered block verbatim under bash with the given environment."""
+        return subprocess.run(["bash", "-c", block], env=dict(environment, **extra),
+                              capture_output=True, text=True, check=False)
+
+    # When the gate runs with the variable absent, set but empty, and set to a fresh path
+    absent, empty, present = run_gate(), run_gate(FULLSEND_OUTPUT_DIR=""), run_gate(
+        FULLSEND_OUTPUT_DIR=str(output_dir))
+
+    # Then absent is interactive, empty fails closed, and non-empty reports sandbox mode
+    assert (absent.returncode, absent.stdout.strip()) == (0, "interactive mode")
+    assert empty.returncode == 1 and empty.stdout == ""
+    assert "ERROR: FULLSEND_OUTPUT_DIR is set but empty" in empty.stderr
+    assert (present.returncode, present.stdout.strip()) == (0, f"sandbox mode: {output_dir}")
+    # Then only the triage-security gate creates the output directory
+    assert output_dir.is_dir() is creates_directory
 
 
 def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
