@@ -387,6 +387,16 @@ stdout/stderr, path, transcript line or judge rationale is exported.
   truncated, empty or symlinked, a gate-step result has a missing or non-Boolean
   `is_error`, or a matched result has an unbound/duplicate `tool_use_id`.
 
+Delivered gate commands must stay in Tirith's accepted shell dialect. Fullsend's
+mandatory Tirith PreToolUse hook cannot parse the `[ ... ]` / `[[ ... ]]` test form,
+reports it as `analysis_incomplete` and always blocks the call, so a gate written
+that way never executes: the blocked call is an observed tool error and
+`presence_gate` reads `tool-error`, never `successful`. Write presence checks with
+the `test` builtin (for example `if test "${FULLSEND_OUTPUT_DIR+x}" = x; then`)
+instead. TC-7653 rewrote both delivered gates that way, and
+`test_fullsend_gate_eval.py` fails if a bracket test returns to a delivered gate
+block.
+
 The extractor recognizes only the exact Step0.6/0.7 Bash instructions in the trusted
 eval source (with the native plugin mount substituted). Narration, quoted commands and
 unmatched results cannot establish success and stay `not-observed`; command variants
@@ -415,11 +425,13 @@ invariant is:
 - A failing gate verdict against `successful` evidence, or against an observed failure,
   is `consistent` — it stays a genuine behavior result and only lowers the advisory score.
 - A failing verdict with no usable evidence is `inconclusive`, not a behavior result.
+- A non-Boolean or absent gate verdict with no usable evidence is `not-evaluable`:
+  neither the judgment nor the evidence can be read, so the case cannot be scored.
 - A malformed, unknown, incoherent or incomplete `gate_input` map is `invalid-input`.
 
-`contradiction`, `inconclusive` and `invalid-input` all set `execution_valid: false`,
-are published as fixed categories and fail the trusted check. Only `consistent` (and
-`not-applicable` for `034-empty`/`035-malformed`) is publishable.
+`contradiction`, `inconclusive`, `not-evaluable` and `invalid-input` all set
+`execution_valid: false`, are published as fixed categories and fail the trusted check.
+Only `consistent` (and `not-applicable` for `034-empty`/`035-malformed`) is publishable.
 
 ### Evaluability of dependent assertions
 

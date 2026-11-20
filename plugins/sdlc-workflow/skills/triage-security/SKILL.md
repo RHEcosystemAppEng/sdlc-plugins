@@ -68,8 +68,8 @@ is a configuration error and must fail closed rather than reaching the credentia
 interactive workflow:
 
 ```bash
-if [ "${FULLSEND_OUTPUT_DIR+x}" = x ]; then
-  if [ -z "$FULLSEND_OUTPUT_DIR" ]; then
+if test "${FULLSEND_OUTPUT_DIR+x}" = x; then
+  if test -z "$FULLSEND_OUTPUT_DIR"; then
     echo "ERROR: FULLSEND_OUTPUT_DIR is set but empty" >&2
     exit 1
   fi
