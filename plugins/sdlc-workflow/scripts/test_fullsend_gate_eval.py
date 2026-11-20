@@ -33,6 +33,11 @@ LOCK = ROOT / ".fullsend/lock.yaml"
 PINNED_RAW_PREFIX = "/RHEcosystemAppEng/sdlc-plugins/"
 HARNESS_DIR = ROOT / ".fullsend/harness"
 BASE_PIN = re.compile(r"^base:\s*https://raw\.githubusercontent\.com/[^/]+/[^/]+/([0-9a-f]{40})/", re.MULTILINE)
+# Policy, env, result schema and validator files always copied from this checkout,
+# never from a separately tested plugin.
+TRUSTED_PLUGIN_FILES = ["policies/triage-security.yaml", "env/gcp-vertex.env",
+                        "schemas/triage-security-result.schema.json",
+                        "scripts/validate-output-schema.sh", "scripts/strip_extra_properties.py"]
 
 
 def load_script(path):
@@ -997,6 +1002,66 @@ def test_native_adapter_preserves_process_exit_and_artifacts(tmp_path, monkeypat
     assert [p.name for p in target.iterdir()] == [".git"], "Native cases must not preload interactive configuration"
     assert (output / "metrics.json").read_bytes() == native_bytes
     assert sorted(p.name for p in output.iterdir()) == ["metrics.json", "native"]
+
+
+def staged_separate_plugin_root(tmp_path, monkeypatch):
+    """SYNTHETIC TEST DATA — stage a separately tested plugin, native CLI doubled."""
+    adapter = load_script(SUITE / "run-fullsend.py")
+    workspace = tmp_path / "case"
+    workspace.mkdir()
+    output = workspace / "output"
+    output.mkdir()
+    tested = tmp_path / "pr-checkout/plugins/sdlc-workflow"
+    (tested / "skills/triage-security").mkdir(parents=True)
+    (tested / "skills/triage-security/SKILL.md").write_text(
+        "SYNTHETIC TEST DATA — tested PR plugin, never this checkout's trusted copy\n")
+    for name in TRUSTED_PLUGIN_FILES:
+        (tested / name).parent.mkdir(parents=True, exist_ok=True)
+        (tested / name).write_text(f"SYNTHETIC TEST DATA — tested decoy {name}\n")
+    observed = {}
+    actual_process = subprocess.run
+
+    def fake_process(command, **kwargs):
+        """Stand in for Fullsend only; capture the staged harness it would consume."""
+        if command[0] != "/isolated/fullsend":
+            return actual_process(command, **kwargs)
+        setup = Path(command[command.index("--fullsend-dir") + 1])
+        observed["setup"] = setup
+        observed["harness"] = yaml.safe_load((setup / "harness/triage-security-gate.yaml").read_text())
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(adapter.subprocess, "run", fake_process)
+    monkeypatch.delenv("FULLSEND_MINT_URL", raising=False)
+    assert adapter.run_case(ROOT, workspace, output, "valid", "unused", "high",
+                            Path("/isolated/fullsend"), Path("/isolated/linux-fullsend"),
+                            tested) == 0
+    return tested, observed
+
+
+def test_separate_plugin_root_stages_under_sdlc_workflow_basename(tmp_path, monkeypatch):
+    """A separately tested plugin keeps the sdlc-workflow basename the scorer's Step 0.7 path expects."""
+    # Given the native adapter staged with a separately tested plugin
+    tested, observed = staged_separate_plugin_root(tmp_path, monkeypatch)
+    setup = observed["setup"]
+    staged_plugin = Path(observed["harness"]["plugins"][0])
+    # Then Fullsend's SandboxName() basename resolves to the scorer's plugin root
+    assert staged_plugin.name == "sdlc-workflow"
+    assert staged_plugin == setup / "tested-plugin/sdlc-workflow"
+    # And the sandbox-mounted plugin is the tested one, distinct from trusted staging
+    assert staged_plugin != setup / "plugins/sdlc-workflow"
+    assert (staged_plugin / "skills/triage-security/SKILL.md").read_bytes() == (
+        tested / "skills/triage-security/SKILL.md").read_bytes()
+
+
+def test_separate_plugin_root_keeps_trusted_files_from_this_checkout(tmp_path, monkeypatch):
+    """Trusted policy, env, schema and validator files never come from the tested plugin."""
+    # Given a tested plugin that also ships decoy copies of the trusted files
+    tested, observed = staged_separate_plugin_root(tmp_path, monkeypatch)
+    trusted = observed["setup"] / "plugins/sdlc-workflow"
+    # Then every trusted file is byte-identical to this checkout's copy
+    for name in TRUSTED_PLUGIN_FILES:
+        assert (trusted / name).read_bytes() == (ROOT / "plugins/sdlc-workflow" / name).read_bytes()
+        assert (trusted / name).read_bytes() != (tested / name).read_bytes()
 
 
 def test_staged_layout_with_actual_pinned_fullsend_resolver(tmp_path, monkeypatch):
