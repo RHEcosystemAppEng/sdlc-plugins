@@ -529,7 +529,7 @@ choice before generating any Task:
 >    cause and one in <target-repository> for the symptom, linked to each other
 > 3. **Workaround only** — fix <target-repository> only, recording a
 >    `## Root Cause Layer` waiver that names the owning repository and the
->    deferred root-cause Task or Bug
+>    deferred owning-repository Task
 >
 > Choose (1/2/3):"
 
@@ -546,22 +546,26 @@ Apply the chosen option in Step 5 and record it on the Bug with a comment
   the **Repository Registry**, record the owning repository name and the Step 4
   evidence in the Implementation Notes and note that its conventions were not
   available. Do not fall back to a symptom-repository Task.
-- **Option 2 — Two linked Tasks:** generate the owning-repository Task first,
-  then the symptom-repository Task. Link them with a `Related`/`Relates` issue
-  link, and give the symptom-repository Task a
+- **Option 2 — Two linked Tasks:** create the owning-repository Task first and post
+  its digest (Step 5c) before creating the symptom-repository Task, then post that
+  digest. Link both Tasks to the Bug and to each other with a `Related`/`Relates`
+  issue link, and give the symptom-repository Task a
   [`## Root Cause Layer`](../../shared/task-description-template.md#root-cause-layer-rule)
   section that names the owning repository and the created owning-repository
-  Task key.
+  Task key. On retry after a partial run, reuse the Task already linked to the Bug
+  instead of creating a second one.
 - **Option 3 — Workaround only:** the generated Task MUST contain a
   `## Root Cause Layer` section with:
   - `Root cause owned by: <owning-repository> / <layer>`
   - `Fix location: symptom`
-  - `Deferred root-cause task: <owning-repository Task or Bug key>`
+  - `Deferred root-cause task: <owning-repository Task key>`
 
-  When no deferred Task or Bug exists yet, ask the user to create one or to
-  approve an explicit waiver. Only an explicit user approval permits the value
-  `none — waiver approved by <user>`, and the waiver must be restated in the
-  Bug comment.
+  The deferred key MUST be a Task in the owning repository, never the Bug being
+  triaged: the symptom Task blocks that Bug, so deferring to it lets a workaround
+  close the root cause. When no owning-repository Task exists yet, ask the user to
+  create one or to approve an explicit waiver. Only an explicit user approval
+  permits the value `none — waiver approved by <user>`, and the waiver must be
+  restated in the Bug comment.
 
 Each Task remains scoped to a single repository — this step routes work to the
 owning layer, it does not permit multi-repository Tasks.
@@ -700,8 +704,9 @@ The link direction depends on the configured link type. For "Blocks":
 Consult the Jira link type's inward/outward semantics to set the direction correctly.
 
 Repeat the link for each Task created under Step 4.6 **option 2** (both the
-owning-repository and the symptom-repository Task block the Bug), then link the
-two Tasks to each other with a `Related` link:
+owning-repository and the symptom-repository Task block the Bug) only after both
+digests are posted (Step 5c), then link the two Tasks to each other with a
+`Related` link:
 
 ```
 jira.create_issue_link(
