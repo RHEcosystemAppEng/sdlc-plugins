@@ -1032,6 +1032,11 @@ def staged_separate_plugin_root(tmp_path, monkeypatch):
 
     monkeypatch.setattr(adapter.subprocess, "run", fake_process)
     monkeypatch.delenv("FULLSEND_MINT_URL", raising=False)
+    # An inherited credential path to a nonexistent file makes run_case reject
+    # the staging before the doubled CLI runs, so this helper never depends on
+    # the caller's shell.
+    monkeypatch.delenv("GCP_OIDC_TOKEN_FILE", raising=False)
+    monkeypatch.delenv("TC6726_SANDBOX_CREDENTIALS", raising=False)
     assert adapter.run_case(ROOT, workspace, output, "valid", "unused", "high",
                             Path("/isolated/fullsend"), Path("/isolated/linux-fullsend"),
                             tested) == 0
