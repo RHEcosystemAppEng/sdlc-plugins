@@ -169,7 +169,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 4.11 | When a task's scope matches a convention from CONVENTIONS.md (e.g., migrations with FK columns requiring indexes), the Implementation Notes MUST include explicit guidance referencing the convention by section name with a concrete example file. | `plan-feature/SKILL.md` — Step 5 (Convention-aware task enrichment) |
 | 4.12 | Every generated task description MUST include a **Target Branch** section. The value is `main` for direct-to-main mode, or the feature issue ID for feature-branch mode intermediate tasks. | `plan-feature/SKILL.md` — Step 5 (Target Branch assignment); `task-description-template.md` — Rules |
 | 4.13 | `plan-feature` convention-aware enrichment MUST validate convention file-type applicability per `shared/convention-applicability-rules.md` before including a convention in Implementation Notes. | `plan-feature/SKILL.md` — Step 5 |
-| 4.14 | A task with `Fix location: symptom` MUST include a **Root Cause Layer** section naming the owning repository and either a linked owning-repository Task or Bug, or a user-approved waiver — the single-repository-per-task rule (§4.1) remains unchanged. | `shared/task-description-template.md` — Root Cause Layer rule; `triage-bug/SKILL.md` — Step 4.6 |
+| 4.14 | A task with `Fix location: symptom` MUST include a **Root Cause Layer** section naming the owning repository and a linked owning-repository Task — never the Bug being triaged — or a user-approved waiver; the single-repository-per-task rule (§4.1) remains unchanged. | `shared/task-description-template.md` — Root Cause Layer rule; `triage-bug/SKILL.md` — Step 4.6 |
 
 ### Prior Art — Convention applicability (§4.13)
 
