@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md 'Not adopted' table row 1: \"Existence-only checks: `.filter(..).any(|_| true)` then `assert!(has_x)` | `tests/api/advisory.rs`\"; row 2: \"Count-greater-than-zero checks: `.filter(..).count()` then `assert!(matching > 0)` | `tests/api/sbom.rs`\"."
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md section 'Not adopted (conflicts with the skill's quality guidance)', rows 1-2 cite Skill guidance: \"Step 7: \\\"Prefer value-based assertions over length-only checks\\\". Assert on actual values and key fields.\" and \"Same as #1. Count-only checks hide regressions\"."
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md Resolution column: \"**Skill guidance wins.**\" for rows 1 and 2; line 50: \"The skill's rule (\\\"Skill guidance takes precedence over sibling patterns ... record the conflict but do not adopt the sibling pattern\\\") resolves conflicts #1–#3\"."
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md: \"**Assertions are value-based.** The sibling `.filter().any(|_| true)` and `.count() > 0` existence checks are deliberately not used.\" Test 1 uses `assert_eq!(summary, LicenseSummary { permissive: LicenseCategorySummary { count: 2, licenses: vec![\"Apache-2.0\".into(), \"MIT\".into()] }, ...})`; Test 4 uses `assert_eq!(summary.permissive.licenses, vec![\"Apache-2.0\", \"MIT\"])` and exact counts."
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md Approach: \"Structure, setup, naming, harness and status assertions follow the sibling tests `tests/api/sbom.rs` and `tests/api/advisory.rs`: a real PostgreSQL test DB, the existing test client and fixture helpers, and `assert_eq!(resp.status(), StatusCode::...)`\"; tests named `test_<behavior>` (e.g. `test_license_summary_nonexistent_sbom_returns_404`) in `tests/api/package_license.rs`; \"No `rstest`. The siblings do not use it\". Conventions.md 'Adopted from siblings' lists location, harness, setup/teardown, naming. (Doc-comment addition is an additional skill rule, not a contradiction of sibling structure.)"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,2 @@
+<!-- Standalone digest comment posted on TC-9009 (placeholder key; parent Epic TC-9007) immediately after creation, before links/other comments. No Comment Footnote per protocol. Digest computed with scripts/sha256-digest.py over task-1-remediation-model-service.md (Jira re-fetch unavailable in eval; markdown description used). -->
+[sdlc-workflow] Description digest: sha256-md:3263f1218bfd65edbed2e6ec535773495af6172eb892aa493ed6925dd1750bcb

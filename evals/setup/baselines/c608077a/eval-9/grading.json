@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+      "passed": true,
+      "evidence": "scaffold-race.md Timeline: '1. **First existence check:** `security-matrix.md` was **missing**.' and '4. **Re-read just before writing:** while the user was confirming, a concurrent `triage-security` run **created** `security-matrix.md`.'"
+    },
+    {
+      "text": "The current `Last-Updated: 2026-10-26T09:00:00Z` value and `CONCURRENT-ROW-KEEP` content are preserved rather than replaced by the scaffold",
+      "passed": true,
+      "evidence": "'The scaffold write was **aborted**. `security-matrix.md` was left exactly as the concurrent run wrote it.'; 'Overwriting would destroy real triage data. The `CONCURRENT-ROW-KEEP` row and the `2026-10-26T09:00:00Z` Last-Updated timestamp would both be lost.'; merge option: 'Keep the `CONCURRENT-ROW-KEEP` row and the existing `Last-Updated` line unchanged.'"
+    },
+    {
+      "text": "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+      "passed": true,
+      "evidence": "'Step 10.5 requires **create-if-absent** writes. The file appeared after the first existence check, so the skill must keep the current file and report that it now exists. It must not write the scaffold over it.' and 'Decision: Scaffold NOT written. Current file kept.'"
+    },
+    {
+      "text": "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+      "passed": true,
+      "evidence": "Report line: 'security-matrix.md already exists at security-matrix.md (created concurrently by triage-security; Last-Updated 2026-10-26T09:00:00Z) — scaffold not written; existing file preserved.' Merge option: 'written only after a new explicit confirmation and a final re-read showing the target has not changed'; also rejects 'do not ask again': 'requires a **merge proposal** ... and a **fresh** confirmation.'"
+    },
+    {
+      "text": "The output states that no project file is written until the changed target is reconciled and confirmed",
+      "passed": true,
+      "evidence": "'## Files written - None in the project. `security-matrix.md`, CLAUDE.md and all other project files are unchanged.'; merge path 'written only after a new explicit confirmation'; 'no complete merge can be built yet. The full current contents are needed first.'"
+    }
+  ],
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}
+}

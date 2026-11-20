@@ -39,10 +39,17 @@ def run_case(root, workspace, output, scenario, model, effort, host_binary, sand
             or any(p.is_symlink() for p in plugin_root.rglob("*"))):
         raise ValueError("Tested plugin must contain regular files, not symlinks")
     setup.parent.mkdir(exist_ok=True)
-    plugin_destination = setup / ("tested-plugin" if plugin_root != root / "plugins/sdlc-workflow" else "plugins/sdlc-workflow")
+    separate_plugin = plugin_root != root / "plugins/sdlc-workflow"
+    # Fullsend derives the sandbox plugin directory from the path basename
+    # (PluginInput.SandboxName), so a separately tested plugin must land in a
+    # `sdlc-workflow` directory for the harness commands rewritten from
+    # ${CLAUDE_PLUGIN_ROOT} to match. It stays distinct from the trusted
+    # `plugins/sdlc-workflow` files copied from this checkout below.
+    plugin_destination = (setup / "tested-plugin/sdlc-workflow" if separate_plugin
+                          else setup / "plugins/sdlc-workflow")
     shutil.copytree(plugin_root, plugin_destination,
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    if plugin_destination == setup / "tested-plugin":
+    if separate_plugin:
         for name in ["policies/triage-security.yaml", "env/gcp-vertex.env", "schemas/triage-security-result.schema.json",
                      "scripts/validate-output-schema.sh", "scripts/strip_extra_properties.py"]:
             destination = setup / "plugins/sdlc-workflow" / name

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 4.3 extracts the Upstream Affected Component (webpack) from customfield_10632 and uses it to search for related CVE Jiras (§1.59)",
+      "passed": true,
+      "evidence": "overlap-check.md, Step 4.3 section 1: \"customfield_10632 on TC-8011 = **webpack** (populated → step runs).\" Section 2 runs jira.search_jql(\"project = TC AND issuetype = 10024 AND cf[10632] ~ 'webpack' AND key != TC-8011\", ...), which returns TC-8012 (CVE-2026-43210 webpack)."
+    },
+    {
+      "text": "Step 4.3 filters search results by matching PS Component (customfield_10669 = pscomponent:org/rhtpa-ui) and Stream (customfield_10832 = rhtpa-2.2)",
+      "passed": true,
+      "evidence": "overlap-check.md, section '3. Filter by PS Component and Stream' has a table with rows \"customfield_10669 (PS Component) | pscomponent:org/rhtpa-ui | pscomponent:org/rhtpa-ui | yes\" and \"customfield_10832 (Stream) | rhtpa-2.2 | rhtpa-2.2 | yes\", followed by \"TC-8012 is kept.\""
+    },
+    {
+      "text": "Step 4.3 traverses issuelinks on TC-8012 to find remediation task TC-8013 via the 'Depend' link type",
+      "passed": true,
+      "evidence": "overlap-check.md, section '4. Linked remediation Tasks': \"TC-8012 issuelinks → **Depend: TC-8013** (remediation Task, Closed/Done)\", with summary \"Bump webpack to 5.96.1 in rhtpa-ui [rhtpa-2.2]\"."
+    },
+    {
+      "text": "Step 4.3 compares the remediation task's bump version (5.96.1) against the current CVE's fix threshold (5.98.0) and determines the fix does NOT cover this CVE",
+      "passed": true,
+      "evidence": "overlap-check.md, section '5. Coverage comparison': table lists \"TC-8013 bump target | 5.96.1\" and \"TC-8011 (CVE-2026-45678) fix threshold | 5.98.0\". It states \"minor 96 < 98 → **5.96.1 < 5.98.0**\" and \"TC-8013 does **not** cover CVE-2026-45678\"."
+    },
+    {
+      "text": "The overlap table is presented to the engineer showing TC-8012 and TC-8013 with 'Covers This CVE? = No' — the triage proceeds to create new remediation tasks rather than recommending closure",
+      "passed": true,
+      "evidence": "overlap-check.md, section '6. Findings (presented to engineer)': table header \"| Related CVE | Issue | Remediation Task | Bump Version | Covers This CVE? |\" and row \"| CVE-2026-43210 | TC-8012 | TC-8013 | 5.96.1 | No (threshold: 5.98.0) |\", followed by \"Proceeding with new remediation task creation.\" The same section lists \"No closure recommendation.\" triage-outcome.md says \"**Not closed... New remediation is required (Case B)**\" and recommends 2 new tasks, including \"Bump webpack to >= 5.98.0 in rhtpa-ui [rhtpa-2.2]\". No output file contradicts this."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
