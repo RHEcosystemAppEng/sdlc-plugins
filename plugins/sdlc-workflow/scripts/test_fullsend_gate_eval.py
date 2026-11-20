@@ -6,12 +6,14 @@ import importlib.util
 import io
 import json
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+import re
 import shutil
 import signal
 import subprocess
 import sys
 import tarfile
+from urllib.parse import urlsplit
 
 import pytest
 import yaml
@@ -21,7 +23,16 @@ ROOT = Path(__file__).resolve().parents[3]
 SUITE = ROOT / "evals/fullsend/triage-security"
 FIXTURES = ROOT / "evals/triage-security/files"
 # Pin of the triage-security Step 0.6/0.7 gate commands that gate_input diagnostics match against.
-GATE_COMMANDS_SHA256 = "330702b7cd14df099e7bdc7e9da5dac5b6e182854ad3dfe55273d8ad21bf75c8"
+GATE_COMMANDS_SHA256 = "c41f32eae044fc94998e2e71ca8b9c1a34e0d37d5b01d4c787ee5018d5e4927f"
+# Fullsend's mandatory Tirith PreToolUse hook cannot parse the `[ ... ]` / `[[ ... ]]`
+# test form: it reports `analysis_incomplete` at HIGH and always blocks the call, so a
+# delivered gate written that way never executes and reads `presence_gate: tool-error`.
+# Delivered gate blocks must stay in Tirith's accepted `test ...` dialect.
+BRACKET_TEST = re.compile(r"(^|[\s;&|(!])\[\[?\s", re.MULTILINE)
+LOCK = ROOT / ".fullsend/lock.yaml"
+PINNED_RAW_PREFIX = "/RHEcosystemAppEng/sdlc-plugins/"
+HARNESS_DIR = ROOT / ".fullsend/harness"
+BASE_PIN = re.compile(r"^base:\s*https://raw\.githubusercontent\.com/[^/]+/[^/]+/([0-9a-f]{40})/", re.MULTILINE)
 
 
 def load_script(path):
@@ -574,6 +585,141 @@ def test_gate_commands_match_gate_input_pin():
         "Step 0.6/0.7 gate commands changed. Native gate_input evidence for this PR compares against "
         "main's commands, so presence_gate / input_validation will not read successful. "
         f"Check the native transcript manually, then update GATE_COMMANDS_SHA256 to {digest} in this PR.")
+
+
+def delivered_gate_blocks():
+    """Extract both Fullsend-delivered presence gates the way the native eval tooling does."""
+    triage = (ROOT / "plugins/sdlc-workflow/skills/triage-security/SKILL.md").read_text()
+    triage_gate = triage.split("### Step 0.6", 1)[1].split("```bash\n", 1)[1].split("\n```", 1)[0]
+    verify = (ROOT / "plugins/sdlc-workflow/skills/verify-pr/SKILL.md").read_text()
+    verify_gate = next(block for block in re.findall(r"```bash\n(.*?)\n```", verify, re.S)
+                       if "FULLSEND_OUTPUT_DIR+x" in block)
+    return {"triage-security": triage_gate, "verify-pr": verify_gate}
+
+
+@pytest.mark.parametrize("skill", ["triage-security", "verify-pr"])
+def test_delivered_gate_blocks_use_tirith_accepted_test_dialect(skill):
+    """Tirith blocks bracket tests, so a delivered gate must use the `test` builtin."""
+    # Given the gate bash block Fullsend delivers to the sandbox for the skill
+    block = delivered_gate_blocks()[skill]
+    # When scanning that block for a bracket test token
+    match = BRACKET_TEST.search(block)
+    # Then the gate stays in Tirith's accepted dialect
+    assert match is None, (
+        f"{skill} delivers a bracket test ({match.group(0)!r}) in its Fullsend gate. Tirith cannot "
+        "parse `[ ... ]` / `[[ ... ]]`, reports `analysis_incomplete` at HIGH, and blocks the call, "
+        "so the gate reads `presence_gate: tool-error` instead of running. Use Tirith's accepted "
+        "`test ...` form (fullsend docs/contributing/runtime-implementation.md).")
+
+
+@pytest.mark.parametrize("skill,creates_directory", [("triage-security", True), ("verify-pr", False)])
+def test_delivered_gate_blocks_keep_presence_semantics(tmp_path, skill, creates_directory):
+    """Presence-not-truthiness semantics survive the `test` rewrite in every environment state."""
+    # Given a delivered gate block and an environment without FULLSEND_OUTPUT_DIR
+    block = delivered_gate_blocks()[skill]
+    environment = {name: value for name, value in os.environ.items() if name != "FULLSEND_OUTPUT_DIR"}
+    output_dir = tmp_path / "sandbox-output"
+
+    def run_gate(**extra):
+        """Execute the delivered block verbatim under bash with the given environment."""
+        return subprocess.run(["bash", "-c", block], env=dict(environment, **extra),
+                              capture_output=True, text=True, check=False)
+
+    # When the gate runs with the variable absent, set but empty, and set to a fresh path
+    absent, empty, present = run_gate(), run_gate(FULLSEND_OUTPUT_DIR=""), run_gate(
+        FULLSEND_OUTPUT_DIR=str(output_dir))
+
+    # Then absent is interactive, empty fails closed, and non-empty reports sandbox mode
+    assert (absent.returncode, absent.stdout.strip()) == (0, "interactive mode")
+    assert empty.returncode == 1 and empty.stdout == ""
+    assert "ERROR: FULLSEND_OUTPUT_DIR is set but empty" in empty.stderr
+    assert (present.returncode, present.stdout.strip()) == (0, f"sandbox mode: {output_dir}")
+    # Then only the triage-security gate creates the output directory
+    assert output_dir.is_dir() is creates_directory
+
+
+def locked_checkout_digests(lock_path=LOCK):
+    """Map every Fullsend-pinned repository path to (locked digest, checkout digest or None)."""
+    lock = yaml.safe_load(Path(lock_path).read_text())
+    digests = {}
+    for harness in lock["harnesses"].values():
+        for dependency in harness["dependencies"]:
+            url = urlsplit(dependency["url"])
+            if not url.path.startswith(PINNED_RAW_PREFIX):
+                continue
+            commit, _, relative = url.path[len(PINNED_RAW_PREFIX):].partition("/")
+            if not commit:
+                continue
+            if dependency.get("type") == "directory":
+                base = relative.rstrip("/") if relative.endswith("/") else str(PurePosixPath(relative).parent)
+                targets = [(f"{base}/{entry['path']}", entry["sha256"])
+                           for entry in dependency.get("files") or []]
+            else:
+                targets = [(relative, dependency["sha256"])]
+            for repo_path, locked in targets:
+                path = ROOT / repo_path
+                actual = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+                digests[repo_path] = (locked, actual)
+    return digests
+
+
+def assert_lock_matches_checkout(lock_path=LOCK):
+    """Fail when Fullsend-pinned content differs from the bytes in this checkout."""
+    drifting = {path: digests for path, digests in locked_checkout_digests(lock_path).items()
+                if digests[0] != digests[1]}
+    assert not drifting, (
+        "Fullsend-pinned content does not match this checkout: "
+        + ", ".join(f"{path} (locked {locked}, checkout {actual or 'missing'})"
+                    for path, (locked, actual) in sorted(drifting.items()))
+        + ". Re-pin the base SHA in .fullsend/harness/*.yaml and re-lock with "
+          "`fullsend lock --all --fullsend-dir .fullsend` (fullsend.md, pin-and-bump).")
+
+
+def pinned_commits(lock_path=LOCK):
+    """Return the commit SHAs that every locked URL under this repository resolves to."""
+    lock = yaml.safe_load(Path(lock_path).read_text())
+    commits = set()
+    for harness in lock["harnesses"].values():
+        for dependency in harness["dependencies"]:
+            path = urlsplit(dependency["url"]).path
+            if path.startswith(PINNED_RAW_PREFIX):
+                commits.add(path[len(PINNED_RAW_PREFIX):].partition("/")[0])
+    return commits
+
+
+def test_fullsend_lock_matches_checkout_bytes():
+    """Delivered gate tests are only meaningful while the pin serves the checkout bytes."""
+    # Given both harnesses pinned to one commit and the committed lock
+    base_commits = set(BASE_PIN.findall("".join(
+        path.read_text() for path in sorted(HARNESS_DIR.glob("*.yaml")))))
+    # When comparing every pinned repository file with its checkout bytes
+    pinned = locked_checkout_digests()
+    # Then the delivered skills are covered, nothing drifted, and the pin is consistent
+    assert {"plugins/sdlc-workflow/skills/triage-security/SKILL.md",
+            "plugins/sdlc-workflow/skills/verify-pr/SKILL.md"} <= set(pinned)
+    assert base_commits == pinned_commits(), (
+        "The .fullsend/harness/*.yaml base SHA and the locked URLs disagree; re-pin and re-lock.")
+    assert_lock_matches_checkout()
+
+
+def test_fullsend_lock_detects_tampered_digest(tmp_path):
+    """A stale lock digest fails the check and names the drifting file."""
+    # Given a lock copy whose verify-pr SKILL.md digest no longer matches the checkout
+    lock = yaml.safe_load(LOCK.read_text())
+    tampered = False
+    for harness in lock["harnesses"].values():
+        for dependency in harness["dependencies"]:
+            for entry in dependency.get("files") or []:
+                if entry["path"] == "skills/verify-pr/SKILL.md":
+                    entry["sha256"] = "0" * 64
+                    tampered = True
+    assert tampered, "The lock no longer pins skills/verify-pr/SKILL.md"
+    lock_path = tmp_path / "lock.yaml"
+    lock_path.write_text(yaml.safe_dump(lock))
+    # When the tampered lock is checked against the checkout
+    # Then the failure names the drifting file
+    with pytest.raises(AssertionError, match="plugins/sdlc-workflow/skills/verify-pr/SKILL.md"):
+        assert_lock_matches_checkout(lock_path)
 
 
 def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
