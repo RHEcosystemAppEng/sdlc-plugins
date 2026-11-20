@@ -105,15 +105,15 @@ When a task's fix location is the symptom layer, include the extension section:
 
 - Root cause owned by: <repository> / <layer>
 - Fix location: <root-cause | symptom>
-- Deferred root-cause task: <owning-repository Task or Bug key>
+- Deferred root-cause task: <owning-repository Task key>
 ```
 
 A task whose `Fix location` is `symptom` MUST either name the owning-repository
-Task (or Bug) that fixes the root cause in `Deferred root-cause task`, or record
-an explicit user-approved waiver as `Deferred root-cause task: none — waiver
-approved by <user>`. A symptom-level task MUST NOT be created while the root
-cause is known to live in another repository or the data layer unless one of
-these two conditions is met.
+Task that fixes the root cause in `Deferred root-cause task` — never the Bug being
+triaged — or record an explicit user-approved waiver as `Deferred root-cause
+task: none — waiver approved by <user>`. A symptom-level task MUST NOT be created
+while the root cause is known to live in another repository or the data layer
+unless one of these two conditions is met.
 
 This rule routes work to the layer that owns the defect. It does not relax the
 single-repository-per-task rule: each task, including the owning-repository task,
