@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md Step 6 '1. modules/ingestor/src/graph/sbom/mod.rs (modify)': '`fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>` becomes `pub fn ...`' and '`fn suppliers(sbom: &Sbom) -> Vec<SupplierInfo>` becomes `pub fn ...`'. reuse-decision.md Decision section repeats this for the same file path."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "reuse-decision.md step 1 'Is the source crate already a dependency of the target crate? Yes.' quotes `trustify-module-ingestor = { path = \"../modules/ingestor\" }` from migration/Cargo.toml and adds 'In a real run I would check this directly in migration/Cargo.toml'. plan.md Step 4: 'Read migration/Cargo.toml to confirm the dependency on trustify-module-ingestor.' The decision in step 2 comes after this check."
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md: 'Make both functions public in the ingestor crate and import them from the migration crate. Do NOT duplicate them.' and '2. The dependency exists, so make them public and import them.' and 'Because the dependency already exists, making the functions public adds no new coupling between crates.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md: 'Do NOT duplicate them.' and in the trade-off section 'So I follow the skill rule and do not duplicate.' plan.md up() step 3: 'call the **imported** describing_packages(&sbom) and suppliers(&sbom). No extraction logic is written again in the migration.' Step 9 also includes a duplication-check grep. No output proposes copying the code."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md: '**DRY / one source of truth:** ... If the migration had its own copy, the two could drift apart. A future fix to the ingestor (for example, CycloneDX vs SPDX supplier handling) would then not reach the migration'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

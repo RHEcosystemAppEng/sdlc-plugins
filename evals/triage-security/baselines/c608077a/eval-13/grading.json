@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "The remediation output describes the digest protocol for the upstream backport task: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md 'Task 3 – 2.1.x Upstream backport (PREEMPTIVE)' digest steps (lines 224-226): '1. upstream_task = jira.create_issue(...) ... returns <T3-key>', '2. jira.get_issue(<T3-key>, fields=[\"description\"]), then write the result to /tmp/task-desc.md', '3. python3 scripts/sha256-digest.py /tmp/task-desc.md, which outputs the tagged digest.' Task 1 (2.2.x upstream-repo dependency bump, lines 78-81) follows the same create_issue -> get_issue -> sha256-digest.py sequence."
+    },
+    {
+      "text": "The remediation output describes the digest protocol for the downstream propagation subtask: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
+      "passed": true,
+      "evidence": "remediation.md Task 2 (2.2.x downstream propagation) lines 140-142: 'downstream_task = jira.create_issue(...)' -> 'jira.get_issue(<T2-key>, fields=[\"description\"]), then write the result to /tmp/task-desc.md' -> 'python3 scripts/sha256-digest.py /tmp/task-desc.md'. Task 4 (2.1.x downstream propagation) lines 287-289 repeat the same sequence for <T4-key>."
+    },
+    {
+      "text": "The remediation output includes the digest comment marker '[sdlc-workflow] Description digest:' in the described steps for each remediation task — both upstream and downstream (§1.66)",
+      "passed": true,
+      "evidence": "Marker appears in all four tasks' digest steps in remediation.md: Task 1 line 82 ('[sdlc-workflow] Description digest: <full tagged digest output>'), Task 2 line 143 and Task 4 line 290 (jira.add_comment(<T2-key>/<T4-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\")), Task 3 line 227 (jira.add_comment(<T3-key>, \"[sdlc-workflow] Description digest: <tagged-digest>\"))."
+    },
+    {
+      "text": "The remediation output sequences digest comments BEFORE issue links (Depend, Blocks) or other comments in the described procedure for each task (§1.66, shared/description-digest-protocol.md Rules)",
+      "passed": true,
+      "evidence": "remediation.md Task 1 heading: 'Description digest comment steps (right after creation, before any link or other comment)'; step 6 'Only after that, create the links: TC-8001 -> <T1-key>, type Depend ... Blocks'. Task 2 step 5 'Then create the links' (Depend, Blocks) after digest step 4; Task 3 step 5 'Then create the link TC-8001 -> <T3-key>, type Related' after digest step 4; Task 4 step 5 'Then create the links' (Related, Blocks) after digest step 4. TC-8001 comments section is titled '(after all task links)'. No contradicting ordering found."
+    },
+    {
+      "text": "The remediation output specifies that the digest is computed from the re-fetched description (via Jira API after create_issue), not from the description string passed to create_issue (shared/description-digest-protocol.md Hashing)",
+      "passed": true,
+      "evidence": "remediation.md line 79: 'Re-fetch the stored description: jira.get_issue(<T1-key>, fields=[\"description\"]). Do not hash the string passed to create_issue, because Jira normalizes content.' Lines 295-296: 'A real digest has to be computed by scripts/sha256-digest.py from the description re-fetched after creation in Jira.' Tasks 2-4 all hash the get_issue output written to /tmp/task-desc.md."
+    }
+  ],
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}
+}

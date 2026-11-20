@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "At least one task's Acceptance Criteria contains a code-level, testable criterion requiring the gating flow to fail closed (e.g., exit non-zero or report an error rather than skip) when the tracker search returns an empty result from a source that cannot be proven authenticated or healthy.",
+      "passed": true,
+      "evidence": "task-3-ready-for-verification-gate-fail-closed.md AC: '**Fail closed (gate):** when `search_issues` raises the auth-unproven error (or fails with 401/403), `resolve_gated_issue` does not return `None`/skip; the gate exits non-zero instead of treating the empty result as a skip.' and '**Fail closed (wrapper):** `scripts/pre-verify.sh` exits non-zero whenever the gate exits non-zero — including the auth-unproven exit code with no 401/403 text in stderr'. Task 2 AC also: 'when the gateway returns a successful (2xx) empty search response but the request cannot be proven authenticated ... the client CLI exits non-zero — it MUST NOT return `[]` / exit 0.'"
+    },
+    {
+      "text": "The same task's Test Requirements include a test that drives the unauthenticated, degraded, or empty-search path and asserts the fail-closed outcome rather than a skip.",
+      "passed": true,
+      "evidence": "task-3 Test Requirements: 'Test (degraded path): `search_issues` mocked to raise `TrackerAuthUnprovenError` (simulating gateway 200 + `[]` without proven auth) → `resolve_gated_issue` raises / gate exits non-zero; assert it does NOT return `None`.' and 'Test (wrapper degraded path): run `scripts/pre-verify.sh` with a stubbed gate that exits with the auth-unproven code ... assert the wrapper exits non-zero and does not report a skip.'"
+    },
+    {
+      "text": "That task's Implementation Notes point at the specific gate or skip site where the guard belongs, naming src/gate/resolve_issue.py (resolve_gated_issue) and/or scripts/pre-verify.sh.",
+      "passed": true,
+      "evidence": "task-3 Implementation Notes: '**Gate site 1:** `src/gate/resolve_issue.py::resolve_gated_issue(pr_url)`. Currently calls `search_issues` and returns `None` (skip) when the result is empty...' and '**Gate site 2:** `scripts/pre-verify.sh`. Currently greps client stderr for 401/403...'"
+    },
+    {
+      "text": "The documented silent-empty risk is not covered only by an operational or post-merge mitigation: if a live run after merge is mentioned, it appears alongside the fail-closed Acceptance Criterion and test, not as their replacement.",
+      "passed": true,
+      "evidence": "task-3 Implementation Notes: 'The post-merge live run suggested in the Feature is a supplementary check only; this task's tests are the required coverage.' task-2 Description: 'A post-merge live run may supplement this but is not the coverage for this risk.' impact-map.md: 'retained only as a **supplementary** operational check. It is NOT accepted as the coverage for these risks'. Both tasks include fail-closed ACs and degraded-path tests."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

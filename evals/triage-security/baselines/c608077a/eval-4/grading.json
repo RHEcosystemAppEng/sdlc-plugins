@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
+      "passed": true,
+      "evidence": "version-impact.md lines 12-18: '2.1.0 | v0.3.8 | 0.4.5 | **YES**', '2.1.1 | v0.3.12 | 0.4.5 | **YES**', and 2.2.0 (0.4.8), 2.2.1 (0.4.8), 2.2.2 (retag), 2.2.3 (0.4.9), 2.2.4 (0.4.9) all 'NO'. Lines 3-4 say the data comes from 'git show <tag>:Cargo.lock | grep -A2 'name = \"h2\"''. The 'Mixed impact across streams' section (lines 20-25) shows 2.1.x AFFECTED and 2.2.x NOT AFFECTED."
+    },
+    {
+      "text": "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md line 28: 'Proposed: [RHTPA 2.1.0, RHTPA 2.1.1]'. Line 32: 'Removed: RHTPA 2.2.0 (ships h2 0.4.8...)'. Line 33: 'No 2.2.x version is included'. The edit_issue call (lines 39-41) lists only the 2.1.0 and 2.1.1 IDs."
+    },
+    {
+      "text": "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 8 Case A scoping)",
+      "passed": true,
+      "evidence": "remediation.md line 11: '2.1.x ... YES | 2 tasks'. Line 12: '2.2.x ... NO, all versions ship h2 >= 0.4.8 | **No tasks**'. Both tasks are titled '[2.1.x] ...' (lines 35, 96). Checklist line 158: '2.1.x gets 2 (Cargo source dep); 2.2.x gets 0 (not affected)'. Line 29: 'No release Jira for 2.2.x'."
+    },
+    {
+      "text": "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
+      "passed": true,
+      "evidence": "data-extraction.md lines 48-51: 'The summary contains **no** stream suffix in brackets → the issue is **unscoped** and covers **all** configured streams (2.1.x and 2.2.x)... Step 2 analyzes every version in both streams.' version-impact.md checks all 7 versions across both streams (lines 12-18), and line 4 says 'Every released version was checked'."
+    },
+    {
+      "text": "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 8 Case B applies only to scoped issues)",
+      "passed": true,
+      "evidence": "No cross-stream impact notice or preemptive task appears in any output file. remediation.md line 6: 'Issue scoped? **No** (unscoped) → **Case A skipped** (it applies only to scoped issues)'. Line 17: 'No security-preemptive label: the stream is covered by this unscoped CVE issue'. Line 159: 'Cross-stream coverage: n/a (unscoped issue covers all streams; Case A skipped)'. data-extraction.md line 54 says the cross-stream preemptive case 'does **not** apply'. The output calls the scoped-only cross-stream case 'Case A', but in substance no cross-stream notice was generated, and the reason given is that the issue is unscoped."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

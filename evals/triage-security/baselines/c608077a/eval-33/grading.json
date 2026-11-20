@@ -1,0 +1,45 @@
+{
+  "assertion_results": [
+    {
+      "text": "The output cites the explicit on-demand trigger for a missing required component pair even when the Container Images section exists, and identifies missing (2.1.2, api-rhel10)",
+      "passed": true,
+      "evidence": "matrix-population.md Section 2: 'The on-demand trigger in version-impact-analysis.md > On-demand matrix population runs population when a stream \"is missing any required component pair — even when the section and other rows already exist\". Here the Container Images section and the (2.1.2, api-rhel9) row exist, but the required pair (2.1.2, api-rhel10) is missing.' Repeated in Section 6 written rules."
+    },
+    {
+      "text": "The proposal preserves the existing api-rhel9 row and proposes only the missing api-rhel10 row without duplicating the existing pair",
+      "passed": true,
+      "evidence": "Section 4 proposal Container Images table has exactly two rows: '| 2.1.2 | api-rhel9 | `v0.3.14` | ... sha256:aaaa... |' and '| 2.1.2 | api-rhel10 | `v0.3.14` | ... sha256:bbbb... |'. Text: 'the (2.1.2, api-rhel9) row are kept unchanged. The only addition is the (2.1.2, api-rhel10) row.' No duplicate api-rhel9 row."
+    },
+    {
+      "text": "The Container Images table has separate columns for release tag, resolved full SHA, image reference, immutable digest, and CPE; revision-label comparisons are shown separately from the stored row fields",
+      "passed": true,
+      "evidence": "Proposal table header: '| Product Version | Component | Konflux Release Tag | Resolved Release Commit SHA | Image Reference | Image Digest | CPE |'. Revision-label comparisons are in a separate table under '### Revision-label comparisons (reported separately from the table, as required)' with columns Pair / org.opencontainers.image.revision / Resolved release SHA / Result."
+    },
+    {
+      "text": "The proposed api-rhel10 row preserves v0.3.14 and the full resolved SHA 0123456789abcdef0123456789abcdef01234567 as distinct values, plus its supplied image reference, digest, and CPE",
+      "passed": true,
+      "evidence": "Proposal row: '| 2.1.2 | api-rhel10 | `v0.3.14` | `0123456789abcdef0123456789abcdef01234567` | `registry.example.test/trustify/api:2.1.2-rhel10` | `sha256:bbbb...bbbb` | `cpe:2.3:a:example:trustify_api:2.1.2:*:*:*:*:*:*:*` |' — tag and SHA in separate columns; also listed in Section 3 evidence table."
+    },
+    {
+      "text": "The api-rhel10 revision label is compared with the resolved release SHA and marked verified",
+      "passed": true,
+      "evidence": "Revision-label table row: '| (2.1.2, api-rhel10) | `0123456789abcdef0123456789abcdef01234567` | `0123456789abcdef0123456789abcdef01234567` | MATCH — VERIFIED |'."
+    },
+    {
+      "text": "The existing 2.1.2/build 0.3.14/date 2026-06-25/backend source-pin row is preserved",
+      "passed": true,
+      "evidence": "Proposal Supportability Matrix includes '| 2.1.2 | 0.3.14 | 2026-06-25 | `v0.3.14` | |' (line 79), alongside the 2.1.0 and 2.1.1 rows; Section 1 lists it as part of the snapshot."
+    },
+    {
+      "text": "The proposal preserves the existing Source Pinning Method and Ecosystem Mappings from security-matrix-mock.md",
+      "passed": true,
+      "evidence": "Proposal contains '- **backend**: `artifacts.lock.yaml` (download URL contains tag, e.g., `v0.3.12`)' and Ecosystem Mappings rows '| Cargo | backend | `Cargo.lock` | `git show <tag>:Cargo.lock` | `release/0.3.z` |' and '| RPM | — | `rpms.lock.yaml` | `git show <tag>:rpms.lock.yaml` | — |', identical to Stream 1 in evals/triage-security/files/security-matrix-mock.md."
+    },
+    {
+      "text": "The report cites the shared write-safety rule as covering fallback saves, format auto-repairs, and population; the final comparison detects the concurrent target, preserves it, and aborts rather than writing stale content",
+      "passed": true,
+      "evidence": "Section 6 quotes: 'This procedure applies to every local security-matrix.md write: saving a Konflux fallback copy, applying Step 2.1.1 format auto-repairs, and on-demand population.' with bullets for Fallback saves, Format auto-repairs, Population writes. Section 5 comparison table shows Last-Updated changed (2026-06-28T10:00:00Z -> 2026-10-26T09:15:00Z) and CONCURRENT-ROW-KEEP row present; 'the current file is kept... Writing the confirmed proposal would overwrite the stale snapshot and delete the CONCURRENT-ROW-KEEP row'; header 'Result: NOT WRITTEN — write aborted under Local matrix write safety.'"
+    }
+  ],
+  "summary": {"passed": 8, "failed": 0, "total": 8, "pass_rate": 1.0}
+}

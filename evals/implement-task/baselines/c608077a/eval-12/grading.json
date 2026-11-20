@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md: 'Before declaring any constant, enum, type alias or config map, I searched the whole target package for an existing definition'. Section 3 table lists 'mcp__serena_backend__find_symbol(name_path_pattern=\"SEVERITY_ORDER\", include_body=true)' and 'mcp__serena_backend__search_for_pattern(substring_pattern=\"(?i)severity_?order\", relative_path=\"modules/fundamental\")'."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md section 4 Findings: '`SEVERITY_ORDER` | **Yes** | `modules/fundamental/src/advisory/service/advisory.rs` | `SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]`'."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md Step 6: '**Reuse the existing constant. Never redeclare it.**' and 'In `sbom/service/sbom.rs`: `use crate::advisory::service::advisory::SEVERITY_ORDER;`'. File change 1 also says 'Add the import `use crate::advisory::service::advisory::SEVERITY_ORDER;`'."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "No new constant declared in either file. plan.md: 'Do not fall back to a duplicate, because that breaks AC3'; Step 9: 'exactly one `SEVERITY_ORDER` definition'. symbol-search.md section 6 helper `severity_rank` only references SEVERITY_ORDER and 'does not hold any ordering data of its own'; Case B proposes only a visibility change (pub(crate)), not a redeclaration."
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md section 2 'Search scope': 'Target package: `modules/fundamental` (crate `trustify-module-fundamental`)' plus 'Wider check: `common/`, `entity/`, `modules/ingestor/`, `modules/search/`'; intro states 'I searched the whole target package for an existing definition, not only the files I was editing'; search #3 runs 'across the whole repo'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

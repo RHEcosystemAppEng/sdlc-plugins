@@ -1,0 +1,85 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review comment about transaction wrapping (id 30001) is classified as a code change request and triggers sub-task creation",
+      "passed": true,
+      "evidence": "review-30001.md: '## Classification: **Code change request**' and 'Sub-task created: yes, see `subtask-1.md`'. report.md table row: '30001 | ... | Code change request | subtask-1'."
+    },
+    {
+      "text": "The review comment about adding an index (id 30002) is classified as suggestion — the reviewer uses suggestive language ('should also', 'would help') and the classification output (review-30002.md) explains this reasoning",
+      "passed": true,
+      "evidence": "review-30002.md: '## Classification: **Suggestion**' with reasoning 'The justification is speculative performance (\"will be frequent\", \"a partial index would help\"). The SQL is offered loosely (\"Something like:\")' and that it is 'an optional optimization'."
+    },
+    {
+      "text": "The nit comment about context message (id 30003) is classified as nit and does NOT trigger sub-task creation",
+      "passed": true,
+      "evidence": "review-30003.md: '## Classification: **Nit**' and 'Sub-task created: no.' report.md row: '30003 | ... | Nit | none'."
+    },
+    {
+      "text": "The question comment about GET behavior (id 30004) is classified as question and does NOT trigger sub-task creation",
+      "passed": true,
+      "evidence": "review-30004.md: '## Classification: **Question**' and 'Sub-task created from this comment: no.' subtask-2 is explicitly sourced from the Intent Alignment Scope Containment FAIL, not from reclassifying 30004."
+    },
+    {
+      "text": "Each sub-task description follows the task-description-template.md format: contains Repository, Description, Files to Modify, Implementation Notes, and Acceptance Criteria sections (constraint 1.12)",
+      "passed": true,
+      "evidence": "Both subtask-1.md and subtask-2.md contain '## Repository', '## Description', '## Files to Modify', '## Implementation Notes', '## Acceptance Criteria' (plus Reuse Candidates, Test Requirements, Dependencies)."
+    },
+    {
+      "text": "Each sub-task description includes a Target PR section with the PR URL https://github.com/trustify/trustify-backend/pull/744 (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-1.md and subtask-2.md each have '## Target PR' followed by 'https://github.com/trustify/trustify-backend/pull/744'."
+    },
+    {
+      "text": "Each sub-task description includes a Review Context section with the original review comment text (constraint 1.12)",
+      "passed": true,
+      "evidence": "subtask-1.md '## Review Context' quotes comment 30001 verbatim ('The `soft_delete` method should run all three UPDATE statements...'). subtask-2.md '## Review Context' quotes related comment 30004 verbatim ('Have you considered what happens when someone queries...')."
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, creates sub-task descriptions, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "Outputs contain only report.md, review-3000[1-4].md, subtask-1.md, subtask-2.md. report.md: 'All writes (sub-tasks, replies, Jira comments, the PR report comment) are recorded in these output files instead.' No code edits described."
+    },
+    {
+      "text": "The skill reads and processes all PR review comments before generating findings (constraint 1.10)",
+      "passed": true,
+      "evidence": "report.md 'Review feedback classification': 'Enumeration: there are 4 inline threads (30001–30004), all top-level with no replies, and 1 review (20001).' Each of the 4 has a classification file, and review 20001's body is also assessed."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR (constraint 1.13)",
+      "passed": true,
+      "evidence": "report.md contains no merge action; Overall is FAIL and the only actions are proposed sub-tasks and planned replies. No merge command or statement appears in any output."
+    },
+    {
+      "text": "The report contains a Test Change Classification row with ADDITIVE — only new test files were added (tests/api/sbom_delete.rs is a new file)",
+      "passed": true,
+      "evidence": "report.md: '| Test Change Classification | ADDITIVE | Only a new test file (`tests/api/sbom_delete.rs`, 5 tests). No test files were modified or deleted. |'"
+    },
+    {
+      "text": "Convention upgrade eligibility is evaluated for review comment 30002 (index suggestion) — the review classification output (review-30002.md) or the report's Style/Conventions analysis explains whether the suggestion matches a documented or demonstrated project convention",
+      "passed": true,
+      "evidence": "review-30002.md 'The convention-upgrade check found no backing': CONVENTIONS.md (1a) key conventions contain nothing on indexes; Codebase patterns (1b) '0 instances of `Index::create`, `CREATE INDEX`'; Performance scrutiny (1c); Decision (1d) 'The comment stays a suggestion.' report.md: 'Convention Upgrade PASS: 30002 was not upgraded.'"
+    },
+    {
+      "text": "Review comment 30002 (index suggestion) does NOT result in a sub-task — the suggestion classification is correct (suggestive language, no directive) and no project convention in the fixture data backs an upgrade from suggestion to code change request",
+      "passed": true,
+      "evidence": "review-30002.md: 'Sub-task created: no.' report.md row: '30002 | ... | Suggestion (convention upgrade checked; not upgraded: no CONVENTIONS.md or codebase index pattern, performance-only) | none'. Neither subtask file concerns the index."
+    },
+    {
+      "text": "Eval Quality is N/A because no eval result reviews exist in the PR — the 3-criteria detection (author github-actions[bot], marker ## Eval Results, footer sdlc-workflow/run-evals) found no matches, so Eval Quality does not affect the Test Quality combination",
+      "passed": true,
+      "evidence": "report.md 'Eval Quality detection' table checks review 20001 against all three criteria (author `reviewer-a` not github-actions[bot]; no `## Eval Results`; no `sdlc-workflow/run-evals`) -> 'Reviews matching all three checks: 0', 'Eval Quality verdict: N/A', 'Effect on the Test Quality combination: none... Test Quality = PASS'."
+    },
+    {
+      "text": "The sub-task creation for comment 30001 explicitly specifies Issue Type as Sub-task — the subtask-30001.md file, the report's sub-task section, or the review classification output (review-30001.md) indicates the Jira issue is created with issueTypeName Sub-task (not as a standalone Task) to ensure parent-child hierarchy with the parent task",
+      "passed": true,
+      "evidence": "subtask-1.md (the sub-task for 30001, 'Source: review comment 30001'): '- **Issue Type:** Sub-task' and '- **Parent:** TC-9103'."
+    }
+  ],
+  "summary": {
+    "passed": 15,
+    "failed": 0,
+    "total": 15,
+    "pass_rate": 1.0
+  }
+}

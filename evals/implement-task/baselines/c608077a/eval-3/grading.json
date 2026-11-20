@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 6.2: 'call `common::db::query::apply_filter(select, package_license::Column::License, license)` to add the `= value` / `IN (...)` condition'. reuse-analysis.md section 1 '`common/src/db/query.rs::apply_filter` — used directly' states it 'parses a comma-separated multi-value query parameter' and 'What it replaces: there will be no hand-written `split(',')`, no hand-written `Expr::col(...).is_in(...)`'. plan.md Step 9 duplication check: 'grep for any new split-on-comma or `is_in(` code in the diff. All of that logic should go through `apply_filter`.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md Step 6.1: 'Mirror the `severity` filter in `advisory/endpoints/list.rs`' and 'pass `query.license.as_deref()` to `PackageService::list` the same way the advisory handler passes `severity`'. reuse-analysis.md section 2 '`modules/fundamental/src/advisory/endpoints/list.rs` — pattern followed' lists same Query struct shape, same handler flow, same utoipa params style, and notes 'It is only a structural reference'."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Step 6.2: 'add a JOIN to `entity::package_license` using the SeaORM relation (`.join(JoinType::InnerJoin, package::Relation::PackageLicense.def())` or `.inner_join(package_license::Entity)`)'. reuse-analysis.md section 3 '`entity/src/package_license.rs` — used for the JOIN': 'join with the SeaORM relation API ... There is **no raw SQL**', with fallback `package_license::Relation::Package.def().rev()' 'rather than editing the entity file'."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md opens with 'The task lists three Reuse Candidates. **All three are used.**' and has three dedicated sections: '1. `common/src/db/query.rs::apply_filter` — used directly' (with code snippet of the call in PackageService::list), '2. `modules/fundamental/src/advisory/endpoints/list.rs` — pattern followed' (Query struct, handler flow, utoipa params), '3. `entity/src/package_license.rs` — used for the JOIN' (inner_join + Column::License passed to apply_filter, distinct handling). Each matches the task's Reuse Candidates list."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6: 'Scope is limited to exactly these three files': MODIFY `modules/fundamental/src/package/endpoints/list.rs`, MODIFY `modules/fundamental/src/package/service/mod.rs`, CREATE `tests/api/package_license_filter.rs` — exactly the task's Files to Modify/Create. Other files are read-only inspection targets; potential out-of-scope changes (tests/Cargo.toml registration, docs/api.md, other callers, common/src/db/query.rs visibility) are explicitly 'flagged for user approval' and 'not changed'. Step 9: '`git diff --name-only` must list only the 3 files above.'"
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": true,
+      "evidence": "No new filter/parsing utility is proposed. reuse-analysis.md 'Planned new code' lists only: a Query struct field, a parameter + conditional join + `apply_filter` call, a minimal SPDX-syntax validation (only for the 400 criterion, conditional on no existing helper), and the test file. reuse-analysis.md: 'the endpoint does a small SPDX-syntax check and still calls `apply_filter` for the parsing and SQL work. The check is not a second parser.' If apply_filter is private, plan says 'make it `pub` instead of copying it'."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}
