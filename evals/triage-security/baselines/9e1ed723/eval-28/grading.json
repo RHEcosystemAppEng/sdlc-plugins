@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 2.3.5 dependency chain context identifies h2 as a transitive dependency with the chain: backend → reqwest → hyper → h2 (3 levels deep)",
+      "passed": true,
+      "evidence": "version-impact.md lines 63-69, section '## 2.3.5 — Dependency chain context': 'Dependency chain for h2:\\n  backend (workspace) → reqwest → hyper → h2\\n  Type: transitive (3 levels deep)'."
+    },
+    {
+      "text": "The dependency chain output labels h2 as transitive (not direct) and includes the full chain path in the version impact output",
+      "passed": true,
+      "evidence": "version-impact.md line 68 'Type: transitive (3 levels deep)', line 74 'h2 is NOT a direct dependency.', line 67 full chain 'backend (workspace) → reqwest → hyper → h2', and line 77 lock chain 'reqwest 0.12.5 → hyper 1.4.1 → h2 0.4.4'. The impact table notes also say 'h2 0.4.4 via hyper 1.4.1'."
+    },
+    {
+      "text": "Remediation task Implementation Notes include the dependency type as transitive with the dependency chain",
+      "passed": true,
+      "evidence": "remediation.md Task 1 Implementation Notes, line 52: '**Dependency type**: transitive (chain: backend (workspace) → reqwest → hyper → h2)', followed by 'Depth: 3 levels. h2 is NOT declared in backend/Cargo.toml.' Task 2 line 133 carries the same chain forward."
+    },
+    {
+      "text": "Remediation task Implementation Notes describe the two-tier remediation approach: preferred is bumping reqwest (the direct dependency), fallback is pinning h2 directly",
+      "passed": true,
+      "evidence": "remediation.md lines 63-83, '### Remediation approach (transitive dependency)' within Implementation Notes: 'h2 is a **transitive** dependency, so use a two-tier approach:' then '**Preferred: bump the direct dependency** - The direct dependency that pulls in h2 is `reqwest` (via `hyper`)' and '**Fallback: pin the transitive dependency directly**'."
+    },
+    {
+      "text": "The fallback approach specifies the ecosystem-specific pinning mechanism: cargo add h2@0.4.5 for Cargo",
+      "passed": true,
+      "evidence": "remediation.md line 81, under Fallback: '- Cargo: `cargo add h2@0.4.5` to add h2 as a direct dependency, overriding the transitive resolution (or `cargo update -p h2 --precise 0.4.5`).' version-impact.md line 90 also lists `cargo add h2@0.4.5`."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

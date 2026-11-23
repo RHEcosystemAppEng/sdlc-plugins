@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+      "passed": true,
+      "evidence": "scaffold-race.md Section 2 'Initial Existence Check': 'Path checked: `security-matrix.md` for stream 2.1.x - Result: **MISSING**'. Section 3 'Pre-Write Re-Check — Conflict Detected': 'Re-read of `security-matrix.md`: **the file now EXISTS.**' and 'a concurrent `/triage-security` run created it after the initial existence check.'"
+    },
+    {
+      "text": "The current `Last-Updated: 2026-10-26T09:00:00Z` value and `CONCURRENT-ROW-KEEP` content are preserved rather than replaced by the scaffold",
+      "passed": true,
+      "evidence": "Section 3: 'I did not write the scaffold. The current file is kept exactly as it is, including its Last-Updated timestamp and the `CONCURRENT-ROW-KEEP` row.' Section 5 Final State table: '`<!-- Last-Updated: 2026-10-26T09:00:00Z -->` | Kept' and '`CONCURRENT-ROW-KEEP` row | Kept'."
+    },
+    {
+      "text": "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+      "passed": true,
+      "evidence": "Section 3: 'Step 10.5 requires re-reading the configured path immediately before writing and creating the file only if it is still absent.' Section 4 reason 1: 'Step 10.5 makes that write create-if-absent'; reason 4: 'A forced overwrite of a file I know exists breaks that rule outright.' The user's overwrite request was declined: 'Overwrite request | Declined. It conflicts with the create-if-absent rule'."
+    },
+    {
+      "text": "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+      "passed": true,
+      "evidence": "Section 3 report: 'security-matrix.md now exists at `security-matrix.md` ... I'm keeping the current file and did not write the scaffold over it.' Section 5: 'Scaffold | Thrown away.' Merge option in Section 4: 'I then show you the complete merged file and need your fresh confirmation before writing', and reason 3: '\"Do not ask again\" cannot replace that fresh confirmation'."
+    },
+    {
+      "text": "The output states that no project file is written until the changed target is reconciled and confirmed",
+      "passed": true,
+      "evidence": "Header: 'wrote no project files'. Section 5: '`security-matrix.md` (2.1.x) | Kept exactly as it was. Not modified', 'Merge | Not started. It needs the current file's full contents, a complete merged proposal and fresh user confirmation', 'CLAUDE.md / other project files | Not modified', 'Step 10.6 (populate matrix) | Not started. Waiting for the user to choose an option above.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

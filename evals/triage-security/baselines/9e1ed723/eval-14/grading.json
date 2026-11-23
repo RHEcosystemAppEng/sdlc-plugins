@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Dependency chain output includes both the rpms.lock.yaml classification AND the SBOM verification result for the affected versions (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md section '2.3.5 — Dependency chain context (with inline SBOM verification)' has a dependency chain block for each affected in-scope version (2.2.0, 2.2.1, 2.2.2). Each block has both lines, e.g. 'rpms.lock.yaml: present (openssl-libs 3.0.7-25.el9_3) → explicit install' and 'SBOM verification: present in BOTH final image SBOM and base image SBOM → base image'."
+    },
+    {
+      "text": "SBOM verification uses cosign download sbom to compare the final container image SBOM against the base image SBOM (Step 2.3.5 sub-steps 2 and 4)",
+      "passed": false,
+      "evidence": "The output does compare the final image SBOM against the base image SBOM ('present in BOTH final image SBOM and base image SBOM'; table column 'SBOM signal (final / base)'). But neither output file mentions the `cosign download sbom` command. Cosign appears only as an availability check: 'SBOM verification: cosign available (`which cosign` → `/usr/bin/cosign`)', 'Investigation method: rpms.lock.yaml + SBOM verification (cosign available)', and data-extraction.md line 3 'no Jira MCP, git, cosign, or WebFetch calls were made'. version-impact.md says 'SBOM results come from the mock SBOM comparison supplied with the eval task. No commands were actually run.' No concrete evidence shows the cosign download sbom mechanism was used or named."
+    },
+    {
+      "text": "When SBOM classification (base image) disagrees with rpms.lock.yaml classification (explicit install), the discrepancy is flagged to the engineer with a warning (Step 2.3.5 sub-step 5 disagreement handling)",
+      "passed": true,
+      "evidence": "Each chain block contains 'SBOM vs lock file: ⚠️ DISAGREE'. The side-by-side table has an 'Agreement' column showing '⚠️ DISAGREE' for 2.2.0/2.2.1/2.2.2. An explicit warning follows: '> ⚠️ SBOM classification disagrees with rpms.lock.yaml — lock file says **explicit install** but SBOM comparison says **base image**, for RHTPA 2.2.0, 2.2.1 and 2.2.2. Investigate manually.' It is followed by three confirmation steps for the engineer."
+    },
+    {
+      "text": "The rpms.lock.yaml classification remains the primary signal — the SBOM result supplements but does not override it (Step 2.3.5 non-MVP enhancement)",
+      "passed": true,
+      "evidence": "version-impact.md: 'The SBOM check supplements the lock file classification; it does not replace it.' and 'In that case the lock file entry decides the installed version'. The lock file classification ('explicit install') is kept and listed first in every chain block. The SBOM result does not replace it with 'base image'. The 'Origin: UNRESOLVED' line reports the conflict but does not override the lock file classification."
+    },
+    {
+      "text": "The SBOM verification result is presented alongside the rpms.lock.yaml result in the dependency chain output, not as a separate section (Step 2.3.5 sub-step 6)",
+      "passed": true,
+      "evidence": "The SBOM result appears inside the same 'Dependency chain for openssl-libs (RPM) — RHTPA 2.2.x' code blocks, on the line directly after the rpms.lock.yaml line. The section header reads '2.3.5 — Dependency chain context (with inline SBOM verification)', and the text says 'rpms.lock.yaml and SBOM signals are shown side by side.' There is no separate SBOM section."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 1,
+    "total": 5,
+    "pass_rate": 0.8
+  }
+}

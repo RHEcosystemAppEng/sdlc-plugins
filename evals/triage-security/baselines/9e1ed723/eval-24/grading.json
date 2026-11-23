@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 detects the absence of the Deployment Context column in the Source Repositories table and defaults all repositories to upstream (§1.78)",
+      "passed": true,
+      "evidence": "data-extraction.md 'Source Repositories mapping — Deployment Context' section (lines 26-34): 'The Source Repositories table has columns `Repository | URL | Local Path`. **The Deployment Context column is absent.** Per Step 0 backward-compatibility rule, all repositories default to `upstream`', with table row 'rhtpa-backend | https://github.com/rhtpa/rhtpa-backend | `upstream` (defaulted — column absent)'. Step 1 table line 60 also records 'Deployment context | `upstream` (default — no Deployment Context column)'."
+    },
+    {
+      "text": "Remediation task descriptions do NOT include a Coordination Guidance subsection — the section is omitted entirely when no Deployment Context column exists",
+      "passed": true,
+      "evidence": "grep for 'coordination' in remediation.md hits only line 15 ('**no Coordination Guidance subsection is included** in any task below') and line 287 (checklist: 'Coordination guidance: **omitted** — Deployment Context column absent'). None of the four task description code blocks (Task 1 2.2.x bump, Task 2 2.2.x propagation, Task 3 2.1.x backport, Task 4 2.1.x propagation) has a '### Coordination Guidance' heading; their sections are Repository, Target Branch, Description, Implementation Notes, Acceptance Criteria, Test Requirements, Dependencies."
+    },
+    {
+      "text": "The triage proceeds normally through all steps without errors from the missing Deployment Context column",
+      "passed": true,
+      "evidence": "data-extraction.md line 39: 'Triage otherwise proceeds normally; the missing column is not an error.' The outputs go through Step 0.6, 0, 0.3, 0.8, 1, 1.5, 1.7, 2, 3, 4-7, and then Step 8 in remediation.md (decision, 4 tasks, Case A comment, post-creation steps, pre-creation checklist). No errors are raised about the column; grep for 'error' only finds the line 39 statement."
+    },
+    {
+      "text": "Backward compatibility is maintained — existing eval behavior is unaffected by the absence of the Deployment Context column",
+      "passed": true,
+      "evidence": "remediation.md produces the standard behavior: Cargo source dependency gives '2 tasks per stream', Case B for scoped 2.2.x (Depend links, release Task Blocks links) plus Case A for 2.1.x (cross-stream comment, preemptive tasks with `security-preemptive` label, Related links), standard template sections, an Affects Versions correction (RHTPA 2.0.0 -> 2.2.0/2.2.1/2.2.2), and a pre-creation checklist. Line 287 explicitly cites 'backward compatibility'. The only change linked to the missing column is that coordination guidance is left out."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

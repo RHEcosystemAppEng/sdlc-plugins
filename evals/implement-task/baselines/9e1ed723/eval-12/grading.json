@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md opens with 'before declaring any new constant ... search the **target package**' and its 'Searches performed' table lists `mcp__serena_backend__find_symbol(name_path_pattern=\"SEVERITY_ORDER\", relative_path=\"modules/fundamental\", include_body=true)` and `search_for_pattern(substring_pattern=\"(?i)severity_?order\", relative_path=\"modules/fundamental\")`."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md 'Where it was found': '**Location**: `modules/fundamental/src/advisory/service/advisory.rs`' with definition `SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]`."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md section 'SEVERITY_ORDER handling (key decision)': '**Reuse, do not redeclare.**' and 'In `sbom.rs`: `use crate::advisory::service::advisory::SEVERITY_ORDER;`'. Step 6 file 1 also says 'Add import: use crate::advisory::service::advisory::SEVERITY_ORDER;'."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "plan.md: 'No new constant, enum, match table, or map is introduced anywhere.' The only new code in sbom.rs is RemediationItem, severity_rank (which uses SEVERITY_ORDER.iter().position), and the remediations method. symbol-search.md 'Rejected alternatives' lists 'Redeclare `const SEVERITY_ORDER` in `sbom.rs`' as rejected. The private case is handled by widening visibility to pub(crate), not by copying."
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md 'Target package' section names `modules/fundamental` (crate trustify-module-fundamental). Searches 1-2 use relative_path=\"modules/fundamental\", and searches 3-4 use relative_path=\".\" to search the whole workspace by value, e.g. to catch duplicates in `common/`."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
