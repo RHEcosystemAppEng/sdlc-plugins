@@ -48,6 +48,16 @@
        When configured and a CVE has Critical or Important severity, triage-security
        presents a warning gate before proceeding. Leave blank to skip the embargo check.
 
+     Optional field for Fullsend (unattended) runs:
+     - Triage status transitions: enabled | disabled (default: enabled). When
+       disabled, Fullsend triage-security runs never move the Vulnerability out of
+       its current status; assignment to the runner identity, comments, links,
+       remediation tasks and the ai-cve-triaged label still apply. Use it when Jira
+       automation reverts issues that leave New without fields the triage does not
+       set (e.g. Story Points, Sprint, Fix Version). Interactive runs are unaffected.
+       Not prompted by /setup; add `- Triage status transitions: disabled` to the
+       list below manually when needed.
+
      Example:
        Product pages URL: https://lifecycle.example.com/products/myproduct
        Jira version prefix: MYPRODUCT
@@ -57,7 +67,8 @@
        Upstream Affected Component custom field: customfield_10632
        PS Component custom field: customfield_10669
        Stream custom field: customfield_10832
-       Embargo policy URL: https://example.com/security/embargo-policy -->
+       Embargo policy URL: https://example.com/security/embargo-policy
+       Triage status transitions: disabled -->
 
 - Product pages URL: {{product-pages-url}}
 - Jira version prefix: {{jira-version-prefix}}
