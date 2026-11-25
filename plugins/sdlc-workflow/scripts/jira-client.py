@@ -553,6 +553,21 @@ def create_issue(
         data["fields"]["security"] = {"id": str(level_id)}
 
     if custom_fields:
+        # Fail fast: a generic merge runs after the validated security write, so a
+        # ``security`` key here would silently replace or null the inherited level
+        # and create an unprotected issue. The validated argument is authoritative.
+        if security is not None and 'security' in custom_fields:
+            print(
+                "❌ Conflicting security level: create_issue received both security "
+                "and custom_fields['security']",
+                file=sys.stderr,
+            )
+            print(
+                "Pass the level only through the security argument so the validated "
+                "value cannot be overridden.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
         data["fields"].update(custom_fields)
 
     return make_request('POST', 'issue', data)
