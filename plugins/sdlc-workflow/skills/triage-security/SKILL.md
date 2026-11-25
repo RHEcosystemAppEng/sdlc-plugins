@@ -199,20 +199,21 @@ branch once from `authorization.mutation_authorized` after trusted-input validat
 | Assigned, In Progress, or Closed workflow change | `status-transition` to a target name from `issue.transitions` (status rules: `jira-triage-operations.md`) |
 | Triage, correction, overlap, reconciliation, cross-stream, and summary comments | `comment` with `body_adf`, preserving required ADF mentions and footnotes |
 | Related, Depend, or Blocks relationship | `link` with the matching `link_type` |
-| Remediation Task creation | `remediation-task` with `ref`, `description_adf`, labels, and optional priority/fix versions |
-| Release Epic creation | `release-epic` with family, version, ref, project, exact release summary, description_adf and labels |
-| Child release Task creation | `release-task` with the same fields and its existing/generated Epic `parent` |
+| Remediation Task creation | `remediation-task` with `ref`, `description_adf`, labels, the parent Vulnerability's `security` level, and optional priority/fix versions |
+| Release Epic creation | `release-epic` with family, version, ref, project, exact release summary, description_adf, labels and the parent Vulnerability's `security` level |
+| Child release Task creation | `release-task` with the same fields (including `security`) and its existing/generated Epic `parent` |
 | Registering a separately trusted, pre-existing reference before dependent work | `resolve-reference` |
 
-Preserve the existing step order. For every newly planned remediation task, append
-the `remediation-task` action before its dependent `link` actions and before later
-comments (task-list, reconciliation, cross-stream, and post-triage summary). The
-binding executor registers the task reference and posts its description digest
-exactly once inside `remediation-task`, including when it reuses an existing task on
-a partial retry. Do not serialize a separate digest `comment` or a
-post-creation `resolve-reference` action. Use `{{ref.key}}` in later link/comment
-actions where the result schema permits it; never invent a Jira key in the sandbox.
-This digest-before-link rule applies to standard and preemptive tasks alike.
+Preserve the existing step order: append each `remediation-task` before its dependent
+`link` actions and later comments (task-list, reconciliation, cross-stream, summary).
+The executor registers the reference and posts the digest exactly once inside
+`remediation-task`; never serialize a separate digest `comment` or a post-creation
+`resolve-reference`. Use `{{ref.key}}` in later link/comment actions; never invent a
+Jira key. This digest-before-link rule applies to standard and preemptive tasks alike.
+
+**Security level.** Copy `issue.security` (`{id, name}`) into `security` on every
+creation action; omit it only when `null`. Task has no default level, so omission
+silently exposes the issue to every Browse Projects holder.
 
 ### Trusted-evidence map for Fullsend mode
 
@@ -297,8 +298,7 @@ PYEOF
   In Fullsend mode, the narrow output exception above also permits writing
   `$FULLSEND_OUTPUT_DIR/agent-result.json`; otherwise only use Bash for read-only
   `git show` commands and JIRA REST API fallback scripts.
-- If any step fails (e.g., Jira MCP unavailable, lock file not found, repo not cloned),
-  stop and inform the user rather than attempting alternative actions.
+- If any step fails, stop and inform the user rather than attempting alternatives.
 
 ### Exception: JIRA REST API Fallback
 
@@ -437,7 +437,7 @@ Follow the JIRA Access protocol in `shared/jira-access-strategy.md`.
 - `jira.get_issue(id)` → `python3 scripts/jira-client.py get_issue <id> --fields "*all"`
 - `jira.search_jql(jql)` → `python3 scripts/jira-client.py search_jql --jql "<jql>" --fields "summary,status,labels,versions" --max-results 50`
 - `jira.edit_issue(id, fields)` → `python3 scripts/jira-client.py update_issue <id> --fields-json '<json>'`
-- `jira.create_issue(...)` → `python3 scripts/jira-client.py create_issue --project <key> --summary "<summary>" --description-md "<desc>" --issue-type "<type-id>" --labels <labels>`
+- `jira.create_issue(...)` → `python3 scripts/jira-client.py create_issue --project <key> --summary "<summary>" --description-md "<desc>" --issue-type "<type-id>" --labels <labels> --security <parent-level-id>`
 - `jira.create_link(...)` → `python3 scripts/jira-client.py create_link --inward <key> --outward <key> --link-type <type>`
 - `jira.transition_issue(id, status)` → First `get_transitions <id>`, then `transition_issue <id> --transition-id <id>`
 - `jira.add_comment(id, text)` → `python3 scripts/jira-client.py add_comment <id> --comment-md "<text>"`
@@ -959,8 +959,8 @@ flowchart TD
     J -->|No| L["Close with\nresolution only"]
 ```
 
-**Important**: This skill never creates Vulnerability issues. PSIRT owns
-Vulnerability issue creation — the skill only creates remediation **Tasks**.
+**Important**: This skill never creates Vulnerability issues (PSIRT owns them);
+it only creates remediation **Tasks**.
 
 **Fullsend mode:** retain the existing decision tree and evidence thresholds, but
 append remediation, field, status, comment, link, and reference operations to the
@@ -1162,8 +1162,7 @@ following `task-description-template.md` so that `/implement-task` can parse the
 directly. Only create tasks for streams within the current issue's scope.
 
 After creating each remediation task, post a description digest comment per
-`shared/description-digest-protocol.md`. This ensures `/implement-task` can
-verify description integrity in its Step 1.5.
+`shared/description-digest-protocol.md` so `/implement-task` can verify integrity.
 
 For transitive dependencies, the remediation task must document the full
 dependency chain (from Step 2.3.5) and specify the two-tier remediation

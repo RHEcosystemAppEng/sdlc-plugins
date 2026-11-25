@@ -37,13 +37,16 @@ def _plan(actions, mode="mutation-authorized"):
 
 
 def _trusted_input(authorized=True, markers=None, remediation=None, issue="TC-42", related=None, searches=None,
-                   runner=None):
+                   runner=None, security=None):
     """Build the trusted runner fields consumed by the executor."""
     authorization = {"mutation_authorized": authorized}
     if runner is not None:
         authorization["runner_account_id"] = runner
+    issue_record = {"key": issue}
+    if security is not None:
+        issue_record["security"] = security
     return {
-        "issue": {"key": issue},
+        "issue": issue_record,
         "configuration": {"project_key": "TC"},
         "jira_metadata": {"related_issues": related or [], "sibling_searches": searches or []},
         "authorization": authorization,
@@ -681,6 +684,34 @@ def test_schema_invalid_plan_is_rejected_before_any_jira_operation(action, recor
     assert recorder.calls == []
 
 
+@pytest.mark.parametrize("build", [
+    _remediation_action,
+    lambda: _release_action("release-epic"),
+    lambda: _release_action("release-task"),
+])
+def test_result_schema_accepts_an_inherited_security_level(build):
+    """Every creation branch accepts the optional inherited security object."""
+    # Given a creation action proposing the parent's level
+    action = build()
+    action["security"] = {"id": "10034", "name": "Red Hat Employee"}
+
+    # When the trusted runner validates the sandbox result
+    # Then the level is accepted
+    executor._validate_result(_plan([action]))
+
+
+def test_result_schema_rejects_unknown_security_properties():
+    """The security object stays strict so a sandbox cannot smuggle extra fields."""
+    # Given a security object with an undeclared property
+    action = _remediation_action()
+    action["security"] = {"id": "10034", "unexpected": True}
+
+    # When the trusted runner validates the sandbox result
+    # Then the unknown property is rejected
+    with pytest.raises(executor.ActionError, match="result schema validation failed"):
+        executor._validate_result(_plan([action]))
+
+
 def test_unauthorized_mutating_plan_fails_without_jira_calls(recorder):
     """A mutating result cannot bypass an absent trusted authorization grant."""
     # Given a plan with a valid-looking mutation but no runner authorization
@@ -805,6 +836,60 @@ def test_remediation_digest_precedes_links_and_resolves_references(recorder):
     expected = hashlib.sha256(json.dumps(stored, separators=(",", ":")).encode("utf-8")).hexdigest()
     assert "Description digest: sha256-adf:{}".format(expected) in json.dumps(recorder.calls[2][3])
     assert recorder.calls[3] == ("link", "TC-42", "TC-9001", "Depend")
+
+
+def test_remediation_task_inherits_trusted_parent_security_level(recorder):
+    """Given a protected parent vulnerability, its remediation task is created protected."""
+    # Given a trusted parent at level 10034 and one authorized remediation action
+    result = _plan([_remediation_action()])
+    trusted = _trusted_input(security={"id": "10034", "name": "Red Hat Employee"})
+
+    # When the authorized plan runs
+    executor.execute_plan(result, trusted)
+
+    # Then the created task carries the parent's security level
+    create = next(call[1] for call in recorder.calls if call[0] == "remediation-task")
+    assert create["security"]["id"] == "10034"
+    assert create["security"]["name"] == "Red Hat Employee"
+
+
+def test_creation_without_a_trusted_security_level_omits_the_field(recorder):
+    """An unprotected parent still authorizes creation, without inventing a level."""
+    # Given a trusted parent that carries no security level
+    result = _plan([_remediation_action()])
+
+    # When the authorized plan runs
+    executor.execute_plan(result, _trusted_input())
+
+    # Then creation carries no level at all
+    create = next(call[1] for call in recorder.calls if call[0] == "remediation-task")
+    assert "security" not in create
+
+
+@pytest.mark.parametrize("proposed,trusted_security", [
+    ({"id": "10038", "name": "Embargoed Security Issue"}, {"id": "10034", "name": "Red Hat Employee"}),
+    ({"id": "10034", "name": "Red Hat Employee"}, None),
+])
+def test_action_security_level_must_match_the_trusted_parent(proposed, trusted_security, recorder):
+    """A proposed level that contradicts the trusted parent rejects the plan untouched."""
+    # Given an action whose level is weaker than, or absent from, the trusted parent
+    action = _remediation_action()
+    action["security"] = proposed
+
+    # When the plan is executed
+    # Then it fails before any Jira call
+    with pytest.raises(executor.ActionError, match="security level"):
+        executor.execute_plan(_plan([action]), _trusted_input(security=trusted_security))
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("security", ["10034", {"name": "Red Hat Employee"}, {"id": "  "}])
+def test_invalid_trusted_security_level_fails_closed(security, recorder):
+    """Malformed trusted security evidence rejects creation instead of degrading protection."""
+    # Given trusted input whose parent level cannot be trusted
+    with pytest.raises(executor.ActionError, match="security level"):
+        executor.execute_plan(_plan([_remediation_action()]), _trusted_input(security=security))
+    assert recorder.calls == []
 
 
 def test_existing_marker_and_remediation_skip_retry_duplicates(recorder):
@@ -1267,6 +1352,20 @@ def test_release_creation_parent_and_digest_order(recorder):
     assert registry['release-task']['key'] == 'TC-9002'
     assert [call[0] for call in recorder.calls] == [
         'remediation-task', 'get-issue', 'digest', 'remediation-task', 'get-issue', 'digest', 'link']
+
+
+def test_release_creation_inherits_trusted_parent_security_level(recorder):
+    """Release Epic and child release Task both inherit the parent's security level."""
+    # Given an authorized release graph and a protected trusted parent
+    trusted = _release_trusted()
+    trusted['issue']['security'] = {'id': '10034', 'name': 'Red Hat Employee'}
+
+    # When both release issues are created
+    executor.execute_plan(_plan([_release_action(), _release_action('release-task')]), trusted)
+
+    # Then each creation carries the parent's level
+    creates = [call[1] for call in recorder.calls if call[0] == 'remediation-task']
+    assert [create['security']['id'] for create in creates] == ['10034', '10034']
 
 
 @pytest.mark.parametrize('defect', ['decision', 'project', 'family', 'version', 'summary',

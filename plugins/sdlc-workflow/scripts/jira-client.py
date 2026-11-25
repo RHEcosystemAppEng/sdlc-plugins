@@ -467,7 +467,8 @@ def create_issue(
     fix_versions: Optional[List[str]] = None,
     custom_fields: Optional[Dict[str, Any]] = None,
     description_adf: Optional[Dict[str, Any]] = None,
-    parent: Optional[str] = None
+    parent: Optional[str] = None,
+    security: Optional[Any] = None
 ) -> Dict[str, Any]:
     """Create JIRA issue with a markdown or pre-rendered ADF description.
 
@@ -483,6 +484,9 @@ def create_issue(
         custom_fields: Optional custom field values (field_id: value)
         description_adf: Pre-rendered ADF description (takes precedence over description_md)
         parent: Optional parent issue key (creates a sub-task under it)
+        security: Optional Jira issue security level — a level id (e.g., "10034")
+            or an object carrying one (e.g., ``{"id": "10034", "name": "Red Hat Employee"}``).
+            Serialized as ``fields.security``; omitted when not supplied.
 
     Returns:
         Created issue object with key and ID
@@ -533,6 +537,20 @@ def create_issue(
 
     if fix_versions:
         data["fields"]["fixVersions"] = [{"name": v} for v in fix_versions if v]
+
+    if security is not None:
+        # Fail fast: Jira silently applies no security level to issue types whose
+        # security field is optional, so a malformed value must never degrade to
+        # an omitted key and leave the issue unprotected.
+        level_id = security.get("id") if isinstance(security, dict) else security
+        if (isinstance(level_id, bool) or not isinstance(level_id, (str, int))
+                or not str(level_id).strip()):
+            print(
+                "❌ Invalid security level: create_issue requires a level id or an object with an id",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        data["fields"]["security"] = {"id": str(level_id)}
 
     if custom_fields:
         data["fields"].update(custom_fields)
@@ -903,6 +921,7 @@ def main(argv=None):
     create_issue_parser.add_argument('--assignee-id', help='Assignee account ID')
     create_issue_parser.add_argument('--priority', help='Priority name (e.g., Major)')
     create_issue_parser.add_argument('--fix-versions', help='Comma-separated fixVersion names')
+    create_issue_parser.add_argument('--security', help='Issue security level ID (e.g., 10034)')
 
     # update_issue
     update_issue_parser = subparsers.add_parser('update_issue', help='Update issue fields')
@@ -989,6 +1008,7 @@ def main(argv=None):
             assignee_id=args.assignee_id,
             priority=args.priority,
             fix_versions=fix_versions,
+            security=args.security,
         )
 
     elif args.command == 'update_issue':

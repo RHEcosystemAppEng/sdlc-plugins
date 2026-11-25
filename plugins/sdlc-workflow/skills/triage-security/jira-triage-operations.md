@@ -596,12 +596,13 @@ release issue, choose a patch bump, prompt or contact Jira.
    release decision required report, no guessed version or dependent creation.
 4. Append `release-epic` before `release-task`; the Task's `parent` is the matching
    existing Epic key or `{{release-epic-ref.key}}`. Both actions carry family,
-   version, ref, project, exact summary, description_adf and labels (optional
-   priority/fix_versions). Use unique stable markers and one creation action per
-   identity. Always retain planned release creation actions on partial retries,
-   even with a recorded marker: the host reuses the typed snapshot and repairs
-   its digest before dependent links/comments. Do not add standalone digest
-   comments or post-creation resolve-reference actions.
+   version, ref, project, exact summary, description_adf, labels and the parent
+   Vulnerability's `security` level (optional priority/fix_versions). Use unique
+   stable markers and one creation action per identity. Always retain planned
+   release creation actions on partial retries, even with a recorded marker: the
+   host reuses the typed snapshot and repairs its digest before dependent
+   links/comments. Do not add standalone digest comments or post-creation
+   resolve-reference actions.
 5. For dedup, inspect only the selected release Task's Blocks inward endpoints
    in `remediation`, then their Depend-linked `originating_cves`. Compare the
    originating CVE's `upstream_affected_component` with the current issue's
@@ -674,7 +675,8 @@ the Version Streams table in Security Configuration:
      issueTypeName: "Epic",
      summary: "RHTPA <version> Release Tasks",
      description: "Release tracking Epic for RHTPA <version>. Contains CVE triage and remediation tasks for this release.",
-     labels: ["ai-generated-jira"]
+     labels: ["ai-generated-jira"],
+     security: <parent-issue-security-level>
    )
    ```
 
@@ -713,7 +715,8 @@ jira.search_jql(
      summary: "RHTPA <version> CVE triage",
      description: "CVE triage tracking task for RHTPA <version>. Linked to CVE Vulnerability issues (Related) and blocked by remediation Tasks (Blocks).",
      labels: ["ai-generated-jira"],
-     parent: <release-epic-key>
+     parent: <release-epic-key>,
+     security: <parent-issue-security-level>
    )
    ```
 

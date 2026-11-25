@@ -311,6 +311,27 @@ def _require_list(value, name, allow_empty=False):
     return value
 
 
+def normalize_security_level(security):
+    """Reduce a Jira security level object to its stable id/name audit fields.
+
+    Returns None when the issue carries no security level: Jira gives some issue
+    types (including Task) no default level, so absence is a normal, unprotected
+    state rather than missing evidence.
+    """
+    if security is None:
+        return None
+    security = _require_mapping(security, "issue.fields.security")
+    level_id = security.get("id")
+    if (isinstance(level_id, bool) or not isinstance(level_id, (str, int))
+            or not str(level_id).strip()):
+        raise EvidenceError("issue.fields.security.id must be a non-empty id")
+    level = {"id": str(level_id)}
+    name = security.get("name")
+    if isinstance(name, str) and name:
+        level["name"] = name
+    return level
+
+
 def normalize_issue(issue):
     """Extract the schema-required audit fields from a full Jira issue response."""
     issue = _require_mapping(issue, "issue")
@@ -348,6 +369,7 @@ def normalize_issue(issue):
         "labels": _require_list(fields.get("labels"), "issue.fields.labels", allow_empty=True),
         "versions": normalize_versions(fields.get("versions")),
         "reporter": {"account_id": account_id, "display_name": display_name},
+        "security": normalize_security_level(fields.get("security")),
         "comments": _require_list(comments.get("comments"), "issue.fields.comment.comments", allow_empty=True),
         "fields": fields,
     }

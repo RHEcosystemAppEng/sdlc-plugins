@@ -59,6 +59,16 @@
       "type": "string",
       "pattern": "^triage-security:[a-z0-9][a-z0-9._:-]*$"
     },
+    "security_level": {
+      "type": "object",
+      "description": "Jira issue security level inherited from the parent Vulnerability. Creation actions must carry it so remediation and release issues are not left readable to every Browse Projects holder.",
+      "additionalProperties": false,
+      "required": ["id"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 }
+      }
+    },
     "adf_document": {
       "type": "object",
       "additionalProperties": false,
@@ -209,7 +219,8 @@
               "description_adf": { "$ref": "#/$defs/adf_document" },
               "labels": { "type": "array", "items": { "type": "string" } },
               "priority": { "type": "string", "minLength": 1 },
-              "fix_versions": { "type": "array", "items": { "type": "string" } }
+              "fix_versions": { "type": "array", "items": { "type": "string" } },
+              "security": { "$ref": "#/$defs/security_level" }
             },
             "additionalProperties": false
           }
@@ -242,7 +253,8 @@
               "priority": {"type": "string", "minLength": 1},
               "fix_versions": {"type": "array", "items": {"type": "string"}},
               "family": {"type": "string", "pattern": "^\\d+\\.\\d+$"},
-              "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"}
+              "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
+              "security": {"$ref": "#/$defs/security_level"}
             },
             "additionalProperties": false
           }
@@ -263,7 +275,8 @@
               "fix_versions": {"type": "array", "items": {"type": "string"}},
               "family": {"type": "string", "pattern": "^\\d+\\.\\d+$"},
               "version": {"type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+$"},
-              "parent": {"$ref": "#/$defs/issue_reference"}
+              "parent": {"$ref": "#/$defs/issue_reference"},
+              "security": {"$ref": "#/$defs/security_level"}
             },
             "additionalProperties": false
           }

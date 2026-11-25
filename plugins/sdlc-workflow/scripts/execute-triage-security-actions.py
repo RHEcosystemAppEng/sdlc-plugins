@@ -389,6 +389,10 @@ def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> No
         _validate_action(raw_action)
         action = _resolve_action(raw_action, registry)
         action_type = action["type"]
+        if action_type in _CREATE_ACTION_TYPES:
+            # A level that contradicts the trusted parent rejects the whole plan
+            # before any creation can leave an issue unprotected.
+            _inherited_security(action, trusted_input)
         target_fields = _ACTION_DEFINITIONS.get(action_type, {}).get("targets")
         if not target_fields and action_type != "report-only":
             raise ActionError("{} action has no declared target fields".format(action_type))
@@ -507,6 +511,51 @@ def _already_applied(action: dict[str, Any], trusted_input: dict[str, Any]) -> b
     return False
 
 
+_CREATE_ACTION_TYPES = {"remediation-task", "release-epic", "release-task"}
+
+
+def _trusted_security_level(trusted_input: dict[str, Any]) -> dict[str, str] | None:
+    """Return the trusted parent issue's Jira security level, or None when unprotected."""
+    issue = trusted_input.get("issue")
+    security = issue.get("security") if isinstance(issue, dict) else None
+    if security is None:
+        return None
+    if not isinstance(security, dict):
+        raise ActionError("trusted issue security level is invalid")
+    level_id = security.get("id")
+    if (isinstance(level_id, bool) or not isinstance(level_id, (str, int))
+            or not str(level_id).strip()):
+        raise ActionError("trusted issue security level has no id")
+    level = {"id": str(level_id)}
+    name = security.get("name")
+    if isinstance(name, str) and name:
+        level["name"] = name
+    return level
+
+
+def _inherited_security(action: dict[str, Any], trusted_input: dict[str, Any]) -> dict[str, str] | None:
+    """Return the security level a created issue must carry; fail closed on mismatch.
+
+    The trusted parent's level is authoritative: a proposed action may repeat it
+    but can never omit it into an unprotected issue, weaken it, or invent a level
+    the parent does not have. Without a trusted level, creation stays level-free.
+    """
+    parent = _trusted_security_level(trusted_input)
+    proposed = action.get("security")
+    if proposed is None:
+        return parent
+    if not isinstance(proposed, dict):
+        raise ActionError("action security level must be an object")
+    if parent is None or str(proposed.get("id")) != parent["id"]:
+        raise ActionError("action security level does not match the trusted parent")
+    return parent
+
+
+def _security_kwarg(security: dict[str, str] | None) -> dict[str, Any]:
+    """Pass ``security`` to the Jira client only when the parent has a level."""
+    return {"security": security} if security is not None else {}
+
+
 def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]], trusted_input: dict[str, Any]) -> None:
     """Perform one already-authorized action and update generated references."""
     action_type = action["type"]
@@ -565,6 +614,7 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
             labels=list(dict.fromkeys(["ai-generated-jira", *action["labels"]])),
             priority=action.get("priority"), fix_versions=action.get("fix_versions"),
             description_adf=action["description_adf"],
+            **_security_kwarg(_inherited_security(action, trusted_input)),
         )
         key = created.get("key")
         if not isinstance(key, str) or not re.fullmatch(re.escape(action["project"]) + r"-\d+", key):
@@ -584,6 +634,7 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
             priority=action.get("priority"),
             fix_versions=action.get("fix_versions"),
             description_adf=action["description_adf"],
+            **_security_kwarg(_inherited_security(action, trusted_input)),
         )
         issue_key = created.get("key")
         if not issue_key:

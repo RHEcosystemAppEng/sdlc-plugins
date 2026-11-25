@@ -169,6 +169,19 @@ def test_trusted_input_fixtures_validate_against_the_sandbox_schema():
                for name in fixture_names[1:])
 
 
+@requires_format_extra
+def test_all_trusted_input_fixtures_validate_against_the_sandbox_schema():
+    """Every mounted trusted-input fixture still satisfies the extended input schema."""
+    # Given fixtures that predate the explicit issue.security field
+    names = sorted(path.name for path in FIXTURE_DIR.glob("fullsend-*-trusted-input.json"))
+    assert names, "expected mounted trusted-input fixtures"
+
+    # When the same pre-triage validator checks each mounted input
+    # Then the new optional security field does not invalidate any of them
+    for name in names:
+        pre_triage.validate_bundle(_trusted_input(name))
+
+
 def test_invalid_trusted_input_fixture_fails_closed_before_analysis(tmp_path):
     """The literal input-validation contract emits only the exact abort result."""
     # Given the deliberately incomplete mounted JSON fixture
@@ -514,6 +527,21 @@ def _release_create(kind, ref, **extra):
                 description_adf={'type': 'doc', 'version': 1, 'content': [
                     {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'SYNTHETIC TEST DATA — release tracking'}]}]},
                 **extra)
+
+
+def test_release_fixture_inherits_the_trusted_parent_security_level(recorder):
+    """A protected trusted bundle reaches the Jira boundary with the parent's level."""
+    # Given a protected version of the release fixture bundle
+    bundle = _trusted_input('fullsend-release-trusted-input.json')
+    bundle['issue']['security'] = {'id': '10034', 'name': 'Red Hat Employee'}
+    pre_triage.validate_bundle(bundle)
+
+    # When the executor creates the release Epic
+    executor.execute_plan(_release_result([_release_create('release-epic', 'new-epic')]), bundle)
+
+    # Then the creation crosses the boundary carrying the inherited level
+    create = next(call[1] for call in recorder.calls if call[0] == 'remediation-task')
+    assert create['security'] == {'id': '10034', 'name': 'Red Hat Employee'}
 
 
 def test_release_fixture_executes_reuse_dedup_and_creation(recorder, monkeypatch):
