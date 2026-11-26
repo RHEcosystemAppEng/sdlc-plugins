@@ -1,0 +1,2 @@
+**Criterion 1: `PackageSummary` includes a `vulnerability_count: i64` field. Verdict: PASS.**
+`modules/fundamental/src/package/model/summary.rs` adds `pub vulnerability_count: i64,` with the doc comment `/// Number of known vulnerability advisories affecting this package.` The name and type match the criterion, and the field follows the same pattern as the existing fields (`name`, `version`, `license`).

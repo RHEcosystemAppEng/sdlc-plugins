@@ -1,0 +1,50 @@
+{
+  "assertion_results": [
+    {
+      "text": "The output cites the explicit on-demand trigger for a missing required component pair even when the Container Images section exists, and identifies missing (2.1.2, api-rhel10)",
+      "passed": true,
+      "evidence": "matrix-population.md Section 1 quotes the rule: \"...or is missing any required component pair—even when the section and other rows already exist—research and prepare a complete update\". Its table marks \"(2.1.2, api-rhel10) | No | Missing, so population is triggered\" and says \"The Container Images section exists... the missing (2.1.2, api-rhel10) pair still triggers population.\""
+    },
+    {
+      "text": "The proposal preserves the existing api-rhel9 row and proposes only the missing api-rhel10 row without duplicating the existing pair",
+      "passed": true,
+      "evidence": "Section 1: \"(2.1.2, api-rhel9) | Yes, verified row | No change\". The Section 3 Container Images table has exactly one api-rhel9 row (sha256:aaaa..., 2.1.2-rhel9) and one new api-rhel10 row. There are no duplicates."
+    },
+    {
+      "text": "The Container Images table has separate columns for release tag, resolved full SHA, image reference, immutable digest, and CPE; revision-label comparisons are shown separately from the stored row fields",
+      "passed": true,
+      "evidence": "Section 3 table header: \"| Product Version | Component | Konflux Release Tag | Resolved Release Commit SHA | Image Reference | Image Digest | CPE |\". Revision-label comparisons sit in a separate table under the heading \"Revision-label comparisons (reported separately from the table, as step 3 requires)\"."
+    },
+    {
+      "text": "The proposed api-rhel10 row preserves v0.3.14 and the full resolved SHA 0123456789abcdef0123456789abcdef01234567 as distinct values, plus its supplied image reference, digest, and CPE",
+      "passed": true,
+      "evidence": "Line 67: \"| 2.1.2 | api-rhel10 | `v0.3.14` | `0123456789abcdef0123456789abcdef01234567` | `registry.example.test/trustify/api:2.1.2-rhel10` | `sha256:bbbb...bbbb` | `cpe:2.3:a:example:trustify_api:2.1.2:*:*:*:*:*:*:*` |\". The tag and the SHA are in separate columns."
+    },
+    {
+      "text": "The api-rhel10 revision label is compared with the resolved release SHA and marked verified",
+      "passed": true,
+      "evidence": "Line 43: \"| (2.1.2, api-rhel10) | `0123456789abcdef...01234567` | `0123456789abcdef...01234567` | MATCH: VERIFIED |\""
+    },
+    {
+      "text": "The existing 2.1.2/build 0.3.14/date 2026-06-25/backend source-pin row is preserved",
+      "passed": true,
+      "evidence": "The Section 3 Supportability Matrix includes \"| 2.1.2 | 0.3.14 | 2026-06-25 | `v0.3.14` | |\" along with the 2.1.0 and 2.1.1 rows. The merge request also keeps \"the `2.1.2 | 0.3.14 | 2026-06-25 | v0.3.14` row\"."
+    },
+    {
+      "text": "The proposal preserves the existing Source Pinning Method and Ecosystem Mappings from security-matrix-mock.md",
+      "passed": true,
+      "evidence": "The Section 3 proposal contains \"- **backend**: `artifacts.lock.yaml` (download URL contains tag, e.g., `v0.3.12`)\" and the Ecosystem Mappings rows Cargo/backend/Cargo.lock/release/0.3.z and RPM/—/rpms.lock.yaml. These match evals/triage-security/files/security-matrix-mock.md lines 17-26 word for word."
+    },
+    {
+      "text": "The report cites the shared write-safety rule as covering fallback saves, format auto-repairs, and population; the final comparison detects the concurrent target, preserves it, and aborts rather than writing stale content",
+      "passed": true,
+      "evidence": "Section 6 quotes: \"This procedure applies to every local security-matrix.md write: saving a Konflux fallback copy, applying Step 2.1.1 format auto-repairs, and on-demand population\", and its table marks all three paths as covered. Section 4 records the pre-write re-read: Last-Updated changed from 2026-06-28T10:00:00Z to 2026-10-26T09:15:00Z, the CONCURRENT-ROW-KEEP row was added, and the result is \"the target CHANGED\". The header says \"WRITE ABORTED — NOT WRITTEN\". Section 5 says \"The current file is preserved. Nothing was written\" and \"The stale snapshot was not overwritten.\""
+    }
+  ],
+  "summary": {
+    "passed": 8,
+    "failed": 0,
+    "total": 8,
+    "pass_rate": 1.0
+  }
+}

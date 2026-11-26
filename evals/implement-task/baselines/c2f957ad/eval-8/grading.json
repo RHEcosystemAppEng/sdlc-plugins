@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "reuse-decision.md: 'Located in `modules/ingestor/src/graph/sbom/mod.rs` ... Both are currently private (`fn`, not `pub fn`).' plan.md Step 6a: '`fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>` -> `pub fn describing_packages(...)`' and '`fn suppliers(...)` -> `pub fn suppliers(...)`'."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "reuse-decision.md Rationale item 1 'Check dependency relationship — `migration/Cargo.toml` already declares: trustify-module-ingestor = { path = \"../modules/ingestor\" }', followed by item 2 'The dependency already exists -> ... make the function public and import it'. plan.md Step 4 item 5: 'Read `migration/Cargo.toml` to confirm the `trustify-module-ingestor = { path = \"../modules/ingestor\" }` dependency.'"
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md Decision: 'Make `describing_packages()` and `suppliers()` public in the ingestor crate and import them from the migration crate. Do NOT duplicate them.' Rationale item 2: 'The dependency already exists -> the skill rule says to make the function public and import it rather than duplicate it.' plan.md summary: 'The `migration -> trustify-module-ingestor` dependency already exists, so duplicating them is not justified.'"
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "plan.md Step 6b: '**No copy of the extraction logic in the migration crate.**'; Step 9: 'Duplication check: grep the migration crate for supplier/describing-package logic to confirm nothing was re-implemented.' reuse-decision.md: 'Do NOT duplicate them.' No output proposes copying function bodies."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md Rationale item 3: 'DRY / single source of truth — ... If the logic were copied, a future bug fix in the ingestor would silently diverge from the migration, and backfilled `sbom_supplier` rows would differ from newly-ingested ones.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

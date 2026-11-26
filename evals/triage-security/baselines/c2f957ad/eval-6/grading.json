@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "JQL queries use the project key (TC) and vulnerability issue type ID (10024) from the Security Configuration in claude-md-security-config.md — not hardcoded values (§1.49)",
+      "passed": true,
+      "evidence": "discovery-listing.md Step 0 table lists 'Project key | TC' and 'Vulnerability issue type ID | 10024' read from claude-md-security-config.md; the JQL section states 'Substitutions: `<project-key>` = `TC`, `<vulnerability-issue-type-id>` = `10024`', and all three queries begin 'project = TC AND issuetype = 10024'."
+    },
+    {
+      "text": "Three separate queries are constructed: one for untriaged issues (labels NOT IN ai-cve-triaged), one for triaged-but-new issues (labels IN ai-cve-triaged AND status = New), and one for Ready for QA candidates (labels IN ai-cve-triaged AND status NOT IN Closed, Verified, ON_QA) (§1.48)",
+      "passed": true,
+      "evidence": "discovery-listing.md: Query 1 'project = TC AND issuetype = 10024 AND labels NOT IN (ai-cve-triaged) ...'; Query 2 '... AND labels IN (ai-cve-triaged) AND status = New ...'; Query 3 '... AND labels IN (ai-cve-triaged) AND status NOT IN (Closed, Verified, 'ON_QA') ...'."
+    },
+    {
+      "text": "Results are grouped into three clearly separated lists: Untriaged issues, Triaged but still New issues, and Ready for QA issues",
+      "passed": true,
+      "evidence": "discovery-listing.md has separate headings '## 1. Untriaged (4 issues)', '## 2. Triaged but still New (1 issue) — FLAGGED', and '## 3. Ready for QA (1 issue)'."
+    },
+    {
+      "text": "Each listed issue shows: issue key, status, CVE ID (from labels), summary, and created date",
+      "passed": true,
+      "evidence": "Every listed entry includes all five fields, e.g. '**TC-9001** — New — CVE-2026-40112 — CVE-2026-40112 h2 - HTTP/2 rapid reset vulnerability [rhtpa-2.2] — created 2026-06-08'; TC-9010 '— New — CVE-2026-39874 — ... — created 2026-05-28'; the Ready for QA table row is 'TC-9020 | Modified | CVE-2026-38901 | hyper - HTTP request smuggling [rhtpa-2.2] | 2026-05-15'."
+    },
+    {
+      "text": "Status-aware handling: New issues (TC-9001, TC-9002, TC-9004) are presented for full triage, while the In Progress issue (TC-9003) triggers a warning about active work",
+      "passed": true,
+      "evidence": "status-handling.md table: TC-9001, TC-9002, TC-9004 'New | Proceed with full triage (default path)'; TC-9003 'In Progress | Warn: \"This issue is already in `In Progress`. It may be actively worked on.\" Ask: 1) Proceed ... 2) Skip'. discovery-listing.md also shows under TC-9003: 'Warning: already In Progress; may be actively worked on.'"
+    },
+    {
+      "text": "Ready for QA filtering: TC-9020 appears in Ready for QA (all linked Tasks Done/Closed), TC-9023 is excluded (TC-9025 still In Progress), TC-9026 is excluded (no Depend links)",
+      "passed": true,
+      "evidence": "discovery-listing.md Depend-link filtering table: 'TC-9020 | Modified | TC-9021 (Done), TC-9022 (Closed) | All Done/Closed → **Included**'; 'TC-9023 | In Progress | TC-9024 (Done), TC-9025 (In Progress) | Open task remaining → Excluded'; 'TC-9026 | Modified | none | No Depend links → Excluded'. Only TC-9020 appears in the final Ready for QA list."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

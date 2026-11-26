@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "population-race.md section 4 'Final unchanged-target check (just before writing)': 'Per Step 10.6.5 the target is re-read immediately before writing and compared with the snapshot', followed by a table with columns 'Snapshot (initial read)' and 'Current file'; section 3.3 says the proposal 'was built from the snapshot in 3.1'."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "Section 4 table: '`Last-Updated` | `2026-06-28T10:00:00Z` | `2026-10-26T09:15:00Z` | **CHANGED**' and '`CONCURRENT-ROW-KEEP` entry for 2.1.0/api-rhel10 | absent | present | **ADDED**'."
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "Section 5: 'Never write a stale proposal over a concurrent update... would delete the CONCURRENT-ROW-KEEP entry and roll the timestamp back'; Outcome: '`security-matrix.md` stays exactly as the concurrent run left it, with `<!-- Last-Updated: 2026-10-26T09:15:00Z -->` and the `CONCURRENT-ROW-KEEP` entry'."
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Section 5 'Why the merge cannot be finished now' lists missing 'complete values of the CONCURRENT-ROW-KEEP row' and states 'I won't show a merged matrix with \"unknown\" or placeholder cells for the concurrent row. **The merge is aborted.**'; message asks 'please give me the current full contents of `security-matrix.md`, or at least the complete values of the `CONCURRENT-ROW-KEEP` row'."
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "Header: 'Result: WRITE ABORTED.'; Outcome: '**No write occurs.**'; steps '3. show you the complete merged matrix... for a fresh review, 4. after you confirm, re-read the file again just before writing, and write only if it hasn't changed'; Section 6: 'Population is stopped until the user supplies the current matrix data and confirms the reconciled proposal.'"
+    }
+  ],
+  "summary": {"passed": 5, "failed": 0, "total": 5, "pass_rate": 1.0}
+}

@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The verification report marks at least 2 acceptance criteria as FAIL, identifying specific gaps between the diff and the task requirements",
+      "passed": true,
+      "evidence": "report.md Acceptance Criteria row: 'FAIL | 3 of 6 criteria met. Criteria 1, 3 and 5 fail.' Detail table gives the gaps: #1 total computed from unfiltered counts, #3 unwrap_or(0) returns 200 instead of 400, #5 threshold_applied absent."
+    },
+    {
+      "text": "The report identifies that invalid threshold values are silently accepted (unwrap_or(0)) instead of returning 400 Bad Request as required",
+      "passed": true,
+      "evidence": "report.md criterion 3: '`.position(...).unwrap_or(0)` silently treats an invalid value as `critical` and returns 200. No `AppError` validation is done'. criterion-3.md ends: 'The criterion is not met. Invalid input is silently accepted.'"
+    },
+    {
+      "text": "The report identifies that the threshold_applied boolean field is missing from the response",
+      "passed": true,
+      "evidence": "report.md criterion 5 FAIL: 'The field is absent from the response literal, and `advisory/model/summary.rs` is not modified.' criterion-5.md: 'There is no `threshold_applied` field.'"
+    },
+    {
+      "text": "The report identifies that the test file tests/api/advisory_summary.rs is absent from the diff — no tests were created",
+      "passed": true,
+      "evidence": "report.md Scope Containment: 'Required file `tests/api/advisory_summary.rs` (Files to Create) is missing.' Test Requirements: 'None of the 6 Test Requirements are met. The required file `tests/api/advisory_summary.rs` is not in the diff, and no other test file was added or changed.'"
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "Outputs directory contains only report.md and criterion-1..6.md. Fixes are only proposed as sub-tasks under 'Proposed Actions (not executed; offline eval)'. Nothing in the outputs shows any code being changed."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR — it presents findings for human review (constraint 1.13)",
+      "passed": true,
+      "evidence": "report.md never mentions merging. It ends with 'Overall: FAIL' and proposed sub-tasks 'Target PR #743', all under the heading 'Proposed Actions (not executed; offline eval)'."
+    },
+    {
+      "text": "The overall result is FAIL, not PASS or WARN",
+      "passed": true,
+      "evidence": "report.md: '### Overall: FAIL' followed by 'Scope Containment and Acceptance Criteria both fail.'"
+    },
+    {
+      "text": "The report contains a Test Change Classification row with N/A — no test files exist in the PR diff",
+      "passed": true,
+      "evidence": "report.md table row: '| Test Change Classification | N/A | No test files were added, modified, or deleted. |'"
+    },
+    {
+      "text": "The report includes detailed findings for each failing check with specific evidence from the diff — Scope Containment identifies the missing test file by comparing PR files against the task specification, Acceptance Criteria provides per-criterion analysis explaining each gap",
+      "passed": true,
+      "evidence": "Scope Containment checks the PR files against the task's 'Files to Create' list and finds `tests/api/advisory_summary.rs` missing. It also notes the service/advisory.rs hunk changes nothing. The Acceptance Criteria Detail table gives reasoning for each of the 6 criteria, citing code such as `summary.critical + summary.high + summary.medium + summary.low` and `.position(...).unwrap_or(0)`."
+    },
+    {
+      "text": "Acceptance criteria verification produces per-criterion PASS/FAIL analysis with code-level evidence — each criterion-N.md output file contains detailed reasoning about what was checked and what gap was found",
+      "passed": true,
+      "evidence": "criterion-1.md to criterion-6.md each contain a 'Verdict', an 'Evidence' section with Rust snippets from get.rs, and a 'Reasoning' section. For example, criterion-1.md gives a worked example (critical=2, high=3, medium=5, low=7 gives total:17 instead of 5), and criterion-6.md explains why the 404 path is unchanged and notes the missing test."
+    },
+    {
+      "text": "Eval Quality is N/A because no eval result reviews exist in the PR — no reviews match the eval result detection criteria, so Eval Quality does not affect the Test Quality combination",
+      "passed": true,
+      "evidence": "report.md Test Quality row: 'N/A | The PR contains no test files. Repetitive Test Detection: N/A. Test Documentation: N/A. Eval Quality: N/A.' Review Feedback row: 'The PR has no review comments and no review bodies.' With no reviews there are no eval result reviews, so Eval Quality is N/A and has no effect on the Test Quality result."
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "pass_rate": 1.0
+  }
+}

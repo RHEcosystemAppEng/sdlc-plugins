@@ -1,0 +1,2 @@
+**Criterion 3: The count reflects unique advisories only (no duplicates from multiple SBOMs). Verdict: FAIL.**
+Nothing is counted. The only assignment is `vulnerability_count: 0, // TODO: implement subquery`. The diff contains no `COUNT(DISTINCT a.id)`, no join through `sbom_package` → `sbom_advisory` → `advisory`, and no deduplication, even though the Implementation Notes specify all of these. `test_vulnerability_count_deduplicates_across_sboms` expects 2 and would fail against this code. `test_package_with_vulnerabilities_has_count` expects 3 and would also fail.

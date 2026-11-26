@@ -1,0 +1,2 @@
+**Criterion 6: Existing package list endpoint tests continue to pass (backward compatible). Verdict: PASS (checked indirectly).**
+The change only adds a field. No existing field is renamed or removed, the endpoint signature is unchanged, and all CI checks pass. Because CI did not catch the hard-coded 0 (see report issue 3), the green result is somewhat weaker evidence than usual. Still, nothing in the diff breaks existing behaviour.

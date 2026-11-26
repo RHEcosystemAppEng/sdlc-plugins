@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "Across implementation task Files to Modify or Files to Create, the plan covers all four catalog writer paths: src/workflows/registration.py, src/workflows/scheduled_sync.py, src/workflows/fallback_import.py, and src/api/on_demand_refresh.py",
+      "passed": true,
+      "evidence": "task-1-owner-group-all-population-paths.md 'Files to Modify' lists `src/workflows/registration.py`, `src/workflows/scheduled_sync.py`, `src/workflows/fallback_import.py`, and `src/api/on_demand_refresh.py`, each with a path-specific change description."
+    },
+    {
+      "text": "Task Test Requirements cover each writer with its corresponding test path: tests/workflows/test_registration.py, tests/workflows/test_scheduled_sync.py, tests/workflows/test_fallback_import.py, and tests/api/test_on_demand_refresh.py",
+      "passed": true,
+      "evidence": "Task 1 Test Requirements contain entries for `tests/workflows/test_registration.py` (registered record contains ownerGroup), `tests/workflows/test_scheduled_sync.py` (preserve/update/IDs unchanged), `tests/workflows/test_fallback_import.py` (legacy export preserves, export with ownerGroup sets), and `tests/api/test_on_demand_refresh.py` (POST without ownerGroup preserves, with new value updates)."
+    },
+    {
+      "text": "Implementation tasks cover src/catalog/store.py and tests/catalog/test_store.py, verifying ownerGroup persistence, omitted-update preservation, explicit replacement, and unchanged stable IDs",
+      "passed": true,
+      "evidence": "Task 1 Files to Modify include `src/catalog/store.py` (schema field, preserve-on-update merge) and `tests/catalog/test_store.py` ('tests for the schema field, the preserve/override merge, and fail-closed persistence'). Test Requirements: 'tests/catalog/test_store.py: updating a record without ownerGroup keeps the stored value. Updating with a new non-empty value replaces it.' Stable IDs: AC 'Record IDs and existing population behavior for all four writers are unchanged' and Test Requirement 'Existing tests in all seven test modules still pass unchanged (regression check for existing population behavior and stable IDs)'."
+    },
+    {
+      "text": "Implementation tasks specify path-specific validation: registration persists the supplied ownerGroup, scheduled sync/fallback/on-demand updates preserve an existing value when omitted and apply a supplied replacement, and both consumers expose values from all four writers",
+      "passed": true,
+      "evidence": "Task 1 Acceptance Criteria: 'Registration ... persists the supplied ownerGroup'; 'Scheduled sync ... keeps the existing ownerGroup when provider data has none, and applies a provider-supplied non-empty value'; 'Fallback import ... keeps the existing ownerGroup when the export lacks it, and imports ownerGroup when the export contains it'; 'On-demand refresh ... keeps the current ownerGroup unless a new non-empty value is supplied, and then applies it'; summary API and report each include ownerGroup 'for records populated by registration, scheduled sync, fallback import, and on-demand refresh'."
+    },
+    {
+      "text": "Generated tasks cover both catalog consumers, src/api/catalog_summary.py and src/reports/catalog_export.py, and validate that entries produced by every writer are visible to those consumers",
+      "passed": true,
+      "evidence": "Task 1 Files to Modify include `src/api/catalog_summary.py` and `src/reports/catalog_export.py`; ACs require both to return ownerGroup for records populated by all four named paths."
+    },
+    {
+      "text": "The impact map enumerates the four writer paths with their matching tests and both consumers with their test paths",
+      "passed": true,
+      "evidence": "impact-map.md producer/consumer table lists registration.py/test_registration.py, scheduled_sync.py/test_scheduled_sync.py, fallback_import.py/test_fallback_import.py, on_demand_refresh.py/test_on_demand_refresh.py, catalog_summary.py/test_catalog_summary.py, catalog_export.py/test_catalog_export.py."
+    },
+    {
+      "text": "Task Test Requirements include tests/api/test_catalog_summary.py and tests/reports/test_catalog_export.py, exercising records from each writer through each consumer",
+      "passed": true,
+      "evidence": "Task 1 Test Requirements: '`tests/api/test_catalog_summary.py`: the summary shows ownerGroup for records populated by each of the four paths.' and '`tests/reports/test_catalog_export.py`: the report shows ownerGroup for records populated by each of the four paths.'"
+    },
+    {
+      "text": "A documentation task or equivalent Documentation Updates section explains the shared Service Catalog contract and names registration, scheduled sync, fallback import, and on-demand refresh as population paths",
+      "passed": true,
+      "evidence": "task-2-document-owner-group-population-paths.md: 'state that catalog records may be populated through registration, scheduled synchronization, fallback import, or on-demand refresh (POST /api/catalog/refresh). All four paths use the same catalog record contract, including ownerGroup.' AC: 'lists all four population paths ... and states that they share the same catalog contract.'"
+    },
+    {
+      "text": "Generated tasks preserve the fixture's existing-population behavior and stable-ID compatibility acceptance criterion",
+      "passed": true,
+      "evidence": "Task 1 AC: 'Record IDs and existing population behavior for all four writers are unchanged.' Implementation Notes: 'Stable IDs and existing behavior (AC3). Do not change how record IDs are generated or matched in any writer.' Sync and fallback tests require 'Record IDs are unchanged'."
+    },
+    {
+      "text": "The fallback-import and on-demand-refresh paths are explicitly planned; coverage is not limited to initial registration and scheduled sync",
+      "passed": true,
+      "evidence": "Task 1 includes dedicated Files to Modify entries, ACs, and Test Requirements for `src/workflows/fallback_import.py` / `tests/workflows/test_fallback_import.py` and `src/api/on_demand_refresh.py` / `tests/api/test_on_demand_refresh.py`; impact map lists both as 'Change needed? Yes'."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  }
+}

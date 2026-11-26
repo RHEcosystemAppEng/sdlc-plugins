@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Dependency chain output includes both the rpms.lock.yaml classification AND the SBOM verification result for the affected versions (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md section '2.3.5 – Dependency chain context': every in-scope affected version (2.2.0, 2.2.1, 2.2.2) has a block with both 'rpms.lock.yaml: present (openssl-libs 3.0.7-25.el9_3) → explicit install' and 'SBOM verification: present in BOTH final image SBOM and base image SBOM → base image'. The 2.1.x versions are outside the issue scope and are explicitly noted as not traced."
+    },
+    {
+      "text": "SBOM verification uses cosign download sbom to compare the final container image SBOM against the base image SBOM (Step 2.3.5 sub-steps 2 and 4)",
+      "passed": false,
+      "evidence": "Neither output file mentions the 'cosign download sbom' command. The only cosign references are the availability check ('which cosign -> /usr/bin/cosign' in data-extraction.md line 56 and version-impact.md line 46) and the statement 'SBOM verification was performed using the eval-provided mock SBOM comparison results.' The output does compare the final and base SBOMs ('in final AND base SBOM'), but it never says cosign download sbom was used, or would be used, to fetch the final image SBOM and the base image SBOM."
+    },
+    {
+      "text": "When SBOM classification (base image) disagrees with rpms.lock.yaml classification (explicit install), the discrepancy is flagged to the engineer with a warning (Step 2.3.5 sub-step 5 disagreement handling)",
+      "passed": true,
+      "evidence": "version-impact.md lines 54, 65 and 76 each contain the warning: '⚠️ SBOM classification disagrees with rpms.lock.yaml — lock file says explicit install but SBOM comparison says base image. Investigate manually.' The side-by-side table also marks all three versions '⚠️ DISAGREE'."
+    },
+    {
+      "text": "The rpms.lock.yaml classification remains the primary signal — the SBOM result supplements but does not override it (Step 2.3.5 non-MVP enhancement)",
+      "passed": false,
+      "evidence": "The Interpretation paragraph (version-impact.md line 89) says 'the SBOM check supplements the lock file classification but does not replace it, so the primary classification stays **explicit install**.' This is contradicted by every per-version chain block (lines 56, 67, 78), which gives 'Origin: UNRESOLVED (conflicting signals: lock file = explicit install, SBOM = base image)'. Here the SBOM result overrides the lock-file classification and leaves the origin unresolved. Under rule 6, contradictory evidence means FAIL."
+    },
+    {
+      "text": "The SBOM verification result is presented alongside the rpms.lock.yaml result in the dependency chain output, not as a separate section (Step 2.3.5 sub-step 6)",
+      "passed": true,
+      "evidence": "In version-impact.md, each 'Dependency chain for openssl-libs (RPM) — 2.2.x:' code block lists the 'SBOM verification:' line directly under the 'rpms.lock.yaml:' line inside the same block. The 'Side-by-side classification summary' table sits under the same 2.3.5 heading and only summarizes these blocks."
+    }
+  ],
+  "summary": {
+    "passed": 3,
+    "failed": 2,
+    "total": 5,
+    "pass_rate": 0.6
+  }
+}

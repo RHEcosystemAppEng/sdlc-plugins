@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4: \"`get_symbols_overview` on `advisory/service/advisory.rs`, `advisory/endpoints/mod.rs`, `advisory/endpoints/get.rs`, `advisory/model/mod.rs`, `advisory/model/summary.rs`, ... `common/src/error.rs`\" plus `find_symbol(include_body=true)` for `AdvisoryService::fetch`, `AdvisorySummary`, and the advisory `get` handler. conventions.md lists get.rs, advisory.rs, summary.rs as analyzed siblings. All 4 named files are covered."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6 lists exactly 3 files to create and 3 to modify (files 1-6); `server/src/main.rs` is marked \"**No change**\". Step 9: \"expected diff = files 1–6 only\". Out-of-scope items (`docs/api.md`, test registration, OpenAPI spec) are \"Flags for user approval (not done unilaterally)\", not edited."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md 'Files to Create' table: `modules/fundamental/src/advisory/model/severity_summary.rs`, `modules/fundamental/src/advisory/endpoints/severity_summary.rs`, `tests/api/advisory_summary.rs`; detailed in file-1, file-2, file-3 outputs with full code."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md 'Files to Modify' table rows 4-6: `advisory/model/mod.rs` (add `pub mod severity_summary;`), `advisory/service/advisory.rs` (add `AdvisoryService::severity_summary`), `advisory/endpoints/mod.rs` (declare module and register route); detailed in file-4, file-5, file-6."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10 commit message subject: \"feat(advisory): add SBOM advisory severity summary endpoint\", body paragraph, footer line \"Implements TC-9201\"."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: <tool> (<model>)' in the commit, naming the AI tool and model actually used (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md Step 10: `git commit --trailer=\"Assisted-by: Claude Code (Claude Opus 5.5)\" -m \"<message above>\"` — names tool (Claude Code) and model (Claude Opus 5.5)."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Step 5: `git checkout main`, `git pull`, `git checkout -b TC-9201`; Step 1: \"**Target Branch: `main`**\"; Step 10: `gh pr create --base main`."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md §5 Error handling: \"All handlers return `Result<T, AppError>` (`common/src/error.rs`...)\" and \"Errors from DB/service calls wrapped with `.context(\"...\")`\"; §1 Module structure: \"Each domain module follows `model/ + service/ + endpoints/`.\""
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md Step 1 'Parsed task': \"Repository: trustify-backend; **Target Branch: `main`**\"; also lists 'Target Branch' among required sections present."
+    },
+    {
+      "text": "The plan mentions checking for a description digest comment (Step 1.5) and notes that when no digest is found, it proceeds with a warning rather than blocking execution (backward compatibility per shared/description-digest-protocol.md)",
+      "passed": true,
+      "evidence": "plan.md 'Step 1.5 — Description digest': \"Would fetch comments, find latest `[sdlc-workflow] Description digest:` comment, compute digest with `scripts/sha256-digest.py` and compare. ... no comments available -> would log \\\"No description digest found — skipping integrity check.\\\"\" — logs a notice and skips the check, then continues to Step 2 (non-blocking)."
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": false,
+      "evidence": "cargo metadata is mentioned only for the tests crate: plan.md Step 7 \"Run `cargo test -p <tests crate>` (resolved via `cargo metadata`)\". For the affected module, Step 9 hardcodes \"`cargo test -p trustify-module-fundamental`\" with no description of resolving that crate name via cargo metadata. The exact command `cargo metadata --no-deps --format-version 1` does not appear anywhere. The module-level resolution step is not described."
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 1,
+    "total": 11,
+    "pass_rate": 0.909
+  }
+}

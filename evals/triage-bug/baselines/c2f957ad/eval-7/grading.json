@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation traces compute_risk_score() output through create_assessment() to diesel::insert_into(assessments::table) and identifies the persistence boundary at the assessments table, risk_score column (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md 'Persistence-Impact Analysis' (lines 88-109): trace block 'compute_risk_score(total_deps, vulnerable_deps) -> let score = compute_risk_score(...) // assessment.rs::create_assessment -> diesel::insert_into(assessments::table).values(assessments::risk_score.eq(score), ...) // PERSISTENCE BOUNDARY'; 'Result: persistence boundary FOUND' table with 'Table | assessments' and 'Column | risk_score (DOUBLE PRECISION)'."
+    },
+    {
+      "text": "Investigation records that risk_score is written at ingestion time (assessment creation) and is NOT recomputed on read, confirming a data migration is needed (Step 3 persistence-impact analysis)",
+      "passed": true,
+      "evidence": "investigation.md line 108: 'Write timing | **Ingestion time** — written once when the assessment is created; never recomputed on read or updated afterwards'; line 109: 'Every existing row in assessments holds the inverted value ... **A data migration is required.**'; line 97-99: read path 'returns stored risk_score without recomputation'."
+    },
+    {
+      "text": "Task description Files to Create includes a data migration file following the Diesel naming convention discovered in the repository (YYYY-MM-DD-NNNNNN_description/up.sql) (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md 'Files to Create' line 43: 'migration/<YYYY-MM-DD>-000004_fix_inverted_risk_scores/up.sql — data migration that corrects existing assessments.risk_score values' (plus down.sql), matching convention discovered in investigation.md lines 113-117 (existing 2024-01-15-000001_create_sboms etc.)."
+    },
+    {
+      "text": "Task description Implementation Notes includes migration logic to recompute and update existing risk_score values in the assessments table (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md Implementation Notes 'Data migration — persistence impact' lines 66-77: preferred path 'recompute risk_score = vulnerable / total' from source tables via assessments.sbom_id, and fallback SQL 'UPDATE assessments SET risk_score = CASE WHEN risk_score = 'Infinity'::float8 OR ... THEN 0.0 WHEN risk_score <> 0 THEN 1.0 / risk_score ELSE risk_score END;'."
+    },
+    {
+      "text": "Task description Acceptance Criteria includes a criterion that existing assessments with incorrect persisted risk_score values are corrected by the migration (Step 5 data migration)",
+      "passed": true,
+      "evidence": "task-description.md line 91: '- [ ] A Diesel data migration under migration/ (named YYYY-MM-DD-000004_fix_inverted_risk_scores) corrects existing assessments.risk_score rows that hold the wrong value (e.g. a stored 20.0 becomes 0.05, a stored Infinity becomes 0.0)'."
+    },
+    {
+      "text": "Task description has reproducer test as the FIRST acceptance criterion — before the data migration criterion and any fix criteria (Step 5 Acceptance Criteria ordering)",
+      "passed": true,
+      "evidence": "task-description.md Acceptance Criteria line 87 (first item): '- [ ] A reproducer test asserts compute_risk_score(100, 5) == 0.05. It fails before the fix (returns 20.0) and passes after it.' Fix criteria follow at lines 88-90 and migration criterion at line 91."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

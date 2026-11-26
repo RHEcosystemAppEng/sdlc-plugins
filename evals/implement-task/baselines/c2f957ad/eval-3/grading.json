@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 6 item 2: \"Call `common::db::query::apply_filter(select, package_license::Column::License, license)`. This splits on commas and emits `= value` for a single value or `IN (...)` for several.\" reuse-analysis.md section 1 is titled \"`common/src/db/query.rs::apply_filter` — USED DIRECTLY\" and lists under What is avoided: \"hand-written `split(',')`, trim and `is_in(...)` logic in the package module\" and \"a second, slightly different multi-value parser\"."
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "reuse-analysis.md section 2 is titled \"`modules/fundamental/src/advisory/endpoints/list.rs` (severity filter) — USED AS THE STRUCTURAL TEMPLATE\" and says to add `license: Option<String>` \"with the same derives, serde attributes and doc-comment style as `severity`\". plan.md Step 6 item 1: \"Extend the endpoint's query-parameter struct with one optional field, following the advisory `severity` field exactly\"."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Step 6 item 2: \"Join `package::Entity` to `entity::package_license::Entity` using the existing SeaORM relation ... No raw SQL.\" reuse-analysis.md section 3 is titled \"`entity/src/package_license.rs` — USED FOR THE JOIN\" and says \"no raw SQL\". Its Not reused section says: \"No new query helper, no new entity and no migration\"."
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md opens with \"The task lists three Reuse Candidates. The plan uses all three\" and gives each its own section with a 'How it is used' subsection and code: section 1 apply_filter (call inside PackageService::list), section 2 advisory list.rs (struct, validation, utoipa, threading to service), section 3 package_license.rs (InnerJoin plus .distinct(), then apply_filter on package_license::Column::License)."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6 'Changes per file' lists exactly three files: modules/fundamental/src/package/endpoints/list.rs (MODIFY), modules/fundamental/src/package/service/mod.rs (MODIFY), and tests/api/package_license_filter.rs (CREATE). These match the parsed Files to Modify and Files to Create in Step 1. Step 9 says \"the expected diff is exactly the three listed files\". Other files the plan mentions (docs/api.md, tests/Cargo.toml, external callers, and making apply_filter pub) are explicitly flagged for user approval and not edited, and the other files are read-only references."
+    },
+    {
+      "text": "The plan does not propose creating new utility functions that duplicate the functionality of apply_filter (constraint 5.4)",
+      "passed": false,
+      "evidence": "The plan proposes no named helper function, but plan.md Step 6 item 1 (Validation) adds hand-rolled comma parsing in list.rs: \"Split the value on `,`, trim each entry, and reject an empty segment (e.g. `license=` or `MIT,,`).\" This duplicates apply_filter's split and trim parsing. It contradicts reuse-analysis.md, which lists \"hand-written `split(',')`, trim ... logic in the package module\" as avoided, and plan.md Step 9, which greps for `split(',')` \"to confirm no hand-rolled parsing duplicates `apply_filter`\". The reuse is only conditional (\"If `apply_filter` already validates input ... rely on it instead\"). Under the contradictory-evidence rule this is FAIL."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 1,
+    "total": 6,
+    "pass_rate": 0.8333
+  }
+}

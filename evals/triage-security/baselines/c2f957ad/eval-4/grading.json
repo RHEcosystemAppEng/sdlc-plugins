@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
+      "passed": true,
+      "evidence": "version-impact.md section 2.4 table: '2.1.x | 2.1.0 | v0.3.8 | 0.4.5 | **YES**' and '2.1.x | 2.1.1 | v0.3.12 | 0.4.5 | **YES**'; all five 2.2.x rows (2.2.0-2.2.4, h2 0.4.8/0.4.9) marked 'NO'. Heading 'Per-stream summary (mixed impact)'. Evidence source stated as stand-in for 'git show <tag>:Cargo.lock | grep -A2 'name = \"h2\"''. 2.2.2 is carried forward from 2.2.1 as a retag (same tag v0.4.8), so it still rests on lock file evidence."
+    },
+    {
+      "text": "Affects Versions correction includes only the actually affected versions (2.1.x versions), not the unaffected 2.2.x versions (Step 3.2)",
+      "passed": true,
+      "evidence": "affects-versions.md 3.2: 'Current: [RHTPA 2.1.0, RHTPA 2.2.0]' -> 'Proposed: [RHTPA 2.1.0, RHTPA 2.1.1]'; RHTPA 2.2.0 action '**Remove**', 2.2.1-2.2.4 'leave absent'. Proposed mutation sets versions to only RHTPA 2.1.0 and RHTPA 2.1.1."
+    },
+    {
+      "text": "Remediation tasks are created only for the affected stream (2.1.x), not for 2.2.x which already ships the patched version (Step 8 Case A scoping)",
+      "passed": true,
+      "evidence": "remediation.md: 'Total tasks: **2** (2.1.x only). None for 2.2.x.'; Task 1 '(2.1.x)' targeting release/0.3.z and Task 2 '(2.1.x)' targeting rhtpa-release.0.3.z; section 'No tasks for 2.2.x' says 'No upstream, downstream, or preemptive task is created for it.' Checklist: '2.2.x -> 0 (not affected)'."
+    },
+    {
+      "text": "The analysis treats the issue as unscoped (no stream suffix) and checks ALL versions across all streams (Step 1 Stream scope resolution, unscoped path)",
+      "passed": true,
+      "evidence": "data-extraction.md 'Stream scope resolution': 'Summary has **no stream suffix** -> the issue is **UNSCOPED**. It covers all configured streams (2.1.x and 2.2.x).' version-impact.md 2.1 lists 'all streams enumerated from Version Streams', and the 2.4 table covers all 7 versions (2.1.0, 2.1.1, 2.2.0-2.2.4). affects-versions.md: 'Scope: **unscoped issue** (no summary suffix).'"
+    },
+    {
+      "text": "Cross-stream impact notice is NOT generated because the issue is unscoped — it covers all streams by definition (Step 8 Case B applies only to scoped issues)",
+      "passed": true,
+      "evidence": "remediation.md Decision table: 'Issue scope | **Unscoped**, so **Case A is skipped** (no cross-stream comment, no preemptive tasks)'; checklist: 'Cross-stream coverage: N/A (unscoped issue, so Case A is skipped)'. data-extraction.md: 'Step 8 Case A (cross-stream proactive or preemptive remediation) does **not** apply.' No cross-stream impact notice appears in any output file. The output's case label (A) differs from the assertion's (B), but both refer to the same cross-stream notice path, and the output skips it for the reason the assertion gives."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

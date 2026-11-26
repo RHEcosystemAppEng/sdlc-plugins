@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+      "passed": true,
+      "evidence": "scaffold-race.md Section 2: '1. Initial existence check. security-matrix.md was **missing**.' and '4. Re-read immediately before writing (required create-if-absent check). The file now **exists**. A concurrent /triage-security run created it.'"
+    },
+    {
+      "text": "The current `Last-Updated: 2026-10-26T09:00:00Z` value and `CONCURRENT-ROW-KEEP` content are preserved rather than replaced by the scaffold",
+      "passed": true,
+      "evidence": "Section 3: 'Its Last-Updated timestamp (2026-10-26T09:00:00Z) and the CONCURRENT-ROW-KEEP row are untouched.' Section 2 step 5: 'Write aborted. I preserved the current file exactly as found.' Appendix A heading: 'Confirmed scaffold (NOT written...)'."
+    },
+    {
+      "text": "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+      "passed": true,
+      "evidence": "Section 3: 'Step 10.5 requires create-if-absent' and 'I will **not** write the scaffold over security-matrix.md, even though the user explicitly asked me to.' Also: 'The file already exists, so a plain Write would be an overwrite. The skill says to abort rather than overwrite in that case.'"
+    },
+    {
+      "text": "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+      "passed": true,
+      "evidence": "Section 3 reports 'security-matrix.md exists at security-matrix.md — preserved (created concurrently by triage-security; scaffold not written).' Section 4 option 2 (Merge): 'I would show you the **complete merged result** and need a **fresh confirmation** before writing. Right before writing I would re-read the file again and abort if it changed.'"
+    },
+    {
+      "text": "The output states that no project file is written until the changed target is reconciled and confirmed",
+      "passed": true,
+      "evidence": "Header: 'changed no project files.' Section 3: 'Any write to an existing file needs a merge proposal built from that file, shown in full, plus fresh confirmation.' Section 5: 'CLAUDE.md was not changed by Step 10.5 ... No matrix file was written by setup.' Section 4 blocks merge until full current contents are available."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

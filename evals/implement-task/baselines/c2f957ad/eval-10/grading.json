@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md 'Test conventions (from sibling tests)': \"Sibling assertion style for collections checks existence or count only: - `advisory.rs`: `.filter(|a| a.severity == \"Critical\").any(|_| true)` then `assert!(has_critical, ...)` - `sbom.rs`: `.filter(|s| s.name.contains(\"openssl\")).count()` then `assert!(matching > 0, ...)`\""
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md section 'Conflicts with the skill's built-in quality guidance', table row #1: Sibling pattern \"Existence and count checks: `.filter(..).any(|_| true)` + `assert!(bool)`, `.filter(..).count()` + `assert!(n > 0)`\" vs Skill guidance \"Step 7: prefer value-based assertions over length-only checks.\""
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md: \"The skill says its own guidance takes precedence over sibling patterns. Each conflict below is recorded and the sibling pattern is **not** adopted.\" Row #1 decision: \"**Follow the skill.** ... Do not use `.any(|_| true)` or `count() > 0`.\" Also lists items 'Kept from siblings (no conflict)', showing siblings act as defaults."
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md: \"build an expected `LicenseSummary` ... compare it with `assert_eq!(summary, expected)`\" and \"no `.any(|_| true)`, `count() > 0` or other existence-only assertions.\" Test 1 asserts `assert_eq!(summary, LicenseSummary { permissive: LicenseCategorySummary { count: 2, licenses: vec![\"Apache-2.0\".into(), \"MIT\".into()] }, ... })`; test 4 asserts exact per-category structs; test 3 compares with `LicenseSummary::default()`. No .any()/count()>0 assertions appear in any test code."
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md 'Kept from siblings': \"integration tests against the real PostgreSQL test database, using the same harness, fixture and ingest helpers as `tests/api/sbom.rs` and `tests/api/advisory.rs`. Status checks use `assert_eq!(resp.status(), StatusCode::...)`. The body is deserialized into `LicenseSummary`. Test names use the `test_*` pattern.\" File placed at tests/api/package_license.rs per sibling layout; no rstest per siblings. The only other deviations (/// doc comments, Given/When/Then) are additive skill-mandated items explicitly classified as skill-guidance conflicts in conventions.md (rows #2-#3), not non-conflicting sibling aspects; among sibling patterns actually present, only the assertion style is replaced."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

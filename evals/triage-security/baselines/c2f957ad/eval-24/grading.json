@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 0 detects the absence of the Deployment Context column in the Source Repositories table and defaults all repositories to upstream (§1.78)",
+      "passed": true,
+      "evidence": "data-extraction.md, 'Step 0 — Configuration' > 'Source Repositories mapping': \"The Source Repositories table has **no Deployment Context column**. For backward compatibility, every repository defaults to `upstream`.\" The mapping table row reads: \"rhtpa-backend | https://github.com/rhtpa/rhtpa-backend | `upstream` (default — column absent)\". Step 1's parsed data repeats it: \"Deployment context | `upstream` (default — Deployment Context column absent)\". rhtpa-backend is the only repository in the table, so all repositories are defaulted. The output never cites §1.78 by number, but it applies the behavior that rule describes."
+    },
+    {
+      "text": "Remediation task descriptions do NOT include a Coordination Guidance subsection — the section is omitted entirely when no Deployment Context column exists",
+      "passed": true,
+      "evidence": "All four task description code blocks in remediation.md were read in full: Task 1 (2.2.x dependency bump), Task 2 (2.2.x downstream), Task 3 (2.1.x preemptive backport) and Task 4 (2.1.x preemptive downstream). Their only sections are Repository, Target Branch, Description, Implementation Notes (Task 3 also has 'Remediation approach' sub-headings), Acceptance Criteria, Test Requirements and Dependencies. None contains a Coordination Guidance heading or content. 'Coordination' appears only outside the task bodies, and each mention states it is omitted: remediation.md Decision: \"**no Coordination Guidance subsection is added** to any task\"; the pre-creation checklist: \"Coordination guidance: **intentionally omitted**, because the Source Repositories table has no Deployment Context column\"; data-extraction.md: \"the remediation tasks **leave out the Coordination Guidance subsection**\"."
+    },
+    {
+      "text": "The triage proceeds normally through all steps without errors from the missing Deployment Context column",
+      "passed": true,
+      "evidence": "data-extraction.md covers Step 0, 0.3 (staleness: 151 days, proceeded), 1, 1.5, 1.7, 2 (version impact table, dependency chain, upstream fix status), 3 (AV correction RHTPA 2.0.0 -> 2.2.0/2.2.1/2.2.2) and Steps 4–7.5. remediation.md completes Step 8 with a Case A + Case B decision, 4 tasks, 5 proposed comments and a pre-creation checklist. The output reports no error, warning or halt caused by the missing column; the only effect noted is the `upstream` default. Steps that were skipped or not run name other causes: Upstream Affected Component not configured, Embargo policy URL not configured, and no Jira/external/git calls allowed in eval mode."
+    },
+    {
+      "text": "Backward compatibility is maintained — existing eval behavior is unaffected by the absence of the Deployment Context column",
+      "passed": true,
+      "evidence": "remediation.md labels the behavior a backward-compatibility rule: \"Under the backward-compatibility rule, **no Coordination Guidance subsection is added**\". The usual triage behavior still runs: Cargo source dependency -> 2 tasks per stream (\"Task count per stream: 2 (Cargo source dependency) for 2.2.x and 2.1.x\"); Case A cross-stream preemptive tasks with `security-preemptive` label and Related links; Depend/Blocks link types; the dependency-bump variant for 2.2.x and the upstream-backport variant for 2.1.x; standard labels `ai-generated-jira, Security, CVE-2026-31812`. Apart from the defaulted context and the omitted subsection, none of the output is changed by the missing column."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

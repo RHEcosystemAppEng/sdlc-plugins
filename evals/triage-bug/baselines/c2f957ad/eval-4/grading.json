@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Bug parsing extracts the Environment / Version section content including 'Product version: 0.9.0' (Step 1)",
+      "passed": true,
+      "evidence": "bug-parsing.md, '#### Environment / Version' section, quotes the block 'Product version: 0.9.0 / OS: RHEL 9.2 / Deployment: OpenShift 4.14' and lists 'Extracted product version: **0.9.0**'. The required-sections table shows Environment / Version as found ('yes')."
+    },
+    {
+      "text": "Version resolution extracts '0.9.0' as the version identifier from the Environment / Version section (Step 4.5.2)",
+      "passed": true,
+      "evidence": "version-resolution.md '## 4.5.2 – Extract version from description' quotes the section content and concludes '**Extracted version: `0.9.0`**'. It explicitly rejects 9.2 (OS) and 4.14 (OpenShift) as product versions."
+    },
+    {
+      "text": "Version resolution presents the available Jira versions from the fixture's version table (Step 4.5.3)",
+      "passed": true,
+      "evidence": "version-resolution.md '## 4.5.3 – Discover available Jira versions' has a table with 62643 RHTPA 0.9.0 (released 2025-06-15), 62644 RHTPA 1.0.0 (2025-09-01), and 62645 RHTPA 1.1.0 (unreleased, 2026-01-15), labelled 'from the mock issue data'."
+    },
+    {
+      "text": "Version resolution matches extracted '0.9.0' against Jira version 'RHTPA 0.9.0' (ID: 62643) using substring matching (Step 4.5.4)",
+      "passed": true,
+      "evidence": "version-resolution.md '## 4.5.4 – Match' says 'Substring match of `0.9.0` against the version names', with a table marking RHTPA 0.9.0 (62643) as 'yes' and the other two as 'no'. It concludes 'Exactly one candidate: **RHTPA 0.9.0 (ID: 62643)**'."
+    },
+    {
+      "text": "Version resolution presents a confirmation prompt asking whether to set 'RHTPA 0.9.0' as the Affects Version on ACME-510 (Step 4.5.5)",
+      "passed": true,
+      "evidence": "version-resolution.md '## 4.5.5 – Confirmation prompt shown to the user' contains: 'Matched Jira version: RHTPA 0.9.0 (ID: 62643)' and 'Set this as the Affects Version on ACME-510? (yes/no/skip)'. It notes 'No write happens until the user confirms.' task-description.md agrees: 'RHTPA 0.9.0 (ID 62643), pending user confirmation in Step 4.5'."
+    },
+    {
+      "text": "Since affectsVersions is not already set, sub-step 4.5.1 (existing field check) is skipped or notes the field is empty (Step 4.5.1)",
+      "passed": true,
+      "evidence": "version-resolution.md '## 4.5.1 – Check existing field' says: 'Affects Version/s on ACME-510 is **(none)**. The `affectsVersions` field is empty, so the keep/replace/augment prompt is not shown. Continue to 4.5.2.' bug-parsing.md agrees: 'affectsVersions is **not populated**, so Step 4.5.1 (keep/replace/augment) is skipped'."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,2 @@
+**Criterion 2: Packages with no vulnerabilities show `vulnerability_count: 0`. Verdict: PASS, but only by accident.**
+`PackageService::list` (in `service/mod.rs`) sets `vulnerability_count: 0` for every package, so packages with no advisories do return 0. That comes from the hard-coded placeholder (`// TODO: implement subquery`), not from real counting. Once the subquery is written, this needs checking again: `COUNT(DISTINCT ...)` must return 0, not NULL, when nothing joins. `test_package_without_vulnerabilities_has_zero_count` covers this case.

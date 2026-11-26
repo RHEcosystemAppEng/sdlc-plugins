@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md field table (lines 21-23) lists `cves` | `Option<Vec<String>>`, `affected_packages` | `Option<Vec<AffectedPackage>>`, `severity_counts` | `Option<HashMap<String, u32>>`, and each has its own subsection (### `cves`, ### `affected_packages`, ### `severity_counts`)."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md lines 121-128: `result.cves.as_deref().map(<[String]>::to_vec).unwrap_or_default()`, `result.affected_packages.as_ref().map_or(0, Vec::len)`, `result.severity_counts.clone().unwrap_or_default()`. null-guards.md line 66 lists `.unwrap()`, `.expect()` under 'Not used'; plan.md line 153: 'no `.unwrap()`/`.expect()`/indexing is used anywhere'."
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "All three Option fields in plan.md's extract_vulnerability_summary (lines 121-128) are accessed only via as_deref/as_ref/clone followed by map/map_or/unwrap_or_default. `.len()` is only called on the already-guarded `cve_list` (line 132: `to_u32(cve_list.len())`) and inside `map_or(0, Vec::len)`. No .join() or iteration on raw Option values appears in either file."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md lines 5-10: '`AdvisoryIngestResult` is produced by a different crate (`modules/ingestor`, `IngestorService::ingest_advisory()`) and consumed in `modules/fundamental`. This is a module boundary ... because the producer's schema allows absence and may evolve independently. Here the type signature itself declares absence (`Option<T>`) for all three aggregate fields'."
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md line 166: test `extract_summary_all_none_returns_zeroed` with input 'all three `None`' expecting `assert_eq!(summary, VulnerabilitySummary::default())` plus explicit field checks. null-guards.md line 83: 'All `None` | all-None test: `assert_eq!(summary, VulnerabilitySummary::default())`'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
