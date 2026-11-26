@@ -13,9 +13,9 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.1 | `plan-feature` MUST NOT modify, create, or delete any source code files in any repository. | `plan-feature/SKILL.md` — Guardrails |
 | 1.2 | `plan-feature` MUST NOT use Edit, Write, or Bash tools to change files. Only read-only tools (Read, Glob, Grep, Serena search) are permitted. | `plan-feature/SKILL.md` — Guardrails |
 | 1.3 | `plan-feature` output goes to Jira (tasks, comments) — never to the filesystem. | `plan-feature/SKILL.md` — Guardrails |
-| 1.4 | `implement-task` MUST keep changes scoped to what the task describes — no unrelated refactoring. | `implement-task/SKILL.md` — Important Rules |
-| 1.5 | `implement-task` MUST NOT guess code structure — it must inspect code before modifying it using Serena or Read/Grep/Glob. | `implement-task/SKILL.md` — Important Rules |
-| 1.6 | `implement-task` MUST ask the user for clarification and stop execution when the structured description is incomplete — it MUST NOT draft an implementation plan or proceed with any subsequent steps until the user responds. | `implement-task/SKILL.md` — Important Rules, Step 1 |
+| 1.4 | `implement-task` MUST keep changes scoped to what the task describes — no unrelated refactoring. | `implement-task/SKILL.md` — Step 6; Step 9 check 1 |
+| 1.5 | `implement-task` MUST NOT guess code structure — it must inspect code before modifying it using Serena or Read/Grep/Glob. | `implement-task/SKILL.md` — Step 4 |
+| 1.6 | `implement-task` MUST ask the user for clarification and stop execution when the structured description is incomplete — it MUST NOT draft an implementation plan or proceed with any subsequent steps until the user responds. | `implement-task/SKILL.md` — Step 1 |
 | 1.7 | `define-feature` MUST NOT modify, create, or delete any files in any repository. Only Jira MCP tools are permitted for output. | `define-feature/SKILL.md` — Guardrails |
 | 1.8 | `define-feature` MUST NOT fabricate content. All Feature description content must come from user input. | `define-feature/SKILL.md` — Guardrails |
 | 1.9 | `define-feature` MUST NOT create a Jira issue without showing a full preview and receiving explicit user approval. | `define-feature/SKILL.md` — Important Rules |
@@ -24,7 +24,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.12 | `verify-pr` sub-tasks MUST follow the plan-feature task template structure and include Target PR and Review Context sections. | `verify-pr/SKILL.md` — Step 4d (orchestrator) |
 | 1.13 | `verify-pr` MUST NOT auto-merge. Merging is always a human decision. | `verify-pr/SKILL.md` — Important Rules (orchestrator) |
 | 1.14 | `verify-pr` root-cause tasks MUST target the workflow phase where the gap originated, not always the implementation phase. | `verify-pr/SKILL.md` — Step 5b (orchestrator, root-cause) |
-| 1.15 | `implement-task` MUST check out the existing PR branch (instead of creating a new one) when a Target PR section is present in the task description. | `implement-task/SKILL.md` — Step 5 (Target PR flow) |
+| 1.15 | `implement-task` MUST check out the existing PR branch (instead of creating a new one) when a Target PR section is present in the task description. | `implement-task/SKILL.md` — Step 5 (target-pr) |
 | 1.16 | `verify-pr` MUST flag repetitive test functions that could be parameterized as a WARN finding, applying the Meszaros heuristic as the decision boundary. | `verify-pr/style-conventions.md` — Check 2 (style-conventions sub-agent) |
 | 1.17 | `verify-pr` MUST flag test functions missing doc comments as a WARN finding. | `verify-pr/style-conventions.md` — Check 3 (style-conventions sub-agent) |
 | 1.18 | `verify-pr` test change classification sub-agent MUST operate in complete isolation — it MUST NOT receive or access the Jira task description, review comments, PR metadata, or outputs from other verify-pr steps. | `verify-pr/style-conventions.md` — Check 4, Step 4b (style-conventions sub-agent) |
@@ -132,9 +132,9 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 
 | # | Constraint | Source |
 |---|---|---|
-| 2.1 | Every commit MUST reference a Jira issue ID in the footer (e.g., `Implements TC-123`). | `implement-task/SKILL.md` — Step 9; `methodology.md` — Traceable Implementation |
-| 2.2 | Commit messages MUST follow the Conventional Commits specification (`<type>[optional scope]: <description>`). | `implement-task/SKILL.md` — Step 9 |
-| 2.3 | Every commit MUST include an `Assisted-by:` trailer naming the AI tool and model that produced the change (e.g., `Assisted-by: OpenCode (GPT-6.1 Sol)`). | `implement-task/SKILL.md` — Step 9 |
+| 2.1 | Every commit MUST reference a Jira issue ID in the footer (e.g., `Implements TC-123`). | `implement-task/SKILL.md` — Step 10; `methodology.md` — Traceable Implementation |
+| 2.2 | Commit messages MUST follow the Conventional Commits specification (`<type>[optional scope]: <description>`). | `implement-task/SKILL.md` — Step 10 |
+| 2.3 | Every commit MUST include an `Assisted-by:` trailer naming the AI tool and model that produced the change (e.g., `Assisted-by: OpenCode (GPT-6.1 Sol)`). | `implement-task/SKILL.md` — Step 10 |
 
 ---
 
@@ -143,9 +143,9 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | # | Constraint | Source |
 |---|---|---|
 | 3.1 | The feature branch MUST be named after the Jira issue ID (e.g., `TC-123`). | `implement-task/SKILL.md` — Step 5 |
-| 3.2 | After opening a PR, its link MUST be posted as a comment on the Jira task. | `implement-task/SKILL.md` — Step 10; `methodology.md` — Pull Request Workflow |
-| 3.3 | `gh pr create` MUST always specify `--base <target-branch>` matching the task's Target Branch value. | `implement-task/SKILL.md` — Step 10 (Default flow) |
-| 3.4 | Feature branches MUST be named after the feature issue ID (e.g., `TC-4418`), not the task issue ID. | `implement-task/SKILL.md` — Step 5 (Create-branch bookend flow); `plan-feature/SKILL.md` — Step 5 (Bookend task generation) |
+| 3.2 | After opening a PR, its link MUST be posted as a comment on the Jira task. | `implement-task/SKILL.md` — Step 11; `methodology.md` — Pull Request Workflow |
+| 3.3 | `gh pr create` MUST always specify `--base <target-branch>` matching the task's Target Branch value. | `implement-task/SKILL.md` — Step 10 (default) |
+| 3.4 | Feature branches MUST be named after the feature issue ID (e.g., `TC-4418`), not the task issue ID. | `implement-task/SKILL.md` — Step 5 (create-branch); `plan-feature/SKILL.md` — Step 5 (Bookend task generation) |
 
 ---
 
@@ -177,20 +177,20 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 
 | # | Constraint | Source |
 |---|---|---|
-| 5.1 | Changes MUST be scoped to the files listed in Files to Modify and Files to Create — no unrelated files. | `implement-task/SKILL.md` — Step 6, Important Rules |
-| 5.2 | Code MUST NOT be modified without first inspecting it (via Serena or Read/Grep/Glob). | `implement-task/SKILL.md` — Step 4, Important Rules |
-| 5.3 | Implementation MUST follow the patterns referenced in the task's Implementation Notes. | `implement-task/SKILL.md` — Important Rules |
-| 5.4 | Code MUST NOT duplicate existing functionality — reuse or extend existing utilities, helpers, and shared modules when equivalent logic exists. | `implement-task/SKILL.md` — Step 4, Step 6, Step 9 |
+| 5.1 | Changes MUST be scoped to the files listed in Files to Modify and Files to Create — no unrelated files. | `implement-task/SKILL.md` — Step 6; Step 9 check 1 |
+| 5.2 | Code MUST NOT be modified without first inspecting it (via Serena or Read/Grep/Glob). | `implement-task/SKILL.md` — Step 4 |
+| 5.3 | Implementation MUST follow the patterns referenced in the task's Implementation Notes. | `implement-task/SKILL.md` — Step 6 |
+| 5.4 | Code MUST NOT duplicate existing functionality — reuse or extend existing utilities, helpers, and shared modules when equivalent logic exists. | `implement-task/SKILL.md` — Step 6 (Reuse); Step 9 check 5 |
 | 5.5 | AI MUST NOT start work autonomously — a human must trigger it. | `methodology.md` — Core Principles (Human Driven Workflow) |
-| 5.6 | After implementation, each new feature MUST be traced through its complete data-flow lifecycle (input → processing → output) — incomplete paths must be fixed before committing. | `implement-task/SKILL.md` — Step 9 |
-| 5.7 | Modified or created code that implements an interface, trait, or type contract MUST have all required methods, properties, and type signatures verified as complete before committing. | `implement-task/SKILL.md` — Step 9 |
-| 5.8 | Modified or created code MUST be compared against sibling implementations for parity on cross-cutting concerns (capabilities, error handling, logging, configuration) — gaps must be fixed or explicitly approved by the user before committing. | `implement-task/SKILL.md` — Step 9 |
+| 5.6 | After implementation, each new feature MUST be traced through its complete data-flow lifecycle (input → processing → output) — incomplete paths must be fixed before committing. | `implement-task/SKILL.md` — Step 9 check 11 |
+| 5.7 | Modified or created code that implements an interface, trait, or type contract MUST have all required methods, properties, and type signatures verified as complete before committing. | `implement-task/SKILL.md` — Step 9 check 13 |
+| 5.8 | Modified or created code MUST be compared against sibling implementations for parity on cross-cutting concerns (capabilities, error handling, logging, configuration) — gaps must be fixed or explicitly approved by the user before committing. | `implement-task/SKILL.md` — Step 9 check 13 |
 | 5.9 | implement-task SHOULD prefer parameterized tests when multiple test cases exercise the same behavior with different inputs, applying the Meszaros heuristic as the decision boundary. | `implement-task/SKILL.md` — Step 7 |
 | 5.10 | implement-task MUST NOT introduce parameterized test patterns if sibling test analysis shows the project does not use them. | `implement-task/SKILL.md` — Step 7 |
 | 5.11 | `implement-task` MUST add a doc comment to every test function it creates, regardless of sibling test documentation patterns. | `implement-task/SKILL.md` — Step 7 |
 | 5.12 | `implement-task` MUST add given-when-then inline comments to non-trivial test functions (tests with distinct setup, action, and assertion phases). | `implement-task/SKILL.md` — Step 7 |
 | 5.13 | `implement-task` MUST NOT add given-when-then comments to trivial tests (single assertion, no distinct setup phase). | `implement-task/SKILL.md` — Step 7 |
-| 5.14 | When implementing batch operations that target a described subset of records, `implement-task` MUST verify that the query or iteration scope is filtered accordingly — broader queries MUST be flagged for review when a narrower query is possible at the data source level. | `implement-task/SKILL.md` — Step 9 |
+| 5.14 | When implementing batch operations that target a described subset of records, `implement-task` MUST verify that the query or iteration scope is filtered accordingly — broader queries MUST be flagged for review when a narrower query is possible at the data source level. | `implement-task/SKILL.md` — Step 9 check 12 |
 
 ---
 
@@ -199,7 +199,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 Each constraint above references its source. The full source files are:
 
 - `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Step 1 Priority/fixVersion extraction (§1.74, §1.76), Step 1.5 Parent linking (§1.82), Step 2.5 Discover Project Issue Types (§1.62–1.64), Step 3 Shared-artifact producer and consumer analysis (§1.106), Step 4.5 Determine Workflow Mode (§1.27), Step 5 Epic grouping (§1.79, §1.81), Step 5 Shared-artifact coverage in task decomposition (§1.106), Step 5 Convention-aware task enrichment (§4.11, §4.13), Step 5 Target Branch assignment (§4.12), Step 5 Bookend task generation (§3.4), Step 5 Documentation task generation (§1.83, §1.84), Step 5 Testing task generation (§1.85–1.87), Step 6 sub-step 6a.0 Epic creation (§1.79), Step 6 graceful degradation (§1.80), Step 6 Priority/fixVersion inheritance (§1.74, §1.75, §1.76), Step 6a Digest posting (§1.33), Task Description Template (§4.1–4.10)
-- `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Important Rules (§1.4–1.6, §5.1–5.3), Step 1 (§1.6), Step 1.5 Digest verification (§1.34, §1.35), Step 4/6/9 (§5.4), Step 5 (§1.15, §3.1, §3.4), Step 7 (§5.9–5.13), Step 9 (§2.1–2.3, §5.6–5.8), Step 10 (§3.2, §3.3)
+- `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Step 1 (§1.6), Step 1.5 Digest verification (§1.34, §1.35), Step 4 (§1.5, §5.2), Step 5 (§1.15, §3.1, §3.4), Step 6 (§1.4, §5.1, §5.3), Step 6 Reuse (§5.4), Step 7 (§5.9–5.13), Step 9 check 1 (§1.4, §5.1), Step 9 check 5 (§5.4), Step 9 checks 11–14 (§5.6–5.8, §5.14), Step 10 (§2.1–2.3, §3.3), Step 11 (§3.2)
 - `plugins/sdlc-workflow/skills/setup/SKILL.md` — Steps 10.5–10.6 (§1.100–1.102, §1.104–1.105)
 - `plugins/sdlc-workflow/shared/task-description-template.md` — Rules (§4.12)
 - `plugins/sdlc-workflow/shared/description-digest-protocol.md` — Digest format and verification procedure (§1.33, §1.34, §1.35)
