@@ -65,7 +65,9 @@ class _JiraRecorder:
         self.created = 0
         self.live_assignee = None
         self.live_security = None
+        self.live_security_by_issue = {}
         self.live_security_error = None
+        self.live_security_errors = {}
 
     def update_issue(self, issue, fields):
         """Record a Jira field update."""
@@ -89,9 +91,13 @@ class _JiraRecorder:
     def get_issue(self, issue, fields="*all"):
         """Return only the requested field projection, as Jira does, and record it."""
         self.calls.append(("get-issue", issue, fields))
-        if fields == "security" and self.live_security_error is not None:
-            raise self.live_security_error
-        stored = {"assignee": self.live_assignee, "security": self.live_security, "description": {
+        if fields == "security":
+            if issue in self.live_security_errors:
+                raise self.live_security_errors[issue]
+            if self.live_security_error is not None:
+                raise self.live_security_error
+        security = self.live_security_by_issue.get(issue, self.live_security)
+        stored = {"assignee": self.live_assignee, "security": security, "description": {
             "type": "doc", "version": 1,
             "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Stored by Jira."}]}],
         }}
@@ -964,6 +970,84 @@ def test_invalid_trusted_security_level_fails_closed(security, recorder):
     assert recorder.calls == []
 
 
+def _existing_task(key="TC-777", summary="Fix CVE"):
+    """Build trusted retry state for an existing remediation task."""
+    return {"key": key, "summary": summary, "labels": ["ai-generated-jira"],
+            "description": {"type": "doc", "version": 1, "content": []},
+            "comments": [{"body": "[sdlc-workflow] Description digest: sha256-adf:already"}]}
+
+
+def test_reused_remediation_gains_the_trusted_security_level(recorder):
+    """A retry that reuses an unprotected task raises it to the parent's level first."""
+    # Given an existing unprotected task and a protected parent
+    recorder.live_security_by_issue = {
+        "TC-42": {"id": "10034", "name": "Red Hat Employee"}, "TC-777": None}
+    trusted = _trusted_input(remediation=[_existing_task()],
+                             security={"id": "10034", "name": "Red Hat Employee"})
+
+    # When the retry registers the existing task
+    registry = executor.execute_plan(_plan([_remediation_action()]), trusted)
+
+    # Then the level is repaired before the reference is used
+    assert registry["remediation"]["key"] == "TC-777"
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == [
+        ("field-edit", "TC-777", {"security": {"id": "10034"}})]
+
+
+def test_reused_issue_already_at_the_parent_level_is_not_updated(recorder):
+    """A reused issue that already carries the parent's level receives no write."""
+    # Given a reused task already at the parent's level
+    recorder.live_security_by_issue = {"TC-42": {"id": "10034"}, "TC-777": {"id": "10034"}}
+    trusted = _trusted_input(remediation=[_existing_task()], security={"id": "10034"})
+
+    # When the retry registers it
+    executor.execute_plan(_plan([_remediation_action()]), trusted)
+
+    # Then no security write occurs
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == []
+
+
+def test_reused_issue_at_a_different_level_is_realigned(recorder):
+    """Jira levels are unranked, so a diverging reused level is realigned to the parent's."""
+    # Given a reused task at a different level than the parent's current one
+    recorder.live_security_by_issue = {"TC-42": {"id": "10035"}, "TC-777": {"id": "10034"}}
+    trusted = _trusted_input(remediation=[_existing_task()], security={"id": "10035"})
+
+    # When the retry registers it
+    executor.execute_plan(_plan([_remediation_action()]), trusted)
+
+    # Then the parent's level is applied
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == [
+        ("field-edit", "TC-777", {"security": {"id": "10035"}})]
+
+
+def test_unprotected_parent_leaves_reused_issue_untouched(recorder):
+    """Without a trusted parent level the reused issue is neither read nor modified."""
+    # Given a parent with no level and an existing task
+    trusted = _trusted_input(remediation=[_existing_task()])
+
+    # When the retry registers it
+    executor.execute_plan(_plan([_remediation_action()]), trusted)
+
+    # Then there is no level read and no write for the reused issue
+    assert ("get-issue", "TC-777", "security") not in recorder.calls
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == []
+
+
+def test_failed_reused_issue_security_read_fails_closed(recorder):
+    """An unreadable reused issue aborts before dependent actions run."""
+    # Given a parent level and a reused issue whose read fails
+    recorder.live_security_by_issue = {"TC-42": {"id": "10034"}}
+    recorder.live_security_errors = {"TC-777": SystemExit(1)}
+    trusted = _trusted_input(remediation=[_existing_task()], security={"id": "10034"})
+
+    # When the retry registers it
+    # Then it aborts before any security write
+    with pytest.raises(SystemExit):
+        executor.execute_plan(_plan([_remediation_action()]), trusted)
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == []
+
+
 def test_existing_marker_and_remediation_skip_retry_duplicates(recorder):
     """Stable runner markers and existing remediation state make retries idempotent."""
     # Given actions already applied by a previous trusted runner attempt
@@ -980,7 +1064,7 @@ def test_existing_marker_and_remediation_skip_retry_duplicates(recorder):
     registry = executor.execute_plan(result, trusted)
 
     # Then no duplicate writes occur and the existing task resolves the reference
-    assert recorder.calls == []
+    assert [call for call in recorder.calls if call[0] != "get-issue"] == []
     assert registry["remediation-1"]["key"] == "TC-777"
 
 
@@ -1001,7 +1085,8 @@ def test_marked_remediation_still_populates_references_for_dependent_actions(rec
 
     # Then its generated reference remains usable by the dependent link
     assert registry["remediation-1"]["key"] == "TC-777"
-    assert recorder.calls == [("link", "TC-42", "TC-777", "Depend")]
+    assert [call for call in recorder.calls if call[0] != "get-issue"] == [
+        ("link", "TC-42", "TC-777", "Depend")]
 
 
 def test_marked_reference_binding_still_resolves_dependent_actions(recorder):
@@ -1033,7 +1118,7 @@ def test_existing_remediation_without_digest_is_digested_before_follow_up_action
     executor.execute_plan(result, trusted)
 
     # Then it posts the stored-description digest before the dependent link
-    assert [call[0] for call in recorder.calls] == ["get-issue", "digest", "link"]
+    assert [call[0] for call in recorder.calls] == ["get-issue", "get-issue", "digest", "link"]
 
 
 def test_existing_issue_state_skips_retried_field_status_and_link_actions(recorder):
@@ -1484,7 +1569,27 @@ def test_release_retry_reuses_and_repairs_digests(recorder):
     trusted['idempotency']['action_markers'] = ['triage-security:release-epic', 'triage-security:release-task']
     registry = executor.execute_plan(_plan([_release_action(), _release_action('release-task')]), trusted)
     assert registry['release-task']['key'] == 'TC-71'
-    assert [call[0] for call in recorder.calls] == ['get-issue', 'digest', 'get-issue', 'digest']
+    assert [call[0] for call in recorder.calls] == [
+        'get-issue', 'get-issue', 'digest', 'get-issue', 'get-issue', 'digest']
+
+
+def test_reused_release_gains_the_trusted_security_level(recorder):
+    """Reused release Epic and Task are realigned to the trusted parent's level."""
+    # Given a reused release graph and a protected parent
+    trusted = _release_trusted()
+    graph = trusted['jira_metadata']['release_jira'][0]
+    graph['epics'] = [_release_snapshot('TC-70', 'Epic')]
+    graph['tasks'] = [_release_snapshot('TC-71', 'Task', 'TC-70')]
+    trusted['issue']['security'] = {'id': '10034', 'name': 'Red Hat Employee'}
+    recorder.live_security_by_issue = {'TC-42': {'id': '10034'}, 'TC-70': None, 'TC-71': None}
+
+    # When both release identities are reused
+    executor.execute_plan(_plan([_release_action(), _release_action('release-task')]), trusted)
+
+    # Then each reused issue is raised to the parent's level
+    assert [call for call in recorder.calls if call[0] == 'field-edit'] == [
+        ('field-edit', 'TC-70', {'security': {'id': '10034'}}),
+        ('field-edit', 'TC-71', {'security': {'id': '10034'}})]
 
 
 @pytest.mark.parametrize('defect', ['wrong-type', 'wrong-parent', 'wrong-project', 'wrong-family',

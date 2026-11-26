@@ -146,11 +146,12 @@ def _has_description_digest(existing: dict[str, Any]) -> bool:
 
 
 def _register_existing_remediation(action: dict[str, Any], registry: dict[str, dict[str, str]], trusted_input: dict[str, Any]) -> bool:
-    """Register a prior remediation task and repair a digest lost during a partial run."""
+    """Register a prior remediation task, repairing its level and a digest lost in a partial run."""
     existing = _existing_remediation(action, trusted_input)
     if existing is None:
         return False
     issue_key = existing["key"]
+    _repair_reused_security(issue_key, action, trusted_input)
     registry[action["ref"]] = {"key": issue_key, "url": _browse_url(issue_key)}
     if not _has_description_digest(existing):
         _post_digest(issue_key)
@@ -241,11 +242,12 @@ def _existing_release(action: dict[str, Any], trusted_input: dict[str, Any]) -> 
 
 def _register_existing_release(action: dict[str, Any], registry: dict[str, dict[str, str]],
                                trusted_input: dict[str, Any]) -> bool:
-    """Repair partial release creation before dependent actions execute."""
+    """Repair partial release creation, including its level, before dependent actions execute."""
     existing = _existing_release(action, trusted_input)
     if existing is None:
         return False
     key = existing["key"]
+    _repair_reused_security(key, action, trusted_input)
     registry[action["ref"]] = {"key": key, "url": _browse_url(key)}
     if not _has_description_digest(existing):
         _post_digest(key)
@@ -548,20 +550,19 @@ def _trusted_issue_key(trusted_input: dict[str, Any]) -> str:
 
 
 def _live_security_level(issue_key: str) -> dict[str, str] | None:
-    """Read the parent's current Jira security level immediately before creation.
+    """Read an issue's current Jira security level immediately before a write that needs it.
 
     The trusted snapshot can be stale: a human may tighten the parent's level after
     the pre-script collected it, and a child created from the snapshot would keep the
-    broader level. Re-read the parent right before the write, mirroring the live
-    assignee read. ``get_issue`` exits non-zero on an HTTP or connection failure, so
-    an unreadable parent aborts before any issue is created instead of silently
-    falling back to the snapshot.
+    broader level. Re-read right before the write, mirroring the live assignee read.
+    ``get_issue`` exits non-zero on an HTTP or connection failure, so an unreadable
+    issue aborts before the write instead of silently falling back to the snapshot.
     """
     issue = _jira_mod.get_issue(issue_key, fields="security")
     fields = issue.get("fields") if isinstance(issue, dict) else None
     if not isinstance(fields, dict):
-        raise ActionError("live parent security read returned no fields")
-    return _normalize_security_level(fields.get("security"), "live parent")
+        raise ActionError("live security read for {} returned no fields".format(issue_key))
+    return _normalize_security_level(fields.get("security"), "live issue")
 
 
 def _inherited_security(action: dict[str, Any], trusted_input: dict[str, Any]) -> dict[str, str] | None:
@@ -592,6 +593,24 @@ def _creation_security(action: dict[str, Any], trusted_input: dict[str, Any]) ->
     """
     _inherited_security(action, trusted_input)
     return _live_security_level(_trusted_issue_key(trusted_input))
+
+
+def _repair_reused_security(issue_key: str, action: dict[str, Any], trusted_input: dict[str, Any]) -> None:
+    """Raise a reused issue to the trusted parent's current level before dependent actions.
+
+    A retry can match an issue created before this protection existed, or before the
+    parent was protected, leaving its vulnerability details readable. Jira levels are
+    not ranked, so the parent's current level is authoritative: the reused issue is set
+    to it whenever it differs. Without a trusted parent level the issue is untouched.
+    """
+    _inherited_security(action, trusted_input)
+    parent = _live_security_level(_trusted_issue_key(trusted_input))
+    if parent is None:
+        return
+    current = _live_security_level(issue_key)
+    if current is not None and current["id"] == parent["id"]:
+        return
+    _jira_mod.update_issue(issue_key, {"security": {"id": parent["id"]}})
 
 
 def _security_kwarg(security: dict[str, str] | None) -> dict[str, Any]:

@@ -213,7 +213,7 @@ Jira key. This digest-before-link rule applies to standard and preemptive tasks 
 
 **Security level.** Copy `issue.security` (`{id, name}`) into `security` on every
 creation action; omit it only when `null`. Task has no default level; the executor
-re-reads the level live before creating.
+re-reads the level live before creating and repairs reused issues to it.
 
 ### Trusted-evidence map for Fullsend mode
 

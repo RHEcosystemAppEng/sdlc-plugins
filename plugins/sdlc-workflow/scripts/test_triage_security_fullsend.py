@@ -358,7 +358,7 @@ def test_idempotent_retry_fixture_skips_duplicate_mutations(recorder):
     registry = executor.execute_plan(contract["result"], contract["trusted_input"])
 
     # Then no duplicate Jira mutation occurs and the existing task remains resolvable
-    assert recorder.calls == []
+    assert [call for call in recorder.calls if call[0] != "get-issue"] == []
     assert registry["remediation"]["key"] == "TC-9001"
 
 
@@ -480,18 +480,22 @@ def test_conditional_retry_fixture_repairs_digest_before_resolving_new_link(reco
     # When the trusted executor processes the repair against a recorded Jira boundary
     registry = executor.execute_plan(result, bundle)
 
-    # Then task creation is skipped, one digest precedes the resolved downstream link
-    assert [call[0] for call in recorder.calls] == ["get-issue", "digest", "link"]
-    assert recorder.calls[0] == ("get-issue", "TC-8100")
+    # Then task creation is skipped, exactly one digest is repaired, and the link resolves last
+    kinds = [call[0] for call in recorder.calls]
+    assert "remediation-task" not in kinds
+    assert kinds.count("digest") == 1
+    assert kinds[-1] == "link"
+    assert kinds.count("get-issue") >= 2  # one live parent security read per reused task
+    digest_call = next(call for call in recorder.calls if call[0] == "digest")
     assert recorder.calls[-1] == ("link", "TC-8001", "TC-8101", "Depend")
     assert {ref: value["key"] for ref, value in registry.items()} == {"upstream": "TC-8100", "downstream": "TC-8101"}
 
     # Given a refreshed snapshot after the repair, the next retry performs no writes
-    tasks[0]["comments"] = [{"body": recorder.calls[1][3]}]
+    tasks[0]["comments"] = [{"body": digest_call[3]}]
     bundle["idempotency"]["action_markers"].append(actions[-1]["marker"])
     recorder.calls.clear()
     assert executor.execute_plan(result, bundle) == registry
-    assert recorder.calls == []
+    assert [call for call in recorder.calls if call[0] != "get-issue"] == []
 
 
 def test_release_instructions_bind_trusted_decisions_and_actions():
@@ -698,4 +702,5 @@ def test_release_partial_retry_reuses_prefetched_hierarchy_and_repairs_digest(re
                 'inward': '{{new-release.key}}', 'outward': 'TC-8101'}]
     registry = executor.execute_plan(_release_result(actions), bundle)
     assert registry['new-release']['key'] == 'TC-9502'
-    assert [call[0] for call in recorder.calls] == ['get-issue', 'digest', 'get-issue', 'digest', 'link']
+    assert [call[0] for call in recorder.calls] == [
+        'get-issue', 'get-issue', 'digest', 'get-issue', 'get-issue', 'digest', 'link']
