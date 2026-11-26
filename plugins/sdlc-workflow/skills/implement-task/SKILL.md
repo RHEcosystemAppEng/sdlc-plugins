@@ -672,6 +672,31 @@ modified functions for parameters that are no longer used in the function body.
 > `version` after a code change. Remove the parameter and update all callers from
 > `filter_by_status(items, "1.0")` to `filter_by_status(items)`.
 
+### Validated-value override paths
+
+When a change adds a validated, security-relevant, or fail-closed value to a function,
+trace every later write into the same object or payload. Generic merge or override
+parameters — extra-field maps, variadic passthroughs, defaults merges, patch helpers —
+can run after the validated assignment and silently replace or drop it.
+
+1. **List later writes**: for each new validated or protective value, enumerate every
+   assignment, merge, or bulk update that runs after it in the same function and its
+   immediate callees.
+2. **Verify none can replace it**: confirm each path preserves the validated value.
+   When one can overwrite or remove it, either apply the validated value last or reject
+   a conflicting key with the project's fail-fast error handling — never rely on call
+   order staying unchanged.
+3. **Test the conflict when one exists**: when steps 1–2 find a later write path
+   that can replace or remove the validated value, add a test proving a generic
+   override cannot change it, not only that the value is set on the happy path.
+   When no such path exists, no conflict test is required — do not add a test seam
+   for a conflict the function cannot express.
+
+> **Example:** a builder validates a protection level, writes it, then merges a
+> caller-supplied extra-fields map. A conflicting key in that map would replace the
+> validated level, so the builder must reject it or re-apply the validated value after
+> the merge.
+
 ### Sensitive-pattern check
 
 Search the staged diff for secrets, credentials, or environment files that should not be committed:
