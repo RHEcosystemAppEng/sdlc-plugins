@@ -1,7 +1,7 @@
 ---
 name: implement-task
 description: |
-  Implement a Jira task by reading its structured description, modifying code, running tests, and updating Jira.
+  Implement a Jira task end-to-end from its structured description: modify code, write tests, run the project's checks, commit, open or update the PR, and update Jira. Handles direct-to-main tasks, feature-branch bookends, and review-feedback fixes that add commits to an existing PR.
 argument-hint: "[jira-issue-id]"
 ---
 
