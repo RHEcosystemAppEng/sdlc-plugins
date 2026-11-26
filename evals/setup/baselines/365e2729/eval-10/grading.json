@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "population-race.md section 2 records the snapshot ('Setup kept this snapshot to compare against just before writing': Last-Updated 2026-06-28T10:00:00Z, one 2.1.0 row, no CONCURRENT-ROW-KEEP). Section 4: 'Setup re-read `security-matrix.md` immediately before writing and compared it with the snapshot', followed by a Snapshot vs Current file comparison table."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "Section 4 table: '`Last-Updated` | `2026-06-28T10:00:00Z` | `2026-10-26T09:15:00Z` | Yes' and '`CONCURRENT-ROW-KEEP` entry (2.1.0 / api-rhel10) | Absent | Present | Yes'. It then says 'The unchanged-target check failed, so the proposal is **stale**.'"
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "Header: 'WRITE ABORTED... Nothing was written to any project file.' Section 5: 'Preserved, untouched: `<!-- Last-Updated: 2026-10-26T09:15:00Z -->`; The `CONCURRENT-ROW-KEEP` entry for 2.1.0 / api-rhel10'. Section 7: '`security-matrix.md` and CLAUDE.md were not modified.' It also refuses the user's request to write without another review."
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Section 5: 'it does not have the entry's complete values' (lists tag, SHA, image reference, digest, CPE, notes), then 'Setup will not fill these in with placeholders, guess them, or call an incomplete merge complete. It is therefore **aborting the merge** rather than showing a partial merged proposal.' Section 6 option 1: 'Paste the full current contents of `security-matrix.md`, or at least the complete `CONCURRENT-ROW-KEEP` row'. Section 3 repeats only the earlier proposal the user confirmed, for context. It is not offered as a new merged proposal."
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "Section 6: 'Setup will write nothing until all of these are true: The concurrent change has been reconciled. You have reviewed and confirmed the complete merged proposal. A final re-read shows the target has not changed since that confirmation.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

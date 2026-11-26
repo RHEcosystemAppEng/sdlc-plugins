@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "The self-review traces the writes in build_summary() and finds no later merge, bulk update, or generic override path that could replace or remove the validated risk_classification",
+      "passed": true,
+      "evidence": "self-review.md 'Validated-value override paths' item 1 says: 'After the validated `risk_classification` is assigned, `build_summary()` only finishes the field-by-field population of `AdvisorySummary` and returns it... There are no extra-field maps, defaults merges, `..Default::default()` / struct-update spreads or patch helpers.' Item 2: 'The only assignment to `risk_classification` is the validated one. No generic path exists that could overwrite or drop it.'"
+    },
+    {
+      "text": "The test plan does not require a generic-override or conflict test for the validated risk_classification, because no later write path can change it",
+      "passed": true,
+      "evidence": "plan.md Files to Create: '**No override-conflict test.** `build_summary()` has no generic merge, extra-field map, or patch path after the assignment, so a generic override has no way to replace the validated value... no conflict test is required, and no test seam is added'. self-review.md item 3: 'Conflict test. None is required, because no override path exists.'"
+    },
+    {
+      "text": "The plan still tests that each allowed risk_classification is accepted and that a disallowed value is rejected",
+      "passed": true,
+      "evidence": "plan.md lists `build_summary_accepts_each_allowed_classification` covering the four allowed values, asserting `assert_eq!(summary.risk_classification, expected)`, and `build_summary_rejects_disallowed_classification`, which passes e.g. \"severe\" and asserts the result is `Err` with the expected `AppError` variant."
+    },
+    {
+      "text": "The plan keeps all changes within the task's Files to Modify and Files to Create — no unrelated files are modified",
+      "passed": true,
+      "evidence": "self-review.md 'Scope containment' gives the planned diff as exactly `modules/fundamental/src/advisory/model/summary.rs`, `modules/fundamental/src/advisory/service/advisory.rs`, `tests/api/advisory_summary.rs` and says 'All three files are in scope.' It handles possible out-of-scope items (external callers, test registration, OpenAPI spec) as 'flags... needing user approval' and says 'None of these are planned as edits without approval.' The RiskClassification enum goes in the in-scope summary.rs."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

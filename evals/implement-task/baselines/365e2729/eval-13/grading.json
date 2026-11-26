@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md field table lists rows for `cves: Option<Vec<String>>`, `affected_packages: Option<Vec<AffectedPackage>>`, and `severity_counts: Option<HashMap<String, u32>>`, each marked 'Guard needed? **Yes**'."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md 6.2 code: `result.cves.as_deref().map(<[String]>::to_vec).unwrap_or_default()`, `result.affected_packages.as_ref().map_or(0, Vec::len)`, `result.severity_counts.clone().unwrap_or_default()`. null-guards.md item 6 'Explicitly avoided: result.cves.unwrap(), ... .expect(..)'; plan notes 'No .unwrap(), .expect() or indexing is used on upstream data.'"
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "In plan.md the only accesses of result.cves/affected_packages/severity_counts are the three guarded expressions above. `.len()` is called only on the defaulted `cve_list` (Vec) and inside `map_or(0, Vec::len)`. Test `summary.cve_list.len()` operates on the non-Option output struct. No .join() or iteration on Option values appears."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md 'Why guards are required': '`AdvisoryIngestResult` comes from another module: the `ingestor` crate ... The skill's \"Defensive property access on external data\" rule applies to every access path that crosses this module boundary. The ingestor owns the schema and may return partial results ... The task makes all three aggregate fields `Option<T>`'."
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md 6.3 test table: `test_summary_all_none_returns_zeroed` | 'all three fields `None`' | `assert_eq!(summary, VulnerabilitySummary::default())` plus explicit checks of each field. null-guards.md: 'All `None`: the summary equals `VulnerabilitySummary::default()`'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

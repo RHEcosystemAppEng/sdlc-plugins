@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+      "passed": true,
+      "evidence": "scaffold-race.md Timeline: '1. Initial existence check (Step 10.5): security-matrix.md was missing.' and '3. Pre-write re-read ... The file now exists. A concurrent /triage-security run created it.'"
+    },
+    {
+      "text": "The current `Last-Updated: 2026-10-26T09:00:00Z` value and `CONCURRENT-ROW-KEEP` content are preserved rather than replaced by the scaffold",
+      "passed": true,
+      "evidence": "Write actions table: 'security-matrix.md | None. The current file is kept as-is, including the Last-Updated timestamp and the CONCURRENT-ROW-KEEP row.' Decision: 'Do NOT overwrite. The current file is kept unchanged.'"
+    },
+    {
+      "text": "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+      "passed": true,
+      "evidence": "'Step 10.5 says the scaffold must be created with create-if-absent semantics ... The file has appeared, so the create-if-absent condition fails and no write happens.' Also refuses the user's 'write it over the current file' instruction."
+    },
+    {
+      "text": "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+      "passed": true,
+      "evidence": "Status: 'matrix exists (created concurrently) — scaffold skipped, current file kept.' Option 2 (merge): 'I would show you the complete merged result and need your fresh confirmation before writing.' Also: '\"Do not ask again\" cannot remove the requirement ... fresh confirmation before writing.'"
+    },
+    {
+      "text": "The output states that no project file is written until the changed target is reconciled and confirmed",
+      "passed": true,
+      "evidence": "Write actions table lists 'None' for both security-matrix.md and CLAUDE.md; Status: 'Waiting on the user's choice of option 2 (merge, which needs fresh confirmation of the full merged result) before any write to security-matrix.md.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

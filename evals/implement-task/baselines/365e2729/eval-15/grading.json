@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The self-review identifies the extra_fields merge into the same ingest payload as a write path that runs after the validated data_classification assignment",
+      "passed": true,
+      "evidence": "self-review.md 'Validated-value override paths' item 1: \"after the validated `data_classification` is written into the payload map, `build_ingest_payload()` runs one more write, the bulk merge of the caller-supplied `extra_fields` map. It runs last, after the standardized fields.\""
+    },
+    {
+      "text": "The self-review states that this merge can replace or remove the validated value, so the validated value must remain authoritative",
+      "passed": true,
+      "evidence": "self-review.md item 1: \"a key \\\"data_classification\\\" in it would **replace** the validated value (for example with \\\"top-secret\\\") or **drop** it (null). That would break the acceptance criterion 'a payload built with a valid classification always carries that value'.\" Item 2 mitigation ensures the validated value cannot be overridden."
+    },
+    {
+      "text": "The plan resolves the override path by applying the validated value after the merge or by rejecting a conflicting key — not by assuming the current call order cannot change",
+      "passed": true,
+      "evidence": "plan.md: \"Before merging, reject a conflicting key\" with `if extra_fields.contains_key(\"data_classification\") { return Err(AppError::BadRequest(...)) }`, and \"It also keeps the guarantee even if someone later reorders the statements in the function.\" self-review.md: \"The guarantee does not depend on statement order staying the same.\""
+    },
+    {
+      "text": "The test plan includes a test that a conflicting extra_fields classification cannot override the validated value",
+      "passed": true,
+      "evidence": "plan.md test 3 `test_build_ingest_payload_extra_fields_cannot_override_classification`: builds with data_classification = \"restricted\" and extra_fields = {\"data_classification\": \"public\", ...}, asserts rejection \"so the validated value can never be replaced through the generic merge.\""
+    },
+    {
+      "text": "The conflict test is justified by the identified later extra_fields write path rather than restated from a task acceptance criterion or test requirement",
+      "passed": true,
+      "evidence": "plan.md test 3: \"This test exists because the Step 9 override-path check found a real later write (the `extra_fields` merge).\" self-review.md item 3 'Conflict test added' follows directly from the listed later write. The task's Test Requirements list only allowed/disallowed tests."
+    },
+    {
+      "text": "The plan keeps all changes within the task's Files to Modify and Files to Create — no unrelated files are modified",
+      "passed": true,
+      "evidence": "self-review.md 'Scope containment' planned diff lists only sbom.rs, details.rs (Files to Modify) and tests/api/sbom_ingest_payload.rs (Files to Create). Possible extra files (external callers, tests/Cargo.toml) are \"flagged for user approval and not edited without it\"; plan.md: \"is flagged for user approval ... and is not silently edited.\""
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

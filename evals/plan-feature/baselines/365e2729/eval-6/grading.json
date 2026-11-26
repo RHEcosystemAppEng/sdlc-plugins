@@ -1,0 +1,80 @@
+{
+  "assertion_results": [
+    {
+      "text": "Epics are generated between Feature and Tasks — at least 2 Epics are created (one per repository) when by-repository grouping is used",
+      "passed": true,
+      "evidence": "impact-map.md 'Step 5 — Epic grouping (by-repository)' table lists two Epics (trustify-backend: tasks 1,2,3,4,5,9,10; trustify-ui: tasks 6,7,8). Step 6a.0 shows two jira.create_issue calls with issueTypeName=\"Epic\" returning <EPIC-BE> and <EPIC-UI>, and Step 6a sets each task's parent to one of these Epics."
+    },
+    {
+      "text": "Each Epic summary follows the format '<feature-key>: <repository-name>' (e.g., 'TC-9006: trustify-backend', 'TC-9006: trustify-ui')",
+      "passed": true,
+      "evidence": "impact-map.md Step 6a.0: summary=\"TC-9006: trustify-backend\" and summary=\"TC-9006: trustify-ui\". The Step 5 table uses the same summaries."
+    },
+    {
+      "text": "Each task specifies its parent Epic key in the output — tasks targeting trustify-backend are assigned to the backend Epic, tasks targeting trustify-ui are assigned to the frontend Epic",
+      "passed": true,
+      "evidence": "Every task file has a '**Parent Epic:**' line. Tasks 1,2,3,4,5,9,10 (Repository trustify-backend) say 'TC-9006: trustify-backend (<EPIC-BE>)'. Tasks 6,7,8 (Repository trustify-ui) say 'TC-9006: trustify-ui (<EPIC-UI>)'. The Step 6a table in impact-map.md shows the same parent mapping."
+    },
+    {
+      "text": "The plan documents Incorporates links from the Feature to each Epic (not from Feature to individual Tasks) — evidenced by link decisions in the impact map or task output files",
+      "passed": true,
+      "evidence": "impact-map.md 6b: '**Incorporates links go from the Feature to the Epics only, not to individual tasks:**', followed by create_issue_link(link_type=\"Incorporates\", inward_issue_key=\"TC-9006\", outward_issue_key=<EPIC-BE>) and the same call for <EPIC-UI>. No Incorporates links to tasks appear anywhere."
+    },
+    {
+      "text": "Task dependency ordering is preserved within and across Epics — backend tasks have lower task numbers than dependent frontend tasks",
+      "passed": true,
+      "evidence": "The backend API tasks 2, 3, and 4 come before frontend Task 6, which depends on them ('Depends on: Task 2/3/4'). Tasks 7 and 8 depend on Task 6. Backend Task 9 (docs) depends on frontend tasks 6–8 and is numbered after them. impact-map.md: 'Backend implementation tasks (2–5) are numbered before the frontend tasks that depend on them (6–8).'"
+    },
+    {
+      "text": "Each non-documentation, non-testing task file contains all required template sections: Repository, Target Branch, Description, at least one of Files to Modify or Files to Create, Implementation Notes, Acceptance Criteria, Test Requirements. Documentation tasks (tasks whose filename or description indicates doc-only scope) and testing tasks (tasks whose filename or description indicates cross-cutting testing scope) are exempt from requiring Files to Modify, Files to Create, and Implementation Notes — they must still include Repository, Target Branch, Description, Acceptance Criteria, and Test Requirements",
+      "passed": false,
+      "evidence": "task-1-create-feature-branch.md and task-10-merge-feature-branch.md are bookend tasks, not documentation or testing tasks. They contain only Repository, Target Branch, Bookend Type, Description, Acceptance Criteria, Test Requirements, and Dependencies. Neither has a Files to Modify/Files to Create section or an Implementation Notes section. The assertion's exemption covers only documentation and testing tasks. Tasks 2–8 have all the required sections, and Task 9 (docs) meets the exempt requirements."
+    },
+    {
+      "text": "The plan documents Epic creation with the level-1 issue type name ('Epic') and parent set to the feature issue key — evidenced by Epic creation parameters in the impact map or output files",
+      "passed": true,
+      "evidence": "impact-map.md Step 2.5: 'Epic:    Epic    (level: 1)'. Step 6a.0: both create_issue calls use issueTypeName=\"Epic\"  # level-1 type discovered in Step 2.5, and parent=\"TC-9006\"."
+    },
+    {
+      "text": "Every generated task description contains a Repository section with a single repository name (not multiple repos per task)",
+      "passed": true,
+      "evidence": "Each of the 10 task files has exactly one '## Repository' section with one value. Tasks 1–5, 9, and 10 say 'trustify-backend'. Tasks 6–8 say 'trustify-ui'."
+    },
+    {
+      "text": "Every generated task description contains Target Branch, Description, Acceptance Criteria, and Test Requirements sections as required by the handoff contract in task-description-template.md",
+      "passed": true,
+      "evidence": "All 10 task files contain '## Target Branch' (main for tasks 1 and 10, TC-9006 for the others), '## Description', '## Acceptance Criteria', and '## Test Requirements'."
+    },
+    {
+      "text": "For each task created, a description digest is produced — evidenced by a separate digest file (e.g., task-N-digest.md), a digest entry in the impact map, or a '[sdlc-workflow] Description digest: sha256-md:<64-char-hex>' marker in any output file. The digest must contain a format-tagged SHA-256 hash — exactly 64 lowercase hex characters prefixed by 'sha256-md:' or 'sha256-adf:'",
+      "passed": true,
+      "evidence": "There are 10 digest files (task-1-digest.md through task-10-digest.md), one for each task. Each contains '[sdlc-workflow] Description digest: sha256-md:<hex>'. All 10 hashes were checked and are exactly 64 lowercase hex characters, e.g. task-1: sha256-md:5db0af93dc55dba4544f0b74605cd1668779e33221ec8a9139d131bbcb593248."
+    },
+    {
+      "text": "Convention-aware enrichment validates file-type applicability per shared/convention-applicability-rules.md before including a convention — inapplicable conventions are excluded entirely (not listed with 'Not applicable' annotations), and applicable ones include a rationale in the prescribed format ('Applies: task modifies <file> matching the convention's <scope>'), not free-form prose",
+      "passed": true,
+      "evidence": "Every convention entry in tasks 2–8 uses the prescribed format, e.g. task-2: 'Per CONVENTIONS.md §Error handling: ... Applies: task modifies `modules/fundamental/src/remediation/endpoints/summary.rs` matching the convention's endpoint handler scope.' and task-6: 'Applies: task modifies `src/api/rest.ts` matching the convention's API layer scope.' A case-insensitive grep for 'not applicable' found nothing in any output file."
+    },
+    {
+      "text": "When the Feature issue has a priority set (not 'Undefined'), the plan documents that the Feature's priority is inherited by created tasks — evidenced by priority field values in the impact map, task creation log, or task description files. When the Feature's priority is 'Undefined', the plan documents that priority inheritance is skipped (not propagated as null or 'Undefined')",
+      "passed": true,
+      "evidence": "impact-map.md: 'Feature priority: Major ... — propagated' and Step 1: 'Priority: `Major`. This is not \"Undefined\", so it is propagated.' The Step 6a task additional_fields include \"priority\": {\"name\": \"Major\"}, and every task file has '**Priority:** Major'."
+    },
+    {
+      "text": "When the Feature issue has a non-empty fixVersions array and the fixVersion scope config (from ### Jira Field Defaults in CLAUDE.md) is 'task' or 'both' (or absent, defaulting to 'both'), the plan documents that fixVersions are inherited by created tasks — evidenced by fixVersion values in the impact map, task creation log, or task description files. When fixVersion scope is 'feature' or the Feature has no fixVersions, the plan documents that fixVersion inheritance is skipped",
+      "passed": true,
+      "evidence": "impact-map.md: 'Feature fixVersions: RHTPA 1.5.0 — propagated (`fixVersion scope: both`)'. The Step 6a task additional_fields include \"fixVersions\": [{\"name\": \"RHTPA 1.5.0\"}], and every task file has '**fixVersions:** RHTPA 1.5.0'."
+    },
+    {
+      "text": "A summary of inherited field propagation is produced — evidenced by a summary-comment.md file in the outputs directory, or a summary section in the impact map that includes the inherited priority and fixVersion values propagated to tasks, or states they were omitted and why",
+      "passed": false,
+      "evidence": "There is no summary-comment.md in the outputs directory, even though impact-map.md Step 6c says 'See `summary-comment.md`'. The outputs contain only impact-map.md, impact-map-comment.md, workflow-mode-comment.md, and the task and digest files. impact-map.md has no dedicated summary section for inherited-field propagation. It only has header lines ('Feature priority: Major — propagated', 'Feature fixVersions: RHTPA 1.5.0 — propagated') and the per-task additional_fields. The Step 6c Feature summary comment was referenced but never produced."
+    }
+  ],
+  "summary": {
+    "passed": 12,
+    "failed": 2,
+    "total": 14,
+    "pass_rate": 0.857
+  }
+}

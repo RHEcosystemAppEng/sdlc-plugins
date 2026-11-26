@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md: 'Before declaring a constant, I searched the target package for an existing definition.' Lists planned calls 'mcp__serena_backend__find_symbol(name_path_pattern=\"SEVERITY_ORDER\", include_body=true)' and 'mcp__serena_backend__search_for_pattern(substring_pattern=\"(?i)severity_?order\", relative_path=\"modules/fundamental\")', plus Grep fallback."
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md 'Where I found it': '**Location:** `modules/fundamental/src/advisory/service/advisory.rs`' with definition 'SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]'."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md: 'Decision: reuse it with `use crate::advisory::service::advisory::SEVERITY_ORDER;`. Do not redeclare it.' and in sbom.rs changes: 'Add the import `use crate::advisory::service::advisory::SEVERITY_ORDER;`'; severity_rank helper uses SEVERITY_ORDER.iter().position."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "No new const declaration appears in plan.md; code snippets only add RemediationItem struct, severity_rank fn, and remediations method. symbol-search.md 'Rejected alternatives' explicitly rejects 'Redeclare const SEVERITY_ORDER in sbom.rs' and 'Move the constant to common/'. Plan Step 9: 'Exactly one definition must exist, in advisory.rs.'"
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "symbol-search.md: 'Target package: `modules/fundamental` (crate `fundamental`)... I searched the whole crate, not just the edited file, and then the whole workspace.' search_for_pattern uses relative_path=\"modules/fundamental\" and value search uses relative_path=\".\"; notes 'no other definition ... in sbom/, common/, or entity/'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

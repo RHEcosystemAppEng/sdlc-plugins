@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md line 44: \"Library `openssl-libs` is a system package in the container image, so the ecosystem is **RPM**.\" Line 45 reads it from config: \"RPM appears in the 2.2.x Ecosystem Mappings: Repository `—` (Konflux release repo), Lock File `rpms.lock.yaml`...\". Line 23 lists the library as \"openssl-libs (RPM system package)\". Cargo is never named as the ecosystem in any output file."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md lines 30-36: the table column is headed \"openssl-libs (rpms.lock.yaml)\" and has rows for 2.2.0 (v0.4.5, 3.0.7-25.el9_3), 2.2.1 (v0.4.8, 3.0.7-27.el9_4), 2.2.2 (retag of v0.4.8, result carried forward), 2.2.3 (v0.4.11, 3.0.7-28.el9_4) and 2.2.4 (v0.4.12, 3.0.7-28.el9_4). Line 18 gives the extraction command: \"git show <tag>:rpms.lock.yaml | grep 'openssl-libs'\"."
+    },
+    {
+      "text": "Dependency chain context identifies openssl-libs as present in rpms.lock.yaml and uses this to determine the package origin — the lock file presence is the primary classification signal (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md lines 50-59: \"rpms.lock.yaml: present at v0.4.5 (...), v0.4.8 (...), v0.4.11 (...), v0.4.12 (...) → explicit install\" and \"Origin: explicit install (openssl-libs is resolved in rpms.lock.yaml / rpms.in.yaml...)\". Line 57: \"Using rpms.lock.yaml classification only.\" remediation.md line 16: \"Origin is **explicit install** (openssl-libs is present in rpms.lock.yaml)\"."
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 8 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md line 15: \"Ecosystem RPM (system package) means **1 task per stream**, a Konflux release repo fix.\" The single 2.2.x task (lines 21-83) targets Repository \"rhtpa-release.0.4.z\". The checklist at lines 169 and 171 says \"Task count per stream: 1 (RPM = system package)\" and \"There is no Blocks link between tasks because RPM is a single task.\" The only other task is a conditional preemptive task for the separate 2.1.x stream (Case A cross-stream), not an upstream/downstream pair."
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 8 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md task description (lines 32-83) has the headings \"## Repository\", \"## Target Branch\", \"## Description\", \"## Implementation Notes\" and \"## Acceptance Criteria\", plus Test Requirements and Dependencies. There is no \"Files to Modify\" section in either task description."
+    },
+    {
+      "text": "The version impact output addresses SBOM verification in the dependency chain context — either noting that verification was skipped because cosign is not available or because external tools are prohibited, or presenting the SBOM classification result (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md lines 53-57, inside the Dependency chain block: \"SBOM verification: ⚠️ skipped — cosign not available (cosign/`which cosign` not executed in this eval; no external tools permitted)... Using rpms.lock.yaml classification only.\" Line 74 repeats this for 2.1.x."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

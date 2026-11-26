@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "reuse-decision.md lines 5-8: \"Both live in `modules/ingestor/src/graph/sbom/mod.rs` (crate `trustify-module-ingestor`) and are currently private: - `fn describing_packages(...)` ... - `fn suppliers(...)`\". plan.md Step 6 item 1: \"Change `fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>` to `pub fn describing_packages(...)`\" and the same change for suppliers."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "reuse-decision.md Rationale item 1, \"Check the dependency relationship\", quotes `migration/Cargo.toml` with `trustify-module-ingestor = { path = \"../modules/ingestor\" }` and says \"The edge `migration -> trustify-module-ingestor` **already exists**.\" Item 2 then decides: \"The dependency already exists, so promote and import.\" plan.md Step 4.4: \"Read `migration/Cargo.toml` to confirm ... This decides between reuse and duplication.\""
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md line 12: \"Decision: **make them public (`pub fn`) and import them. Do NOT duplicate them.**\". Line 22: \"The dependency already exists, so promote and import. Making the functions `pub` adds no new crate coupling...\""
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md line 12: \"Do NOT duplicate them.\" Line 23 says inlining is only justified when it would avoid a new dependency, \"That is not the case here.\" plan.md line 106: \"imported from `trustify_module_ingestor` and never reimplemented\". The Step 9 duplication check greps for reimplementations: \"There should be none.\" Neither file proposes copying the bodies."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md line 22: \"Duplicating them would create two copies ... Those copies would drift apart, and future bug fixes (for example to SPDX/CycloneDX supplier parsing) would have to be applied twice.\""
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 6 (service/mod.rs): 'call `common::db::query::apply_filter` with `entity::package_license::Column::License` ... and the raw parameter. That call handles the comma split and builds the `IN (...)` clause.' reuse-analysis.md section 1 'USED DIRECTLY': 'What is not written: no new comma-splitting code and no hand-built `IN` clause.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md Step 6: 'Add `license: Option<String>` to the package list Query struct, following the advisory `severity` field exactly: same derives, same `IntoParams`/utoipa attributes'. reuse-analysis.md section 2 'modules/fundamental/src/advisory/endpoints/list.rs (severity filter) — USED AS THE PATTERN'."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Step 6: 'join `package` to `package_license` using the SeaORM relation from `entity/src/package_license.rs`'. reuse-analysis.md section 3 'USED FOR THE JOIN': 'What is not written: no raw SQL and no new entity or migration.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md has sections 1 (apply_filter, 'How it is used: PackageService::list ... calls apply_filter(...)'), 2 (advisory list.rs, 'How it is used: the package list endpoint copies its structure'), 3 (package_license.rs, 'How it is used: the service joins through the entity's relation'), plus a summary table of all three."
+    },
+    {
+      "text": "The plan modifies only the files listed in Files to Modify and Files to Create, apart from files it explicitly flags for user approval under Step 9 and artifacts produced by a documented code-generation command that Step 9 directs staging; silently adding unlisted files fails (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6 changes only endpoints/list.rs, service/mod.rs, and creates tests/api/package_license_filter.rs. Step 9 'Scope containment: the expected diff is the two modified files and the one new test file. Possible out-of-scope items, each flagged for user approval: test registration in tests/Cargo.toml..., docs/api.md..., a generated OpenAPI spec file'. Step 4 explicitly says docs/api.md 'is not in Files to Modify, so it is flagged in Step 9 instead of being edited'; adding a relation to package.rs 'would be flagged for approval' (reuse-analysis.md)."
+    },
+    {
+      "text": "The plan reuses apply_filter for comma-separated parsing and SQL IN-clause construction rather than building its own split/trim/IN filtering path; additional per-value validation (allowed-value or character checks) applied before or after calling apply_filter does not count as duplication (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 6 service passes 'the raw parameter' to apply_filter which 'handles the comma split and builds the IN (...) clause'. The handler split/trim is solely for validation (reject empty segments, non-SPDX characters -> 400), which the assertion permits; reuse-analysis.md: 'the handler's validation step ... only checks the input. It does not parse values into the filter. Splitting and filtering stay inside apply_filter.' Step 9 duplication check: 'The comma parsing must come from apply_filter and must not be reimplemented.'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

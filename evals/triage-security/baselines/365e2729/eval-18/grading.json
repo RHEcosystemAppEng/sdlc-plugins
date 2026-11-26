@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md rows 5-8: TC-8100 'SKIP creation. Remediation already exists for the 2.2.x stream'; TC-8101 'SKIP creation'; Depend links 'issuelinks contains Depend / TC-8100' and 'Depend / TC-8101' -> SKIP. triage-outcome.md: 'Remediation Tasks created | 0' and 'Both exist and are linked via Depend: TC-8100 ... and TC-8101 ... Creating them again would duplicate active work.'"
+    },
+    {
+      "text": "The ai-cve-triaged label is already present on the issue — the triage does NOT attempt to add it again (label idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md row 1: '`ai-cve-triaged` label | ... | Label already present in `labels` | SKIP.' triage-outcome.md: 'Labels added or removed | 0' and 'The triage marker is already present. `ai-cve-triaged` is on the issue, so re-adding it would change nothing.'"
+    },
+    {
+      "text": "The issue is already In Progress — the triage does NOT attempt to transition the status again or warns that the issue is already in a post-triage state (status idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md rows 2-3: transitions to Assigned and In Progress both SKIP ('Status is `In Progress`, which is later than Assigned'). triage-outcome.md: 'Status transitions | 0'. data-extraction.md status-aware handling: warns 'This issue is already in In Progress. It may be actively worked on.'"
+    },
+    {
+      "text": "The existing description digest comment is detected — no duplicate digest comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md row 10: 'Description digest comment | ... | `[sdlc-workflow] Description digest: sha256-md:a1b2c3…a1b2` from triage-security, 2026-07-01T10:00:00Z | SKIP ... Re-posting would add a second digest'. triage-outcome.md: 'Comments posted (digest, summary, correction, cross-stream) | 0'."
+    },
+    {
+      "text": "The existing post-triage summary comment is detected — no duplicate summary comment is posted (comment idempotency)",
+      "passed": true,
+      "evidence": "idempotency-check.md row 11: 'Post-triage summary comment | ... | Summary from triage-security v0.11.1 with footnote, 2026-07-01T10:01:00Z ... | SKIP.' triage-outcome.md item 5: 'The post-triage summary already exists ... Posting it again would add duplicate audit noise.' and comments posted count 0."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
