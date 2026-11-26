@@ -68,6 +68,21 @@ Example:
 
 /implement-task PROJ-231
 
+## Modes
+
+Four modes decide what Steps 5, 10, and 11 do. Resolve the mode in Step 1 from the
+parsed sections, then apply its row in every later step and skip every step the row
+does not list. **target-pr** wins whenever a Target PR is present; otherwise
+**create-branch** / **merge-branch** follow the Bookend Type; otherwise the mode is
+**default**.
+
+| Mode | Steps run | Step 5 – branch | Step 10 – PR | Step 11 – Jira |
+|---|---|---|---|---|
+| **default** | 1–11 | create `<jira-issue-id>` from `<target-branch>` | create PR → `<target-branch>` | set PR field; comment; → In Review |
+| **target-pr** | 1–11 | check out the PR's head branch | push; append to PR body | no field update; comment; → In Review |
+| **create-branch** | 1–5, 11 | create and push `<feature-branch-name>` from main | none | no PR field; comment with branch name; → **Done** |
+| **merge-branch** | 1–3, 10–11 | none | create PR `<feature-branch-name>` → main | set PR field; comment; → In Review |
+
 ## Comment Footnote
 
 Every comment posted to Jira by this skill MUST end with the footnote defined in
@@ -104,7 +119,8 @@ URL to extract `owner`, `repo`, and `pr-number` from the pattern
 Steps 5, 10, and 11.
 
 When Target PR is present, the task is a review feedback fix — the implementation adds
-commits to the existing PR branch instead of creating a new branch and PR.
+commits to the existing PR branch instead of creating a new branch and PR. This mode
+wins over Target Branch and Bookend Type when more than one is present.
 
 ### Target Branch extraction
 
@@ -119,8 +135,7 @@ If the task description contains a **Bookend Type** section, extract the value
 (`create-branch` or `merge-branch`). Store the value for use in Steps 5, 10, and 11.
 
 When Bookend Type is present, the task is a feature-branch bookend — it performs
-branch or PR operations only and skips normal implementation steps. See
-**Step 5.5 – Bookend Task Handling** for the full skip logic.
+branch or PR operations only. The Modes table lists the steps it runs.
 
 If any required section is missing or the description doesn't follow the template, list the
 gaps, ask the user for clarification, and **stop execution immediately** — do not proceed
@@ -327,12 +342,12 @@ but do not adopt the sibling pattern.
 > **Example:** Error handling: handlers use `Result<T, AppError>` with `.context()`.
 > Naming: `verb_noun` pattern. Test assertions: `assert_eq!(resp.status(), StatusCode::OK)`.
 
-## Step 5 – Create Branch
+## Step 5 – Branch
 
-**Default flow (no Target PR, no Bookend Type):**
+Apply the **Step 5 – branch** column of the Modes table.
 
-Check out the target branch, pull latest changes, and create a task branch named
-after the Jira issue:
+**default** — check out the target branch (Target Branch, Step 1), update it, and create
+the task branch:
 
 ```
 git checkout <target-branch>
@@ -340,31 +355,16 @@ git pull
 git checkout -b <jira-issue-id>
 ```
 
-Where `<target-branch>` is the value extracted from the Target Branch section in Step 1.
+**target-pr** — check out the existing PR branch so the fix commits land on it:
 
-**Target PR flow:**
+```
+gh pr view <pr-number> --json headRefName -R <owner/repo>
+git checkout <branch-name>
+git pull
+```
 
-When Target PR is present (parsed in Step 1), check out the existing PR branch
-instead of creating a new one. Target PR takes precedence over Target Branch when
-both are present.
-
-1. Resolve the PR's head branch name:
-   ```
-   gh pr view <pr-number> --json headRefName -R <owner/repo>
-   ```
-2. Check out and update the branch:
-   ```
-   git checkout <branch-name>
-   git pull
-   ```
-
-This ensures the fix commits are added to the existing PR branch.
-
-**Create-branch bookend flow:**
-
-When Bookend Type is `create-branch`, create and push the feature branch from main.
-The branch name is the feature issue ID (from the parent feature), not this task's
-Jira issue ID:
+**create-branch** — create and push the feature branch from main. The branch name is the
+parent feature issue ID, not this task's Jira issue ID:
 
 ```
 git checkout main
@@ -373,30 +373,10 @@ git checkout -b <feature-branch-name>
 git push -u origin <feature-branch-name>
 ```
 
-After pushing, skip to Step 5.5 (Bookend Task Handling).
+**merge-branch** — no branch operation.
 
-## Step 5.5 – Bookend Task Handling
-
-When the task has a Bookend Type (parsed in Step 1), it performs branch or PR
-operations only — normal implementation steps are skipped.
-
-**Create-branch bookend (`create-branch`):**
-
-After creating and pushing the feature branch in Step 5, skip Steps 6–10 entirely.
-Proceed directly to Step 11 with the following differences:
-- Do **not** set the Git Pull Request custom field (there is no PR).
-- Add a Jira comment stating that the feature branch was created, including the
-  branch name.
-- Transition the task to **Done** (not In Review, since there is no PR to review).
-
-**Merge-branch bookend (`merge-branch`):**
-
-Skip Steps 4–9 entirely. Proceed directly to Step 10 with the merge-branch
-bookend flow (create a PR from the feature branch to main). Then continue to
-Step 11 to update Jira with the PR link and transition to In Review.
-
-For merge-branch, Step 3 (assign and transition to In Progress) still runs
-before skipping to Step 10.
+Completion: the branch named in the Modes row is checked out and clean, or the mode is
+merge-branch.
 
 ## Step 6 – Implement Changes
 
@@ -888,133 +868,66 @@ git remote get-url upstream 2>/dev/null
 - If the command fails, no upstream remote exists — skip fork-specific flags and use
   the default `gh pr create` behavior.
 
-**Default flow (no Target PR, no Bookend Type):**
+Apply the **Step 10 – PR** column of the Modes table.
 
-Push the branch and open a pull request. Always specify `--base <target-branch>`
-explicitly to ensure the PR targets the correct branch.
-
-When a fork is detected (upstream remote exists):
+**default** — push the task branch and open a pull request against `<target-branch>`
+(always pass `--base` explicitly):
 
 ```
-gh pr create -R <upstream-owner/repo> --head <fork-owner>:<branch> --base <target-branch> ...
+gh pr create --base <target-branch> ...                                          # no fork
+gh pr create -R <upstream-owner/repo> --head <fork-owner>:<branch> --base <target-branch> ...   # fork
 ```
 
-When no fork is detected:
+Write the PR description with:
+
+- `Implements [<JIRA-ID>](<webUrl>)` — a Markdown link so the Jira issue is clickable;
+  `<webUrl>` is the URL captured in Step 1 (e.g. `https://redhat.atlassian.net/browse/PROJ-231`).
+- `Closes <owner>/<repo>#<number>` when a GitHub issue reference was extracted in Step 1.
+  This line belongs in the PR description only, never in the commit message.
+
+**target-pr** — push the new commits to the existing branch and extend its description:
 
 ```
-gh pr create --base <target-branch> ...
+git push
+gh pr edit <pr-number> -R <owner/repo> --body "<updated-description>"
 ```
 
-In the PR description, use a Markdown link for the "Implements" line so the Jira
-issue is clickable:
+Append a Summary bullet describing this fix and preserve the existing description content.
 
-Implements [<JIRA-ID>](<webUrl>)
-
-where `<webUrl>` is the issue URL captured in Step 1 (e.g. `Implements [PROJ-231](https://redhat.atlassian.net/browse/PROJ-231)`).
-
-If a GitHub issue reference was extracted in Step 1, append a `Closes <owner>/<repo>#<number>`
-line to the PR description body. GitHub recognizes this keyword and will auto-close the
-linked issue when the PR is merged. Do **not** add this to the commit message — only the
-PR description.
-
-**Target PR flow:**
-
-When Target PR is present, push to the existing branch and update the PR description
-instead of creating a new PR:
-
-1. Push the new commit(s) to the existing branch:
-   ```
-   git push
-   ```
-2. Update the PR description to reflect the additional changes:
-   ```
-   gh pr edit <pr-number> -R <owner/repo> --body "<updated-description>"
-   ```
-   Add the current task's Jira issue ID to the PR description's Summary section
-   (e.g., a new bullet point describing the fix). Preserve the existing PR description
-   content — only append to the Summary bullets.
-
-**Merge-branch bookend flow:**
-
-When Bookend Type is `merge-branch`, create a PR from the feature branch to main.
-No new commits are needed — the PR aggregates all commits already on the feature
-branch.
-
-When a fork is detected (upstream remote exists):
+**merge-branch** — open the merge PR. The feature branch already holds every commit, so
+no new commit is needed:
 
 ```
-gh pr create -R <upstream-owner/repo> --head <fork-owner>:<feature-branch-name> --base main ...
+gh pr create --base main --head <feature-branch-name> ...                                        # no fork
+gh pr create -R <upstream-owner/repo> --head <fork-owner>:<feature-branch-name> --base main ...  # fork
 ```
 
-When no fork is detected:
-
-```
-gh pr create --base main --head <feature-branch-name> ...
-```
-
-In the PR description, reference the feature issue and list the tasks that were
-implemented on the feature branch.
+Reference the feature issue in the description and list the tasks implemented on the branch.
 
 ## Step 11 – Update Jira
 
-**Default flow (no Target PR):**
+Apply the **Step 11 – Jira** column of the Modes table. Every comment ends with the
+footnote from `shared/comment-footnote.md` (skill name `implement-task`).
 
-Look up the **Git Pull Request custom field** ID from the project's **Jira Configuration**
-section in CLAUDE.md (the field is listed as `Git Pull Request custom field: <field-id>`).
-
-- **If configured**, update that custom field on the Jira issue with the PR URL.
-  The field requires ADF (Atlassian Document Format), not a plain string:
+**PR custom field.** Look up the **Git Pull Request custom field** ID in the project's
+**Jira Configuration** (CLAUDE.md). When configured, set it to the PR URL — the field
+requires ADF (Atlassian Document Format), not a plain string:
 
 jira.update_issue(<jira-issue-id>, fields={"<field-id>": {"type": "doc", "version": 1, "content": [{"type": "paragraph", "content": [{"type": "inlineCard", "attrs": {"url": "<PR-URL>"}}]}]}})
 
-- **If not configured**, skip the custom field update — the PR link will still be included in the Jira comment below.
+When the field is not configured, skip it — the comment still carries the link.
 
-Add a comment to the Jira task:
+**Comment and transition per mode:**
 
-jira.add_comment
-
-Include:
-- PR link
-- Summary of changes made
-- Any deviations from the plan
-
-Transition the task:
-
-jira.transition_issue → In Review
-
-**Target PR flow:**
-
-When Target PR is present, use the PR URL from the Target PR section (not a newly
-created PR). Skip the custom field update — the PR link was already set when the
-original task's PR was created.
-
-Add a comment to the Jira task:
-
-jira.add_comment
-
-Include:
-- PR link (from Target PR)
-- Summary of fix changes made
-- Reference to the review feedback that triggered the fix
-
-Transition the task:
-
-jira.transition_issue → In Review
-
-**Create-branch bookend flow:**
-
-When Bookend Type is `create-branch`:
-- Skip the Git Pull Request custom field update (there is no PR).
-- Add a Jira comment stating the feature branch was created, including the branch name.
-- Transition the task to **Done** (not In Review).
-
-**Merge-branch bookend flow:**
-
-When Bookend Type is `merge-branch`:
-- Update the Git Pull Request custom field with the merge PR URL (if configured).
-- Add a Jira comment with the merge PR link and a summary of the feature branch
-  being merged.
-- Transition the task to **In Review**.
+- **default** — comment with the PR link, a summary of changes made, and any deviations
+  from the plan; set the PR field; transition to **In Review**.
+- **target-pr** — comment with the Target PR link, a summary of the fix, and the review
+  feedback that triggered it; leave the PR field as the original task set it; transition
+  to **In Review**.
+- **create-branch** — comment that the feature branch was created, naming it; skip the PR
+  field (there is no PR); transition to **Done**.
+- **merge-branch** — set the PR field to the merge PR URL; comment with the merge PR link
+  and a summary of the feature branch; transition to **In Review**.
 
 ## Important Rules
 
