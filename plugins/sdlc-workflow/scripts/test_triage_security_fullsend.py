@@ -66,6 +66,7 @@ class _JiraRecorder:
 
     def __init__(self):
         self.calls = []
+        self.live_security = None
 
     def update_issue(self, issue, fields):
         """Record a field mutation."""
@@ -85,13 +86,17 @@ class _JiraRecorder:
         self.calls.append(("remediation-task", kwargs))
         return {"key": "TC-9001"}
 
-    def get_issue(self, issue):
-        """Return the stored remediation description for digest generation."""
+    def get_issue(self, issue, fields="*all"):
+        """Return the requested projection: description for digests, security for inheritance."""
         self.calls.append(("get-issue", issue))
-        return {"fields": {"description": {
+        stored = {"description": {
             "type": "doc", "version": 1,
             "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Stored."}]}],
-        }}}
+        }, "security": self.live_security}
+        if fields == "*all":
+            return {"fields": stored}
+        requested = {name.strip() for name in fields.split(",")}
+        return {"fields": {name: value for name, value in stored.items() if name in requested}}
 
     def create_link(self, inward, outward, link_type):
         """Record an issue-link mutation."""
@@ -320,7 +325,7 @@ def test_authorized_action_plan_executes_each_mutation_category_in_order(recorde
     # Then every mutation category occurs and the digest precedes the dependent link
     assert [call[0] for call in recorder.calls] == [
         "field-edit", "get-transitions", "status-transition", "comment",
-        "remediation-task", "get-issue", "digest", "link",
+        "get-issue", "remediation-task", "get-issue", "digest", "link",
     ]
     assert recorder.calls[-1] == ("link", "TC-42", "TC-9001", "Depend")
 
@@ -534,6 +539,7 @@ def test_release_fixture_inherits_the_trusted_parent_security_level(recorder):
     # Given a protected version of the release fixture bundle
     bundle = _trusted_input('fullsend-release-trusted-input.json')
     bundle['issue']['security'] = {'id': '10034', 'name': 'Red Hat Employee'}
+    recorder.live_security = {'id': '10034', 'name': 'Red Hat Employee'}
     pre_triage.validate_bundle(bundle)
 
     # When the executor creates the release Epic
@@ -634,7 +640,8 @@ def test_release_output_strips_unexpected_properties_before_execution(tmp_path, 
     assert 'unexpected' not in cleaned and 'unexpected' not in cleaned['actions'][0]
     assert cleaned['actions'][0]['family'] == '2.3' and cleaned['actions'][0]['version'] == '2.3.1'
     executor.execute_plan(cleaned, _trusted_input('fullsend-release-trusted-input.json'))
-    assert recorder.calls[0][1]['issue_type'] == 'Epic'
+    create = next(call[1] for call in recorder.calls if call[0] == 'remediation-task')
+    assert create['issue_type'] == 'Epic'
 
 
 def test_release_dependency_bump_and_propagation_use_existing_task_action(recorder, monkeypatch):

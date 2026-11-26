@@ -514,18 +514,16 @@ def _already_applied(action: dict[str, Any], trusted_input: dict[str, Any]) -> b
 _CREATE_ACTION_TYPES = {"remediation-task", "release-epic", "release-task"}
 
 
-def _trusted_security_level(trusted_input: dict[str, Any]) -> dict[str, str] | None:
-    """Return the trusted parent issue's Jira security level, or None when unprotected."""
-    issue = trusted_input.get("issue")
-    security = issue.get("security") if isinstance(issue, dict) else None
+def _normalize_security_level(security: Any, label: str) -> dict[str, str] | None:
+    """Reduce a Jira security level object to the ``{id, name}`` shape, or None when absent."""
     if security is None:
         return None
     if not isinstance(security, dict):
-        raise ActionError("trusted issue security level is invalid")
+        raise ActionError("{} security level is invalid".format(label))
     level_id = security.get("id")
     if (isinstance(level_id, bool) or not isinstance(level_id, (str, int))
             or not str(level_id).strip()):
-        raise ActionError("trusted issue security level has no id")
+        raise ActionError("{} security level has no id".format(label))
     level = {"id": str(level_id)}
     name = security.get("name")
     if isinstance(name, str) and name:
@@ -533,12 +531,46 @@ def _trusted_security_level(trusted_input: dict[str, Any]) -> dict[str, str] | N
     return level
 
 
-def _inherited_security(action: dict[str, Any], trusted_input: dict[str, Any]) -> dict[str, str] | None:
-    """Return the security level a created issue must carry; fail closed on mismatch.
+def _trusted_security_level(trusted_input: dict[str, Any]) -> dict[str, str] | None:
+    """Return the trusted parent issue's snapshot security level, or None when unprotected."""
+    issue = trusted_input.get("issue")
+    security = issue.get("security") if isinstance(issue, dict) else None
+    return _normalize_security_level(security, "trusted issue")
 
-    The trusted parent's level is authoritative: a proposed action may repeat it
-    but can never omit it into an unprotected issue, weaken it, or invent a level
-    the parent does not have. Without a trusted level, creation stays level-free.
+
+def _trusted_issue_key(trusted_input: dict[str, Any]) -> str:
+    """Return the trusted parent issue key, failing closed when it is absent."""
+    issue = trusted_input.get("issue")
+    key = issue.get("key") if isinstance(issue, dict) else None
+    if not isinstance(key, str) or not key:
+        raise ActionError("mutation-authorized execution requires a trusted issue key")
+    return key
+
+
+def _live_security_level(issue_key: str) -> dict[str, str] | None:
+    """Read the parent's current Jira security level immediately before creation.
+
+    The trusted snapshot can be stale: a human may tighten the parent's level after
+    the pre-script collected it, and a child created from the snapshot would keep the
+    broader level. Re-read the parent right before the write, mirroring the live
+    assignee read. ``get_issue`` exits non-zero on an HTTP or connection failure, so
+    an unreadable parent aborts before any issue is created instead of silently
+    falling back to the snapshot.
+    """
+    issue = _jira_mod.get_issue(issue_key, fields="security")
+    fields = issue.get("fields") if isinstance(issue, dict) else None
+    if not isinstance(fields, dict):
+        raise ActionError("live parent security read returned no fields")
+    return _normalize_security_level(fields.get("security"), "live parent")
+
+
+def _inherited_security(action: dict[str, Any], trusted_input: dict[str, Any]) -> dict[str, str] | None:
+    """Validate a proposed action level against the trusted snapshot, or return it.
+
+    The snapshot is the reviewable authority for the proposal: an action may repeat
+    it but can never omit it into an unprotected issue, weaken it, or invent a level
+    the parent does not have. The level actually applied is re-read live at creation
+    time by ``_creation_security``.
     """
     parent = _trusted_security_level(trusted_input)
     proposed = action.get("security")
@@ -549,6 +581,17 @@ def _inherited_security(action: dict[str, Any], trusted_input: dict[str, Any]) -
     if parent is None or str(proposed.get("id")) != parent["id"]:
         raise ActionError("action security level does not match the trusted parent")
     return parent
+
+
+def _creation_security(action: dict[str, Any], trusted_input: dict[str, Any]) -> dict[str, str] | None:
+    """Return the level to apply to a created issue, re-read from the parent live.
+
+    The proposal is validated against the snapshot first (fail closed on a
+    contradiction), then the parent's current level decides the value so a level
+    tightened after collection is the one the child inherits.
+    """
+    _inherited_security(action, trusted_input)
+    return _live_security_level(_trusted_issue_key(trusted_input))
 
 
 def _security_kwarg(security: dict[str, str] | None) -> dict[str, Any]:
@@ -614,7 +657,7 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
             labels=list(dict.fromkeys(["ai-generated-jira", *action["labels"]])),
             priority=action.get("priority"), fix_versions=action.get("fix_versions"),
             description_adf=action["description_adf"],
-            **_security_kwarg(_inherited_security(action, trusted_input)),
+            **_security_kwarg(_creation_security(action, trusted_input)),
         )
         key = created.get("key")
         if not isinstance(key, str) or not re.fullmatch(re.escape(action["project"]) + r"-\d+", key):
@@ -634,7 +677,7 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
             priority=action.get("priority"),
             fix_versions=action.get("fix_versions"),
             description_adf=action["description_adf"],
-            **_security_kwarg(_inherited_security(action, trusted_input)),
+            **_security_kwarg(_creation_security(action, trusted_input)),
         )
         issue_key = created.get("key")
         if not issue_key:

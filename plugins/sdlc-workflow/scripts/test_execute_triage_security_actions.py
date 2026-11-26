@@ -64,6 +64,8 @@ class _JiraRecorder:
         self.calls = []
         self.created = 0
         self.live_assignee = None
+        self.live_security = None
+        self.live_security_error = None
 
     def update_issue(self, issue, fields):
         """Record a Jira field update."""
@@ -87,7 +89,9 @@ class _JiraRecorder:
     def get_issue(self, issue, fields="*all"):
         """Return only the requested field projection, as Jira does, and record it."""
         self.calls.append(("get-issue", issue, fields))
-        stored = {"assignee": self.live_assignee, "description": {
+        if fields == "security" and self.live_security_error is not None:
+            raise self.live_security_error
+        stored = {"assignee": self.live_assignee, "security": self.live_security, "description": {
             "type": "doc", "version": 1,
             "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Stored by Jira."}]}],
         }}
@@ -826,21 +830,23 @@ def test_remediation_digest_precedes_links_and_resolves_references(recorder):
     executor.execute_plan(result, _trusted_input())
 
     # Then task creation carries inherited metadata, its digest is first, and its key resolves in the link
-    assert recorder.calls[0][0] == "remediation-task"
-    assert recorder.calls[0][1]["labels"] == ["ai-generated-jira", "security-preemptive"]
-    assert recorder.calls[0][1]["priority"] == "Major"
-    assert recorder.calls[0][1]["fix_versions"] == ["1.2"]
-    assert recorder.calls[1] == ("get-issue", "TC-9001", "*all")
-    assert recorder.calls[2][0] == "digest"
+    assert recorder.calls[0] == ("get-issue", "TC-42", "security")
+    assert recorder.calls[1][0] == "remediation-task"
+    assert recorder.calls[1][1]["labels"] == ["ai-generated-jira", "security-preemptive"]
+    assert recorder.calls[1][1]["priority"] == "Major"
+    assert recorder.calls[1][1]["fix_versions"] == ["1.2"]
+    assert recorder.calls[2] == ("get-issue", "TC-9001", "*all")
+    assert recorder.calls[3][0] == "digest"
     stored = recorder.get_issue("TC-9001")["fields"]["description"]
     expected = hashlib.sha256(json.dumps(stored, separators=(",", ":")).encode("utf-8")).hexdigest()
-    assert "Description digest: sha256-adf:{}".format(expected) in json.dumps(recorder.calls[2][3])
-    assert recorder.calls[3] == ("link", "TC-42", "TC-9001", "Depend")
+    assert "Description digest: sha256-adf:{}".format(expected) in json.dumps(recorder.calls[3][3])
+    assert recorder.calls[4] == ("link", "TC-42", "TC-9001", "Depend")
 
 
 def test_remediation_task_inherits_trusted_parent_security_level(recorder):
     """Given a protected parent vulnerability, its remediation task is created protected."""
     # Given a trusted parent at level 10034 and one authorized remediation action
+    recorder.live_security = {"id": "10034", "name": "Red Hat Employee"}
     result = _plan([_remediation_action()])
     trusted = _trusted_input(security={"id": "10034", "name": "Red Hat Employee"})
 
@@ -864,6 +870,72 @@ def test_creation_without_a_trusted_security_level_omits_the_field(recorder):
     # Then creation carries no level at all
     create = next(call[1] for call in recorder.calls if call[0] == "remediation-task")
     assert "security" not in create
+
+
+def test_live_security_level_wins_when_the_parent_is_tightened(recorder):
+    """A level tightened after collection is the one the created task inherits."""
+    # Given a snapshot at 10034 and a parent tightened live to 10035
+    recorder.live_security = {"id": "10035", "name": "Restricted"}
+
+    # When the plan runs with the stale snapshot
+    executor.execute_plan(
+        _plan([_remediation_action()]),
+        _trusted_input(security={"id": "10034", "name": "Red Hat Employee"}))
+
+    # Then the live level is read before creation and carried by it
+    assert ("get-issue", "TC-42", "security") in recorder.calls
+    create = next(call[1] for call in recorder.calls if call[0] == "remediation-task")
+    assert create["security"] == {"id": "10035", "name": "Restricted"}
+
+
+def test_live_parent_without_a_level_creates_without_one(recorder):
+    """A parent unprotected at creation time does not impose the stale snapshot level."""
+    # Given a snapshot level but a live parent with none
+    recorder.live_security = None
+
+    # When the plan runs
+    executor.execute_plan(
+        _plan([_remediation_action()]),
+        _trusted_input(security={"id": "10034", "name": "Red Hat Employee"}))
+
+    # Then creation stays level-free, matching the parent's current state
+    create = next(call[1] for call in recorder.calls if call[0] == "remediation-task")
+    assert "security" not in create
+
+
+def test_failed_live_security_read_fails_closed_before_creation(recorder):
+    """An unreadable parent aborts the plan instead of falling back to the snapshot."""
+    # Given a live read that fails the way the Jira client fails (SystemExit)
+    recorder.live_security_error = SystemExit(1)
+
+    # When the plan runs
+    # Then it aborts before any issue is created
+    with pytest.raises(SystemExit):
+        executor.execute_plan(
+            _plan([_remediation_action()]),
+            _trusted_input(security={"id": "10034", "name": "Red Hat Employee"}))
+    assert not [call for call in recorder.calls if call[0] == "remediation-task"]
+
+
+@pytest.mark.parametrize("response", [
+    None,
+    {},
+    {"fields": None},
+    {"fields": {"security": "10034"}},
+    {"fields": {"security": {"name": "Red Hat Employee"}}},
+])
+def test_malformed_live_security_read_fails_closed(response, recorder, monkeypatch):
+    """A live response without a usable level raises before creation."""
+    # Given a live read returning a malformed parent payload
+    monkeypatch.setattr(executor._jira_mod, "get_issue", lambda issue, fields="*all": response)
+
+    # When the plan runs
+    # Then it fails closed before any create call
+    with pytest.raises(executor.ActionError, match="security"):
+        executor.execute_plan(
+            _plan([_remediation_action()]),
+            _trusted_input(security={"id": "10034", "name": "Red Hat Employee"}))
+    assert not [call for call in recorder.calls if call[0] == "remediation-task"]
 
 
 @pytest.mark.parametrize("proposed,trusted_security", [
@@ -1351,12 +1423,14 @@ def test_release_creation_parent_and_digest_order(recorder):
     assert creates[1]['parent'] == 'TC-9001'
     assert registry['release-task']['key'] == 'TC-9002'
     assert [call[0] for call in recorder.calls] == [
-        'remediation-task', 'get-issue', 'digest', 'remediation-task', 'get-issue', 'digest', 'link']
+        'get-issue', 'remediation-task', 'get-issue', 'digest',
+        'get-issue', 'remediation-task', 'get-issue', 'digest', 'link']
 
 
 def test_release_creation_inherits_trusted_parent_security_level(recorder):
     """Release Epic and child release Task both inherit the parent's security level."""
     # Given an authorized release graph and a protected trusted parent
+    recorder.live_security = {'id': '10034', 'name': 'Red Hat Employee'}
     trusted = _release_trusted()
     trusted['issue']['security'] = {'id': '10034', 'name': 'Red Hat Employee'}
 
@@ -1826,8 +1900,9 @@ def test_live_runner_owner_lets_retry_proceed(recorder):
 
 
 @pytest.mark.parametrize("fields,expected", [
-    ("*all", {"assignee", "description"}),
+    ("*all", {"assignee", "description", "security"}),
     ("assignee", {"assignee"}),
+    ("security", {"security"}),
     ("status", set()),
     ("description,assignee", {"assignee", "description"}),
 ])
