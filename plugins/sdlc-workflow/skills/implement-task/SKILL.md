@@ -178,7 +178,7 @@ plan-feature created it. This uses the digest protocol defined in
       response. Write it to a temp file and compute the digest using the script:
 
       ```bash
-      python3 scripts/sha256-digest.py /tmp/desc-<task-key>.txt
+      python3 scripts/sha256-digest.py "$TMPDIR/desc-<task-key>.txt"
       ```
 
       The script auto-detects the format and outputs a tagged digest. If the script
@@ -618,12 +618,9 @@ silently change the fixture or contract to make the assertion pass. Correct the 
 to match the authoritative requirement and fixture, or ask the user when the source of
 truth is unclear.
 
-Run tests to verify:
-
-cargo test (for Rust)
-npm test (for TypeScript)
-
-Fix any failures before proceeding.
+Run the project's test command and fix any failures before proceeding. Step 9 resolves
+the exact command: the CI checks recorded from `CONVENTIONS.md`, or the per-crate test
+rule for Rust repositories.
 
 ## Step 8 – Verify Acceptance Criteria
 
@@ -699,11 +696,11 @@ can run after the validated assignment and silently replace or drop it.
 
 ### Sensitive-pattern check
 
-Search the staged diff for secrets, credentials, or environment files that should not be committed:
+Search every change this commit would include — staged and unstaged tracked changes:
 
-git diff --cached | grep -iE '(password\s*=|API_KEY|SECRET_KEY|BEGIN.*PRIVATE KEY|\.env)'
+git diff HEAD | grep -iE '(password\s*=|API_KEY|SECRET_KEY|BEGIN.*PRIVATE KEY|\.env)'
 
-If any match is found, flag it to the user and do not proceed until the issue is resolved.
+If any match is found, flag it to the user and resolve it before committing.
 
 ### Documentation currency
 
@@ -777,10 +774,9 @@ exit is a hard stop. The user decides how to proceed.
    failure cannot be fixed (e.g., missing infrastructure, unavailable tools), stop
    and report to the user — do not proceed to commit.
 
-If `CONVENTIONS.md` was not found or contained no CI check section, fall back to
-running the project's standard build or lint step (if one exists) and compare the
-warning output against the pre-implementation baseline captured during Step 7. If
-new warnings were introduced, fix them before proceeding.
+If `CONVENTIONS.md` was not found or contained no CI check section, run the project's
+standard build or lint step (if one exists) and fix any warnings it reports in files
+this task modified.
 
 ### Module-level test requirement (Rust)
 
