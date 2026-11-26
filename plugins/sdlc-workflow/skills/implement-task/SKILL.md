@@ -257,10 +257,6 @@ the instance name from the Repository Registry.
    to modify to identify all callers and ensure your changes won't break them.
 4. **Non-symbolic search**: use `search_for_pattern` for configuration, string literals,
    or patterns not captured as symbols.
-5. **Convention conformance analysis**: identify sibling files — files in the same directory
-   or module that serve a similar role to the files being modified or created. Use
-   `get_symbols_overview` on 2–3 siblings to understand their structure and patterns, or
-   Read/Glob if Serena is unavailable.
 
 > **Note:** Check the **Code Intelligence** section of the project's CLAUDE.md for
 > per-instance limitations (e.g., some language servers may not support certain operations).
@@ -305,7 +301,7 @@ This step is optional — if `CONVENTIONS.md` does not exist, proceed normally.
 When reading `CONVENTIONS.md`, search for a section that lists CI check commands — look for
 headings or labels such as "CI checks", "All CI checks", "Linting", "Pre-commit checks",
 "Verification", or similar. Extract every command listed in that section and record them
-for use in Step 9's CI verification sub-step.
+for use in Step 9 check 14.
 
 Also look for any commands that generate code artifacts (e.g., OpenAPI spec generation,
 code generation, schema generation). Record these separately — they may produce file
@@ -334,10 +330,10 @@ serves as a binding reference during implementation (Step 6) and test writing (S
 If a convention conflict is detected — the task description contradicts an established
 convention — flag it to the user and ask for guidance before proceeding.
 
-**Skill guidance takes precedence over sibling patterns:** When a sibling pattern
-conflicts with this skill's built-in quality guidance (e.g., Step 7's "prefer value-based
-assertions" vs sibling `.any()` checks), follow the skill guidance. Record the conflict
-but do not adopt the sibling pattern.
+**Skill wins over sibling patterns.** When a sibling pattern conflicts with this skill's
+built-in quality guidance (e.g., Step 7's "prefer value-based assertions" vs sibling
+`.any()` checks), follow the skill guidance and record the conflict. This rule binds
+Steps 6 and 7.
 
 > **Example:** Error handling: handlers use `Result<T, AppError>` with `.context()`.
 > Naming: `verb_noun` pattern. Test assertions: `assert_eq!(resp.status(), StatusCode::OK)`.
@@ -381,60 +377,32 @@ merge-branch.
 ## Step 6 – Implement Changes
 
 The **Description** section is your primary specification — implement exactly what it describes.
-Use **Files to Modify**, **Files to Create**, and **API Changes** as your working scope.
-Do not plan or implement changes to files outside these sections — if you discover a
-file that seems to need modification, flag it in Step 9's scope containment check
-instead of adding it to your plan.
+**Files to Modify**, **Files to Create**, and **API Changes** are the working scope: work
+within them. A file outside them that appears to need changes becomes a Step 9 scope flag,
+not a plan expansion.
 Follow the **Implementation Notes** for patterns and code references on how to implement the changes.
-
-**Reuse first:** Before writing new logic, check whether the Implementation Notes list reusable
-code (utilities, helpers, shared modules). If they do, use or extend the existing code. If you
-discover additional reusable code during implementation that was not listed, prefer reusing it
-over creating duplicated logic.
 
 **Follow conventions:** Apply the conventions discovered during Step 4's convention conformance
 analysis. When writing new code, match the patterns found in sibling files rather than inventing
 new approaches. If any Implementation Notes or task instructions conflict with a discovered
 convention, follow the guidance obtained from the user during Step 4.
 
-### Reuse over duplication
+### Reuse
 
-When the implementation needs to use a function, method, or utility that exists in another
-module or package but is not publicly exported (e.g., a private function in a Rust crate,
-an unexported function in a Go package, a non-exported function in a Node.js module),
-decide whether to make it public or duplicate it:
+Before writing new logic, search the Implementation Notes and the target package for code
+that already does it — utilities, helpers, shared modules, and existing definitions of the
+same constant, enum, type alias, or configuration map (check naming variants such as
+`SEVERITY_ORDER`, `severityOrder`, `SeverityOrder`).
 
-1. **Check dependency relationship**: determine whether the source package (where the
-   function lives) is already a dependency of the target package (where you need to use it).
-   Use the project's dependency manifest (e.g., `Cargo.toml`, `package.json`, `go.mod`,
-   `pom.xml`) to verify.
-2. **If the dependency already exists**: make the function public (`pub`, `export`, etc.)
-   and import it rather than duplicating the code. This follows the DRY principle and
-   ensures future bug fixes apply in one place.
-3. **If adding a new dependency would be required**: inlining or duplicating the function
-   is acceptable — introducing a new cross-package dependency for a single utility may
-   not be worth the coupling.
-4. **Flag the decision**: when choosing between options 2 and 3, state the choice and
-   rationale in the commit message or PR description so reviewers understand why code
-   was reused or duplicated.
-
-### Symbol deduplication
-
-Before declaring any new constant, enum, type alias, or configuration map, search the
-target package for an existing definition of the same symbol. This applies especially
-when the task description references a sibling module — the symbol may already exist there.
-
-1. **Search before declaring**: use `find_symbol`, `search_for_pattern`, or Grep to search
-   the target package (not just the file being edited) for the symbol name or its value.
-   Include common variations (e.g., `SEVERITY_ORDER`, `severityOrder`, `SeverityOrder`).
-2. **If found**: import and reuse the existing definition. If it is not exported, follow
-   the "Reuse over duplication" guidance above to decide whether to export it or inline it.
-3. **If not found**: declare the new symbol in the most appropriate shared location
-   (utilities module, constants file, or the file where it is used if truly local).
-
-> **Example:** Task says "sort remediations by severity". Before declaring
-> `const SEVERITY_ORDER = [...]`, grep the package for `SEVERITY_ORDER`. If
-> `src/remediation.js` already exports it, import from there instead of redeclaring.
+1. **Exists and is exported** — import and use it.
+2. **Exists but is not exported** — when its package is already a dependency (check
+   `Cargo.toml`, `package.json`, `go.mod`, `pom.xml`), make it public (`pub`, `export`) and
+   import it. When that would add a new cross-package dependency for one utility, inline a
+   local copy instead.
+3. **Does not exist** — declare it in the most appropriate shared location (utilities
+   module, constants file, or the file that uses it when truly local).
+4. **Record the choice** — when you export or inline instead of importing, state the choice
+   and rationale in the commit message or PR description.
 
 ### Serena symbolic editing (preferred)
 
@@ -524,10 +492,8 @@ convention analysis. When writing new tests, match the assertion patterns, respo
 validation style, error case coverage, and naming conventions found in sibling test files
 rather than inventing new approaches.
 
-**Skill guidance overrides sibling patterns:** The test conventions from Step 4 are
-defaults. The guidance below (value-based assertions, parameterized tests, test
-documentation) is the skill's explicit quality standard and takes precedence over
-conflicting sibling patterns. Note any deviation in the convention output.
+The test conventions from Step 4 are defaults. The rules below are this skill's quality
+standard and win over a conflicting sibling pattern (record the conflict, per Step 4).
 
 **Prefer value-based assertions over length-only checks:** When verifying collections or
 response data, assert on the actual values — not just the count. Assert on specific items
@@ -609,232 +575,32 @@ If any criterion cannot be met, stop and explain to the user.
 
 ## Step 9 – Self-Verification
 
-Before committing, verify that all changes are in scope and free of common errors.
+Before committing, apply every check below whose trigger matches the task. Each row
+links to its procedure in [`shared/self-verification.md`](../../shared/self-verification.md);
+follow that procedure exactly.
 
-### Scope containment
+Report one line per firing check — `PASS` or `FLAGGED <what>` — and resolve every flag
+before Step 10. CI-check and test failures are a hard stop: report the failing command
+and its output and let the user decide.
 
-1. Run `git diff --name-only` to list all modified and created files.
-2. Compare the list against the **Files to Modify** and **Files to Create** parsed in Step 1.
-3. If any file is out-of-scope (not listed in either section):
-   - List the out-of-scope file(s).
-   - Explain why each was modified.
-   - Ask the user to approve or revert each out-of-scope change.
-   - Do **not** proceed to commit without explicit user approval for every out-of-scope file.
-
-### Untracked file check
-
-Run `git status --short` and filter untracked files (`??`) in directories with
-modified files. For each, search the staged diff for references to its filename
-(compile-time includes, imports, config paths, string literals). Flag referenced
-or proximity-matched untracked files for user approval before staging — do not
-automatically stage untracked files.
-
-### Dead parameter detection
-
-When the implementation removes code that references function parameters, scan the
-modified functions for parameters that are no longer used in the function body.
-
-1. **Identify candidates**: from `git diff`, find functions where removed lines
-   contained the only reference to a parameter.
-2. **Detect dead parameters**: look for underscore-prefixed parameters (`_version`,
-   `_ctx`), compiler/linter warnings about unused parameters, or parameters with
-   zero references in the function body. The correct fix is removal, not renaming.
-3. **Remove dead parameters**: remove the parameter from the signature, use
-   `find_referencing_symbols` (or Grep) to find all call sites, and update every
-   caller to remove the corresponding argument. For trait/interface methods, only
-   remove if no implementation references the parameter.
-4. **Re-run tests** to confirm nothing broke.
-
-> **Example:** `fn filter_by_status(items: &[Item], version: &str)` no longer uses
-> `version` after a code change. Remove the parameter and update all callers from
-> `filter_by_status(items, "1.0")` to `filter_by_status(items)`.
-
-### Validated-value override paths
-
-When a change adds a validated, security-relevant, or fail-closed value to a function,
-trace every later write into the same object or payload. Generic merge or override
-parameters — extra-field maps, variadic passthroughs, defaults merges, patch helpers —
-can run after the validated assignment and silently replace or drop it.
-
-1. **List later writes**: for each new validated or protective value, enumerate every
-   assignment, merge, or bulk update that runs after it in the same function and its
-   immediate callees.
-2. **Verify none can replace it**: confirm each path preserves the validated value.
-   When one can overwrite or remove it, either apply the validated value last or reject
-   a conflicting key with the project's fail-fast error handling — never rely on call
-   order staying unchanged.
-3. **Test the conflict when one exists**: when steps 1–2 find a later write path
-   that can replace or remove the validated value, add a test proving a generic
-   override cannot change it, not only that the value is set on the happy path.
-   When no such path exists, no conflict test is required — do not add a test seam
-   for a conflict the function cannot express.
-
-> **Example:** a builder validates a protection level, writes it, then merges a
-> caller-supplied extra-fields map. A conflicting key in that map would replace the
-> validated level, so the builder must reject it or re-apply the validated value after
-> the merge.
-
-### Sensitive-pattern check
-
-Search every change this commit would include — staged and unstaged tracked changes:
-
-git diff HEAD | grep -iE '(password\s*=|API_KEY|SECRET_KEY|BEGIN.*PRIVATE KEY|\.env)'
-
-If any match is found, flag it to the user and resolve it before committing.
-
-### Documentation currency
-
-If the implementation changed public APIs, configuration options, or setup steps,
-verify that related documentation files (identified in Step 4) are still accurate.
-If a doc file describes behavior that was changed and was not already updated in
-Step 6, update it now. This check is lightweight — only flag docs that directly
-describe the modified behavior.
-
-### Documentation scope preservation
-
-For each replaced documentation section, verify the replacement still covers all use
-cases, input types, and scenarios the original described. Extract use cases from
-removed lines in the diff (enumerations, conditional branches, listed alternatives),
-then check the added lines address each one. If any use case is absent and the task
-doesn't justify its removal, flag for user confirmation before proceeding.
-
-### Eval coverage currency
-
-If any modified file matches `skills/<skill-name>/SKILL.md`, check whether
-`evals/<skill-name>/evals.json` exists. If it does, compare the SKILL.md diff
-against existing eval assertions and flag new behavior (new steps, output formats,
-decision branches) that has no corresponding assertion. Present gaps to the user
-and ask whether to add coverage now, defer, or skip — advisory only, do not block.
-
-### Example consistency
-
-If the implementation wrote or modified documentation with composite examples (narrative
-text paired with data structures — tables, JSON, code snippets), cross-check that every
-entry in the data structure matches the narrative and vice versa. Fix any mismatches
-(field names, values, labels, relationships) before proceeding.
-
-### Cross-section reference consistency
-
-Verify that the same entity (struct, service, module, component) uses consistent
-file paths across Files to Modify, Files to Create, and Implementation Notes. If
-the same entity is associated with different paths across sections, resolve by
-inspecting the actual codebase before implementing. Apply the same validation to
-any structured documents the implementation creates (eval fixtures, task descriptions).
-
-### Duplication check
-
-Search for functions, methods, or logic in the repository that overlap with the code you wrote.
-Use Grep or Serena's `search_for_pattern` to look for similar function names, string literals,
-or algorithmic patterns. If you find that your new code substantially duplicates existing
-utilities or helpers, refactor to reuse the existing code before proceeding.
-
-### CI checks from CONVENTIONS.md
-
-If `CONVENTIONS.md` was loaded in Step 4 and verification commands were extracted,
-run every CI check command recorded during the verification commands extraction.
-Execute each command in sequence.
-
-**Hard stop on failure:** If any CI check command exits with a non-zero status,
-**stop execution immediately** — do not proceed to Step 10 (Commit and Push).
-Report the failure to the user, including the command that failed and its output.
-Do not attempt to classify the failure (e.g., infrastructure vs. code), do not
-add fallback logic, and do not treat any failure as non-blocking. Every non-zero
-exit is a hard stop. The user decides how to proceed.
-
-1. **Run all CI check commands**: execute each command extracted from the
-   `CONVENTIONS.md` CI checks section (e.g., formatting, linting, type checking,
-   compilation). These commands are project-specific — do not hardcode or assume
-   which tools the project uses.
-2. **Run code generation commands**: if any code generation commands were extracted
-   (e.g., OpenAPI spec generation, schema generation, code scaffolding), run them
-   now. If they produce file changes, stage those changes for commit alongside the
-   implementation — they are part of the deliverable.
-3. **Fix failures**: if any CI check command fails, fix the underlying issue and
-   re-run the failing command until it passes. Do not skip failing checks. If the
-   failure cannot be fixed (e.g., missing infrastructure, unavailable tools), stop
-   and report to the user — do not proceed to commit.
-
-If `CONVENTIONS.md` was not found or contained no CI check section, run the project's
-standard build or lint step (if one exists) and fix any warnings it reports in files
-this task modified.
-
-### Module-level test requirement (Rust)
-
-For Rust repositories, run the test suite for every crate containing modified files,
-regardless of whether `CONVENTIONS.md` CI checks include a test command. Lint, fmt,
-and `cargo check` pass even when test logic is broken — a separate test run is required
-before committing.
-
-For each modified file, run `cargo metadata --no-deps --format-version 1` from the workspace root and resolve the package whose manifest or target source contains the file. Use that package's `name` as `<crate-name>`; do not derive it from the nearest `Cargo.toml`, which may be a virtual workspace manifest. Skip modified files that do not belong to any package or crate.
-Run:
-
-```
-cargo test -p <crate-name>
-```
-
-or, if the project uses nextest:
-
-```
-cargo nextest run -p <crate-name>
-```
-
-Apply the same hard-stop rule: if the test command exits non-zero, stop immediately,
-report the failure, and do not proceed to Step 10.
-
-> **Note:** If the test context requires a database or external service, attempt the
-> run first — many Rust projects bootstrap their own test DB. Only skip if the
-> environment is genuinely unavailable, and report clearly that tests were not run.
-
-### Data-flow trace
-
-For each new feature, trace data through its complete lifecycle: input (API request,
-file read, user event) → processing (validation, transformation) → output (response,
-persistence, UI render). Confirm each stage connects to the next. Flag incomplete
-paths (missing or disconnected stages) and fix before committing, or ask the user to
-confirm if the missing stage is intentionally out of scope. Output the traced flows
-and their completeness status to the user.
-
-### Query-scope verification
-
-When implementing batch operations (data migrations, batch updates, or any code
-iterating database records), verify the query scope matches the task's target scope.
-
-1. **Extract target scope**: scan the task **Description** for subset-restricting
-   language — type qualifiers, status filters, date ranges, category selectors.
-2. **Compare query scope**: check whether each batch query filters to the target
-   subset or loads all records indiscriminately.
-3. **Flag scope mismatches**: if the task targets a subset but a narrower query is
-   possible at the data source (via columns, indexes, ORM scopes, or API
-   parameters), flag for review with: target scope, actual query scope, available
-   filter, and performance impact.
-4. **Accept intentional broad queries**: when filtering cannot be expressed at the
-   query level or the full dataset is needed, document the rationale in a comment.
-
-> **Example:** Task: "re-process all SPDX SBOMs". Query: `Document::all()`.
-> Flag: `labels->>'type'` supports filtering — use filtered query instead.
-
-### Contract & sibling parity
-
-Verify that modified or created code fully honors its type contracts and maintains
-parity with sibling implementations. Run four checks using the pattern below:
-
-| Check | What to compare | Search method |
-|-------|----------------|---------------|
-| **Contract** | All methods, properties, and type signatures required by implemented interfaces/traits/abstract classes/protocols. Parameter types, return types, nullability must align. | `find_symbol` or Grep to locate the contract definition |
-| **Sibling parity** | Cross-cutting concerns: shared capabilities, error handling, logging, configuration options. Reuse siblings from Step 4. | `get_symbols_overview` on sibling files |
-| **Cross-module entity** | When writing to a shared DB entity used by other modules: transaction handling, constraint/conflict handling, data validation, locking strategies. | `search_for_pattern` or Grep for all modules interacting with the same entity |
-| **Caller-site** | When calling a shared abstraction (hook, API client, service function): success/error handling, side effects, parameter patterns. Compares how *consumers* invoke it, not the definition. | `find_referencing_symbols` or Grep for all callers of the same abstraction |
-
-For each check: identify targets, search and compare against the reference (siblings,
-cross-module peers, or existing callers), flag anomalies with what the new code does vs
-the established pattern, and fix or ask the user to confirm before proceeding.
-
-Output all four check results to the user before proceeding.
-
-> **Example:** Contract: `StorageProvider` missing `update()` from `Provider` trait.
-> Sibling parity: `StorageProvider` missing `info!()` logging present in `S3Provider`/`GcsProvider`.
-> Cross-module: `ingestor` uses `ON CONFLICT DO UPDATE` but new code uses plain `insert()`.
-> Caller-site: new code uses `window.location.reload()` but 3 existing callers use `queryClient.invalidateQueries()`.
+| # | Check | Fires when |
+|---|---|---|
+| 1 | [Scope containment](../../shared/self-verification.md#1-scope-containment) | always |
+| 2 | [Untracked files](../../shared/self-verification.md#2-untracked-files) | untracked files exist in a directory with modified files |
+| 3 | [Sensitive patterns](../../shared/self-verification.md#3-sensitive-patterns) | always |
+| 4 | [Dead parameters](../../shared/self-verification.md#4-dead-parameters) | removed lines referenced a function parameter |
+| 5 | [Duplication](../../shared/self-verification.md#5-duplication) | new functions or logic were written |
+| 6 | [Documentation currency](../../shared/self-verification.md#6-documentation-currency) | public APIs, configuration, or setup changed |
+| 7 | [Documentation scope preservation](../../shared/self-verification.md#7-documentation-scope-preservation) | a documentation section was replaced |
+| 8 | [Eval coverage](../../shared/self-verification.md#8-eval-coverage) | a `skills/<skill-name>/SKILL.md` was modified |
+| 9 | [Example consistency](../../shared/self-verification.md#9-example-consistency) | docs with composite examples were modified |
+| 10 | [Cross-section references](../../shared/self-verification.md#10-cross-section-references) | the task lists file paths or creates structured documents |
+| 11 | [Data-flow trace](../../shared/self-verification.md#11-data-flow-trace) | a new feature was implemented |
+| 12 | [Query scope](../../shared/self-verification.md#12-query-scope) | batch operations over database records were implemented |
+| 13 | [Contract & sibling parity](../../shared/self-verification.md#13-contract--sibling-parity) | code implements a contract or has siblings |
+| 14 | [CI checks from CONVENTIONS.md](../../shared/self-verification.md#14-ci-checks-from-conventionsmd) | always — CI checks if recorded, else the build/lint fallback |
+| 15 | [Module tests (Rust)](../../shared/self-verification.md#15-module-tests-rust) | a Rust repository has modified crates |
+| 16 | [Validated-value override paths](../../shared/self-verification.md#16-validated-value-override-paths) | a validated, security-relevant, or fail-closed value was added |
 
 ## Step 10 – Commit and Push
 
@@ -929,13 +695,12 @@ When the field is not configured, skip it — the comment still carries the link
 - **merge-branch** — set the PR field to the merge PR URL; comment with the merge PR link
   and a summary of the feature branch; transition to **In Review**.
 
-## Important Rules
+## Stop Conditions
 
-- Do not guess — use the Serena instance specified in the project's **Repository Registry** (CLAUDE.md) for the target repo, with tools like `get_symbols_overview`, `find_symbol`, `find_referencing_symbols` to inspect code before modifying it. Check the **Code Intelligence** section for per-instance limitations. Fall back to Read/Grep/Glob for repos without a Serena instance.
-- Follow the Implementation Notes closely — they reference real code patterns.
-- If the structured description is incomplete, ask the user for clarification and **stop execution**. Do not draft an implementation plan, create branches, or proceed with any subsequent steps until the user provides the missing information.
-- Keep changes strictly within **Files to Modify** and **Files to Create** — do not add, plan, or propose modifications to files outside these sections. If an out-of-scope file needs changes, flag it in Step 9's scope containment check for user approval.
-- Every commit must reference the Jira issue ID.
-- If the same test fails 3 times with the same error, stop and ask the user for guidance — do not retry the same approach.
-- If the same file is edited more than 5 times for the same change, stop and reassess your approach — present the problem and proposed alternatives to the user.
-- If a build or compile error persists after 2 fix attempts, stop and present the error and proposed alternatives to the user — do not keep trying the same fix.
+Stop and hand the decision to the user when:
+
+- the same test fails 3 times with the same error — present the error and what you tried;
+- the same file is edited more than 5 times for one change — present the problem and
+  proposed alternatives;
+- a build or compile error survives 2 fix attempts — present the error and proposed
+  alternatives.
