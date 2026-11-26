@@ -320,7 +320,13 @@ withholds the entire creation/digest/link sequence.
 The following creation pseudocode is interactive-only and retains its existing
 confirmation behavior. In Fullsend mode, do not call `create_issue`, `add_comment`,
 or `create_link`. Use the validated task description, labels, priority, fix-version,
-and idempotency evidence to serialize schema actions instead.
+security, and idempotency evidence to serialize schema actions instead.
+
+Every `create_issue` variant below passes `security: <parent-issue-security-level>`:
+the parent Vulnerability's level as `{id, name}` (from `issue.security` in Fullsend
+mode, or a live `jira.get_issue` read interactively). Omit the argument only when the
+parent has no security level. Jira gives Task no default level, so omitting it under
+a protected CVE silently creates a publicly readable remediation issue.
 
 When `authorization.mutation_authorized` is false, no task, digest, reference, or
 link action is permitted. The evidence-backed top-level report must name each
@@ -336,9 +342,10 @@ creation, and repair a missing description digest during a partial retry. Later
 `{{ref.key}}` placeholders then resolve against that rehydrated reference. For each
 task, append actions in this exact order:
 
-1. `remediation-task` with `ref`, project, summary, `description_adf`, labels, and
-   any supported priority or fix versions. The executor registers its reference and
-   posts the description digest exactly once as part of this action.
+1. `remediation-task` with `ref`, project, summary, `description_adf`, labels, the
+   parent Vulnerability's `security` level, and any supported priority or fix
+   versions. The executor registers its reference and posts the description digest
+   exactly once as part of this action.
 2. `link` actions: `Depend` for a task and its own CVE, `Related` for a preemptive
    task and its originating CVE, and `Blocks` from upstream to downstream.
 3. Only after all of that task's links, append later comments such as task-list,
@@ -364,7 +371,8 @@ upstream_task = jira.create_issue(
   issueTypeName: "Task",
   summary: "Remediate CVE-YYYY-XXXXX: bump [library] to [fixed-version] ([stream])",
   description: <upstream-task-description>,
-  labels: ["ai-generated-jira", "Security", "<CVE-ID>"]
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>"],
+  security: <parent-issue-security-level>
 )
 
 # 1a. Post description digest comment (before links or other comments)
@@ -379,7 +387,8 @@ downstream_task = jira.create_issue(
   issueTypeName: "Task",
   summary: "Propagate CVE-YYYY-XXXXX fix: update [source-repo] ref in [konflux-repo] ([stream])",
   description: <downstream-task-description>,
-  labels: ["ai-generated-jira", "Security", "<CVE-ID>"]
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>"],
+  security: <parent-issue-security-level>
 )
 
 # 2a. Post description digest comment (before links or other comments)
@@ -400,7 +409,8 @@ bump_task = jira.create_issue(
   issueTypeName: "Task",
   summary: "Remediate CVE-YYYY-XXXXX: update [library] to [fixed-version] ([stream])",
   description: <dependency-bump-task-description>,
-  labels: ["ai-generated-jira", "Security", "<CVE-ID>"]
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>"],
+  security: <parent-issue-security-level>
 )
 
 # 1a. Post description digest comment (before links or other comments)
@@ -414,7 +424,8 @@ downstream_task = jira.create_issue(
   issueTypeName: "Task",
   summary: "Propagate CVE-YYYY-XXXXX fix: update [source-repo] ref in [konflux-repo] ([stream])",
   description: <downstream-task-description>,
-  labels: ["ai-generated-jira", "Security", "<CVE-ID>"]
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>"],
+  security: <parent-issue-security-level>
 )
 
 # 2a. Post description digest comment (before links or other comments)
@@ -431,7 +442,8 @@ task = jira.create_issue(
   issueTypeName: "Task",
   summary: "Remediate CVE-YYYY-XXXXX: update [package-name] to [fixed-version] ([stream])",
   description: <system-package-task-description>,
-  labels: ["ai-generated-jira", "Security", "<CVE-ID>"]
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>"],
+  security: <parent-issue-security-level>
 )
 
 # Post description digest comment (before links or other comments)
@@ -488,7 +500,8 @@ upstream_task = jira.create_issue(
   issueTypeName: "Task",
   summary: "Remediate CVE-YYYY-XXXXX: bump [library] to [fixed-version] ([stream])",
   description: <upstream-task-description-with-preemptive-prefix>,
-  labels: ["ai-generated-jira", "Security", "<CVE-ID>", "security-preemptive"]
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>", "security-preemptive"],
+  security: <parent-issue-security-level>
 )
 
 # Post description digest comment (before links or other comments)
@@ -502,7 +515,8 @@ task = jira.create_issue(
   issueTypeName: "Task",
   summary: "Remediate CVE-YYYY-XXXXX: update [package-name] to [fixed-version] ([stream])",
   description: <system-package-task-description-with-preemptive-prefix>,
-  labels: ["ai-generated-jira", "Security", "<CVE-ID>", "security-preemptive"]
+  labels: ["ai-generated-jira", "Security", "<CVE-ID>", "security-preemptive"],
+  security: <parent-issue-security-level>
 )
 
 # Post description digest comment (before links or other comments)

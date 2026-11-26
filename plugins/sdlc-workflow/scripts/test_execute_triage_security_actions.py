@@ -37,13 +37,16 @@ def _plan(actions, mode="mutation-authorized"):
 
 
 def _trusted_input(authorized=True, markers=None, remediation=None, issue="TC-42", related=None, searches=None,
-                   runner=None):
+                   runner=None, security=None):
     """Build the trusted runner fields consumed by the executor."""
     authorization = {"mutation_authorized": authorized}
     if runner is not None:
         authorization["runner_account_id"] = runner
+    issue_record = {"key": issue}
+    if security is not None:
+        issue_record["security"] = security
     return {
-        "issue": {"key": issue},
+        "issue": issue_record,
         "configuration": {"project_key": "TC"},
         "jira_metadata": {"related_issues": related or [], "sibling_searches": searches or []},
         "authorization": authorization,
@@ -61,6 +64,10 @@ class _JiraRecorder:
         self.calls = []
         self.created = 0
         self.live_assignee = None
+        self.live_security = None
+        self.live_security_by_issue = {}
+        self.live_security_error = None
+        self.live_security_errors = {}
 
     def update_issue(self, issue, fields):
         """Record a Jira field update."""
@@ -84,7 +91,13 @@ class _JiraRecorder:
     def get_issue(self, issue, fields="*all"):
         """Return only the requested field projection, as Jira does, and record it."""
         self.calls.append(("get-issue", issue, fields))
-        stored = {"assignee": self.live_assignee, "description": {
+        if fields == "security":
+            if issue in self.live_security_errors:
+                raise self.live_security_errors[issue]
+            if self.live_security_error is not None:
+                raise self.live_security_error
+        security = self.live_security_by_issue.get(issue, self.live_security)
+        stored = {"assignee": self.live_assignee, "security": security, "description": {
             "type": "doc", "version": 1,
             "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Stored by Jira."}]}],
         }}
@@ -681,6 +694,34 @@ def test_schema_invalid_plan_is_rejected_before_any_jira_operation(action, recor
     assert recorder.calls == []
 
 
+@pytest.mark.parametrize("build", [
+    _remediation_action,
+    lambda: _release_action("release-epic"),
+    lambda: _release_action("release-task"),
+])
+def test_result_schema_accepts_an_inherited_security_level(build):
+    """Every creation branch accepts the optional inherited security object."""
+    # Given a creation action proposing the parent's level
+    action = build()
+    action["security"] = {"id": "10034", "name": "Red Hat Employee"}
+
+    # When the trusted runner validates the sandbox result
+    # Then the level is accepted
+    executor._validate_result(_plan([action]))
+
+
+def test_result_schema_rejects_unknown_security_properties():
+    """The security object stays strict so a sandbox cannot smuggle extra fields."""
+    # Given a security object with an undeclared property
+    action = _remediation_action()
+    action["security"] = {"id": "10034", "unexpected": True}
+
+    # When the trusted runner validates the sandbox result
+    # Then the unknown property is rejected
+    with pytest.raises(executor.ActionError, match="result schema validation failed"):
+        executor._validate_result(_plan([action]))
+
+
 def test_unauthorized_mutating_plan_fails_without_jira_calls(recorder):
     """A mutating result cannot bypass an absent trusted authorization grant."""
     # Given a plan with a valid-looking mutation but no runner authorization
@@ -795,16 +836,216 @@ def test_remediation_digest_precedes_links_and_resolves_references(recorder):
     executor.execute_plan(result, _trusted_input())
 
     # Then task creation carries inherited metadata, its digest is first, and its key resolves in the link
-    assert recorder.calls[0][0] == "remediation-task"
-    assert recorder.calls[0][1]["labels"] == ["ai-generated-jira", "security-preemptive"]
-    assert recorder.calls[0][1]["priority"] == "Major"
-    assert recorder.calls[0][1]["fix_versions"] == ["1.2"]
-    assert recorder.calls[1] == ("get-issue", "TC-9001", "*all")
-    assert recorder.calls[2][0] == "digest"
+    assert recorder.calls[0] == ("get-issue", "TC-42", "security")
+    assert recorder.calls[1][0] == "remediation-task"
+    assert recorder.calls[1][1]["labels"] == ["ai-generated-jira", "security-preemptive"]
+    assert recorder.calls[1][1]["priority"] == "Major"
+    assert recorder.calls[1][1]["fix_versions"] == ["1.2"]
+    assert recorder.calls[2] == ("get-issue", "TC-9001", "*all")
+    assert recorder.calls[3][0] == "digest"
     stored = recorder.get_issue("TC-9001")["fields"]["description"]
     expected = hashlib.sha256(json.dumps(stored, separators=(",", ":")).encode("utf-8")).hexdigest()
-    assert "Description digest: sha256-adf:{}".format(expected) in json.dumps(recorder.calls[2][3])
-    assert recorder.calls[3] == ("link", "TC-42", "TC-9001", "Depend")
+    assert "Description digest: sha256-adf:{}".format(expected) in json.dumps(recorder.calls[3][3])
+    assert recorder.calls[4] == ("link", "TC-42", "TC-9001", "Depend")
+
+
+def test_remediation_task_inherits_trusted_parent_security_level(recorder):
+    """Given a protected parent vulnerability, its remediation task is created protected."""
+    # Given a trusted parent at level 10034 and one authorized remediation action
+    recorder.live_security = {"id": "10034", "name": "Red Hat Employee"}
+    result = _plan([_remediation_action()])
+    trusted = _trusted_input(security={"id": "10034", "name": "Red Hat Employee"})
+
+    # When the authorized plan runs
+    executor.execute_plan(result, trusted)
+
+    # Then the created task carries the parent's security level
+    create = next(call[1] for call in recorder.calls if call[0] == "remediation-task")
+    assert create["security"]["id"] == "10034"
+    assert create["security"]["name"] == "Red Hat Employee"
+
+
+def test_creation_without_a_trusted_security_level_omits_the_field(recorder):
+    """An unprotected parent still authorizes creation, without inventing a level."""
+    # Given a trusted parent that carries no security level
+    result = _plan([_remediation_action()])
+
+    # When the authorized plan runs
+    executor.execute_plan(result, _trusted_input())
+
+    # Then creation carries no level at all
+    create = next(call[1] for call in recorder.calls if call[0] == "remediation-task")
+    assert "security" not in create
+
+
+def test_live_security_level_wins_when_the_parent_is_tightened(recorder):
+    """A level tightened after collection is the one the created task inherits."""
+    # Given a snapshot at 10034 and a parent tightened live to 10035
+    recorder.live_security = {"id": "10035", "name": "Restricted"}
+
+    # When the plan runs with the stale snapshot
+    executor.execute_plan(
+        _plan([_remediation_action()]),
+        _trusted_input(security={"id": "10034", "name": "Red Hat Employee"}))
+
+    # Then the live level is read before creation and carried by it
+    assert ("get-issue", "TC-42", "security") in recorder.calls
+    create = next(call[1] for call in recorder.calls if call[0] == "remediation-task")
+    assert create["security"] == {"id": "10035", "name": "Restricted"}
+
+
+def test_live_parent_without_a_level_creates_without_one(recorder):
+    """A parent unprotected at creation time does not impose the stale snapshot level."""
+    # Given a snapshot level but a live parent with none
+    recorder.live_security = None
+
+    # When the plan runs
+    executor.execute_plan(
+        _plan([_remediation_action()]),
+        _trusted_input(security={"id": "10034", "name": "Red Hat Employee"}))
+
+    # Then creation stays level-free, matching the parent's current state
+    create = next(call[1] for call in recorder.calls if call[0] == "remediation-task")
+    assert "security" not in create
+
+
+def test_failed_live_security_read_fails_closed_before_creation(recorder):
+    """An unreadable parent aborts the plan instead of falling back to the snapshot."""
+    # Given a live read that fails the way the Jira client fails (SystemExit)
+    recorder.live_security_error = SystemExit(1)
+
+    # When the plan runs
+    # Then it aborts before any issue is created
+    with pytest.raises(SystemExit):
+        executor.execute_plan(
+            _plan([_remediation_action()]),
+            _trusted_input(security={"id": "10034", "name": "Red Hat Employee"}))
+    assert not [call for call in recorder.calls if call[0] == "remediation-task"]
+
+
+@pytest.mark.parametrize("response", [
+    None,
+    {},
+    {"fields": None},
+    {"fields": {"security": "10034"}},
+    {"fields": {"security": {"name": "Red Hat Employee"}}},
+])
+def test_malformed_live_security_read_fails_closed(response, recorder, monkeypatch):
+    """A live response without a usable level raises before creation."""
+    # Given a live read returning a malformed parent payload
+    monkeypatch.setattr(executor._jira_mod, "get_issue", lambda issue, fields="*all": response)
+
+    # When the plan runs
+    # Then it fails closed before any create call
+    with pytest.raises(executor.ActionError, match="security"):
+        executor.execute_plan(
+            _plan([_remediation_action()]),
+            _trusted_input(security={"id": "10034", "name": "Red Hat Employee"}))
+    assert not [call for call in recorder.calls if call[0] == "remediation-task"]
+
+
+@pytest.mark.parametrize("proposed,trusted_security", [
+    ({"id": "10038", "name": "Embargoed Security Issue"}, {"id": "10034", "name": "Red Hat Employee"}),
+    ({"id": "10034", "name": "Red Hat Employee"}, None),
+])
+def test_action_security_level_must_match_the_trusted_parent(proposed, trusted_security, recorder):
+    """A proposed level that contradicts the trusted parent rejects the plan untouched."""
+    # Given an action whose level is weaker than, or absent from, the trusted parent
+    action = _remediation_action()
+    action["security"] = proposed
+
+    # When the plan is executed
+    # Then it fails before any Jira call
+    with pytest.raises(executor.ActionError, match="security level"):
+        executor.execute_plan(_plan([action]), _trusted_input(security=trusted_security))
+    assert recorder.calls == []
+
+
+@pytest.mark.parametrize("security", ["10034", {"name": "Red Hat Employee"}, {"id": "  "}])
+def test_invalid_trusted_security_level_fails_closed(security, recorder):
+    """Malformed trusted security evidence rejects creation instead of degrading protection."""
+    # Given trusted input whose parent level cannot be trusted
+    with pytest.raises(executor.ActionError, match="security level"):
+        executor.execute_plan(_plan([_remediation_action()]), _trusted_input(security=security))
+    assert recorder.calls == []
+
+
+def _existing_task(key="TC-777", summary="Fix CVE"):
+    """Build trusted retry state for an existing remediation task."""
+    return {"key": key, "summary": summary, "labels": ["ai-generated-jira"],
+            "description": {"type": "doc", "version": 1, "content": []},
+            "comments": [{"body": "[sdlc-workflow] Description digest: sha256-adf:already"}]}
+
+
+def test_reused_remediation_gains_the_trusted_security_level(recorder):
+    """A retry that reuses an unprotected task raises it to the parent's level first."""
+    # Given an existing unprotected task and a protected parent
+    recorder.live_security_by_issue = {
+        "TC-42": {"id": "10034", "name": "Red Hat Employee"}, "TC-777": None}
+    trusted = _trusted_input(remediation=[_existing_task()],
+                             security={"id": "10034", "name": "Red Hat Employee"})
+
+    # When the retry registers the existing task
+    registry = executor.execute_plan(_plan([_remediation_action()]), trusted)
+
+    # Then the level is repaired before the reference is used
+    assert registry["remediation"]["key"] == "TC-777"
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == [
+        ("field-edit", "TC-777", {"security": {"id": "10034"}})]
+
+
+def test_reused_issue_already_at_the_parent_level_is_not_updated(recorder):
+    """A reused issue that already carries the parent's level receives no write."""
+    # Given a reused task already at the parent's level
+    recorder.live_security_by_issue = {"TC-42": {"id": "10034"}, "TC-777": {"id": "10034"}}
+    trusted = _trusted_input(remediation=[_existing_task()], security={"id": "10034"})
+
+    # When the retry registers it
+    executor.execute_plan(_plan([_remediation_action()]), trusted)
+
+    # Then no security write occurs
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == []
+
+
+def test_reused_issue_at_a_different_level_is_realigned(recorder):
+    """Jira levels are unranked, so a diverging reused level is realigned to the parent's."""
+    # Given a reused task at a different level than the parent's current one
+    recorder.live_security_by_issue = {"TC-42": {"id": "10035"}, "TC-777": {"id": "10034"}}
+    trusted = _trusted_input(remediation=[_existing_task()], security={"id": "10035"})
+
+    # When the retry registers it
+    executor.execute_plan(_plan([_remediation_action()]), trusted)
+
+    # Then the parent's level is applied
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == [
+        ("field-edit", "TC-777", {"security": {"id": "10035"}})]
+
+
+def test_unprotected_parent_leaves_reused_issue_untouched(recorder):
+    """Without a trusted parent level the reused issue is neither read nor modified."""
+    # Given a parent with no level and an existing task
+    trusted = _trusted_input(remediation=[_existing_task()])
+
+    # When the retry registers it
+    executor.execute_plan(_plan([_remediation_action()]), trusted)
+
+    # Then there is no level read and no write for the reused issue
+    assert ("get-issue", "TC-777", "security") not in recorder.calls
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == []
+
+
+def test_failed_reused_issue_security_read_fails_closed(recorder):
+    """An unreadable reused issue aborts before dependent actions run."""
+    # Given a parent level and a reused issue whose read fails
+    recorder.live_security_by_issue = {"TC-42": {"id": "10034"}}
+    recorder.live_security_errors = {"TC-777": SystemExit(1)}
+    trusted = _trusted_input(remediation=[_existing_task()], security={"id": "10034"})
+
+    # When the retry registers it
+    # Then it aborts before any security write
+    with pytest.raises(SystemExit):
+        executor.execute_plan(_plan([_remediation_action()]), trusted)
+    assert [call for call in recorder.calls if call[0] == "field-edit"] == []
 
 
 def test_existing_marker_and_remediation_skip_retry_duplicates(recorder):
@@ -823,7 +1064,7 @@ def test_existing_marker_and_remediation_skip_retry_duplicates(recorder):
     registry = executor.execute_plan(result, trusted)
 
     # Then no duplicate writes occur and the existing task resolves the reference
-    assert recorder.calls == []
+    assert [call for call in recorder.calls if call[0] != "get-issue"] == []
     assert registry["remediation-1"]["key"] == "TC-777"
 
 
@@ -844,7 +1085,8 @@ def test_marked_remediation_still_populates_references_for_dependent_actions(rec
 
     # Then its generated reference remains usable by the dependent link
     assert registry["remediation-1"]["key"] == "TC-777"
-    assert recorder.calls == [("link", "TC-42", "TC-777", "Depend")]
+    assert [call for call in recorder.calls if call[0] != "get-issue"] == [
+        ("link", "TC-42", "TC-777", "Depend")]
 
 
 def test_marked_reference_binding_still_resolves_dependent_actions(recorder):
@@ -876,7 +1118,7 @@ def test_existing_remediation_without_digest_is_digested_before_follow_up_action
     executor.execute_plan(result, trusted)
 
     # Then it posts the stored-description digest before the dependent link
-    assert [call[0] for call in recorder.calls] == ["get-issue", "digest", "link"]
+    assert [call[0] for call in recorder.calls] == ["get-issue", "get-issue", "digest", "link"]
 
 
 def test_existing_issue_state_skips_retried_field_status_and_link_actions(recorder):
@@ -1266,7 +1508,23 @@ def test_release_creation_parent_and_digest_order(recorder):
     assert creates[1]['parent'] == 'TC-9001'
     assert registry['release-task']['key'] == 'TC-9002'
     assert [call[0] for call in recorder.calls] == [
-        'remediation-task', 'get-issue', 'digest', 'remediation-task', 'get-issue', 'digest', 'link']
+        'get-issue', 'remediation-task', 'get-issue', 'digest',
+        'get-issue', 'remediation-task', 'get-issue', 'digest', 'link']
+
+
+def test_release_creation_inherits_trusted_parent_security_level(recorder):
+    """Release Epic and child release Task both inherit the parent's security level."""
+    # Given an authorized release graph and a protected trusted parent
+    recorder.live_security = {'id': '10034', 'name': 'Red Hat Employee'}
+    trusted = _release_trusted()
+    trusted['issue']['security'] = {'id': '10034', 'name': 'Red Hat Employee'}
+
+    # When both release issues are created
+    executor.execute_plan(_plan([_release_action(), _release_action('release-task')]), trusted)
+
+    # Then each creation carries the parent's level
+    creates = [call[1] for call in recorder.calls if call[0] == 'remediation-task']
+    assert [create['security']['id'] for create in creates] == ['10034', '10034']
 
 
 @pytest.mark.parametrize('defect', ['decision', 'project', 'family', 'version', 'summary',
@@ -1311,7 +1569,27 @@ def test_release_retry_reuses_and_repairs_digests(recorder):
     trusted['idempotency']['action_markers'] = ['triage-security:release-epic', 'triage-security:release-task']
     registry = executor.execute_plan(_plan([_release_action(), _release_action('release-task')]), trusted)
     assert registry['release-task']['key'] == 'TC-71'
-    assert [call[0] for call in recorder.calls] == ['get-issue', 'digest', 'get-issue', 'digest']
+    assert [call[0] for call in recorder.calls] == [
+        'get-issue', 'get-issue', 'digest', 'get-issue', 'get-issue', 'digest']
+
+
+def test_reused_release_gains_the_trusted_security_level(recorder):
+    """Reused release Epic and Task are realigned to the trusted parent's level."""
+    # Given a reused release graph and a protected parent
+    trusted = _release_trusted()
+    graph = trusted['jira_metadata']['release_jira'][0]
+    graph['epics'] = [_release_snapshot('TC-70', 'Epic')]
+    graph['tasks'] = [_release_snapshot('TC-71', 'Task', 'TC-70')]
+    trusted['issue']['security'] = {'id': '10034', 'name': 'Red Hat Employee'}
+    recorder.live_security_by_issue = {'TC-42': {'id': '10034'}, 'TC-70': None, 'TC-71': None}
+
+    # When both release identities are reused
+    executor.execute_plan(_plan([_release_action(), _release_action('release-task')]), trusted)
+
+    # Then each reused issue is raised to the parent's level
+    assert [call for call in recorder.calls if call[0] == 'field-edit'] == [
+        ('field-edit', 'TC-70', {'security': {'id': '10034'}}),
+        ('field-edit', 'TC-71', {'security': {'id': '10034'}})]
 
 
 @pytest.mark.parametrize('defect', ['wrong-type', 'wrong-parent', 'wrong-project', 'wrong-family',
@@ -1727,8 +2005,9 @@ def test_live_runner_owner_lets_retry_proceed(recorder):
 
 
 @pytest.mark.parametrize("fields,expected", [
-    ("*all", {"assignee", "description"}),
+    ("*all", {"assignee", "description", "security"}),
     ("assignee", {"assignee"}),
+    ("security", {"security"}),
     ("status", set()),
     ("description,assignee", {"assignee", "description"}),
 ])

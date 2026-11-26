@@ -66,6 +66,7 @@ class _JiraRecorder:
 
     def __init__(self):
         self.calls = []
+        self.live_security = None
 
     def update_issue(self, issue, fields):
         """Record a field mutation."""
@@ -85,13 +86,17 @@ class _JiraRecorder:
         self.calls.append(("remediation-task", kwargs))
         return {"key": "TC-9001"}
 
-    def get_issue(self, issue):
-        """Return the stored remediation description for digest generation."""
+    def get_issue(self, issue, fields="*all"):
+        """Return the requested projection: description for digests, security for inheritance."""
         self.calls.append(("get-issue", issue))
-        return {"fields": {"description": {
+        stored = {"description": {
             "type": "doc", "version": 1,
             "content": [{"type": "paragraph", "content": [{"type": "text", "text": "Stored."}]}],
-        }}}
+        }, "security": self.live_security}
+        if fields == "*all":
+            return {"fields": stored}
+        requested = {name.strip() for name in fields.split(",")}
+        return {"fields": {name: value for name, value in stored.items() if name in requested}}
 
     def create_link(self, inward, outward, link_type):
         """Record an issue-link mutation."""
@@ -167,6 +172,19 @@ def test_trusted_input_fixtures_validate_against_the_sandbox_schema():
     assert _trusted_input(fixture_names[0])["authorization"]["mutation_authorized"] is True
     assert all(not _trusted_input(name)["authorization"]["mutation_authorized"]
                for name in fixture_names[1:])
+
+
+@requires_format_extra
+def test_all_trusted_input_fixtures_validate_against_the_sandbox_schema():
+    """Every mounted trusted-input fixture still satisfies the extended input schema."""
+    # Given fixtures that predate the explicit issue.security field
+    names = sorted(path.name for path in FIXTURE_DIR.glob("fullsend-*-trusted-input.json"))
+    assert names, "expected mounted trusted-input fixtures"
+
+    # When the same pre-triage validator checks each mounted input
+    # Then the new optional security field does not invalidate any of them
+    for name in names:
+        pre_triage.validate_bundle(_trusted_input(name))
 
 
 def test_invalid_trusted_input_fixture_fails_closed_before_analysis(tmp_path):
@@ -307,7 +325,7 @@ def test_authorized_action_plan_executes_each_mutation_category_in_order(recorde
     # Then every mutation category occurs and the digest precedes the dependent link
     assert [call[0] for call in recorder.calls] == [
         "field-edit", "get-transitions", "status-transition", "comment",
-        "remediation-task", "get-issue", "digest", "link",
+        "get-issue", "remediation-task", "get-issue", "digest", "link",
     ]
     assert recorder.calls[-1] == ("link", "TC-42", "TC-9001", "Depend")
 
@@ -340,7 +358,7 @@ def test_idempotent_retry_fixture_skips_duplicate_mutations(recorder):
     registry = executor.execute_plan(contract["result"], contract["trusted_input"])
 
     # Then no duplicate Jira mutation occurs and the existing task remains resolvable
-    assert recorder.calls == []
+    assert [call for call in recorder.calls if call[0] != "get-issue"] == []
     assert registry["remediation"]["key"] == "TC-9001"
 
 
@@ -462,18 +480,22 @@ def test_conditional_retry_fixture_repairs_digest_before_resolving_new_link(reco
     # When the trusted executor processes the repair against a recorded Jira boundary
     registry = executor.execute_plan(result, bundle)
 
-    # Then task creation is skipped, one digest precedes the resolved downstream link
-    assert [call[0] for call in recorder.calls] == ["get-issue", "digest", "link"]
-    assert recorder.calls[0] == ("get-issue", "TC-8100")
+    # Then task creation is skipped, exactly one digest is repaired, and the link resolves last
+    kinds = [call[0] for call in recorder.calls]
+    assert "remediation-task" not in kinds
+    assert kinds.count("digest") == 1
+    assert kinds[-1] == "link"
+    assert kinds.count("get-issue") >= 2  # one live parent security read per reused task
+    digest_call = next(call for call in recorder.calls if call[0] == "digest")
     assert recorder.calls[-1] == ("link", "TC-8001", "TC-8101", "Depend")
     assert {ref: value["key"] for ref, value in registry.items()} == {"upstream": "TC-8100", "downstream": "TC-8101"}
 
     # Given a refreshed snapshot after the repair, the next retry performs no writes
-    tasks[0]["comments"] = [{"body": recorder.calls[1][3]}]
+    tasks[0]["comments"] = [{"body": digest_call[3]}]
     bundle["idempotency"]["action_markers"].append(actions[-1]["marker"])
     recorder.calls.clear()
     assert executor.execute_plan(result, bundle) == registry
-    assert recorder.calls == []
+    assert [call for call in recorder.calls if call[0] != "get-issue"] == []
 
 
 def test_release_instructions_bind_trusted_decisions_and_actions():
@@ -514,6 +536,22 @@ def _release_create(kind, ref, **extra):
                 description_adf={'type': 'doc', 'version': 1, 'content': [
                     {'type': 'paragraph', 'content': [{'type': 'text', 'text': 'SYNTHETIC TEST DATA — release tracking'}]}]},
                 **extra)
+
+
+def test_release_fixture_inherits_the_trusted_parent_security_level(recorder):
+    """A protected trusted bundle reaches the Jira boundary with the parent's level."""
+    # Given a protected version of the release fixture bundle
+    bundle = _trusted_input('fullsend-release-trusted-input.json')
+    bundle['issue']['security'] = {'id': '10034', 'name': 'Red Hat Employee'}
+    recorder.live_security = {'id': '10034', 'name': 'Red Hat Employee'}
+    pre_triage.validate_bundle(bundle)
+
+    # When the executor creates the release Epic
+    executor.execute_plan(_release_result([_release_create('release-epic', 'new-epic')]), bundle)
+
+    # Then the creation crosses the boundary carrying the inherited level
+    create = next(call[1] for call in recorder.calls if call[0] == 'remediation-task')
+    assert create['security'] == {'id': '10034', 'name': 'Red Hat Employee'}
 
 
 def test_release_fixture_executes_reuse_dedup_and_creation(recorder, monkeypatch):
@@ -606,7 +644,8 @@ def test_release_output_strips_unexpected_properties_before_execution(tmp_path, 
     assert 'unexpected' not in cleaned and 'unexpected' not in cleaned['actions'][0]
     assert cleaned['actions'][0]['family'] == '2.3' and cleaned['actions'][0]['version'] == '2.3.1'
     executor.execute_plan(cleaned, _trusted_input('fullsend-release-trusted-input.json'))
-    assert recorder.calls[0][1]['issue_type'] == 'Epic'
+    create = next(call[1] for call in recorder.calls if call[0] == 'remediation-task')
+    assert create['issue_type'] == 'Epic'
 
 
 def test_release_dependency_bump_and_propagation_use_existing_task_action(recorder, monkeypatch):
@@ -663,4 +702,5 @@ def test_release_partial_retry_reuses_prefetched_hierarchy_and_repairs_digest(re
                 'inward': '{{new-release.key}}', 'outward': 'TC-8101'}]
     registry = executor.execute_plan(_release_result(actions), bundle)
     assert registry['new-release']['key'] == 'TC-9502'
-    assert [call[0] for call in recorder.calls] == ['get-issue', 'digest', 'get-issue', 'digest', 'link']
+    assert [call[0] for call in recorder.calls] == [
+        'get-issue', 'get-issue', 'digest', 'get-issue', 'get-issue', 'digest', 'link']
