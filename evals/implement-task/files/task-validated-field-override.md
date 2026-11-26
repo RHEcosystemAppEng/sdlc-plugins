@@ -25,17 +25,15 @@ payload last, after the standardized fields are written.
 
 ## Files to Modify
 - `modules/fundamental/src/sbom/service/sbom.rs` — add the validated `data_classification`
-  field to `build_ingest_payload()` and ensure the later `extra_fields` merge cannot
-  replace or remove it
+  field to `build_ingest_payload()`
 - `modules/fundamental/src/sbom/model/details.rs` — add the `data_classification` field to
   `SbomDetails`
 
 ## Files to Create
-- `tests/service/sbom_ingest_payload.rs` — unit tests for the payload builder
+- `tests/api/sbom_ingest_payload.rs` — integration tests for the payload builder
 
 ## API Changes
-- `POST /api/v2/sbom/ingest` — request body gains `data_classification`, one of
-  `public`, `internal`, `restricted`
+- (none)
 
 ## Implementation Notes
 - `build_ingest_payload()` in `modules/fundamental/src/sbom/service/sbom.rs` currently
@@ -49,12 +47,10 @@ payload last, after the standardized fields are written.
 ## Acceptance Criteria
 - [ ] `build_ingest_payload()` rejects a `data_classification` outside the allowed set
 - [ ] A payload built with a valid classification always carries that value
-- [ ] A caller-supplied `extra_fields` entry cannot change the validated classification
 
 ## Test Requirements
 - [ ] Test that each allowed classification is accepted and lands in the payload
 - [ ] Test that a disallowed classification is rejected
-- [ ] Test that `extra_fields` containing the classification key cannot override the validated value
 
 ## Dependencies
 - Depends on: None

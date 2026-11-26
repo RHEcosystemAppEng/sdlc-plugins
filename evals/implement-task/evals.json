@@ -196,13 +196,14 @@
     {
       "id": 15,
       "prompt": "Implement task TC-9212. The task description is in task-validated-field-override.md, the target repository structure is in repo-backend.md, and the project CLAUDE.md is in claude-md-mock.md. Do NOT actually modify repository files or call external tools (Jira, git, Serena). Instead, write your implementation plan to the workspace outputs/ directory: write outputs/plan.md describing which files you would modify and create, what changes you would make to each, and the commit message you would use. Write outputs/self-review.md describing each Step 9 self-verification check you applied to the planned change.",
-      "expected_output": "An implementation plan where the self-review traces the later extra_fields merge into the ingest payload, identifies that it can replace or remove the newly validated data_classification, and resolves the override path by applying the validated value last or rejecting a conflicting key. The test plan includes a conflict test proving extra_fields cannot override the validated classification.",
+      "expected_output": "An implementation plan where the self-review discovers, from the payload builder itself, that extra_fields is merged after the standardized fields, identifies that the merge can replace or remove the newly validated data_classification, and resolves the override path by applying the validated value last or rejecting a conflicting key. Because that write path exists, the test plan includes a conflict test proving extra_fields cannot override the validated classification.",
       "files": ["files/task-validated-field-override.md", "files/repo-backend.md", "files/claude-md-mock.md"],
       "assertions": [
         "The self-review identifies the extra_fields merge into the same ingest payload as a write path that runs after the validated data_classification assignment",
         "The self-review states that this merge can replace or remove the validated value, so the validated value must remain authoritative",
         "The plan resolves the override path by applying the validated value after the merge or by rejecting a conflicting key — not by assuming the current call order cannot change",
         "The test plan includes a test that a conflicting extra_fields classification cannot override the validated value",
+        "The conflict test is justified by the identified later extra_fields write path rather than restated from a task acceptance criterion or test requirement",
         "The plan keeps all changes within the task's Files to Modify and Files to Create — no unrelated files are modified"
       ]
     },
