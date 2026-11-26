@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Step 4.4 searches for preemptive tasks using JQL with labels 'security-preemptive' and 'CVE-2026-55123' (§1.60)",
+      "passed": true,
+      "evidence": "reconciliation.md lines 23-26: jira.search_jql(\"project = TC AND issuetype = Task AND labels = 'security-preemptive' AND labels = 'CVE-2026-55123' ORDER BY created DESC\", ...); triage-outcome.md line 113 repeats the JQL, which returned TC-8022."
+    },
+    {
+      "text": "Step 4.4 filters results to match the current stream (rhtpa-2.1) by checking the task summary for the stream name",
+      "passed": true,
+      "evidence": "reconciliation.md lines 36-39 under '### 2. Filter by stream': 'Current issue stream suffix: `rhtpa-2.1`.' and 'The TC-8022 summary contains `(rhtpa-2.1)`, so it **matches**.' triage-outcome.md line 114 says the same."
+    },
+    {
+      "text": "Step 4.4 links the new CVE Jira TC-8021 to the preemptive task TC-8022 with 'Depend' link type (standard remediation linkage)",
+      "passed": true,
+      "evidence": "reconciliation.md lines 46-56: '**a. Link TC-8021 -> TC-8022 with \"Depend\"** (standard remediation linkage...)' followed by jira.create_link(inwardIssue: \"TC-8021\", outwardIssue: \"TC-8022\", type: \"Depend\"), with an idempotency check (TC-8021 issuelinks empty). Mutation table row 2 (line 92) says 'TC-8021 -> TC-8022 | create_link | Depend (Step 4.4a)'. It is shown as a proposal because Jira calls are forbidden in the eval."
+    },
+    {
+      "text": "Step 4.4 removes the 'security-preemptive' label from TC-8022 — the task is now a standard remediation task linked to a proper CVE Jira",
+      "passed": true,
+      "evidence": "reconciliation.md lines 58-66: '**b. Remove the `security-preemptive` label from TC-8022**' with jira.edit_issue(\"TC-8022\", fields={ \"labels\": [\"ai-generated-jira\", \"Security\", \"CVE-2026-55123\"] }) and 'Only `security-preemptive` is removed.' Line 79: 'The preemptive task is now a standard remediation task for this CVE Jira.' triage-outcome.md line 116 matches."
+    },
+    {
+      "text": "Step 8 skips remediation task creation for this stream because Step 4.4 reconciliation already linked an existing task",
+      "passed": true,
+      "evidence": "reconciliation.md line 85: 'reconciled_streams = { \"2.1.x\": \"TC-8022\" }. Step 8 must **not** create new remediation tasks for stream 2.1.x.' Line 97: 'No new remediation tasks for 2.1.x, because TC-8022 already covers this stream.' triage-outcome.md line 135: '8 Remediation | Case B for 2.1.x. **Task creation is skipped because of the Step 4.4 reconciliation (TC-8022).**'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

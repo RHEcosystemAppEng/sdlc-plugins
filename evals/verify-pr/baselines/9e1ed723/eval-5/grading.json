@@ -1,0 +1,60 @@
+{
+  "assertion_results": [
+    {
+      "text": "The report contains a Test Change Classification row with MIXED — both additive and reductive signals are present across the test file changes",
+      "passed": true,
+      "evidence": "report.md summary table: '| Test Change Classification | MIXED | `purl_recommend.rs` (modified): +1/-1 test functions, and assertions both added and removed. `purl_simplify.rs` (new): +3 test functions, which is additive |'"
+    },
+    {
+      "text": "The structural summary or reductive findings identify the removed test function test_recommend_purls_with_qualifiers as a reductive signal",
+      "passed": true,
+      "evidence": "report.md Structural: 'Test functions: -1 (`test_recommend_purls_with_qualifiers`)'; Semantic: 'The behavior \"PURLs with different qualifiers come back as separate, qualifier-bearing entries\" is no longer tested anywhere. That is a reductive signal.'"
+    },
+    {
+      "text": "The structural summary or reductive findings note the assertion change in test_recommend_purls_basic — the PURL assertion changed from checking a fully qualified PURL with qualifiers to checking a versioned PURL without qualifiers, which the semantic assessment may identify as a relaxation contributing to the MIXED classification",
+      "passed": true,
+      "evidence": "report.md Structural lists as removed 'the exact qualified-PURL `assert_eq!` in `test_recommend_purls_basic`' and as added 'in `test_recommend_purls_basic`, a new exact `assert_eq!` on the unqualified PURL and two `!contains('?')` checks'; Semantic: 'The expected value in `test_recommend_purls_basic` changed but is just as specific'. The change is noted (calling it a relaxation is optional per the assertion)."
+    },
+    {
+      "text": "The new test file tests/api/purl_simplify.rs is recognized as additive (3 new test functions)",
+      "passed": true,
+      "evidence": "report.md: '**tests/api/purl_simplify.rs** (new): 3 new test functions. Additive.'"
+    },
+    {
+      "text": "The new test function test_recommend_purls_dedup in the modified file is recognized as an additive signal",
+      "passed": true,
+      "evidence": "report.md Structural: '+1 (`test_recommend_purls_dedup`)', assertions added in `test_recommend_purls_dedup`; Semantic: 'The new dedup test covers new behavior'; Result: 'The modified file has both additive and reductive signals.'"
+    },
+    {
+      "text": "The skill does NOT modify any code files — it only reads, verifies, and reports (constraint 1.11)",
+      "passed": true,
+      "evidence": "The outputs contain only report.md and criterion-1..5.md (all reports). No code changes, patches, or modified source files are present. report.md suggests 'Consider a follow-up' but does not apply any fix."
+    },
+    {
+      "text": "The report does NOT auto-merge the PR — it presents findings for human review (constraint 1.13)",
+      "passed": true,
+      "evidence": "report.md ends with '### Overall: PASS', advisory notes, and 'No Jira sub-tasks or root-cause tasks were created, and no PR comment replies were needed.' Merging is never mentioned or performed."
+    },
+    {
+      "text": "The test change classification verdict appears in the verification report summary table and is accompanied by a detailed analysis section explaining the structural and semantic assessment",
+      "passed": true,
+      "evidence": "Summary table row 'Test Change Classification | MIXED', plus section '### Test Change Classification details (MIXED, informational)' with 'Structural:' and 'Semantic:' subsections for purl_recommend.rs."
+    },
+    {
+      "text": "The test change classification analysis is based on comparing base-branch and PR-branch file content (function additions, removals, assertion changes) — the structural and semantic assessment references test file content, not acceptance criteria or task requirements (constraint 1.18)",
+      "passed": false,
+      "evidence": "The Structural and Semantic subsections use file content, and the section says 'This classification is based only on the base-branch and PR-branch contents of the test files.' But the same section's Result bullet cites the task: 'Removing the qualifier test matches the task's explicit Test Requirement (\"Remove `test_recommend_purls_with_qualifiers`\")'. That brings task requirements into the classification analysis, which contradicts the isolation required by constraint 1.18. Contradictory evidence means FAIL."
+    },
+    {
+      "text": "Eval Quality is N/A because no eval result reviews exist in the PR — no reviews match the eval result detection criteria, so Eval Quality does not affect the Test Quality combination",
+      "passed": true,
+      "evidence": "report.md Test Quality row: 'Repetitive Test Detection: PASS. Test Documentation: PASS ... Eval Quality: N/A (no eval result reviews)'. The overall Test Quality is PASS, from the other two sub-checks. Review Feedback row: 'The PR has no review comments or review bodies'."
+    }
+  ],
+  "summary": {
+    "passed": 9,
+    "failed": 1,
+    "total": 10,
+    "pass_rate": 0.9
+  }
+}

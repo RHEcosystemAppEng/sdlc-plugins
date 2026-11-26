@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "The impact map identifies the conflict between requiring ownerGroup on every Service Catalog record regardless of how it is populated and the stakeholder instruction to omit alternate write paths.",
+      "passed": true,
+      "evidence": "impact-map.md has a section '## UNRESOLVED: scope conflict (clarification required)' that says: 'The stakeholder asked for an onboarding-and-display-only change and explicitly excluded scheduled synchronization, fallback import, and on-demand refresh. The repository evidence shows that all three paths also write to the same shared Service Catalog record. Because of that, the planned tasks **do not fully satisfy** these Feature acceptance criteria'. It then quotes 'Every Service Catalog record has an `ownerGroup` value after creation or update' and 'regardless of how that record was populated'. impact-map-comment.md contains the same section."
+    },
+    {
+      "text": "The impact map or an explicit unresolved-scope section enumerates the excluded writer files and matching tests: src/workflows/scheduled_sync.py with tests/workflows/test_scheduled_sync.py, src/workflows/fallback_import.py with tests/workflows/test_fallback_import.py, and src/api/on_demand_refresh.py with tests/api/test_on_demand_refresh.py.",
+      "passed": true,
+      "evidence": "In impact-map.md, the lifecycle table lists all three source/test pairs, each marked '**No (excluded by stakeholder)**'. The unresolved table row names them explicitly: '`src/workflows/scheduled_sync.py` + `tests/workflows/test_scheduled_sync.py`; `src/workflows/fallback_import.py` + `tests/workflows/test_fallback_import.py`; `src/api/on_demand_refresh.py` + `tests/api/test_on_demand_refresh.py`'."
+    },
+    {
+      "text": "No task lists the three stakeholder-excluded writer files or their tests in Files to Modify, Files to Create, or Test Requirements; those paths may appear in the impact map only as unresolved exclusions.",
+      "passed": true,
+      "evidence": "grep for scheduled_sync|fallback_import|on_demand_refresh returns 0 matches in all five task files (task-1 to task-5), in all digest files, and in summary-comment.md. Matches appear only in impact-map.md and impact-map-comment.md (6 each), and only in the lifecycle table and the unresolved-scope section. The task Files to Modify sections list only store.py, registration.py, catalog_summary.py and catalog_export.py. impact-map.md also states: 'the excluded paths do **not** appear in any task's Files to Modify, Files to Create, or Test Requirements'."
+    },
+    {
+      "text": "The plan does not claim the universal ownerGroup acceptance criteria are met by registration and display alone; it asks for scope clarification or clearly records those criteria as unresolved.",
+      "passed": true,
+      "evidence": "impact-map.md marks each universal criterion '**Unresolved / partially covered**'. It asks the stakeholder to choose among '1. **Expand scope**', '2. **Narrow the acceptance criteria**' and '3. **Hybrid**'. summary-comment.md says: 'these criteria are **not fully covered** by the current task set' and 'Please choose: (1) expand scope ... (2) narrow ... (3) split'. task-3 says 'this task alone does not satisfy the \"regardless of how that record was populated\" criterion'. task-5 says 'Before stating that every population path sets or preserves `ownerGroup`, confirm how that conflict was resolved'. No output contradicts this."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

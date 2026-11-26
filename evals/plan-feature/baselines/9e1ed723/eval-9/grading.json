@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "At least one task's Acceptance Criteria contains a code-level, testable criterion requiring the gating flow to fail closed (e.g., exit non-zero or report an error rather than skip) when the tracker search returns an empty result from a source that cannot be proven authenticated or healthy.",
+      "passed": true,
+      "evidence": "task-3-gate-ready-for-verification.md line 55 AC: \"When the tracker source can't be proven authenticated (`TrackerAuthError`, from either a 2xx empty unauthenticated response or a 401/403), `resolve_gated_issue` does not return `None`. The gate exits non-zero instead of treating the empty result as a skip.\" Line 56: \"`scripts/pre-verify.sh` exits non-zero ... whenever the gate exits non-zero, even when stderr contains no \\\"401\\\" or \\\"403\\\" text\". Task 2 line 42-43 adds the same for search_issues/CLI."
+    },
+    {
+      "text": "The same task's Test Requirements include a test that drives the unauthenticated, degraded, or empty-search path and asserts the fail-closed outcome rather than a skip.",
+      "passed": true,
+      "evidence": "task-3 line 62: \"Degraded-path test: a mocked `search_issues` raising `TrackerAuthError` (simulating the gateway's unauthenticated 200 + empty response) makes `resolve_gated_issue` propagate the error, not return `None`. The gate entry point exits non-zero.\" Line 63: wrapper test with stubbed gate exiting non-zero without 401/403, asserting pre-verify.sh exits non-zero and verification not invoked."
+    },
+    {
+      "text": "That task's Implementation Notes point at the specific gate or skip site where the guard belongs, naming src/gate/resolve_issue.py (resolve_gated_issue) and/or scripts/pre-verify.sh.",
+      "passed": true,
+      "evidence": "task-3 line 30: \"**Gate site (skip logic):** `src/gate/resolve_issue.py::resolve_gated_issue`. Today it calls `search_issues` and returns `None` (skip) whenever the result is empty.\" Line 35: \"**Gate site (wrapper):** `scripts/pre-verify.sh`. Today it greps client stderr for 401/403...\""
+    },
+    {
+      "text": "The documented silent-empty risk is not covered only by an operational or post-merge mitigation: if a live run after merge is mentioned, it appears alongside the fail-closed Acceptance Criterion and test, not as their replacement.",
+      "passed": true,
+      "evidence": "task-3 line 40: \"Optional, supplementary only: after merge, a live run with the service-account token can further confirm the setup. That doesn't replace the tests below.\" — appears alongside ACs (lines 55-56) and degraded tests (lines 62-63). impact-map.md line 23: live run \"is **not** accepted as the only coverage. The code-level ACs and tests above are the primary coverage.\" summary-comment.md line 25 consistent. No contradicting output."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

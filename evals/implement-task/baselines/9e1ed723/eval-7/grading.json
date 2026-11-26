@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The response describes locating the digest comment using the marker string '[sdlc-workflow] Description digest:' from shared/description-digest-protocol.md",
+      "passed": true,
+      "evidence": "digest-mismatch.md, '### 2. Locate the digest comment': \"The comment body starts with the marker `[sdlc-workflow] Description digest:`, which is defined in `shared/description-digest-protocol.md`. It is the only matching comment, so I select it.\""
+    },
+    {
+      "text": "The response describes detecting a mismatch between the stored digest and the computed digest of the current description",
+      "passed": true,
+      "evidence": "Section 4b extracts the stored hex '0000...0000', 4c computes the current digest with 'python3 scripts/sha256-digest.py /tmp/desc-TC-9201.txt', and '### 4e. Compare hex digests: MISMATCH' says \"The hex digests differ. The task description was modified after plan-feature created it.\""
+    },
+    {
+      "text": "The response alerts the user that the description was modified after plan-feature created the task and displays the expected vs actual digest values",
+      "passed": true,
+      "evidence": "The user-facing alert says \"The task description was modified after plan-feature created it\" and lists \"**Expected digest** ... `sha256-md:0000000000000000000000000000000000000000000000000000000000000000`\" and \"**Actual digest** ... `sha256-md:94a37782f4aff8cdd79954d97a6b804040be27459879b5d3617f8354c85770f7`\"."
+    },
+    {
+      "text": "The response offers the user a choice: (1) proceed with the current description, or (2) stop so they can re-run plan-feature",
+      "passed": true,
+      "evidence": "The alert offers \"1. **Proceed**: implement TC-9201 using the current description as-is\" and \"2. **Stop**: halt so you can review the change and re-run `/plan-feature` to regenerate the tasks\", followed by \"Please choose (1/2).\""
+    },
+    {
+      "text": "The response stops execution and does not proceed to Step 2 or implementation planning until the user responds — following the same pause-and-ask pattern as the incomplete description handling",
+      "passed": true,
+      "evidence": "'### Execution halts here': \"**Execution stops immediately** until the user responds. None of the later steps run: Step 2 (verify dependencies): not run; Step 3 ... not run; Step 4 ... Steps 6–11: not run\" and \"I do not change any files, run any git commands, or write anything to Jira.\" It then says what happens after the user answers: if 1, continue from Step 2; if 2, end the run. That is the pause-and-ask pattern. The file never mentions the incomplete-description handling by name, but it behaves the same way."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md field table lists `cves: Option<Vec<String>>`, `affected_packages: Option<Vec<AffectedPackage>>`, and `severity_counts: Option<HashMap<String, u32>>`, each marked 'Guard needed? Yes', and each has its own subsection (### `cves`, ### `affected_packages`, ### `severity_counts`)."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md Step 6 code: `result.cves.clone().unwrap_or_default()`, `result.affected_packages.as_ref().map_or(Ok(0), |pkgs| u32::try_from(pkgs.len()))`, `result.severity_counts.clone().unwrap_or_default()`. Plan states 'No `.unwrap()`, `.expect()` or indexing is used on any of the optional fields.'"
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "In both plan.md and null-guards.md, `.len()` is only called on the defaulted `cve_list` or inside the `map_or` closure (`pkgs.len()`). No `.join()`, iteration, or `.len()` is called directly on an Option field. null-guards.md names `result.cves.as_ref().unwrap().len()` only as an anti-pattern to avoid."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md 'Why guards are required here': \"`AdvisoryIngestResult` is produced by a **different crate**: `modules/ingestor`... so the data crosses a module boundary\" and \"The producer's schema explicitly marks every aggregate field as `Option<T>`.\""
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md test table: `extract_summary_all_none` | All `None` (AC2, AC3, TR2) | `summary == VulnerabilitySummary::default()`: `cve_count 0`, empty list, `affected_package_count 0`, empty map, no panic. null-guards.md coverage table: 'All three `None` | `extract_summary_all_none`'."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

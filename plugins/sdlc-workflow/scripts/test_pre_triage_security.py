@@ -341,6 +341,62 @@ def test_normalize_issue_rejects_missing_reporter_metadata():
         pre_triage_security.normalize_issue(issue)
 
 
+def _issue_with_security(security):
+    """Build a complete Jira issue response with an optional security level."""
+    issue = {"key": "TC-42", "fields": {
+        "summary": "CVE-2026-12345",
+        "description": {"type": "doc", "version": 1, "content": []},
+        "status": {"name": "New"},
+        "labels": [],
+        "versions": [],
+        "comment": {"comments": []},
+        "reporter": {"accountId": "acc-1", "displayName": "Runner"},
+    }}
+    if security is not None:
+        issue["fields"]["security"] = security
+    return issue
+
+
+def test_normalize_issue_surfaces_the_parent_security_level():
+    """A protected Vulnerability keeps its security level in the trusted bundle."""
+    # Given a Jira issue at level 10034 with Jira's extra level metadata
+    issue = _issue_with_security({
+        "id": "10034", "name": "Red Hat Employee",
+        "description": "Red Hat Employee and Contractors only",
+        "self": "https://jira.example/rest/api/3/securitylevel/10034",
+    })
+
+    # When the runner normalizes the issue for the sandbox
+    normalized = pre_triage_security.normalize_issue(issue)
+
+    # Then only the stable level id and name are exposed for created issues to inherit
+    assert normalized["security"] == {"id": "10034", "name": "Red Hat Employee"}
+
+
+def test_normalize_issue_tolerates_an_absent_security_level():
+    """An unprotected issue stays representable so creation can proceed without a level."""
+    # Given a Jira issue with no security field
+    issue = _issue_with_security(None)
+
+    # When the runner normalizes the issue
+    normalized = pre_triage_security.normalize_issue(issue)
+
+    # Then security is explicitly null rather than missing evidence
+    assert normalized["security"] is None
+
+
+@pytest.mark.parametrize("security", [{"name": "Red Hat Employee"}, {"id": " "}, "10034"])
+def test_normalize_issue_rejects_a_malformed_security_level(security):
+    """A level without a usable id fails loudly instead of silently dropping protection."""
+    # Given a Jira security field that cannot identify a level
+    issue = _issue_with_security(security)
+
+    # When the runner normalizes the issue
+    # Then it fails rather than emit an unprotectable bundle
+    with pytest.raises(pre_triage_security.EvidenceError, match="security"):
+        pre_triage_security.normalize_issue(issue)
+
+
 def test_normalize_remote_links_rejects_missing_evidence():
     """A security issue without remote-link evidence is rejected before sandbox creation."""
     # Given a Jira issue whose required remote-link prefetch returned no links

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Duplicate check searches for sibling issues using JQL with the CVE label and excludes the current issue key (Step 4)",
+      "passed": true,
+      "evidence": "duplicate-check.md 'Sibling search (simulated)' gives the JQL: \"project = TC AND labels = 'CVE-2026-31812' AND issuetype = 10024 AND key != TC-8003\". It filters on the CVE label and excludes the current key with key != TC-8003."
+    },
+    {
+      "text": "Duplicate check correctly classifies TC-7999 as a same-stream sibling (both have stream suffix [rhtpa-2.2]) and identifies it as a duplicate (Step 4.1)",
+      "passed": true,
+      "evidence": "duplicate-check.md table lists stream suffix [rhtpa-2.2] for both TC-7999 and TC-8003. Classification says: \"TC-7999 is a same-stream sibling. It has the same CVE label (CVE-2026-31812), the same stream suffix `[rhtpa-2.2]` (2.2.x)...\" and \"Step 4.1 (Same-stream duplicates) applies\". The 4.1 result is \"Close TC-8003 as Duplicate of TC-7999.\""
+    },
+    {
+      "text": "Triage outcome recommends closing TC-8003 as Duplicate with resolution 'Duplicate', referencing TC-7999 as the original (Step 4.1)",
+      "passed": true,
+      "evidence": "triage-outcome.md Decision reads: \"Close TC-8003 as Duplicate of TC-7999.\" Proposed mutation 4 is \"Transition to Closed with resolution **Duplicate**\". duplicate-check.md action 2 is \"Transition TC-8003 to Closed with resolution **Duplicate**.\""
+    },
+    {
+      "text": "The close recommendation includes a comment documenting why it is a duplicate — same CVE tracked for the same stream (Step 4.1)",
+      "passed": true,
+      "evidence": "duplicate-check.md proposed comment: \"Duplicate of TC-7999 — same CVE (CVE-2026-31812) tracked for the same stream 2.2.x ([rhtpa-2.2]). Version impact analysis confirms overlap...\". triage-outcome.md mutation 3 has the comment \"Duplicate of TC-7999 — same CVE tracked for the same stream 2.2.x. Version impact analysis confirms overlap.\""
+    },
+    {
+      "text": "The analysis does NOT proceed to remediation task creation — duplicate detection short-circuits the triage flow",
+      "passed": true,
+      "evidence": "triage-outcome.md says \"TC-8003 gets no Affects Versions correction and no remediation tasks.\" Its step table has \"8 Remediation | None from TC-8003. Case A/B/C are superseded by the Duplicate closure.\" duplicate-check.md says \"Case A preemptive task creation for 2.1.x is not done from TC-8003\". No task-creation actions appear in any of the 3 output files. Steps 2-3 (version analysis) did run before Step 4, which follows normal step order, and Step 3's correction was explicitly not applied."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

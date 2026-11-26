@@ -146,11 +146,12 @@ def _has_description_digest(existing: dict[str, Any]) -> bool:
 
 
 def _register_existing_remediation(action: dict[str, Any], registry: dict[str, dict[str, str]], trusted_input: dict[str, Any]) -> bool:
-    """Register a prior remediation task and repair a digest lost during a partial run."""
+    """Register a prior remediation task, repairing its level and a digest lost in a partial run."""
     existing = _existing_remediation(action, trusted_input)
     if existing is None:
         return False
     issue_key = existing["key"]
+    _repair_reused_security(issue_key, action, trusted_input)
     registry[action["ref"]] = {"key": issue_key, "url": _browse_url(issue_key)}
     if not _has_description_digest(existing):
         _post_digest(issue_key)
@@ -241,11 +242,12 @@ def _existing_release(action: dict[str, Any], trusted_input: dict[str, Any]) -> 
 
 def _register_existing_release(action: dict[str, Any], registry: dict[str, dict[str, str]],
                                trusted_input: dict[str, Any]) -> bool:
-    """Repair partial release creation before dependent actions execute."""
+    """Repair partial release creation, including its level, before dependent actions execute."""
     existing = _existing_release(action, trusted_input)
     if existing is None:
         return False
     key = existing["key"]
+    _repair_reused_security(key, action, trusted_input)
     registry[action["ref"]] = {"key": key, "url": _browse_url(key)}
     if not _has_description_digest(existing):
         _post_digest(key)
@@ -389,6 +391,10 @@ def _preflight_plan(result: dict[str, Any], trusted_input: dict[str, Any]) -> No
         _validate_action(raw_action)
         action = _resolve_action(raw_action, registry)
         action_type = action["type"]
+        if action_type in _CREATE_ACTION_TYPES:
+            # A level that contradicts the trusted parent rejects the whole plan
+            # before any creation can leave an issue unprotected.
+            _inherited_security(action, trusted_input)
         target_fields = _ACTION_DEFINITIONS.get(action_type, {}).get("targets")
         if not target_fields and action_type != "report-only":
             raise ActionError("{} action has no declared target fields".format(action_type))
@@ -507,6 +513,111 @@ def _already_applied(action: dict[str, Any], trusted_input: dict[str, Any]) -> b
     return False
 
 
+_CREATE_ACTION_TYPES = {"remediation-task", "release-epic", "release-task"}
+
+
+def _normalize_security_level(security: Any, label: str) -> dict[str, str] | None:
+    """Reduce a Jira security level object to the ``{id, name}`` shape, or None when absent."""
+    if security is None:
+        return None
+    if not isinstance(security, dict):
+        raise ActionError("{} security level is invalid".format(label))
+    level_id = security.get("id")
+    if (isinstance(level_id, bool) or not isinstance(level_id, (str, int))
+            or not str(level_id).strip()):
+        raise ActionError("{} security level has no id".format(label))
+    level = {"id": str(level_id)}
+    name = security.get("name")
+    if isinstance(name, str) and name:
+        level["name"] = name
+    return level
+
+
+def _trusted_security_level(trusted_input: dict[str, Any]) -> dict[str, str] | None:
+    """Return the trusted parent issue's snapshot security level, or None when unprotected."""
+    issue = trusted_input.get("issue")
+    security = issue.get("security") if isinstance(issue, dict) else None
+    return _normalize_security_level(security, "trusted issue")
+
+
+def _trusted_issue_key(trusted_input: dict[str, Any]) -> str:
+    """Return the trusted parent issue key, failing closed when it is absent."""
+    issue = trusted_input.get("issue")
+    key = issue.get("key") if isinstance(issue, dict) else None
+    if not isinstance(key, str) or not key:
+        raise ActionError("mutation-authorized execution requires a trusted issue key")
+    return key
+
+
+def _live_security_level(issue_key: str) -> dict[str, str] | None:
+    """Read an issue's current Jira security level immediately before a write that needs it.
+
+    The trusted snapshot can be stale: a human may tighten the parent's level after
+    the pre-script collected it, and a child created from the snapshot would keep the
+    broader level. Re-read right before the write, mirroring the live assignee read.
+    ``get_issue`` exits non-zero on an HTTP or connection failure, so an unreadable
+    issue aborts before the write instead of silently falling back to the snapshot.
+    """
+    issue = _jira_mod.get_issue(issue_key, fields="security")
+    fields = issue.get("fields") if isinstance(issue, dict) else None
+    if not isinstance(fields, dict):
+        raise ActionError("live security read for {} returned no fields".format(issue_key))
+    return _normalize_security_level(fields.get("security"), "live issue")
+
+
+def _inherited_security(action: dict[str, Any], trusted_input: dict[str, Any]) -> dict[str, str] | None:
+    """Validate a proposed action level against the trusted snapshot, or return it.
+
+    The snapshot is the reviewable authority for the proposal: an action may repeat
+    it but can never omit it into an unprotected issue, weaken it, or invent a level
+    the parent does not have. The level actually applied is re-read live at creation
+    time by ``_creation_security``.
+    """
+    parent = _trusted_security_level(trusted_input)
+    proposed = action.get("security")
+    if proposed is None:
+        return parent
+    if not isinstance(proposed, dict):
+        raise ActionError("action security level must be an object")
+    if parent is None or str(proposed.get("id")) != parent["id"]:
+        raise ActionError("action security level does not match the trusted parent")
+    return parent
+
+
+def _creation_security(action: dict[str, Any], trusted_input: dict[str, Any]) -> dict[str, str] | None:
+    """Return the level to apply to a created issue, re-read from the parent live.
+
+    The proposal is validated against the snapshot first (fail closed on a
+    contradiction), then the parent's current level decides the value so a level
+    tightened after collection is the one the child inherits.
+    """
+    _inherited_security(action, trusted_input)
+    return _live_security_level(_trusted_issue_key(trusted_input))
+
+
+def _repair_reused_security(issue_key: str, action: dict[str, Any], trusted_input: dict[str, Any]) -> None:
+    """Raise a reused issue to the trusted parent's current level before dependent actions.
+
+    A retry can match an issue created before this protection existed, or before the
+    parent was protected, leaving its vulnerability details readable. Jira levels are
+    not ranked, so the parent's current level is authoritative: the reused issue is set
+    to it whenever it differs. Without a trusted parent level the issue is untouched.
+    """
+    _inherited_security(action, trusted_input)
+    parent = _live_security_level(_trusted_issue_key(trusted_input))
+    if parent is None:
+        return
+    current = _live_security_level(issue_key)
+    if current is not None and current["id"] == parent["id"]:
+        return
+    _jira_mod.update_issue(issue_key, {"security": {"id": parent["id"]}})
+
+
+def _security_kwarg(security: dict[str, str] | None) -> dict[str, Any]:
+    """Pass ``security`` to the Jira client only when the parent has a level."""
+    return {"security": security} if security is not None else {}
+
+
 def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]], trusted_input: dict[str, Any]) -> None:
     """Perform one already-authorized action and update generated references."""
     action_type = action["type"]
@@ -565,6 +676,7 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
             labels=list(dict.fromkeys(["ai-generated-jira", *action["labels"]])),
             priority=action.get("priority"), fix_versions=action.get("fix_versions"),
             description_adf=action["description_adf"],
+            **_security_kwarg(_creation_security(action, trusted_input)),
         )
         key = created.get("key")
         if not isinstance(key, str) or not re.fullmatch(re.escape(action["project"]) + r"-\d+", key):
@@ -584,6 +696,7 @@ def _execute_action(action: dict[str, Any], registry: dict[str, dict[str, str]],
             priority=action.get("priority"),
             fix_versions=action.get("fix_versions"),
             description_adf=action["description_adf"],
+            **_security_kwarg(_creation_security(action, trusted_input)),
         )
         issue_key = created.get("key")
         if not issue_key:

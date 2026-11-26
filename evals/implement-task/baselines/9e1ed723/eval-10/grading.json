@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The conventions output identifies the sibling assertion patterns — specifically the .filter().any() and .filter().count() > 0 patterns from tests/api/advisory.rs and tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "conventions.md 'Test conventions (sibling)': \"Collection assertions in siblings are existence-only: `advisory.rs`: `.filter(..).any(|_| true)` then `assert!(has_critical)`; `sbom.rs`: `.filter(..).count()` then `assert!(matching > 0)`\"."
+    },
+    {
+      "text": "The conventions output flags a conflict between the sibling assertion patterns and the skill's built-in 'prefer value-based assertions over length-only checks' guidance",
+      "passed": true,
+      "evidence": "conventions.md section 'Conflicts between sibling patterns and skill guidance', row 1: sibling pattern 'Existence-only assertions (.filter().any(|_| true) + assert!(bool); .filter().count() + assert!(n > 0)) in tests/api/advisory.rs and tests/api/sbom.rs' vs skill guidance \"Prefer value-based assertions over length-only checks\"."
+    },
+    {
+      "text": "The conventions output states that the skill guidance takes precedence over the sibling patterns — sibling conventions are defaults, not overrides of explicit skill instructions",
+      "passed": true,
+      "evidence": "conventions.md row 1 cites \"Skill guidance takes precedence over sibling patterns\" and resolves: \"Follow the skill guidance. Do not adopt the sibling pattern.\" Line 49: \"The assertion-style conflict is settled by the skill's precedence rule\", and all other sibling conventions are \"adopted unchanged\"."
+    },
+    {
+      "text": "The test plan describes value-based assertions for the license summary tests (e.g., assert_eq on specific license identifiers or exact counts per category) rather than using .any() or .count() > 0 existence checks",
+      "passed": true,
+      "evidence": "test-plan.md: \"The sibling .filter(..).any(|_| true) ... and .filter(..).count() + assert!(n > 0) patterns are deliberately not used.\" Tests use e.g. `assert_eq!(summary, LicenseSummary { permissive: LicenseCategorySummary { count: 2, licenses: vec![\"Apache-2.0\".into(), \"MIT\".into()] }, ... })` and `assert_eq!(summary.copyleft, LicenseCategorySummary { count: 1, licenses: vec![\"GPL-2.0-only\".into()] })`."
+    },
+    {
+      "text": "The test plan follows sibling conventions for non-conflicting aspects — test naming, setup/teardown, test organization — while overriding only the assertion style",
+      "passed": true,
+      "evidence": "test-plan.md Approach: \"Structure, setup, naming: copied from tests/api/sbom.rs / tests/api/advisory.rs. Same test context and DB fixture helpers, same HTTP client, same assert_eq!(resp.status(), StatusCode::...) status checks\"; \"No parameterization: the siblings don't use rstest\" (follows project). conventions.md line 49: \"Everything else from the siblings (file layout, fixture/setup helpers, naming, ... status checks, typed deserialization) is adopted unchanged.\" The added /// doc comments are additive (siblings assumed to have none), not a replacement of a sibling convention; assertion style is the only sibling pattern actually overridden."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

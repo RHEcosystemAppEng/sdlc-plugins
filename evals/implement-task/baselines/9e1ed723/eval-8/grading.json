@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "reuse-decision.md table lists `fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>` and `fn suppliers(sbom: &Sbom) -> Vec<SupplierInfo>` at `modules/ingestor/src/graph/sbom/mod.rs` with 'Current visibility: private'; plan.md Step 6 says '`fn describing_packages(...)` -> `pub fn ...`' and '`fn suppliers(...)` -> `pub fn ...`'."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "reuse-decision.md Rationale step 1 'Check dependency relationship': 'migration/Cargo.toml already declares: trustify-module-ingestor = { path = \"../modules/ingestor\" }' and 'In a real run I would confirm this by reading migration/Cargo.toml ... before editing.' Step 2 then bases the decision on it: 'Dependency already exists -> make public and import.' plan.md Step 4 also includes 'Read migration/Cargo.toml to confirm the trustify-module-ingestor dependency.'"
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "reuse-decision.md Decision: 'Make describing_packages() and suppliers() public (pub fn) ... and import them from the migration crate. Do NOT duplicate them.' plan.md summary: 'Make ... pub and import them in the migration, because migration already depends on trustify-module-ingestor'."
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md section '3. Duplication rejected — duplication is only acceptable when reuse would require adding a new dependency. That is not the case here'. plan.md: helper 'does not re-implement extraction' and Step 9 'Duplication check: grep for any supplier-extraction logic in migration/ to ensure none was copied.' No copying proposed anywhere."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md Benefits: 'DRY: one implementation of the extraction logic.' and 'Bug fixes / format support changes ... apply to both ingestion and migration automatically.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

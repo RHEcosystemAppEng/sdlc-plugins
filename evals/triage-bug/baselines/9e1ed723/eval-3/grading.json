@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Investigation identifies two independent root causes: (1) convention reference formatter using wrong case transform, (2) task creation using Feature issue type ID instead of Task (Steps 2-4)",
+      "passed": true,
+      "evidence": "investigation.md Step 2 has 'Trace A' (formatter in shared/convention-utils.md 'normalizes the heading into a slug (lowercase plus spaces replaced by hyphens), which gives §migration-patterns instead of ... §Migration Patterns') and 'Trace B' ('Step 6a passes the Feature issue type ID instead of the discovered Task issue type ID'). Step 3 Independence analysis concludes 'these are **two independent root causes** in different modules'. Step 4 lists 'Root cause #1: Malformed convention references' and 'Root cause #2: Task created with Feature issue type'."
+    },
+    {
+      "text": "Decomposition Guard is triggered because the two root causes are in different modules/code paths (Step 6)",
+      "passed": true,
+      "evidence": "investigation.md Step 5 section: 'Two independent root causes were found, so the **Decomposition Guard (Step 6) applies before any Task is created**.' decomposition-guard.md is titled 'Decomposition Guard — ACME-502 (Step 6)' and says 'These root causes sit in different modules and don't share a code path.'"
+    },
+    {
+      "text": "Decomposition Guard presents both issues with their affected files/modules (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md prompt lists '1. **Malformed convention references** ... (in `plugins/sdlc-workflow/shared/convention-utils.md`, convention reference formatter)' and '2. **Wrong issue type on task creation** ... (in `plugins/sdlc-workflow/skills/plan-feature/SKILL.md`, Step 6a)'."
+    },
+    {
+      "text": "Decomposition Guard offers the user two options: Proceed with single Task or Split into separate Bugs (Step 6)",
+      "passed": true,
+      "evidence": "decomposition-guard.md: 'Options: 1. **Proceed**: create a single Task covering all fixes 2. **Split**: I recommend creating separate Bugs for each independent issue, then triaging each one individually. Choose (1/2):'"
+    },
+    {
+      "text": "The skill does NOT silently create a single Task bundling both fixes — it waits for user input (Step 6 stop rule)",
+      "passed": true,
+      "evidence": "investigation.md heading 'Step 5 / 5b / 5c — Task generation: ON HOLD' and 'No Task, link, or digest is created until the user responds.' decomposition-guard.md: 'Prompt shown to the user before any Task is created' ending with 'Choose (1/2):'. Neither output file contains a created Task."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

@@ -657,6 +657,103 @@ def test_create_issue_all_optional_fields_together():
     print("✓ create_issue all optional fields together test passed")
 
 
+def test_create_issue_security_level_mapping():
+    """Verifies that create_issue posts an inherited security level as its id."""
+    captured = {}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        captured["data"] = data
+        return {"key": "TEST-1", "id": "1"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        # When creating an issue at the parent vulnerability's security level
+        create_issue("TC", "Test", "desc", "Task",
+                     security={"id": "10034", "name": "Red Hat Employee"})
+
+        # Then the payload carries only the level id, as the Jira field expects
+        assert captured["data"]["fields"]["security"] == {"id": "10034"}
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ create_issue security level mapping test passed")
+
+
+def test_create_issue_security_accepts_bare_level_id():
+    """Verifies that a bare level id is serialized the same way as an object."""
+    captured = {}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        captured["data"] = data
+        return {"key": "TEST-1", "id": "1"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        # When creating an issue with a numeric level id
+        create_issue("TC", "Test", "desc", "Task", security=10034)
+
+        # Then it is normalized to Jira's string id form
+        assert captured["data"]["fields"]["security"] == {"id": "10034"}
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ create_issue bare security level id test passed")
+
+
+def test_create_issue_omits_security_when_none():
+    """Verifies that create_issue omits the security field when no level is given."""
+    captured = {}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        captured["data"] = data
+        return {"key": "TEST-1", "id": "1"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        # When the parent vulnerability is unprotected
+        create_issue("TC", "Test", "desc", "Task")
+
+        # Then the payload has no security key, so Jira applies no level
+        assert "security" not in captured["data"]["fields"]
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ create_issue omits security when None test passed")
+
+
+def test_create_issue_fails_fast_on_invalid_security():
+    """Verifies that a malformed security level exits non-zero without a request."""
+    called = {"made": False}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        called["made"] = True
+        return {"key": "TEST-1", "id": "1"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        # When the supplied level has no usable id
+        exit_code = None
+        try:
+            create_issue("TC", "Test", "desc", "Task", security={"name": "Red Hat Employee"})
+            raised = False
+        except SystemExit as e:
+            raised = True
+            exit_code = e.code
+
+        # Then it fails fast rather than silently creating an unprotected issue
+        assert raised, "Expected create_issue to fail fast (SystemExit) on an invalid security level"
+        assert exit_code == 1, f"Expected exit code 1, got {exit_code}"
+        assert not called["made"], "Expected no HTTP request to be issued"
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ create_issue fails fast on invalid security level test passed")
+
+
 def test_create_issue_fix_versions_filters_empty_names():
     """Verifies that create_issue filters out empty version names from fixVersions."""
     captured = {}
@@ -680,6 +777,68 @@ def test_create_issue_fix_versions_filters_empty_names():
         jira_client.make_request = original_make_request
 
     print("✓ create_issue fix_versions filters empty names test passed")
+
+
+def test_create_issue_merges_unrelated_custom_fields_with_security():
+    """Verifies that unrelated custom fields still merge alongside the validated level."""
+    captured = {}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        captured["data"] = data
+        return {"key": "TEST-1", "id": "1"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        # When creating an issue with a level and an unrelated custom field
+        create_issue("TC", "Test", "desc", "Task",
+                     security={"id": "10034", "name": "Red Hat Employee"},
+                     custom_fields={"customfield_10010": "value"})
+
+        # Then both the level and the custom field reach the payload
+        fields = captured["data"]["fields"]
+        assert fields["security"] == {"id": "10034"}
+        assert fields["customfield_10010"] == "value"
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ create_issue merges unrelated custom fields with security test passed")
+
+
+@pytest.mark.parametrize("conflicting", [
+    {"security": {"id": "10038"}},
+    {"security": None},
+])
+def test_create_issue_rejects_custom_fields_security_conflict(conflicting):
+    """Verifies a custom_fields security key cannot override the validated level."""
+    called = {"made": False}
+    original_make_request = jira_client.make_request
+
+    def fake_make_request(method, endpoint, data=None):
+        called["made"] = True
+        return {"key": "TEST-1", "id": "1"}
+
+    jira_client.make_request = fake_make_request
+    try:
+        # When both the validated argument and a generic security key are supplied
+        exit_code = None
+        try:
+            create_issue("TC", "Test", "desc", "Task",
+                         security={"id": "10034", "name": "Red Hat Employee"},
+                         custom_fields=conflicting)
+            raised = False
+        except SystemExit as e:
+            raised = True
+            exit_code = e.code
+
+        # Then it fails fast instead of letting the merge replace or drop the level
+        assert raised, "Expected create_issue to fail fast on a conflicting security key"
+        assert exit_code == 1, f"Expected exit code 1, got {exit_code}"
+        assert not called["made"], "Expected no HTTP request to be issued"
+    finally:
+        jira_client.make_request = original_make_request
+
+    print("✓ create_issue rejects custom_fields security conflict test passed")
 
 
 def test_create_issue_fails_fast_on_empty_issue_type():
