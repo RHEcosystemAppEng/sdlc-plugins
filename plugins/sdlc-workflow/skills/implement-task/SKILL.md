@@ -158,9 +158,7 @@ section in CLAUDE.md (the field is listed as `GitHub Issue custom field: <field-
 
 After fetching the task, verify that the description has not been modified since
 plan-feature created it. This uses the digest protocol defined in
-`shared/description-digest-protocol.md`. Run the check — compute the digest with the
-skill's script and report the value it prints; a described-but-unrun check does not
-satisfy this step.
+`shared/description-digest-protocol.md`.
 
 1. **Retrieve issue comments**: fetch all comments on the Jira issue:
 
@@ -207,9 +205,9 @@ satisfy this step.
    e. **Compare hex digests** (when tags match):
       - **Match**: proceed silently — no additional user prompt, no added latency.
       - **Mismatch**: alert the user that the task description was modified after
-        plan-feature created it. Display both values: the expected digest from the
-        comment and the actual digest computed from the current description — a real
-        hex digest, not a placeholder. Ask the user whether to:
+        plan-feature created it. Display the expected digest (from the comment) and
+        the actual digest (computed from the current description). Ask the user
+        whether to:
         1. **Proceed** with the current description as-is
         2. **Stop** so they can re-run plan-feature to regenerate tasks
 
