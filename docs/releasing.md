@@ -14,33 +14,53 @@ This document describes how to release a new version of the sdlc-workflow plugin
    - `0.X.0` → `0.(X+1).0` (y-stream) for new features or breaking changes
    - `0.X.Y` → `0.X.(Y+1)` (z-stream) for enhancements, bug fixes, and polish
 
-3. **Commit the version bump** with the message:
+3. **Cut a release branch** from the default branch — the bump and its re-pin land through a pull
+   request so CI gates them before they reach `main`. Below, `<remote>` is the remote pointing at
+   `RHEcosystemAppEng/sdlc-plugins` (named `upstream` or `origin`, depending on the clone):
+   ```bash
+   git fetch <remote>
+   git switch -c release/vX.Y.Z <remote>/main
+   ```
+
+4. **Commit the version bump** with the message:
    ```
    chore(release): bump version to X.Y.Z
    ```
-
-4. **Push to the default branch.**
-
-5. **Re-pin and re-lock Fullsend** — `plugin.json` is Fullsend-pinned content, so the bump makes
-   `.fullsend/lock.yaml` stale and Python Tests fails on `test_fullsend_lock_matches_checkout_bytes`.
-   Once the bump commit is on the default branch:
+   Push the branch **to `RHEcosystemAppEng/sdlc-plugins`, not to a fork** — Fullsend fetches the
+   pinned content by SHA from that repository, so a fork-only branch leaves the next step's pin
+   dangling. The branch's tip SHA is what the next step pins:
    ```bash
-   # set the base: SHA in both harnesses to the bump commit, keeping each #sha256=
+   git push -u <remote> HEAD
+   ```
+
+5. **Re-pin and re-lock Fullsend in the same branch** — `plugin.json` is Fullsend-pinned content,
+   so the bump makes `.fullsend/lock.yaml` stale and Python Tests fails on
+   `test_fullsend_lock_matches_checkout_bytes`. Set the `base:` SHA in **both**
+   `.fullsend/harness/*.yaml` to the bump commit (keep each `#sha256=`), then:
+   ```bash
    fullsend lock --all --fullsend-dir .fullsend
    ```
-   Commit as `chore(fullsend): re-pin and re-lock to <bump-sha> (X.Y.Z bump)` and push. See
+   Commit as `chore(fullsend): re-pin and re-lock to <bump-sha> (X.Y.Z bump)` and push the branch
+   again, so the pull request carries the lock update. See
    [fullsend.md — Releasing an update](../fullsend.md#releasing-an-update-this-repo).
 
-6. **Create a GitHub release** — tag the re-pin commit (so the release tree passes CI) and create a
-   GitHub release on `RHEcosystemAppEng/sdlc-plugins` with notes from the changelog:
+6. **Open a PR into `main` and wait for CI** — Python Tests (which includes the lock-vs-checkout
+   test), Plugin Validation and Skill Lint must pass. Merge with a **merge commit, never a
+   squash**: squashing discards the bump commit the harnesses pin to, and the pinned URLs would
+   dangle.
+
+7. **Create a GitHub release** — fetch first so the server-created merge commit exists locally,
+   then tag it and create a GitHub release on `RHEcosystemAppEng/sdlc-plugins` with notes from the
+   changelog:
    ```bash
-   git tag vX.Y.Z <commit-sha>
+   git fetch <remote>
+   git tag vX.Y.Z <merge-commit-sha>
    git push <remote> vX.Y.Z   # push to RHEcosystemAppEng/sdlc-plugins
    gh release create vX.Y.Z --repo RHEcosystemAppEng/sdlc-plugins --title "vX.Y.Z" --latest --notes "<changelog section for this version>"
    ```
    Use the corresponding `CHANGELOG.md` section as the release notes body.
 
-7. **Users update** by running:
+8. **Users update** by running:
    ```
    /plugin marketplace update
    ```
