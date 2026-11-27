@@ -1,0 +1,11 @@
+# Planning decisions (eval run, no external services)
+
+- **Step 0:** the CLAUDE.md Project Configuration is valid (Repository Registry, Jira Configuration, Code Intelligence are present).
+- **Step 1:** TC-9008 was read from `feature-fail-open-risk.md` instead of Jira. Priority Major is propagated. fixVersions is None, so it is omitted. There is no "Documentation Considerations" section, so no documentation task is generated.
+- **Step 1.5 (parent link prompt):** skipped. No parent was given, and no questions are allowed in this run.
+- **Step 2:** no Figma URL, so skipped.
+- **Step 2.5:** Jira issue types could not be fetched. Because CLAUDE.md sets `Default epic grouping strategy: by-sub-feature`, a level-1 "Epic" type is assumed to exist. One sub-feature Epic is proposed (all three tasks form a single sub-feature: fail-closed tracker-gated verification). This stands in for the by-sub-feature approval prompt.
+- **Step 3:** `release-verifier` is not in the Repository Registry and has no Serena instance. Paths come from the Feature's repository-structure table. Code could not be inspected, so the gateway's authenticated-identity mechanism is marked "verify at implementation time" in Task 1. No CONVENTIONS.md, no testing-readiness template, no shared-artifact lifecycle beyond the client → gate → wrapper chain (all of which are covered), and no skill-eval infrastructure apply.
+- **Step 4 / 4.5:** the impact map is treated as approved. Workflow mode is direct-to-main (no atomicity indicators), so there are no bookend tasks.
+- **Fail-open risk coverage:** every stated silent, empty, or no-op success risk has a fail-closed AC, a degraded-path test, and an implementation note naming the gate site: `src/tracker/client.py::search_issues` (Task 1), `src/gate/resolve_issue.py::resolve_gated_issue` (Task 2), and `scripts/pre-verify.sh` (Task 3). The "live run after merge" mitigation is noted only as an extra check.
+- **Step 6:** Jira creation is simulated with output files. Digests were computed with `scripts/sha256-digest.py` over the local task markdown, because there is no Jira re-fetch. Links that would be created: TC-9008 incorporates the Epic, Task 2 depends on Task 1, and Task 3 depends on Task 2.

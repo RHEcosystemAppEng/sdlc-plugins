@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "The self-review traces the writes in build_summary() and finds no later merge, bulk update, or generic override path that could replace or remove the validated risk_classification",
+      "passed": true,
+      "evidence": "self-review.md check 16 'Validated-value override paths' PASS: '(1) Later writes: after risk_classification is validated and assigned in the struct literal, build_summary() only returns the struct... it does no merge, bulk update, defaults merge, extra-field map or patch helper afterwards, and no callee writes to the struct. (2) No path can replace the validated value'. Check 11 also traces input -> validation -> field assignment -> return."
+    },
+    {
+      "text": "The test plan does not require a generic-override or conflict test for the validated risk_classification, because no later write path can change it",
+      "passed": true,
+      "evidence": "plan.md Files to Create: 'No override or conflict test. build_summary() has no later write path that could replace the validated value, so check 16 does not need one.' self-review.md check 16: '(3) No later write path exists, so no override/conflict test is added and no test seam is introduced.'"
+    },
+    {
+      "text": "The plan still tests that each allowed risk_classification is accepted and that a disallowed value is rejected",
+      "passed": true,
+      "evidence": "plan.md: 'build_summary_accepts_allowed_risk_classification: parameterized over critical, high, medium, low... Asserts assert_eq!(summary.risk_classification, case)' and 'build_summary_rejects_disallowed_risk_classification: parameterized over \"severe\", \"\" and \"Critical\". Asserts the result is Err and matches the expected AppError variant'."
+    },
+    {
+      "text": "The plan keeps all changes within the task's Files to Modify and Files to Create — no unrelated files are modified",
+      "passed": true,
+      "evidence": "plan.md lists changes only to modules/fundamental/src/advisory/model/summary.rs, modules/fundamental/src/advisory/service/advisory.rs (Files to Modify) and tests/api/advisory_summary.rs (Files to Create), matching the task. self-review.md check 1: 'Planned diff: advisory/service/advisory.rs, advisory/model/summary.rs ... and tests/api/advisory_summary.rs'. Possible extra edits (callers, tests/Cargo.toml registration, docs/api.md) are only conditional and explicitly gated on user approval, not planned modifications."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

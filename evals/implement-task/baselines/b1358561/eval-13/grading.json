@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The null guards analysis identifies all three nullable fields from AdvisoryIngestResult: cves (Option<Vec<String>>), affected_packages (Option<Vec<AffectedPackage>>), and severity_counts (Option<HashMap<String, u32>>)",
+      "passed": true,
+      "evidence": "null-guards.md 'Field-by-field analysis' table has rows: '`cves` | `Option<Vec<String>>`', '`affected_packages` | `Option<Vec<AffectedPackage>>`', '`severity_counts` | `Option<HashMap<String, u32>>`'."
+    },
+    {
+      "text": "The plan uses Rust's idiomatic null guard patterns for each field — unwrap_or_default(), as_ref(), map(), or if-let/match — rather than calling .unwrap() directly",
+      "passed": true,
+      "evidence": "plan.md Step 6 code: `result.cves.clone().unwrap_or_default()`, `result.affected_packages.as_deref().map_or(0, <[_]>::len)`, `result.severity_counts.clone().unwrap_or_default()`. null-guards.md lists `result.cves.unwrap()` and `.expect(..)` as forbidden patterns."
+    },
+    {
+      "text": "The plan does NOT access any of the three Option fields without a guard — no direct .len(), .join(), or iteration on Option<T> without unwrapping safely",
+      "passed": true,
+      "evidence": "In plan.md each Option field is read only through unwrap_or_default or as_deref().map_or. `.len()` is called only on the already-guarded `cve_list` Vec (`u32::try_from(cve_list.len())`). There is no .join() or iteration on raw Option fields anywhere in either file."
+    },
+    {
+      "text": "The null guards analysis explains why defensive access is needed: the data crosses a module boundary from the ingestor module, and the producer's schema allows None values",
+      "passed": true,
+      "evidence": "null-guards.md 'Why guards are required here': 'AdvisoryIngestResult is produced by IngestorService::ingest_advisory() in a **different crate** (modules/ingestor/src/service/mod.rs)... the data crosses a module boundary' and 'Its fields are explicitly Option<T> for all aggregate data, and each one can be None in normal operation'."
+    },
+    {
+      "text": "The test plan includes test cases for all-None inputs (cves=None, affected_packages=None, severity_counts=None) to verify the guards work correctly",
+      "passed": true,
+      "evidence": "plan.md test table: '`extract_summary_all_none` | all three `None` | `assert_eq!(summary, VulnerabilitySummary::default())`, and spell out cve_count == 0, cve_list.is_empty(), affected_package_count == 0, severity_breakdown.is_empty()'. The same test is listed in the test coverage table in null-guards.md."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

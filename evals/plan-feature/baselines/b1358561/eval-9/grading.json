@@ -1,0 +1,30 @@
+{
+  "assertion_results": [
+    {
+      "text": "At least one task's Acceptance Criteria contains a code-level, testable criterion requiring the gating flow to fail closed (e.g., exit non-zero or report an error rather than skip) when the tracker search returns an empty result from a source that cannot be proven authenticated or healthy.",
+      "passed": true,
+      "evidence": "task-2-gate-ready-for-verification-fail-closed.md AC: \"**Fail-closed:** when `search_issues` raises `TrackerAuthError` (including the case where the gateway returned an empty `[]` without proven authentication), `resolve_gated_issue` does not return a skip. The error propagates and the gate exits non-zero\". Task 1 AC also: \"when the gateway returns HTTP 200 with an empty result (`[]`) but the request cannot be proven authenticated as the service account, `search_issues` raises `TrackerAuthError` and the client exits non-zero. It does not return `[]`\"."
+    },
+    {
+      "text": "The same task's Test Requirements include a test that drives the unauthenticated, degraded, or empty-search path and asserts the fail-closed outcome rather than a skip.",
+      "passed": true,
+      "evidence": "task-2 Test Requirements: \"**Degraded-path test:** stub `search_issues` to raise `TrackerAuthError` (simulating the unauthenticated gateway returning `[]`). Assert that `resolve_gated_issue` raises, never returns `None`/skip, and the gate entry point exits non-zero\"."
+    },
+    {
+      "text": "That task's Implementation Notes point at the specific gate or skip site where the guard belongs, naming src/gate/resolve_issue.py (resolve_gated_issue) and/or scripts/pre-verify.sh.",
+      "passed": true,
+      "evidence": "task-2 Implementation Notes: \"**Fail-closed gate site:** `src/gate/resolve_issue.py::resolve_gated_issue`. The empty-result → `None` branch is the skip site that can fail open. It must not catch `TrackerAuthError`...\". Task 3 likewise names \"**Fail-closed gate site:** `scripts/pre-verify.sh`\"."
+    },
+    {
+      "text": "The documented silent-empty risk is not covered only by an operational or post-merge mitigation: if a live run after merge is mentioned, it appears alongside the fail-closed Acceptance Criterion and test, not as their replacement.",
+      "passed": true,
+      "evidence": "task-2 notes: \"An operational post-merge live run can be an extra check, but it does not replace the fail-closed test below.\" Task 1: \"...is a welcome addition, but it is not this task's coverage for the fail-open risk. The tests below are.\" impact-map.md risk table: live run \"Kept only as an extra post-merge check. It is **not** used as the coverage for any risk above\". Each such mention coexists with fail-closed AC and degraded-path tests in Tasks 1-3."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 0,
+    "total": 4,
+    "pass_rate": 1.0
+  }
+}

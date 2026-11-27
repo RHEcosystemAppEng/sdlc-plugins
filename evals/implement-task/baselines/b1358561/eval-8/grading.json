@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that describing_packages() and suppliers() are private functions in modules/ingestor/src/graph/sbom/mod.rs that need to be made public",
+      "passed": true,
+      "evidence": "plan.md Step 4.1: 'get_symbols_overview(\"modules/ingestor/src/graph/sbom/mod.rs\"): confirm that `describing_packages` and `suppliers` exist and are private.' Step 6.1: '`fn describing_packages(sbom: &Sbom) -> Vec<PackageRef>` becomes `pub fn describing_packages(...)`' and '`fn suppliers(...)` becomes `pub fn suppliers(...)`'. reuse-decision.md: 'Make `describing_packages()` and `suppliers()` public in `modules/ingestor/src/graph/sbom/mod.rs`'."
+    },
+    {
+      "text": "The plan checks or acknowledges that migration/Cargo.toml already depends on trustify-module-ingestor — the dependency relationship is explicitly verified before deciding to reuse",
+      "passed": true,
+      "evidence": "plan.md Step 4.6: 'search_for_pattern(\"trustify-module-ingestor\", paths=\"migration/Cargo.toml\"): confirm the dependency exists.' reuse-decision.md Rationale 2: 'The dependency already exists. `migration/Cargo.toml` already declares `trustify-module-ingestor = { path = \"../modules/ingestor\" }`. Making the functions public adds no edge to the crate graph'."
+    },
+    {
+      "text": "The reuse decision recommends making describing_packages() and suppliers() public (pub fn) rather than duplicating them, because the dependency already exists",
+      "passed": true,
+      "evidence": "plan.md Reuse decision: 'Make the functions public and import them. Do not duplicate them. `migration/Cargo.toml` already depends on `trustify-module-ingestor`, so this is rule 2...'. reuse-decision.md shows `pub fn describing_packages(...)` / `pub fn suppliers(...)` and cites the existing dependency as rationale."
+    },
+    {
+      "text": "The plan does NOT propose copying or inlining the function bodies into the migration crate — duplication is explicitly rejected",
+      "passed": true,
+      "evidence": "reuse-decision.md 'Alternative considered and rejected': 'Copy the functions into the migration crate. Rejected. It violates the acceptance criterion and the skill's reuse rule, and creates two copies of the logic that can drift apart.' plan.md Step 6.2 helper 'does not reimplement the extraction'; Step 8: 'adds no copied code'."
+    },
+    {
+      "text": "The reuse decision references the DRY principle or explains that reuse ensures future bug fixes apply in one place",
+      "passed": true,
+      "evidence": "reuse-decision.md Rationale 4 'One source of truth': 'If the migration had its own copy, the backfilled `sbom_supplier` data could drift from what ingestion produces for new SBOMs whenever the ingestor logic changes (new SBOM formats, bug fixes). Sharing the code keeps backfilled data and newly ingested data consistent.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

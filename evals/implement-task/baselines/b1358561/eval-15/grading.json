@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The self-review identifies the extra_fields merge into the same ingest payload as a write path that runs after the validated data_classification assignment",
+      "passed": true,
+      "evidence": "self-review.md check 16, item 1: 'Later writes after the validated assignment in build_ingest_payload(): the merge of caller-supplied extra_fields into the same map, which runs **last** as the Implementation Notes describe.'"
+    },
+    {
+      "text": "The self-review states that this merge can replace or remove the validated value, so the validated value must remain authoritative",
+      "passed": true,
+      "evidence": "self-review.md check 16, item 2: 'Can a path replace the value? Yes. An extra_fields entry \"data_classification\": <anything> would overwrite the validated value. That breaks AC2 and could let an unvalidated value such as \"top-secret\" through, bypassing AC1.' A post-merge debug_assert_eq! is added so the validated value stays."
+    },
+    {
+      "text": "The plan resolves the override path by applying the validated value after the merge or by rejecting a conflicting key — not by assuming the current call order cannot change",
+      "passed": true,
+      "evidence": "plan.md Step 6 section 2 'Close the override path': RESERVED_PAYLOAD_KEYS check returns AppError::BadRequest before the merge; 'Rejecting is fail-fast and does not depend on statements staying in a particular order.' The self-review also says it 'doesn't depend on write order'."
+    },
+    {
+      "text": "The test plan includes a test that a conflicting extra_fields classification cannot override the validated value",
+      "passed": true,
+      "evidence": "plan.md Step 6 section 3: 'build_ingest_payload_rejects_extra_fields_override_of_classification: valid internal plus extra_fields = {\"data_classification\": \"public\"}. Asserts an error and that no payload is produced.'"
+    },
+    {
+      "text": "The conflict test is justified by the identified later extra_fields write path rather than restated from a task acceptance criterion or test requirement",
+      "passed": true,
+      "evidence": "plan.md: 'This is the conflict test that check 16 requires.' self-review.md check 16 item 3 places the conflict test directly after the later-write analysis of the extra_fields merge. The task's Test Requirements list only accept and reject tests, with no conflict test."
+    },
+    {
+      "text": "The plan keeps all changes within the task's Files to Modify and Files to Create — no unrelated files are modified",
+      "passed": true,
+      "evidence": "plan.md Step 6 changes only details.rs, sbom.rs (modify) and tests/api/sbom_ingest_payload.rs (create). Possible extras (tests/Cargo.toml registration, other SbomDetails construction sites, docs) are only flagged: 'Nothing is committed outside scope without explicit approval' (self-review check 1) and 'not edited without it' (plan Documentation impact). The plan does not modify them."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

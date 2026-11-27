@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.14.1] - 2026-11-27
+
+### Added
+
+- `triage-security`: Fullsend runs assign the Vulnerability to the runner identity, and the new
+  optional `Triage status transitions: disabled` setting keeps the issue in its current status
+  while comments, links, remediation tasks and the `ai-cve-triaged` label still apply
+- `triage-security`: created and reused triage issues inherit the parent Vulnerability's security
+  level, re-read live before creation or repair
+- `implement-task`: validated task values are checked against later override paths, with a
+  conflict test required whenever a later write path exists
+
+### Changed
+
+- `implement-task`: execution modes are resolved once, each rule has a single home, and Step 9 is
+  a check index; self-verification guidance moved to `shared/self-verification.md`
+- `setup`: constraints and security-config templates retargeted to the restructured
+  `implement-task` steps, and the security matrix documents the `Triage status transitions` setting
+
+### Fixed
+
+- `triage-security`: live ownership checked before any executor mutation; human-owned
+  Vulnerabilities are skipped in Fullsend runs
+- `triage-security`: fails closed on a blank `Triage status transitions` setting and omits the
+  Step 0.8 transition when transitions are disabled
+- `jira-client`: rejects `custom_fields` security conflicts that disagree with the validated level
+- `implement-task`: the description digest check runs and scopes unlisted docs, the digest temp
+  path no longer depends on `$TMPDIR`, the Step 9 index carries its decisive facts, and three
+  self-verification checks are repaired
+- `triage-security` and `verify-pr`: Fullsend presence gates delivered in Tirith's accepted
+  `test` dialect
+- Eval runner: native gate evidence pairing hardened, contradictory gate judgments rejected, and
+  the tested plugin staged under an `sdlc-workflow` directory
+
 ## [0.14.0] - 2026-11-19
 
 ### Added

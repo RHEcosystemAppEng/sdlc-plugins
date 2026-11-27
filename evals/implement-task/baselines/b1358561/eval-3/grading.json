@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan explicitly references reusing common/src/db/query.rs::apply_filter for comma-separated multi-value query parameter parsing rather than writing new parsing logic (constraint 5.4)",
+      "passed": true,
+      "evidence": "plan.md Step 6.2: 'call `common::db::query::apply_filter(select, package_license::Column::License, license)`, which handles the single and comma-separated cases and generates the `IN (...)` clause.' reuse-analysis.md section 1 '`common/src/db/query.rs::apply_filter`: reused directly' and 'What it avoids: hand-written `split(',')` and trim logic, and hand-built `Condition::any()` / `is_in` expressions.'"
+    },
+    {
+      "text": "The plan references following the filter pattern from modules/fundamental/src/advisory/endpoints/list.rs as a structural guide for implementing the license filter",
+      "passed": true,
+      "evidence": "plan.md Step 6.1: 'Add an optional `license` field to the package list Query struct, mirroring the advisory `severity` field exactly'. reuse-analysis.md section 2 '`modules/fundamental/src/advisory/endpoints/list.rs`: pattern followed (structural reuse)' detailing Query struct, handler flow, error handling, service parameter, OpenAPI."
+    },
+    {
+      "text": "The plan references using entity/src/package_license.rs for the JOIN query rather than writing raw SQL or creating a new entity",
+      "passed": true,
+      "evidence": "plan.md Step 6.2: 'join `package` to `package_license` through the SeaORM relation defined in `entity/src/package_license.rs`'. reuse-analysis.md section 3: 'joins `package` to `package_license` through the entity's SeaORM relation ... No raw SQL and no new entity or migration.'"
+    },
+    {
+      "text": "The reuse analysis covers all 3 Reuse Candidates from the task description, explaining how each would be applied",
+      "passed": true,
+      "evidence": "reuse-analysis.md has sections '1. common/src/db/query.rs::apply_filter', '2. modules/fundamental/src/advisory/endpoints/list.rs', '3. entity/src/package_license.rs', each with a 'How it is used' explanation, plus a summary table listing all three with reuse type and location."
+    },
+    {
+      "text": "The plan modifies only the files listed in Files to Modify and Files to Create, apart from files it explicitly flags for user approval under Step 9 and artifacts produced by a documented code-generation command that Step 9 directs staging; silently adding unlisted files fails (constraint 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6 edits only package/endpoints/list.rs, package/service/mod.rs, and creates tests/api/package_license_filter.rs. Unlisted files are explicitly flagged: 'tests/Cargo.toml ... would be raised as a Step 9 scope flag for user approval rather than made silently'; docs/api.md 'raised as a Step 9 scope flag ... not edited automatically'; extra callers 'flagged in Step 9 check 1 for user approval'. Step 9 table row 1: 'FLAGGED: possible tests/Cargo.toml registration, docs/api.md, and any extra PackageService::list callers. Presented for approval.' reuse-analysis.md: adding a relation to the entity 'would be flagged for user approval in Step 9'."
+    },
+    {
+      "text": "The plan reuses apply_filter for comma-separated parsing and SQL IN-clause construction rather than building its own split/trim/IN filtering path; additional per-value validation (allowed-value or character checks) applied before or after calling apply_filter does not count as duplication (constraint 5.4)",
+      "passed": true,
+      "evidence": "Filtering and IN-clause go through apply_filter (plan.md Step 6.2; Step 8 'apply_filter multi-value IN'). The endpoint's 'split the value on `,`, trim each entry, and reject ... if any entry is empty ... or is not a syntactically valid SPDX identifier (characters [A-Za-z0-9.\\-+])' is per-value validation before calling the service, which the assertion explicitly permits; no custom IN filtering path is built."
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

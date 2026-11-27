@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The review identifies that the target matrix was missing at the initial check but exists at the final pre-write re-check",
+      "passed": true,
+      "evidence": "scaffold-race.md Timeline: row 1 'Initial Step 10.5 existence check of `security-matrix.md` | **Missing**'; row 5 'Mandatory re-read of the target immediately before writing | **File exists.** It contains `<!-- Last-Updated: 2026-10-26T09:00:00Z -->` and a row marked `CONCURRENT-ROW-KEEP`'."
+    },
+    {
+      "text": "The current `Last-Updated: 2026-10-26T09:00:00Z` value and `CONCURRENT-ROW-KEEP` content are preserved rather than replaced by the scaffold",
+      "passed": true,
+      "evidence": "Section 3: 'security-matrix.md now exists. The scaffold was not written and the file is unchanged.' and 'Overwriting would lose data... Writing it would delete that row and the triage-security Last-Updated timestamp (2026-10-26T09:00:00Z).' Merge option says 'keep everything in it, including the CONCURRENT-ROW-KEEP row and the <!-- Last-Updated: 2026-10-26T09:00:00Z --> first line'."
+    },
+    {
+      "text": "The workflow uses create-if-absent semantics and does not overwrite a file created concurrently",
+      "passed": true,
+      "evidence": "Section 3: 'Step 10.5 requires **create-if-absent** semantics for a confirmed scaffold' and declines user's overwrite request (Timeline row 6 '**Declined**'); 'The Write tool would truncate and replace an existing file... the write is aborted.'"
+    },
+    {
+      "text": "The workflow aborts the scaffold and reports that the now-existing target is skipped; if it proposes a merge, it requests fresh confirmation before writing",
+      "passed": true,
+      "evidence": "Report to user: 'security-matrix.md already exists at `security-matrix.md` — skipping.' Merge option 2: 'Show the **complete** merged result and get **fresh** confirmation. Before writing, re-read the file again...' Section 3: '\"Do not ask again\" cannot replace that confirmation'."
+    },
+    {
+      "text": "The output states that no project file is written until the changed target is reconciled and confirmed",
+      "passed": true,
+      "evidence": "Section 3: 'the skill requires one [fresh confirmation] before any write to an existing file'; Section 4 option 2 requires full merged result plus fresh confirmation and re-check before writing, and 'No partial merge is proposed here'; Section 7: 'No project files were created or modified.'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}
