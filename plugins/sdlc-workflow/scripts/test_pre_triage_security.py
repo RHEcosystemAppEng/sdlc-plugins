@@ -153,6 +153,168 @@ def test_collect_bundle_escapes_configured_values_in_jql_literals(tmp_path, monk
     ]
 
 
+def _issue(key, issue_type, labels=None, links=None, summary="issue"):
+    """Build a minimal Jira issue fixture for bundle-related tests."""
+    return {
+        "key": key,
+        "fields": {
+            "summary": summary,
+            "status": {"name": "New"},
+            "issuetype": {"name": issue_type},
+            "labels": labels or [],
+            "issuelinks": links or [],
+        },
+    }
+
+
+def _depend_link(issue_key, linked_key):
+    """Build a Depend link as Jira returns it from either end."""
+    return {
+        "type": {"name": "Depend"},
+        "inwardIssue": {"key": issue_key},
+        "outwardIssue": {"key": linked_key},
+    }
+
+
+def test_collect_bundle_surfaces_sibling_remediation_tasks(tmp_path, monkeypatch):
+    """A sibling Vulnerability's Depend-linked remediation Task becomes a trusted target."""
+    # Given a triaged issue with no links and a sibling whose Depend links mix
+    # qualifying remediation Tasks with unrelated, non-Depend, and foreign links
+    issue = _issue("TC-41", "Vulnerability")
+    sibling_links = [
+        _depend_link("TC-43", "TC-44"),
+        _depend_link("TC-43", "TC-45"),
+        _depend_link("TC-43", "OTHER-1"),
+        {"type": {"name": "Related"}, "inwardIssue": {"key": "TC-43"}, "outwardIssue": {"key": "TC-46"}},
+        {"outwardIssue": {"key": "TC-49"}},
+    ]
+    issues = {
+        "TC-41": issue,
+        "TC-43": _issue("TC-43", "Vulnerability", labels=["CVE-2026-12345"], links=sibling_links),
+        "TC-44": _issue("TC-44", "Task", labels=["ai-generated-jira"],
+                        links=[_depend_link("TC-44", "TC-47")], summary="Fix CVE in component"),
+        "TC-45": _issue("TC-45", "Task", summary="Unrelated linked task"),
+        "TC-46": _issue("TC-46", "Task", labels=["ai-generated-jira"]),
+    }
+    configuration = {"project_key": "TC", "vulnerability_issue_type_id": "10016"}
+    (tmp_path / "CLAUDE.md").write_text("# Project Configuration\n")
+    fetched_keys = []
+
+    def jira_client(command, *arguments):
+        """Serve the sibling search and record every fetched issue key."""
+        if command == "verify_identity":
+            return {"accountId": "runner-account"}
+        if command == "get_issue":
+            fetched_keys.append(arguments[0])
+            return issues[arguments[0]]
+        if command in ("get_remote_links", "get_versions", "get_transitions"):
+            return []
+        if command == "search_jql":
+            jql = arguments[arguments.index("--jql") + 1]
+            return {"issues": [issues["TC-43"]] if "issuetype = 10016" in jql else []}
+        raise AssertionError("unexpected Jira command: {}".format(command))
+
+    monkeypatch.setattr(
+        pre_triage_security, "_runner_configuration",
+        lambda _content, _root: (configuration, "https://example.com/lifecycle", [], {}))
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+    monkeypatch.setattr(pre_triage_security, "extract_cve_id", lambda _issue: "CVE-2026-12345")
+    monkeypatch.setattr(pre_triage_security, "_fetch_url", lambda _url, **_kwargs: {})
+    monkeypatch.setattr(pre_triage_security, "build_bundle", lambda **bundle: bundle)
+
+    # When the trusted runner collects the bundle one Depend hop out of the sibling
+    bundle = pre_triage_security.collect_bundle("TC-41", tmp_path)
+
+    # Then only the labelled remediation Task is surfaced, in both trusted lists
+    related_keys = [item["key"] for item in bundle["jira_metadata"]["related_issues"]]
+    remediation_keys = [item["key"] for item in bundle["idempotency"]["existing_remediation"]]
+    assert related_keys == ["TC-43", "TC-44"]
+    assert remediation_keys == ["TC-43", "TC-44"]
+    # And discovery follows exactly one hop, skipping foreign, non-Depend, and
+    # second-hop keys before any fetch
+    assert fetched_keys == ["TC-41", "TC-44", "TC-45"]
+    assert "OTHER-1" not in fetched_keys
+    assert "TC-46" not in fetched_keys
+    assert "TC-47" not in fetched_keys
+
+
+@pytest.mark.parametrize("related,expected_keys", [
+    ([{"key": "TC-43", "issue_type": "Vulnerability",
+       "links": [_depend_link("TC-43", "TC-44")]}], ["TC-44"]),
+    ([{"key": "TC-43", "issue_type": "Vulnerability",
+       "links": [{"type": {"name": "Related"},
+                  "inwardIssue": {"key": "TC-43"}, "outwardIssue": {"key": "TC-44"}}]}], []),
+    ([{"key": "TC-43", "issue_type": "Vulnerability",
+       "links": [{"outwardIssue": {"key": "TC-44"}}]}], []),
+    ([{"key": "TC-43", "issue_type": "Vulnerability",
+       "links": [_depend_link("TC-43", "OTHER-1")]}], []),
+    ([{"key": "TC-43", "issue_type": "Vulnerability",
+       "links": [_depend_link("TC-43", "TC-44")]},
+      {"key": "TC-44", "issue_type": "Task", "links": []}], []),
+    ([{"key": "TC-43", "issue_type": "Task",
+       "links": [_depend_link("TC-43", "TC-44")]}], []),
+], ids=["one-hop", "non-depend", "no-link-type", "foreign-project",
+        "already-related", "non-vulnerability"])
+def test_linked_remediation_tasks_skips_non_qualifying_hops(related, expected_keys):
+    """Only one Depend hop from a related Vulnerability can add a new target."""
+    # Given a fetched candidate Task whose own links point at a second hop
+    candidate = _issue("TC-44", "Task", labels=["ai-generated-jira"],
+                       links=[_depend_link("TC-44", "TC-47")])
+    fetched = {"TC-44": candidate}
+
+    # When the helper walks the related snapshots
+    discovered = pre_triage_security._linked_remediation_tasks(
+        copy.deepcopy(related), {"project_key": "TC"}, fetched)
+
+    # Then it returns only the qualifying key and never follows a second hop
+    assert [item["key"] for item in discovered] == expected_keys
+    assert "TC-47" not in fetched
+
+
+@pytest.mark.parametrize("returned_key", ["TC-77", "OTHER-9"],
+                         ids=["moved-in-project", "moved-foreign-project"])
+def test_linked_remediation_tasks_rejects_mismatched_identity(returned_key):
+    """A fetched issue is trusted only when its key matches the requested key."""
+    # Given a linked key whose get_issue result reports a different identity
+    related = [{"key": "TC-43", "issue_type": "Vulnerability",
+                "links": [_depend_link("TC-43", "TC-44")]}]
+    fetched = {"TC-44": _issue(returned_key, "Task", labels=["ai-generated-jira"])}
+
+    # When the helper validates the returned identity
+    discovered = pre_triage_security._linked_remediation_tasks(
+        copy.deepcopy(related), {"project_key": "TC"}, fetched)
+
+    # Then nothing is surfaced and collection does not raise
+    assert discovered == []
+
+
+def test_linked_remediation_tasks_skips_an_unfetchable_link(monkeypatch):
+    """One stale link cannot abort collection; other qualifying Tasks still surface."""
+    # Given two linked keys where one get_issue call fails
+    related = [{"key": "TC-43", "issue_type": "Vulnerability",
+                "links": [_depend_link("TC-43", "TC-44"), _depend_link("TC-43", "TC-45")]}]
+    fetched = {}
+
+    def jira_client(command, *arguments):
+        """Return one qualifying Task and fail the other fetch."""
+        assert command == "get_issue"
+        key = arguments[0]
+        if key == "TC-45":
+            raise subprocess.CalledProcessError(1, ["jira-client.py", command, key])
+        return _issue(key, "Task", labels=["ai-generated-jira"])
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When the helper walks both links
+    discovered = pre_triage_security._linked_remediation_tasks(
+        copy.deepcopy(related), {"project_key": "TC"}, fetched)
+
+    # Then the fetched key is surfaced, the failing key is skipped, and the cache
+    # never records a failed fetch
+    assert [item["key"] for item in discovered] == ["TC-44"]
+    assert "TC-45" not in fetched
+
+
 def test_pre_triage_script_rejects_missing_poller_work_item_url():
     """The runner fails before collection when the poller supplied no work item."""
     # Given runner credentials but no work item dispatched by the poller
