@@ -158,7 +158,9 @@ section in CLAUDE.md (the field is listed as `GitHub Issue custom field: <field-
 
 After fetching the task, verify that the description has not been modified since
 plan-feature created it. This uses the digest protocol defined in
-`shared/description-digest-protocol.md`.
+`shared/description-digest-protocol.md`. Run the check — compute the digest with the
+skill's script and report the value it prints; a described-but-unrun check does not
+satisfy this step.
 
 1. **Retrieve issue comments**: fetch all comments on the Jira issue:
 
@@ -378,8 +380,9 @@ merge-branch.
 
 The **Description** section is your primary specification — implement exactly what it describes.
 **Files to Modify**, **Files to Create**, and **API Changes** are the working scope: work
-within them. A file outside them that appears to need changes becomes a Step 9 scope flag,
-not a plan expansion.
+within them. Every unlisted edit — documentation, callers, registration files — becomes a
+Step 9 scope flag, not a plan expansion. Only artifacts from a documented code-generation
+command run in Step 9 are staged without approval.
 Follow the **Implementation Notes** for patterns and code references on how to implement the changes.
 
 **Follow conventions:** Apply the conventions discovered during Step 4's convention conformance
@@ -477,10 +480,12 @@ After implementing code changes, verify the following quality practices:
 After implementing code changes, evaluate whether documentation needs updating:
 
 1. Check if the task includes a **Documentation Updates** section — if so, apply those updates.
-2. If no Documentation Updates section exists, check the documentation files identified in Step 4:
+2. If no Documentation Updates section exists, update only the documentation files listed
+   in **Files to Modify** or **Files to Create**, using the Step 4 docs to judge impact:
    - If public APIs, CLI commands, or endpoints were added or changed, update related API docs.
    - If configuration options or setup steps were modified, update related guides.
    - If architectural patterns were changed, update architecture docs.
+   A doc outside the listed files is a Step 9 scope flag, not an edit.
 3. Keep documentation updates lightweight and scoped — only update docs directly impacted by the changes.
 
 ## Step 7 – Write Tests
