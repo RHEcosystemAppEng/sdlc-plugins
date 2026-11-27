@@ -24,9 +24,10 @@ implementing tasks, and verifying pull requests:
   structured Jira tasks. Analyzes repositories using Serena LSP, builds an
   impact map, and creates linked Jira tasks.
 
-- **implement-task** — Implement a Jira task by reading its structured
-  description, modifying code, running tests, committing, opening a PR, and
-  updating Jira.
+- **implement-task** — Implement a Jira task end-to-end from its structured
+  description: modify code, write tests, run the project's checks, commit, open
+  or update the PR, and update Jira. Handles direct-to-main tasks, feature-branch
+  bookends, and review-feedback fixes that add commits to an existing PR.
 
 - **verify-pr** — Verify a PR against its Jira task's acceptance criteria and
   deterministic guardrails.

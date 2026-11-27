@@ -13,9 +13,9 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | 1.1 | `plan-feature` MUST NOT modify, create, or delete any source code files in any repository. | `plan-feature/SKILL.md` — Guardrails |
 | 1.2 | `plan-feature` MUST NOT use Edit, Write, or Bash tools to change files. Only read-only tools (Read, Glob, Grep, Serena search) are permitted. | `plan-feature/SKILL.md` — Guardrails |
 | 1.3 | `plan-feature` output goes to Jira (tasks, comments) — never to the filesystem. | `plan-feature/SKILL.md` — Guardrails |
-| 1.4 | `implement-task` MUST keep changes scoped to what the task describes — no unrelated refactoring. | `implement-task/SKILL.md` — Important Rules |
-| 1.5 | `implement-task` MUST NOT guess code structure — it must inspect code before modifying it using Serena or Read/Grep/Glob. | `implement-task/SKILL.md` — Important Rules |
-| 1.6 | `implement-task` MUST ask the user rather than improvising when the structured description is incomplete. | `implement-task/SKILL.md` — Important Rules |
+| 1.4 | `implement-task` MUST keep changes scoped to what the task describes — no unrelated refactoring. | `implement-task/SKILL.md` — Step 6; Step 9 check 1 |
+| 1.5 | `implement-task` MUST NOT guess code structure — it must inspect code before modifying it using Serena or Read/Grep/Glob. | `implement-task/SKILL.md` — Step 4 |
+| 1.6 | `implement-task` MUST ask the user rather than improvising when the structured description is incomplete. | `implement-task/SKILL.md` — Step 1 |
 | 1.7 | `define-feature` MUST NOT modify, create, or delete any files in any repository. Only Jira MCP tools are permitted for output. | `define-feature/SKILL.md` — Guardrails |
 | 1.8 | `define-feature` MUST NOT fabricate content. All Feature description content must come from user input. | `define-feature/SKILL.md` — Guardrails |
 | 1.9 | `define-feature` MUST NOT create a Jira issue without showing a full preview and receiving explicit user approval. | `define-feature/SKILL.md` — Important Rules |
@@ -26,9 +26,9 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 
 | # | Constraint | Source |
 |---|---|---|
-| 2.1 | Every commit MUST reference a Jira issue ID in the footer (e.g., `Implements TC-123`). | `implement-task/SKILL.md` — Step 9; `methodology.md` — Traceable Implementation |
-| 2.2 | Commit messages MUST follow the Conventional Commits specification (`<type>[optional scope]: <description>`). | `implement-task/SKILL.md` — Step 9 |
-| 2.3 | Every commit MUST include an `Assisted-by:` trailer naming the AI tool and model that produced the change (e.g., `Assisted-by: OpenCode (GPT-6.1 Sol)`). | `implement-task/SKILL.md` — Step 9 |
+| 2.1 | Every commit MUST reference a Jira issue ID in the footer (e.g., `Implements TC-123`). | `implement-task/SKILL.md` — Step 10; `methodology.md` — Traceable Implementation |
+| 2.2 | Commit messages MUST follow the Conventional Commits specification (`<type>[optional scope]: <description>`). | `implement-task/SKILL.md` — Step 10 |
+| 2.3 | Every commit MUST include an `Assisted-by:` trailer naming the AI tool and model that produced the change (e.g., `Assisted-by: OpenCode (GPT-6.1 Sol)`). | `implement-task/SKILL.md` — Step 10 |
 
 ---
 
@@ -37,7 +37,7 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 | # | Constraint | Source |
 |---|---|---|
 | 3.1 | The feature branch MUST be named after the Jira issue ID (e.g., `TC-123`). | `implement-task/SKILL.md` — Step 5 |
-| 3.2 | After opening a PR, its link MUST be posted as a comment on the Jira task. | `implement-task/SKILL.md` — Step 10; `methodology.md` — Pull Request Workflow |
+| 3.2 | After opening a PR, its link MUST be posted as a comment on the Jira task. | `implement-task/SKILL.md` — Step 11; `methodology.md` — Pull Request Workflow |
 
 ---
 
@@ -60,9 +60,9 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 
 | # | Constraint | Source |
 |---|---|---|
-| 5.1 | Changes MUST be scoped to the files listed in Files to Modify and Files to Create — no unrelated files. | `implement-task/SKILL.md` — Step 6, Important Rules |
-| 5.2 | Code MUST NOT be modified without first inspecting it (via Serena or Read/Grep/Glob). | `implement-task/SKILL.md` — Step 4, Important Rules |
-| 5.3 | Implementation MUST follow the patterns referenced in the task's Implementation Notes. | `implement-task/SKILL.md` — Important Rules |
+| 5.1 | Changes MUST be scoped to the files listed in Files to Modify and Files to Create — no unrelated files. | `implement-task/SKILL.md` — Step 6; Step 9 check 1 |
+| 5.2 | Code MUST NOT be modified without first inspecting it (via Serena or Read/Grep/Glob). | `implement-task/SKILL.md` — Step 4 |
+| 5.3 | Implementation MUST follow the patterns referenced in the task's Implementation Notes. | `implement-task/SKILL.md` — Step 6 |
 | 5.4 | AI MUST NOT start work autonomously — a human must trigger it. | `methodology.md` — Core Principles (Human Driven Workflow) |
 
 ---
@@ -72,6 +72,6 @@ existing instruction in a SKILL.md or CLAUDE.md file.
 Each constraint above references its source. The full source files are:
 
 - `plugins/sdlc-workflow/skills/plan-feature/SKILL.md` — Guardrails (§1.1–1.3), Task Description Template (§4.1–4.8)
-- `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Important Rules (§1.4–1.6, §5.1–5.3), Step 5 (§3.1), Step 9 (§2.1–2.3), Step 10 (§3.2)
+- `plugins/sdlc-workflow/skills/implement-task/SKILL.md` — Step 1 (§1.6), Step 4 (§1.5, §5.2), Step 5 (§3.1), Step 6 (§1.4, §5.1, §5.3), Step 9 check 1 (§1.4, §5.1), Step 10 (§2.1–2.3), Step 11 (§3.2)
 - `plugins/sdlc-workflow/skills/define-feature/SKILL.md` — Guardrails (§1.7–1.8), Important Rules (§1.9)
 - `docs/methodology.md` — Core Principles (§2.1, §3.2, §5.4)
