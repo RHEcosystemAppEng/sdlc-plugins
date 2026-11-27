@@ -367,6 +367,35 @@ def test_prefetched_triage_relationships_authorize_related_targets(context, reco
     assert recorder.calls[4] == ("link", "TC-43", "TC-42", "Related")
 
 
+def test_surfaced_sibling_remediation_authorizes_planned_link(recorder):
+    """A remediation task the bundle surfaced from a sibling Vulnerability is a trusted target."""
+    # Given a plan linking the triaged issue to that surfaced remediation task
+    result = _plan([{"type": "link", "marker": "triage-security:link", "link_type": "Depend",
+                     "inward": "TC-42", "outward": "TC-43"}])
+    trusted = _trusted_input(remediation=[{"key": "TC-43", "summary": "Fix CVE",
+                                           "labels": ["ai-generated-jira"], "comments": []}])
+
+    # When the executor preflights and executes the plan
+    executor.execute_plan(result, trusted)
+
+    # Then the link reaches the surfaced task as a mutation
+    assert recorder.calls == [("link", "TC-42", "TC-43", "Depend")]
+
+
+def test_unsurfaced_sibling_remediation_keeps_the_link_target_unauthorized(recorder):
+    """The same link is rejected before any Jira call when the bundle did not surface it."""
+    # Given the same plan but no trusted remediation state for the linked task
+    result = _plan([{"type": "link", "marker": "triage-security:link", "link_type": "Depend",
+                     "inward": "TC-42", "outward": "TC-43"}])
+
+    # When the executor preflights the plan
+    with pytest.raises(executor.ActionError, match="unauthorized action target: TC-43"):
+        executor.execute_plan(result, _trusted_input())
+
+    # Then preflight rejected it before any mutation
+    assert recorder.calls == []
+
+
 def test_related_status_transition_retry_skips_completed_transition_and_continues(recorder, monkeypatch):
     """Replaying a completed related transition does not block later actions."""
     # Given an authorized related target whose transition disappears after success

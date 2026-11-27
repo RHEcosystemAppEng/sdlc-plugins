@@ -733,6 +733,12 @@ This prevents duplicate tasks when multiple CVEs affect the same library.
 **Prerequisite:** Requires the Upstream Affected Component custom field to be
 configured. If not configured, skip dedup and proceed to Step 8.
 
+**Fullsend mode:** the covering Task key comes from the trusted bundle, not a live
+traversal. Use `jira_metadata.release_jira[].remediation` and their Depend-linked
+`originating_cves`; remediation Tasks surfaced from sibling Vulnerabilities are in
+`jira_metadata.related_issues` and `idempotency.existing_remediation`. Issue no
+`get_issue` call.
+
 1. **Extract the Upstream Affected Component** from the current CVE issue
    (already fetched in Step 1).
 

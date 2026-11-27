@@ -811,6 +811,56 @@ def _related_keys(issue):
     return sorted(keys)
 
 
+def _linked_remediation_tasks(related, configuration, fetched):
+    """Promote remediation Tasks linked one hop out of related Vulnerabilities.
+
+    A sibling Vulnerability's remediation Task is returned by no search and is
+    not linked directly to the triaged issue, so without this walk the executor's
+    target allowlist rejects every action against it. Only ``Depend``-linked
+    ``Task`` issues carrying the ``ai-generated-jira`` label qualify, so an
+    unrelated or malformed link can never widen the trusted target set. Each
+    project key is fetched at most once, in sorted order; malformed links are
+    skipped rather than raising, and no second hop is ever followed.
+    """
+    project = configuration.get("project_key")
+    if not isinstance(project, str) or not project:
+        return []
+    prefix = project + "-"
+    known = {item.get("key") for item in related if isinstance(item.get("key"), str)}
+    discovered = set()
+    for snapshot in related:
+        if not isinstance(snapshot, dict) or snapshot.get("issue_type") != "Vulnerability":
+            continue
+        for link in snapshot.get("links") or []:
+            if not isinstance(link, dict) or (link.get("type") or {}).get("name") != "Depend":
+                continue
+            for end in (link.get("inwardIssue"), link.get("outwardIssue")):
+                key = end.get("key") if isinstance(end, dict) else None
+                if not isinstance(key, str) or key == snapshot.get("key"):
+                    continue
+                if not _ISSUE_KEY_RE.fullmatch(key) or not key.startswith(prefix):
+                    continue
+                if key in known:
+                    continue
+                discovered.add(key)
+    tasks = []
+    for key in sorted(discovered):
+        if key not in fetched:
+            fetched[key] = _jira_client("get_issue", key, "--fields", "*all")
+        issue = fetched[key]
+        fields = issue.get("fields") if isinstance(issue, dict) else None
+        if not isinstance(fields, dict):
+            continue
+        issue_type = fields.get("issuetype")
+        labels = fields.get("labels")
+        if not isinstance(issue_type, dict) or issue_type.get("name") != "Task":
+            continue
+        if not isinstance(labels, list) or "ai-generated-jira" not in labels:
+            continue
+        tasks.append(_related_issue(issue))
+    return tasks
+
+
 def _action_markers(issue):
     """Extract stable triage action markers from the current issue's comments."""
     markers = []
@@ -904,6 +954,7 @@ def collect_bundle(issue_key, project_root, release_decisions=None, mutation_aut
     for key in _related_keys(issue):
         fetched.setdefault(key, _jira_client("get_issue", key, "--fields", "*all"))
     related = [_related_issue(fetched[key]) for key in sorted(fetched)]
+    related.extend(_linked_remediation_tasks(related, configuration, fetched))
 
     external_evidence = {
         "mitre": _fetch_url("https://cveawg.mitre.org/api/cve/{}".format(cve_id), allow_missing=True),

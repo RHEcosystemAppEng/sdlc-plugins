@@ -163,35 +163,37 @@ sandbox action in this result; never execute it in the sandbox.
 }
 ```
 
-The shown shape is the complete report-only form. For mutation-authorized input,
-replace `mode` with `mutation-authorized` and build the ordered schema actions from
-the same trusted evidence; use `issue.key` from the validated bundle, never the
-illustrative issue key above.
+This shape is the complete report-only form. For mutation-authorized input, set
+`mode` to `mutation-authorized` and build the ordered schema actions from the same
+trusted evidence; use `issue.key` from the validated bundle, never the illustrative
+key above.
 
 ### Fullsend action serialization and authorization
 
-This section applies to **every** Jira write described by this skill and its
-companion procedures. It does not change interactive mode: when
-`FULLSEND_OUTPUT_DIR` is absent, retain every existing engineer-confirmation prompt
-and perform the confirmed Jira operation exactly as documented.
+This section applies to **every** Jira write in this skill and its companion
+procedures. It does not change interactive mode: without `FULLSEND_OUTPUT_DIR`, keep
+every existing engineer-confirmation prompt and perform the confirmed operation exactly
+as documented.
 
-In Fullsend mode, do not ask for confirmation and do not call Jira. Determine the
-branch once from `authorization.mutation_authorized` after trusted-input validation:
+In Fullsend mode, do not ask for confirmation or call Jira. Determine the branch once
+from `authorization.mutation_authorized` after trusted-input validation:
 
 - When it is `false`, produce an evidence-backed `report-only` result with **exactly
-  one** `report-only` action. Its report must list every otherwise-proposed mutation
-  (assignment, field update, transition, comment, link, remediation task, and
-  reconciliation) with the trusted evidence and the reason it is withheld: trusted
-  runner authorization is required. Do not append a proposed mutation as an action.
+  one** `report-only` action. Its report lists every otherwise-proposed mutation
+  (assignment, field update, transition, comment, link, remediation task,
+  reconciliation) with the trusted evidence and why it is withheld: trusted runner
+  authorization is required. Do not append a proposed mutation as an action.
 - When it is `true`, append only schema-defined actions. Give each action a stable,
-  unique lowercase `triage-security:` marker derived from the current issue,
-  operation, and target. Consult `idempotency.action_markers`, `idempotency.existing_remediation`,
-  and trusted existing links/comments before appending. Omit an already-recorded
-  ordinary field, transition, comment, or link action, but **always emit each
-  planned `remediation-task` action with its stable marker and `ref`**. On a partial
-  retry the executor uses that action to re-register an existing task reference,
-  avoid duplicate creation, and repair a missing description digest before later
-  placeholder links or comments are resolved.
+  unique lowercase `triage-security:` marker derived from the issue, operation, and
+  target. Consult `idempotency.action_markers`, `idempotency.existing_remediation`
+  and trusted existing links/comments before appending; `existing_remediation` and
+  `jira_metadata.related_issues` also carry `Depend`-linked remediation Tasks from
+  related Vulnerabilities, so linking or label-editing those is authorized. Omit an
+  already-recorded ordinary field, transition, comment, or link action, but **always
+  emit each planned `remediation-task` action with its stable marker and `ref`**. On a
+  partial retry the executor re-registers the existing task reference, avoids duplicate
+  creation, and repairs a missing description digest before later placeholder
+  links/comments resolve.
 
 | Interactive Jira operation | Mutation-authorized Fullsend action |
 |---|---|
@@ -204,16 +206,16 @@ branch once from `authorization.mutation_authorized` after trusted-input validat
 | Child release Task creation | `release-task` with the same fields (including `security`) and its existing/generated Epic `parent` |
 | Registering a separately trusted, pre-existing reference before dependent work | `resolve-reference` |
 
-Preserve the existing step order: append each `remediation-task` before its dependent
-`link` actions and later comments (task-list, reconciliation, cross-stream, summary).
-The executor registers the reference and posts the digest exactly once inside
-`remediation-task`; never serialize a separate digest `comment` or a post-creation
-`resolve-reference`. Use `{{ref.key}}` in later link/comment actions; never invent a
-Jira key. This digest-before-link rule applies to standard and preemptive tasks alike.
+Preserve the step order: append each `remediation-task` before its dependent `link`
+actions and later comments (task-list, reconciliation, cross-stream, summary). The
+executor registers the reference and posts the digest once inside `remediation-task`;
+never serialize a separate digest `comment` or post-creation `resolve-reference`. Use
+`{{ref.key}}` in later actions; never invent a Jira key. This digest-before-link rule
+applies to standard and preemptive tasks.
 
 **Security level.** Copy `issue.security` (`{id, name}`) into `security` on every
-creation action; omit it only when `null`. Task has no default level; the executor
-re-reads the level live before creating and repairs reused issues to it.
+creation action; omit it when `null`. Task has no default level; the executor re-reads
+it live before creating and repairs reused issues.
 
 ### Trusted-evidence map for Fullsend mode
 
@@ -230,11 +232,10 @@ permits a fallback read.
 
 ### Fullsend final output (successful analysis only)
 
-After all Fullsend analysis has completed, serialize the completed accumulated result
-to **exactly** `$FULLSEND_OUTPUT_DIR/agent-result.json`. This is the only allowed
-sandbox-side write after a successful validation; it must contain the final
-`schema_version`, `mode`, evidence-backed `report`, and ordered `actions`, not the
-initial example or the validation-failure object.
+After all analysis completes, serialize the result to **exactly**
+`$FULLSEND_OUTPUT_DIR/agent-result.json`: the only sandbox write after a successful
+validation. It must hold the final `schema_version`, `mode`, evidence-backed `report`,
+and ordered `actions`, not the initial example or the failure object.
 
 ```bash
 cat > "$FULLSEND_OUTPUT_DIR/agent-result.json" << 'RESULT_EOF'
@@ -279,23 +280,22 @@ PYEOF
   outside interactive local `security-matrix.md` files or the narrow Fullsend output
   exception below.
 - **Interactive mode only: every Jira mutation requires confirmation.** Present the
-  proposed change and rationale to the engineer; wait for explicit approval before
-  executing. Never perform bulk or silent Jira writes. In Fullsend mode, do not ask
+  proposed change and rationale and wait for explicit approval before executing; never
+  perform bulk or silent Jira writes. In Fullsend mode, do not ask
   for confirmation: use `authorization.mutation_authorized` deterministically and
   serialize the corresponding ordered actions (or the report-only result) instead.
 - **Do NOT fabricate data.** In interactive mode, every version, commit hash,
   dependency version, and version-impact assessment must come from actual `git show`
-  output or Jira API responses — never invented or assumed. In Fullsend mode, the
-  validated trusted input bundle is also accepted provenance: derive those values from
-  its `source_evidence` and `jira_metadata`, never infer or invent them.
-- **Fullsend output exception:** In Fullsend mode, the only permitted sandbox-side file
+  output or Jira API responses, never invented or assumed. In Fullsend mode the
+  validated bundle is also accepted provenance: derive those values from its
+  `source_evidence` and `jira_metadata`, never inferred or invented.
+- **Fullsend output exception:** In Fullsend mode the only permitted sandbox-side
   write is `$FULLSEND_OUTPUT_DIR/agent-result.json` (Step 0.6 creates that directory):
-  write either the deliberately schema-invalid validation failure object or the
-  completed valid accumulated result. Do not create, modify, or repair any other
-  local file.
+  either the deliberately schema-invalid failure object or the completed valid result.
+  Do not create, modify, or repair any other local file.
 - **Do NOT use Edit, Write, or Bash tools** to change files — except for
   local `security-matrix.md` files in the project working directory (see Step 2.1).
-  In Fullsend mode, the narrow output exception above also permits writing
+  In Fullsend mode, the output exception above also permits
   `$FULLSEND_OUTPUT_DIR/agent-result.json`; otherwise only use Bash for read-only
   `git show` commands and JIRA REST API fallback scripts.
 - If any step fails, stop and inform the user rather than attempting alternatives.
