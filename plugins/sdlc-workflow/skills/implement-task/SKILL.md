@@ -195,7 +195,7 @@ satisfy this step.
       response. Write it to a temp file and compute the digest using the script:
 
       ```bash
-      python3 scripts/sha256-digest.py "$TMPDIR/desc-<task-key>.txt"
+      python3 scripts/sha256-digest.py /tmp/desc-<task-key>.txt
       ```
 
       The script auto-detects the format and outputs a tagged digest. If the script
