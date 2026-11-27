@@ -819,8 +819,10 @@ def _linked_remediation_tasks(related, configuration, fetched):
     target allowlist rejects every action against it. Only ``Depend``-linked
     ``Task`` issues carrying the ``ai-generated-jira`` label qualify, so an
     unrelated or malformed link can never widen the trusted target set. Each
-    project key is fetched at most once, in sorted order; malformed links are
-    skipped rather than raising, and no second hop is ever followed.
+    project key is fetched at most once, in sorted order; malformed links, a link
+    that cannot be fetched, and an issue whose returned key differs from the
+    requested one are skipped rather than raising, and no second hop is ever
+    followed.
     """
     project = configuration.get("project_key")
     if not isinstance(project, str) or not project:
@@ -846,9 +848,17 @@ def _linked_remediation_tasks(related, configuration, fetched):
     tasks = []
     for key in sorted(discovered):
         if key not in fetched:
-            fetched[key] = _jira_client("get_issue", key, "--fields", "*all")
+            try:
+                fetched[key] = _jira_client("get_issue", key, "--fields", "*all")
+            except subprocess.CalledProcessError:
+                # A deleted or permission-restricted link must not abort every poll.
+                continue
         issue = fetched[key]
-        fields = issue.get("fields") if isinstance(issue, dict) else None
+        # Jira returns the current key for a moved issue, so only the requested
+        # identity is trusted; a different (even in-project) key is never surfaced.
+        if not isinstance(issue, dict) or issue.get("key") != key:
+            continue
+        fields = issue.get("fields")
         if not isinstance(fields, dict):
             continue
         issue_type = fields.get("issuetype")

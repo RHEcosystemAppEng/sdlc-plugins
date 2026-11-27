@@ -271,6 +271,50 @@ def test_linked_remediation_tasks_skips_non_qualifying_hops(related, expected_ke
     assert "TC-47" not in fetched
 
 
+@pytest.mark.parametrize("returned_key", ["TC-77", "OTHER-9"],
+                         ids=["moved-in-project", "moved-foreign-project"])
+def test_linked_remediation_tasks_rejects_mismatched_identity(returned_key):
+    """A fetched issue is trusted only when its key matches the requested key."""
+    # Given a linked key whose get_issue result reports a different identity
+    related = [{"key": "TC-43", "issue_type": "Vulnerability",
+                "links": [_depend_link("TC-43", "TC-44")]}]
+    fetched = {"TC-44": _issue(returned_key, "Task", labels=["ai-generated-jira"])}
+
+    # When the helper validates the returned identity
+    discovered = pre_triage_security._linked_remediation_tasks(
+        copy.deepcopy(related), {"project_key": "TC"}, fetched)
+
+    # Then nothing is surfaced and collection does not raise
+    assert discovered == []
+
+
+def test_linked_remediation_tasks_skips_an_unfetchable_link(monkeypatch):
+    """One stale link cannot abort collection; other qualifying Tasks still surface."""
+    # Given two linked keys where one get_issue call fails
+    related = [{"key": "TC-43", "issue_type": "Vulnerability",
+                "links": [_depend_link("TC-43", "TC-44"), _depend_link("TC-43", "TC-45")]}]
+    fetched = {}
+
+    def jira_client(command, *arguments):
+        """Return one qualifying Task and fail the other fetch."""
+        assert command == "get_issue"
+        key = arguments[0]
+        if key == "TC-45":
+            raise subprocess.CalledProcessError(1, ["jira-client.py", command, key])
+        return _issue(key, "Task", labels=["ai-generated-jira"])
+
+    monkeypatch.setattr(pre_triage_security, "_jira_client", jira_client)
+
+    # When the helper walks both links
+    discovered = pre_triage_security._linked_remediation_tasks(
+        copy.deepcopy(related), {"project_key": "TC"}, fetched)
+
+    # Then the fetched key is surfaced, the failing key is skipped, and the cache
+    # never records a failed fetch
+    assert [item["key"] for item in discovered] == ["TC-44"]
+    assert "TC-45" not in fetched
+
+
 def test_pre_triage_script_rejects_missing_poller_work_item_url():
     """The runner fails before collection when the poller supplied no work item."""
     # Given runner credentials but no work item dispatched by the poller
