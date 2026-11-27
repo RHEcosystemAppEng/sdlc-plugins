@@ -205,9 +205,9 @@ plan-feature created it. This uses the digest protocol defined in
    e. **Compare hex digests** (when tags match):
       - **Match**: proceed silently — no additional user prompt, no added latency.
       - **Mismatch**: alert the user that the task description was modified after
-        plan-feature created it. Display the expected digest (from the comment) and
-        the actual digest (computed from the current description). Ask the user
-        whether to:
+        plan-feature created it. Display both values: the expected digest from the
+        comment and the actual digest computed from the current description — a real
+        hex digest, not a placeholder. Ask the user whether to:
         1. **Proceed** with the current description as-is
         2. **Stop** so they can re-run plan-feature to regenerate tasks
 
@@ -575,9 +575,10 @@ If any criterion cannot be met, stop and explain to the user.
 
 ## Step 9 – Self-Verification
 
-Before committing, apply every check below whose trigger matches the task. Each row
-links to its procedure in [`shared/self-verification.md`](../../shared/self-verification.md);
-follow that procedure exactly.
+Before committing, read
+[`shared/self-verification.md`](../../shared/self-verification.md) in full, then apply
+every check below whose trigger matches the task. The table says when a check fires; the
+file defines what it requires. A row named without its procedure applied is not a check.
 
 Report one line per firing check — `PASS` or `FLAGGED <what>` — and resolve every flag
 before Step 10. CI-check and test failures are a hard stop: report the failing command
@@ -585,7 +586,7 @@ and its output and let the user decide.
 
 | # | Check | Fires when |
 |---|---|---|
-| 1 | [Scope containment](../../shared/self-verification.md#1-scope-containment) | always |
+| 1 | [Scope containment](../../shared/self-verification.md#1-scope-containment) | always — every out-of-scope file is listed for user approval before commit |
 | 2 | [Untracked files](../../shared/self-verification.md#2-untracked-files) | untracked files exist in a directory with modified files |
 | 3 | [Sensitive patterns](../../shared/self-verification.md#3-sensitive-patterns) | always |
 | 4 | [Dead parameters](../../shared/self-verification.md#4-dead-parameters) | removed lines referenced a function parameter |
@@ -599,7 +600,7 @@ and its output and let the user decide.
 | 12 | [Query scope](../../shared/self-verification.md#12-query-scope) | batch operations over database records were implemented |
 | 13 | [Contract & sibling parity](../../shared/self-verification.md#13-contract--sibling-parity) | code implements a contract or has siblings |
 | 14 | [CI checks from CONVENTIONS.md](../../shared/self-verification.md#14-ci-checks-from-conventionsmd) | always — CI checks if recorded, else the build/lint fallback |
-| 15 | [Module tests (Rust)](../../shared/self-verification.md#15-module-tests-rust) | a Rust repository has modified crates |
+| 15 | [Module tests (Rust)](../../shared/self-verification.md#15-module-tests-rust) | a Rust repository has modified crates — resolve each crate with `cargo metadata`, never from the nearest `Cargo.toml` |
 | 16 | [Validated-value override paths](../../shared/self-verification.md#16-validated-value-override-paths) | a validated, security-relevant, or fail-closed value was added |
 
 ## Step 10 – Commit and Push
