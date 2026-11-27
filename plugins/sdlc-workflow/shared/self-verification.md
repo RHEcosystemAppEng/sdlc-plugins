@@ -23,11 +23,24 @@ approval before staging; stage untracked files only with that approval.
 
 ## 3. Sensitive patterns
 
-Search every change the commit would include — staged and unstaged tracked changes:
+Scan two snapshots — each one misses what the other catches.
+
+**Working tree versus HEAD** (edited tracked files), when you reach this check:
 
 ```bash
 git diff HEAD | grep -iE '(password\s*=|API_KEY|SECRET_KEY|BEGIN.*PRIVATE KEY|\.env)'
 ```
+
+**The index**, after every approved file (new files included) is staged in Step 10 and
+before each commit:
+
+```bash
+git diff --cached | grep -iE '(password\s*=|API_KEY|SECRET_KEY|BEGIN.*PRIVATE KEY|\.env)'
+```
+
+The index scan is the authoritative one for the commit: it catches a secret that was
+staged and then removed from the working-tree copy without restaging, and it covers new
+files, which no working-tree diff shows. Re-run it whenever staged content changes.
 
 Flag any match to the user and resolve it before committing.
 

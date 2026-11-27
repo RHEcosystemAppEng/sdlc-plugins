@@ -601,7 +601,7 @@ and its output and let the user decide.
 | 10 | [Cross-section references](../../shared/self-verification.md#10-cross-section-references) | the task lists file paths or creates structured documents |
 | 11 | [Data-flow trace](../../shared/self-verification.md#11-data-flow-trace) | a new feature was implemented |
 | 12 | [Query scope](../../shared/self-verification.md#12-query-scope) | batch operations over database records were implemented |
-| 13 | [Contract & sibling parity](../../shared/self-verification.md#13-contract--sibling-parity) | code implements a contract or has siblings |
+| 13 | [Contract & sibling parity](../../shared/self-verification.md#13-contract--sibling-parity) | code implements a contract, has siblings, writes to a shared DB entity, or calls a shared abstraction |
 | 14 | [CI checks from CONVENTIONS.md](../../shared/self-verification.md#14-ci-checks-from-conventionsmd) | always — CI checks if recorded, else the build/lint fallback |
 | 15 | [Module tests (Rust)](../../shared/self-verification.md#15-module-tests-rust) | a Rust repository has modified crates — resolve each crate with `cargo metadata`, never from the nearest `Cargo.toml` |
 | 16 | [Validated-value override paths](../../shared/self-verification.md#16-validated-value-override-paths) | a validated, security-relevant, or fail-closed value was added |
@@ -662,7 +662,8 @@ git push
 gh pr edit <pr-number> -R <owner/repo> --body "<updated-description>"
 ```
 
-Append a Summary bullet describing this fix and preserve the existing description content.
+Append a Summary bullet describing this fix and including the current task's Jira issue
+ID; preserve the existing description content.
 
 **merge-branch** — open the merge PR. The feature branch already holds every commit, so
 no new commit is needed:
