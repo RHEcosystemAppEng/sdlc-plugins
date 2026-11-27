@@ -8,7 +8,8 @@
       "files": [
         "files/vuln-issue-standard.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Data extraction correctly identifies CVE-2026-31812, library quinn-proto, affected range < 0.11.14, and fixed version 0.11.14 from the Vulnerability issue (Step 1)",
@@ -22,6 +23,10 @@
         "For Cargo ecosystem, remediation creates two tasks: upstream backport task and downstream propagation subtask with Blocks dependency (Important Rule 8)",
         "The analysis presents triage recommendations as proposed actions — framing Affects Versions changes, label additions, and status transitions as proposals rather than executed mutations (Guardrails)",
         "The data-extraction output describes Step 0.7 actions before the Step 1 data table: assigning the CVE issue to the current user and transitioning it to Assigned status (Step 0.7)",
+        "The 2.1.x release/0.3.z preemptive Cargo backport follows the supplied CONVENTIONS.md batch policy and its declared cargo update command",
+        "The 2.2.x Cargo dependency-bump task follows the supplied CONVENTIONS.md batch policy and does not treat cargo update as a plugin default",
+        "All proposed remediation tasks, including the 2.1.x preemptive pair and any generated dependency-bump pair, preserve per-CVE traceability to CVE-2026-31812 and quinn-proto in their task details and include the CVE ID in their labels",
+        "Triage uses the pinned Cargo.lock evidence for impact analysis and does not run a Cargo resolver preflight (`cargo update`, `cargo tree`, or equivalent); a Cargo update command belongs only to the later implementation task",
         "Release orchestration preserves interactive confirmation of the exact release Epic version and separate child Task creation; when release evidence or confirmation is unavailable, it reports pending work instead of claiming creation.",
         "Release dedup is skipped when its Upstream Affected Component configuration is absent. When trusted release evidence is available, the proposed procedure resolves originating CVEs through Blocks/Depend links, compares their components and allows library-summary fallback only for a missing Depend link or component field; a known nonmatch does not count as dedup, and unavailable release evidence is not fabricated."
       ]
@@ -67,7 +72,8 @@
       "files": [
         "files/vuln-issue-split.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Version impact table shows mixed results: 2.1.x versions marked YES (affected) and 2.2.x versions marked NO (not affected) based on lock file evidence",
@@ -151,19 +157,21 @@
     },
     {
       "id": 9,
-      "prompt": "Triage Vulnerability issue TC-8011. The issue details are in vuln-issue-overlap-not-covered.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has stream suffix [rhtpa-2.2] and customfield_10632 (Upstream Affected Component) set to 'webpack'. A JQL search for related CVE Jiras with cf[10632] ~ 'webpack' returns TC-8012 (CVE-2026-43210), which has a linked remediation task TC-8013 that bumps webpack to 5.96.1. The current CVE's fix threshold is 5.98.0. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data, write outputs/overlap-check.md with the Step 4.3 cross-CVE overlap analysis, and write outputs/triage-outcome.md explaining the triage decision.",
+      "prompt": "Triage Vulnerability issue TC-8011. The issue details are in vuln-issue-overlap-not-covered.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md, and the target repository CONVENTIONS.md is conventions-npm-mock.md. Assume the stream Ecosystem Mappings include the configured source row `npm | ui | package-lock.json | project check command | release/0.4.z` for webpack. The issue has stream suffix [rhtpa-2.2] and customfield_10632 (Upstream Affected Component) set to 'webpack'. A JQL search for related CVE Jiras with cf[10632] ~ 'webpack' returns TC-8012 (CVE-2026-43210), which has a linked remediation task TC-8013 that bumps webpack to 5.96.1. The current CVE's fix threshold is 5.98.0. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data, write outputs/overlap-check.md with the Step 4.3 cross-CVE overlap analysis, and write outputs/triage-outcome.md explaining the triage decision.",
       "expected_output": "A triage analysis where Step 4.3 detects related CVE TC-8012 with remediation task TC-8013 that bumps webpack to 5.96.1, but this does NOT meet the current CVE's fix threshold of 5.98.0. The overlap table shows the related CVE and its remediation, but the triage proceeds with new remediation task creation because the existing fix is insufficient.",
       "files": [
         "files/vuln-issue-overlap-not-covered.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-npm-mock.md"
       ],
       "assertions": [
         "Step 4.3 extracts the Upstream Affected Component (webpack) from customfield_10632 and uses it to search for related CVE Jiras (§1.59)",
         "Step 4.3 filters search results by matching PS Component (customfield_10669 = pscomponent:org/rhtpa-ui) and Stream (customfield_10832 = rhtpa-2.2)",
         "Step 4.3 traverses issuelinks on TC-8012 to find remediation task TC-8013 via the 'Depend' link type",
         "Step 4.3 compares the remediation task's bump version (5.96.1) against the current CVE's fix threshold (5.98.0) and determines the fix does NOT cover this CVE",
-        "The overlap table is presented to the engineer showing TC-8012 and TC-8013 with 'Covers This CVE? = No' — the triage proceeds to create new remediation tasks rather than recommending closure"
+        "The overlap table is presented to the engineer showing TC-8012 and TC-8013 with 'Covers This CVE? = No' — the triage proceeds to create new remediation tasks rather than recommending closure",
+        "The remediation task generated because the existing bump is insufficient uses the npm targeted strategy and the declared npm update, graph-verification, and test commands from conventions-npm-mock.md"
       ]
     },
     {
@@ -173,7 +181,8 @@
       "files": [
         "files/vuln-issue-cross-stream-preemptive.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 8 Case A creates standard remediation tasks for the current stream (rhtpa-2.2) with standard labels ['ai-generated-jira', 'Security', 'CVE-2026-55123'] and 'Depend' link to TC-8020",
@@ -190,7 +199,8 @@
       "files": [
         "files/vuln-issue-preemptive-reconciliation.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 4.4 searches for preemptive tasks using JQL with labels 'security-preemptive' and 'CVE-2026-55123' (§1.60)",
@@ -207,7 +217,8 @@
       "files": [
         "files/vuln-issue-enrichment.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 1 extracts imprecise affected range from the Jira description — the description lacks a specific version threshold (Step 1 Data Extraction)",
@@ -224,7 +235,8 @@
       "files": [
         "files/vuln-issue-standard.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "The remediation output describes the digest protocol for the upstream backport task: re-fetching the task description from Jira after create_issue and computing a SHA-256 digest using scripts/sha256-digest.py (§1.66)",
@@ -258,7 +270,8 @@
       "files": [
         "files/vuln-issue-standard.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config-prodsec.md"
+        "files/claude-md-security-config-prodsec.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "The post-triage summary comment (Step 8) includes an @mention of the vulnerability issue's reporter using an ADF mention node with account ID '557058:psirt-analyst-mock-id' (§1.67)",
@@ -293,7 +306,8 @@
       "files": [
         "files/vuln-issue-standard.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config-embargo.md"
+        "files/claude-md-security-config-embargo.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 0 extracts the Embargo policy URL from the Security Configuration as an optional field without raising an error (§1.71 — backward compatible extraction)",
@@ -310,7 +324,8 @@
       "files": [
         "files/vuln-issue-standard-already-triaged.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 8 detects existing remediation tasks TC-8100 and TC-8101 via the Depend links on the issue and skips remediation task creation — does NOT create duplicate tasks (idempotency)",
@@ -392,7 +407,8 @@
       "files": [
         "files/vuln-issue-standard.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config-deploy-ctx.md"
+        "files/claude-md-security-config-deploy-ctx.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 0 extracts the Deployment Context column from the Source Repositories table and parses rhtpa-backend as customer-shipped (§1.77)",
@@ -408,7 +424,8 @@
       "files": [
         "files/vuln-issue-standard.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 0 detects the absence of the Deployment Context column in the Source Repositories table and defaults all repositories to upstream (§1.78)",
@@ -419,18 +436,18 @@
     },
     {
       "id": 25,
-      "prompt": "Triage Vulnerability issue TC-8040. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. However, assume the Ecosystem detection in Step 1 resolves to 'Go modules' — an ecosystem that is NOT listed in the Ecosystem Mappings table. Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data including the ecosystem detection result, and write outputs/unsupported-ecosystem.md with the unsupported ecosystem notification you would present to the user.",
-      "expected_output": "A triage analysis where Step 1 Ecosystem detection resolves to Go modules, which is not in the Ecosystem Mappings table. The skill presents the unsupported ecosystem message using the detected ecosystem name ('Go modules') in the notification, and stops automated triage for that ecosystem.",
+      "prompt": "Triage Vulnerability issue TC-8040. The issue details are in vuln-issue-standard.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. Assume the detected ecosystem is Go modules, but no matching Ecosystem Mappings row or unambiguous repository association exists. Do NOT actually call Jira MCP, git show, or any external tools. Write outputs/data-extraction.md with the detected ecosystem and the mapping lookup, and outputs/mapping-ambiguity.md with the question/report explaining why remediation cannot be classified yet.",
+      "expected_output": "The skill does not label Go modules unsupported merely because the plugin has no ecosystem-specific branch. It reports that the supplied mappings cannot associate the detected ecosystem with a repository or source/system path, asks interactively for the missing mapping, and stops before version impact or Jira remediation mutations.",
       "files": [
         "files/vuln-issue-standard.md",
         "files/security-matrix-mock.md",
         "files/claude-md-security-config.md"
       ],
       "assertions": [
-        "The unsupported ecosystem notification uses the detected ecosystem name ('Go modules') — not a hard-coded ecosystem name (Step 5.3 unsupported ecosystem handling)",
-        "The notification follows the template pattern: the message contains the actual ecosystem name substituted into the placeholder, matching the angle-bracket placeholder convention used by other user-facing messages in the skill",
-        "Automated triage stops after the unsupported ecosystem notification — no version impact analysis or remediation task creation is performed for the unsupported ecosystem",
-        "The notification includes both the ecosystem name and the instruction that manual assessment is required"
+        "The response does not declare Go modules unsupported just because it is not hard-coded in the plugin",
+        "The response identifies the missing Ecosystem Mappings row/repository association as the specific ambiguity",
+        "Interactive triage asks for clarification and stops before version impact analysis or Jira mutations",
+        "The response does not guess a source-versus-system remediation path"
       ]
     },
     {
@@ -440,7 +457,8 @@
       "files": [
         "files/vuln-issue-dev-dependency.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 2.3.5 dependency chain context identifies criterion as a dev-only dependency based on its presence in [dev-dependencies] in the manifest",
@@ -457,7 +475,8 @@
       "files": [
         "files/vuln-issue-feature-gated.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 2.3.5 dependency chain context identifies rustls as a feature-gated optional dependency behind the non-default 'tls-rustls' feature flag",
@@ -470,18 +489,19 @@
     {
       "id": 28,
       "prompt": "Triage Vulnerability issue TC-8060. The issue details are in vuln-issue-transitive.md, the security matrix is in security-matrix-mock.md, and the project CLAUDE.md is in claude-md-security-config.md. The issue has stream suffix [rhtpa-2.2] so triage is scoped to the 2.2.x stream. The vulnerable library (h2) is a transitive dependency — the mock dependency chain data in the fixture shows h2 is pulled in through reqwest → hyper → h2 (3 levels deep). Do NOT actually call Jira MCP, git show, or any external tools. Instead, write your triage analysis to the workspace outputs/ directory: write outputs/data-extraction.md with the parsed CVE data table from Step 1, write outputs/version-impact.md with the version impact table from Step 2 including the dependency chain context from Step 2.3.5, and write outputs/remediation.md with the remediation task descriptions showing the full dependency chain and two-tier remediation approach.",
-      "expected_output": "A triage analysis where Step 2.3.5 identifies h2 as a transitive dependency (3 levels deep: reqwest → hyper → h2). The remediation task descriptions include the full dependency chain in the Implementation Notes and use the two-tier remediation approach: preferred approach is to bump reqwest (the direct dependency) to a version whose transitive closure includes h2 >= 0.4.5; fallback approach is to pin h2 directly via cargo add h2@0.4.5.",
+      "expected_output": "A triage analysis where Step 2.3.5 identifies h2 as a transitive dependency (3 levels deep: reqwest → hyper → h2). The remediation task descriptions include the full dependency chain in the Implementation Notes and use the two-tier remediation approach: prefer updating reqwest, then use only the project-declared Cargo targeted fallback command after the applicable batch attempts fail.",
       "files": [
         "files/vuln-issue-transitive.md",
         "files/security-matrix-mock.md",
-        "files/claude-md-security-config.md"
+        "files/claude-md-security-config.md",
+        "files/conventions-cargo-mock.md"
       ],
       "assertions": [
         "Step 2.3.5 dependency chain context identifies h2 as a transitive dependency with the chain: backend → reqwest → hyper → h2 (3 levels deep)",
         "The dependency chain output labels h2 as transitive (not direct) and includes the full chain path in the version impact output",
         "Remediation task Implementation Notes include the dependency type as transitive with the dependency chain",
         "Remediation task Implementation Notes describe the two-tier remediation approach: preferred is bumping reqwest (the direct dependency), fallback is pinning h2 directly",
-        "The fallback approach specifies the ecosystem-specific pinning mechanism: cargo add h2@0.4.5 for Cargo"
+        "The fallback guidance uses the project's declared Cargo targeted_fallback_command (`cargo update -p h2 --precise 0.4.5`) and reserves it for after applicable batch attempts fail; it is not a plugin-wide Cargo default"
       ]
     },
     {
@@ -584,6 +604,55 @@
         "The output asks for corrected release/image evidence rather than guessing or substituting either SHA",
         "The existing matrix is explicitly left unchanged and no write occurs while the mismatch remains unresolved; a draft, if shown, is clearly labeled not written",
         "Any proposed matrix preserves existing supportability and ecosystem mapping data"
+      ]
+    },
+    {
+      "id": 35,
+      "prompt": "Triage Vulnerability issue TC-8350 using vuln-issue-go.md, security-matrix-go-mock.md, conventions-go-targeted-mock.md as the target repository CONVENTIONS.md, and claude-md-security-config.md. Supplied impact evidence: the supported 2.2.0 release resolves example.com/acme/netparser to 2.3.1; the configured upstream branch already contains fixed 2.4.6; no source-code change is needed; there are no duplicate or deduplicated tasks. Do NOT call Jira, Git, or external services. Write outputs/remediation.md with the policy resolution and task descriptions.",
+      "expected_output": "Triage recognizes Go modules as a configured source ecosystem and selects the per-ecosystem targeted policy over the repository-wide batch default. Because the fix is already upstream and a dependency update is sufficient, it creates the dependency-bump plus downstream propagation tasks. The upstream task cites the project-declared update, graph, and test commands, preserves per-CVE traceability, and does not run a resolver during triage.",
+      "files": [
+        "files/vuln-issue-go.md",
+        "files/security-matrix-go-mock.md",
+        "files/conventions-go-targeted-mock.md",
+        "files/claude-md-security-config.md"
+      ],
+      "assertions": [
+        "The ecosystem/repository selection comes from the configured Go modules Ecosystem Mappings row; Go is not rejected as unsupported or selected from a plugin allowlist",
+        "The per-ecosystem Go modules policy overrides the repository-wide batch default and selects the targeted strategy",
+        "The generated task carries the configured command go get example.com/acme/netparser@2.4.6, the graph command go mod graph, and the verification command go test ./...",
+        "The dependency-bump task is selected only because supplied Step 2.5 evidence says the upstream branch has the fixed version and no code change is needed; downstream propagation remains linked",
+        "The task preserves CVE-2026-77123, affected package/range, fixed version, affected version, and source commit context without collapsing per-CVE traceability",
+        "Triage does not run go get, go mod graph, or another resolver/update command"
+      ]
+    },
+    {
+      "id": 36,
+      "prompt": "Triage Vulnerability issue TC-8001 using vuln-issue-standard.md, security-matrix-mock.md, and claude-md-security-config.md. The affected source repository has no CONVENTIONS.md or dependency-update policy. Supplied Step 2 evidence confirms at least one supported release still contains the vulnerable dependency and requires remediation. This is interactive mode. Do NOT call Jira, Git, or external services. Write outputs/policy-gap.md with the policy gate response and any proposed actions.",
+      "expected_output": "Interactive triage asks the engineer to add or confirm the missing project dependency-update policy and stops before version-impact processing, Jira mutations, or remediation task creation. It does not silently select Cargo or another package-manager command.",
+      "files": [
+        "files/vuln-issue-standard.md",
+        "files/security-matrix-mock.md",
+        "files/claude-md-security-config.md"
+      ],
+      "assertions": [
+        "The response identifies that no applicable CONVENTIONS.md dependency-update policy exists for the mapped source repository",
+        "The response asks the engineer to supply/project-document the approved strategy and verification commands",
+        "The workflow stops before Jira mutations and remediation task creation",
+        "The response does not invent Cargo, npm, Go, Maven, or other package-manager commands"
+      ]
+    },
+    {
+      "id": 37,
+      "prompt": "Run triage-security in Fullsend mode using the trusted input in fullsend-malformed-convention-trusted-input.json. Its matching repository record has status malformed because the trusted collector found duplicate Cargo policy entries. Mutation authorization is true. Do NOT call Jira, Git, or external services. Write outputs/result.json with the valid triage report-only result you would emit.",
+      "expected_output": "Fullsend fails closed on the present malformed convention. It overrides mutation authorization with a report-only blocked result, emits exactly one report-only action, explains the duplicate-policy reason, and does not use the missing-policy targeted fallback or propose Jira mutations.",
+      "files": [
+        "files/fullsend-malformed-convention-trusted-input.json"
+      ],
+      "assertions": [
+        "The result mode is report-only and outcome is needs-review/blocked because the present convention is malformed",
+        "The report cites the trusted duplicate Cargo policy reason rather than treating the convention as absent",
+        "The actions array contains exactly one report-only action and no field edits, transitions, comments, links, or remediation tasks",
+        "The targeted-update fallback is not selected for malformed present policy even though mutation authorization is true"
       ]
     }
   ]

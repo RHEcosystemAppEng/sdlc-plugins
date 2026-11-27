@@ -69,3 +69,17 @@
      - Prefer standard library over external crates when reasonable
      - All new npm packages require team review
      - Pin exact versions in Cargo.toml -->
+
+## Dependency Updates
+
+<!-- For CVE remediation, add project-approved update and verification commands.
+     An empty policy list means no policy is declared; interactive workflows ask
+     and unattended Fullsend emits targeted-update task guidance.
+     See plugins/sdlc-workflow/shared/dependency-update-conventions.md for the
+     policy contract. -->
+
+```json
+{
+  "policies": []
+}
+```
