@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan identifies that removing the version filtering logic from SbomService::list leaves the version_filter parameter unused — it does not simply rename it to _version_filter",
+      "passed": true,
+      "evidence": "plan.md Step 6 #1: \"once the filter block is gone, `version_filter` has zero references in the body — it is a dead parameter... the correct fix is **removal from the signature**, not renaming to `_version_filter`\". parameter-cleanup.md table: \"Rename to `_version_filter` | Rejected\"."
+    },
+    {
+      "text": "The plan includes removing the version_filter parameter from the SbomService::list function signature, not just removing the filter logic in the body",
+      "passed": true,
+      "evidence": "plan.md Step 6 #1 shows new signature `pub async fn list(&self, search: Query, paginated: Paginated, tx: &Transactional<'_>)`; parameter-cleanup.md Procedure step 3 \"Remove the parameter from the signature\" with before/after code."
+    },
+    {
+      "text": "The plan identifies and updates all 3 call sites: the endpoint handler in list.rs, the search service in search/service/mod.rs, and the tests in tests/api/sbom.rs",
+      "passed": true,
+      "evidence": "plan.md Step 6 sections 2 (`modules/fundamental/src/sbom/endpoints/list.rs` -> `service.list(search, paginated, &tx)`), 3 (`modules/search/src/service/mod.rs` -> `sbom_service.list(query, paginated, &tx)`), 4 (`tests/api/sbom.rs` drop version argument). parameter-cleanup.md call-site table rows 1-3 cover the same files."
+    },
+    {
+      "text": "The parameter cleanup document explains that dead parameters should be removed rather than prefixed with an underscore — underscore prefixes suppress compiler warnings but leave unnecessary API surface",
+      "passed": false,
+      "evidence": "parameter-cleanup.md states removal over renaming, but the stated rationale for rejecting `_version_filter` is only \"check 4 says underscore-prefixing is a symptom of a dead parameter; the fix is removal, not renaming\". It never explains that an underscore prefix suppresses the compiler warning while leaving unnecessary API surface. The words \"warning\" and \"misleading API\" show up only in the separate \"Keep `version_filter: &str` unused\" row, not as the reason against the underscore prefix. The required reasoning is missing."
+    },
+    {
+      "text": "The plan includes re-running tests after removing the parameter and updating call sites to verify nothing broke",
+      "passed": true,
+      "evidence": "parameter-cleanup.md Procedure step 6 (after steps 3-5 remove the param and update callers): \"Re-run checks: `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings` ... and `cargo test` per modified crate (fundamental, search, tests)\". plan.md Step 7 runs `cargo test -p <crate>` for each modified crate."
+    }
+  ],
+  "summary": {
+    "passed": 4,
+    "failed": 1,
+    "total": 5,
+    "pass_rate": 0.8
+  }
+}

@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The workflow re-reads the target immediately before writing and compares it with the matrix snapshot used to prepare the proposal",
+      "passed": true,
+      "evidence": "population-race.md, 'Pre-write check: the target changed': \"Just before writing, the target was re-read and compared with the source snapshot:\" followed by a Snapshot vs Current target table. The snapshot is recorded under 'Source snapshot kept from the initial read' (Last-Updated 2026-06-28T10:00:00Z, one row 2.1.0, no CONCURRENT-ROW-KEEP)."
+    },
+    {
+      "text": "The final re-read detects the changed Last-Updated value and the `CONCURRENT-ROW-KEEP` entry",
+      "passed": true,
+      "evidence": "Comparison table rows: \"`Last-Updated` | `2026-06-28T10:00:00Z` | `2026-10-26T09:15:00Z` | **Changed**\" and \"`CONCURRENT-ROW-KEEP` entry (2.1.0 / api-rhel10) | absent | present | **Added concurrently**\"."
+    },
+    {
+      "text": "The concurrent row and newer timestamp are preserved; the stale proposal does not overwrite them",
+      "passed": true,
+      "evidence": "\"the write was **not performed**\"; 'Kept as is': \"The current `security-matrix.md`, unchanged, including `<!-- Last-Updated: 2026-10-26T09:15:00Z -->` and the `CONCURRENT-ROW-KEEP` entry.\" Summary: \"Stale proposal written: **no**\" and \"Concurrent `Last-Updated` (2026-10-26T09:15:00Z) and `CONCURRENT-ROW-KEEP` row: **kept**\"."
+    },
+    {
+      "text": "Because the concurrent row's complete values are not supplied, the workflow aborts merging and asks for the current full matrix/row data rather than presenting an incomplete or placeholder-filled proposal",
+      "passed": true,
+      "evidence": "Reason 3: \"I don't have its full values (release tag, resolved SHA, image reference, digest, CPE, notes) or the rest of the current file. I won't fill the gaps with placeholders or call a partial merge complete, so the merge is **aborted**.\" 'What I need from you' asks for \"The **full current contents** of `security-matrix.md`, or at least the complete `CONCURRENT-ROW-KEEP` row for 2.1.0/api-rhel10 with every column value\". No merged proposal is shown."
+    },
+    {
+      "text": "The output explicitly states that no write occurs until the concurrent change is reconciled and the final proposal is confirmed",
+      "passed": true,
+      "evidence": "\"Any write now needs a complete merged proposal and **fresh** confirmation.\"; next steps: \"Show you the complete merged matrix and revision checks for **fresh confirmation**. Re-read and compare the target again just before writing, then set `Last-Updated` only if that write goes ahead.\"; Summary: \"Status: **aborted, waiting for the current matrix contents and fresh confirmation**\"."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

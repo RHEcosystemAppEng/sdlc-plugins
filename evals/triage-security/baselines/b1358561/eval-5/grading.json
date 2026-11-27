@@ -1,0 +1,40 @@
+{
+  "assertion_results": [
+    {
+      "text": "Data extraction identifies the ecosystem as RPM based on the library name (openssl-libs) and component context, not Cargo (Step 1 Ecosystem detection — read ecosystems from Ecosystem Mappings config)",
+      "passed": true,
+      "evidence": "data-extraction.md line 44: '| Vulnerable library | openssl-libs (RPM: openssl) |'; line 45: '| Ecosystem | **RPM** (system package, so 1 remediation task per stream) |'. version-impact.md line 3 ties it to config: 'The lock file is `rpms.lock.yaml` (RPM row in the Ecosystem Mappings table of both streams)'. Cargo is never named as the ecosystem."
+    },
+    {
+      "text": "Version impact table includes ALL versions from the 2.2.x stream supportability matrix (2.2.0 through 2.2.4) and uses rpms.lock.yaml data for version extraction (Step 2.3)",
+      "passed": true,
+      "evidence": "version-impact.md lines 22-26 list rows for 2.2.0 (v0.4.5, 3.0.7-25.el9_3), 2.2.1 (v0.4.8, 3.0.7-27.el9_4), 2.2.2 (retag, carried forward YES), 2.2.3 (v0.4.11, 3.0.7-28.el9_4) and 2.2.4 (v0.4.12, 3.0.7-28.el9_4). Line 3 gives the source: 'git show <tag>:rpms.lock.yaml | grep 'openssl-libs''."
+    },
+    {
+      "text": "Dependency chain context identifies openssl-libs as present in rpms.lock.yaml and uses this to determine the package origin — the lock file presence is the primary classification signal (Step 2.3.5)",
+      "passed": true,
+      "evidence": "version-impact.md section 2.3.5, lines 44-51: 'rpms.lock.yaml: present at v0.4.5 (3.0.7-25.el9_3), v0.4.8 ..., v0.4.11 / v0.4.12 ... → explicit install', 'Using rpms.lock.yaml classification only.', 'Origin: explicit install (openssl-libs pinned in rpms.lock.yaml ...)'. remediation.md line 11: 'Origin: explicit install (openssl-libs is in rpms.lock.yaml)'."
+    },
+    {
+      "text": "Remediation creates a single task for the Konflux release repo — not the two-task upstream backport + downstream propagation flow used for source dependency ecosystems (Step 8 Remediation Task Creation — system package path)",
+      "passed": true,
+      "evidence": "remediation.md line 10: 'Ecosystem RPM (system package): **1 task** for the 2.2.x stream, in the Konflux release repo. There is no upstream backport or downstream propagation task.' The task's Repository is 'rhtpa-release.0.4.z' (line 29). The only other task mentioned is a conditional preemptive task for the separate 2.1.x stream (lines 104-113), which is also a single system-package task and not a backport/propagation pair."
+    },
+    {
+      "text": "Remediation task description follows task-description-template.md format with Repository, Target Branch, Description, Implementation Notes, and Acceptance Criteria sections — Files to Modify is intentionally omitted per remediation-templates.md (Step 8 Remediation Task Creation)",
+      "passed": true,
+      "evidence": "remediation.md task description has '## Repository' (line 27), '## Target Branch' (line 31), '## Description' (line 35), '## Implementation Notes' (line 55) and '## Acceptance Criteria' (line 67), plus Test Requirements and Dependencies. It has no '## Files to Modify' section."
+    },
+    {
+      "text": "The version impact output addresses SBOM verification in the dependency chain context — either noting that verification was skipped because cosign is not available or because external tools are prohibited, or presenting the SBOM classification result (Step 2.3.5 Optional SBOM verification)",
+      "passed": true,
+      "evidence": "version-impact.md lines 46-49 (section 2.3.5): 'SBOM verification: ⚠️ skipped (cosign not run / unavailable in this eval environment (no external tools permitted), and the matrix has no image reference@digest ...). Using rpms.lock.yaml classification only.' Line 59 says the same for 2.1.x: 'SBOM verification: ⚠️ skipped (cosign not available).'"
+    }
+  ],
+  "summary": {
+    "passed": 6,
+    "failed": 0,
+    "total": 6,
+    "pass_rate": 1.0
+  }
+}

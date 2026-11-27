@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "The symbol search analysis describes searching the target package for SEVERITY_ORDER (or severity ordering) before declaring a new constant — using find_symbol, search_for_pattern, or grep",
+      "passed": true,
+      "evidence": "symbol-search.md section 2 lists planned calls before any code is written, including `mcp__serena_backend__find_symbol(name_path_pattern=\"SEVERITY_ORDER\", include_body=true)` and `mcp__serena_backend__search_for_pattern(substring_pattern=\"(?i)severity_?order\")`. Section 1 says: \"Before writing any sorting key, the Reuse rules say to look for an existing definition.\""
+    },
+    {
+      "text": "The symbol search analysis identifies the existing SEVERITY_ORDER definition in modules/fundamental/src/advisory/service/advisory.rs",
+      "passed": true,
+      "evidence": "symbol-search.md section 3 says: \"**Location**: `modules/fundamental/src/advisory/service/advisory.rs`, which holds `AdvisoryService`\" and gives the definition `SEVERITY_ORDER: &[&str] = &[\"critical\", \"high\", \"medium\", \"low\", \"none\"]`."
+    },
+    {
+      "text": "The plan imports or reuses the existing SEVERITY_ORDER constant from the advisory module rather than declaring a duplicate in the sbom service",
+      "passed": true,
+      "evidence": "plan.md Step 6, under \"SEVERITY_ORDER handling: reuse it, never redeclare it\", says: \"`sbom.rs` imports it with `use crate::advisory::service::advisory::SEVERITY_ORDER;`\". File 1 also lists \"Add the import of `SEVERITY_ORDER`\"."
+    },
+    {
+      "text": "The plan does NOT declare a new SEVERITY_ORDER constant in modules/fundamental/src/sbom/service/sbom.rs or any other file when the existing one can be reused",
+      "passed": true,
+      "evidence": "Neither output file declares a new SEVERITY_ORDER. plan.md says \"Do **not** inline a copy.\" symbol-search.md says \"**Rejected: redeclaring `SEVERITY_ORDER` in `sbom.rs`.**\" The only proposed change is a `pub(crate)` visibility edit on the existing constant, and only if it turns out to be private. The `severity_rank` helper builds on the shared constant without copying it."
+    },
+    {
+      "text": "The symbol search analysis covers the search scope — searching the package broadly (not just the file being edited) to find existing definitions",
+      "passed": true,
+      "evidence": "In symbol-search.md section 2, searches 1–4 have no relative_path, so they cover the whole repo. Search 8 targets `common/src`. Section 3 says the searches confirm there is \"no second copy ... in `sbom/`, `common/`, `search/` or `ingestor/`\". Section 7 re-runs the searches \"across the repo\"."
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

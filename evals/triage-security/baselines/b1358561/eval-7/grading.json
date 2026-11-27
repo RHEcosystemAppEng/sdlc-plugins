@@ -1,0 +1,35 @@
+{
+  "assertion_results": [
+    {
+      "text": "Sibling check correctly classifies TC-8001 as a different-stream companion (stream [rhtpa-2.2] vs current issue's [rhtpa-2.1]), not a same-stream duplicate (Step 4)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 19-22: 'The current issue TC-8006 is in stream **2.1.x** (`[rhtpa-2.1]`). TC-8001 is in stream **2.2.x** (`[rhtpa-2.2]`), so it is a **different-stream sibling**: a companion tracker, not a duplicate. Same-stream siblings: **none**.' Line 86: 'Close TC-8006 as Duplicate | No | Sibling is in a different stream'."
+    },
+    {
+      "text": "Step 4.2 checks the current issue's existing issuelinks before attempting to create a 'Related' link to TC-8001 (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md lines 31-40: '**Existing link check.** I read the `issuelinks` array that Step 1 already fetched for TC-8006' with a table showing link 1990401 (Related, outwardIssue TC-8001) and match criteria on type.name and inward/outward key. triage-outcome.md lines 12-19 repeat this check-before-create logic."
+    },
+    {
+      "text": "Step 4.2 detects the pre-existing 'Related' link to TC-8001 and skips link creation — does NOT call jira.create_link (§1.58)",
+      "passed": true,
+      "evidence": "sibling-check.md line 42: 'Result: **a matching link exists, so link creation is skipped.**'; lines 46-47: '`jira.create_link(inwardIssue: TC-8006, outwardIssue: TC-8001, type: \"Related\")` is **not** called'; line 85: 'Create Related link TC-8006 ↔ TC-8001 | **No (skipped)**'. triage-outcome.md line 25: 'jira.create_link(TC-8006, TC-8001, \"Related\") was **not** issued.'"
+    },
+    {
+      "text": "The output includes a log message indicating the link was skipped because it already exists (e.g., 'Related link to TC-8001 already exists — skipping')",
+      "passed": true,
+      "evidence": "sibling-check.md line 44 and triage-outcome.md line 23 both contain: '\"Related link to TC-8001 already exists — skipping\"'."
+    },
+    {
+      "text": "The sibling landscape table is still presented to the engineer despite the link already existing — the idempotent check only affects link creation, not the sibling summary",
+      "passed": true,
+      "evidence": "sibling-check.md lines 59-68: '3. **Sibling landscape**' with table 'CVE-2026-31812 companion issues:' listing TC-8006 (2.1.x, New) and TC-8001 (2.2.x, In Progress), presented after the link-skip step. triage-outcome.md line 34: '**Sibling landscape** was shown to the engineer (see `sibling-check.md`).'"
+    }
+  ],
+  "summary": {
+    "passed": 5,
+    "failed": 0,
+    "total": 5,
+    "pass_rate": 1.0
+  }
+}

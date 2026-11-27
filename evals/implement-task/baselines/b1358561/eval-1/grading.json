@@ -1,0 +1,65 @@
+{
+  "assertion_results": [
+    {
+      "text": "The plan references inspecting existing code before modifying it — mentions reading or analyzing at least 2 of: advisory/endpoints/get.rs, advisory/service/advisory.rs, advisory/model/summary.rs, common/src/error.rs (constraint 1.5)",
+      "passed": true,
+      "evidence": "plan.md Step 4: \"`get_symbols_overview` on `advisory/service/advisory.rs`, `advisory/endpoints/mod.rs`, `advisory/endpoints/get.rs`, `advisory/model/mod.rs`, `advisory/model/summary.rs`\" and \"`find_symbol` (body) on ... `AppError` in `common/src/error.rs`\". All four named files are inspected before Step 6/7 edits."
+    },
+    {
+      "text": "All files listed in the plan are within the scope defined by the task's Files to Modify and Files to Create sections — no unrelated files are modified (constraint 1.4, 5.1)",
+      "passed": true,
+      "evidence": "plan.md Step 6/7 table lists only the 3 Create and 3 Modify files from the task, plus `server/src/main.rs` marked \"No change\". Out-of-scope candidates (`tests/Cargo.toml`, `docs/api.md`) are only noted as \"Potential FLAGS for approval\" in Step 9, not modified."
+    },
+    {
+      "text": "The plan includes creating the 3 new files listed in Files to Create: severity_summary.rs model, severity_summary.rs endpoint handler, and advisory_summary.rs test file",
+      "passed": true,
+      "evidence": "plan.md table rows 1, 4, 6 are 'Create' for `modules/fundamental/src/advisory/model/severity_summary.rs`, `modules/fundamental/src/advisory/endpoints/severity_summary.rs`, `tests/api/advisory_summary.rs`. Contents are in file-1, file-4, file-6."
+    },
+    {
+      "text": "The plan includes modifying the 3 files listed in Files to Modify: advisory/service/advisory.rs, advisory/endpoints/mod.rs, and advisory/model/mod.rs",
+      "passed": true,
+      "evidence": "plan.md table rows 2, 3, 5 are 'Modify' for `advisory/model/mod.rs` (`pub mod severity_summary;`), `advisory/service/advisory.rs` (`severity_summary` method), `advisory/endpoints/mod.rs` (`mod severity_summary;` + `.route(...)`). Diffs are in file-2, file-3, file-5."
+    },
+    {
+      "text": "The planned commit message follows Conventional Commits format (type(scope): description) and references TC-9201 in the footer (constraint 2.1, 2.2)",
+      "passed": true,
+      "evidence": "plan.md Step 10: subject \"feat(advisory): add SBOM advisory severity summary endpoint\" with final footer line \"Implements TC-9201\"."
+    },
+    {
+      "text": "The plan mentions using --trailer='Assisted-by: <tool> (<model>)' in the commit, naming the AI tool and model actually used (constraint 2.3)",
+      "passed": true,
+      "evidence": "plan.md Step 10: `git commit --trailer=\"Assisted-by: Claude Code (Claude Opus 5.5)\"`. That names the actual tool (Claude Code) and model (Opus 5.5)."
+    },
+    {
+      "text": "The plan references creating a branch named TC-9201 or notes the branch naming convention (constraint 3.1), and references the Target Branch value from the task description",
+      "passed": true,
+      "evidence": "plan.md Step 5: `git checkout main && git pull && git checkout -b TC-9201`; Step 1: \"Target Branch: `main`\" and \"branch `TC-9201` from `main`; PR -> `main`\"."
+    },
+    {
+      "text": "The conventions analysis identifies at least 2 patterns from sibling code: error handling with Result<T, AppError> and .context(), and the model/service/endpoints module structure",
+      "passed": true,
+      "evidence": "conventions.md 'Error handling': \"All handlers return `Result<T, AppError>` (`common/src/error.rs`...)\" and \"Errors wrapped with `.context(\\\"...\\\")`\"; 'Module structure': \"Each domain module uses `model/ + service/ + endpoints/`.\""
+    },
+    {
+      "text": "The plan extracts and references the Target Branch section from the task description, identifying 'main' as the target branch",
+      "passed": true,
+      "evidence": "plan.md Step 1: \"Repository: trustify-backend; Target Branch: `main`\"; Step 10: `gh pr create --base main`."
+    },
+    {
+      "text": "The plan references the Step 1.5 description-digest check before modifying code — e.g., looking for the `[sdlc-workflow] Description digest:` comment or verifying the digest with `scripts/sha256-digest.py`",
+      "passed": true,
+      "evidence": "plan.md 'Steps 1.5 / 2 / 3': \"Fetch comments, look for `[sdlc-workflow] Description digest:`, compare with `scripts/sha256-digest.py`.\" This comes before Step 4 code understanding and Step 6/7 edits."
+    },
+    {
+      "text": "The plan describes using `cargo metadata --no-deps --format-version 1` (or cargo metadata) to resolve the crate name for the affected module before running module-level tests — not deriving it from the nearest `Cargo.toml`, which may be a virtual workspace manifest",
+      "passed": true,
+      "evidence": "plan.md Step 9 item 15: \"Module tests (Rust) — resolve crates via `cargo metadata`: `cargo test -p trustify-module-fundamental` and the `tests` crate.\" conventions.md also says \"(resolved via `cargo metadata`)\". Nothing mentions deriving the name from Cargo.toml."
+    }
+  ],
+  "summary": {
+    "passed": 11,
+    "failed": 0,
+    "total": 11,
+    "pass_rate": 1.0
+  }
+}
