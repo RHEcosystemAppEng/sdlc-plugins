@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Root Cause Layer Check across `triage-bug`, `plan-feature`, and `verify-pr` so a
+  cross-repository or data-layer root cause is fixed in the owning repository or
+  explicitly deferred through the shared `## Root Cause Layer` task section
+
 ## [0.14.1] - 2026-11-27
 
 ### Added

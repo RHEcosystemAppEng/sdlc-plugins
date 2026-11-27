@@ -742,7 +742,7 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     assert all("on-demand" in c["prompt"].lower() for c in new_cases)
     assert all("FULLSEND_OUTPUT_DIR" not in c["prompt"] and "agent-result.json" not in c["prompt"]
                for c in new_cases)
-    assert len(verify) == 6 and sum(len(c["assertions"]) for c in verify) == 68
+    assert len(verify) == 7 and sum(len(c["assertions"]) for c in verify) == 75
     # TC-6820 appends exactly two release assertions and one prompt suffix to case1.
     # Hash the retained 1–32 prefix and all other original cases against the baseline.
     baseline = json.loads(json.dumps(triage[:32]))
@@ -758,12 +758,16 @@ def test_ordinary_evals_preserve_baseline_and_exclude_native_cases():
     # the active ordinary manifests to match the native branch's historical hash.
     # Canonical complete-object digests keep this portable to a shallow checkout:
     # main ab20bee6, native aa15d776, and PR299 d83ee90b (TC4636 prompt repair).
+    # TC-7642 appends verify-pr eval 7 (cross-repository review feedback); its
+    # complete-manifest digest is da0bc2e0 and the earlier digests stay accepted
+    # so the two branches land in either order without rewriting history.
     for cases, digests in [
         (baseline, {"205eeca4b564c0483c919be0951e50b3d5510f981278c61fa1c47468af5fe76d",
                   "b3f9e9d4f4ab1eb92f053c0c0e4199a36eabb12ab9589e9d27e9c59509eee501"}),
         (verify, {"251863edaed38f0b133c0cf0981ddffe80692f5d0655b51f7bfe214be38f69b1",
                   "cf587edf1e94e6a1a210d5c97788f33b3336a0818a86551e364ec056bd1a3be1",
-                  "501a5fd500ff19ad460e9b1c65f7c4422b743ab6db6b58ba331b50197b45aabd"}),
+                  "501a5fd500ff19ad460e9b1c65f7c4422b743ab6db6b58ba331b50197b45aabd",
+                  "da0bc2e0967dc0977654f99ce535100f62b9ab5b3651f34749f64cec79dcfe68"}),
     ]:
         assert hashlib.sha256(json.dumps(cases, sort_keys=True, separators=(",", ":")).encode()).hexdigest() in digests
     assert not (FIXTURES / "fullsend-gate-tools.py").exists()

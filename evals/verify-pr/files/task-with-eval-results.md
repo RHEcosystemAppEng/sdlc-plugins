@@ -6,7 +6,7 @@
 **Summary**: Add documentation coverage check to style-conventions sub-agent
 **Status**: In Review
 **Labels**: ai-generated-jira
-**PR URL**: https://github.com/mrizzi/sdlc-plugins/pull/747
+**PR URL**: https://github.com/RHEcosystemAppEng/sdlc-plugins/pull/747
 **Web URL**: https://redhat.atlassian.net/browse/TC-9106
 **Parent Feature**: TC-9100
 
