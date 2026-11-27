@@ -516,11 +516,17 @@ for the stream.
         rpms.lock.yaml classification of "in lock file")
       - **In both SBOMs** → base image package (confirms rpms.lock.yaml
         classification of "not in lock file")
-      - **If SBOM result disagrees with rpms.lock.yaml classification**, flag the
-        discrepancy to the engineer:
+      - **If SBOM result disagrees with rpms.lock.yaml classification**, keep the
+        rpms.lock.yaml classification as the reported origin, marked as disputed, and
+        flag the discrepancy to the engineer. The SBOM comparison supplements but never
+        overrides the lock file result (sub-step 3):
         > "⚠️ SBOM classification disagrees with rpms.lock.yaml — lock file says
         > [explicit install / base image] but SBOM comparison says [base image /
         > explicit install]. Investigate manually."
+        Report the origin line as the lock file classification, for example
+        `Origin: explicit install (disputed — SBOM comparison suggests base image;
+        investigate manually)`. Never report the two signals as an unresolved tie such
+        as `Origin: UNRESOLVED`: rpms.lock.yaml remains the primary signal.
    6. Present the SBOM classification result alongside the rpms.lock.yaml result
       in the dependency chain output (see example output below).
 
@@ -595,6 +601,17 @@ Dependency chain for openssl (RPM):
   SBOM verification: ⚠️ skipped — cosign not available
   Origin: base image (openssl-libs inherited from ubi9-minimal)
 ```
+
+Example output (RPM, SBOM disagrees — the lock file stays the reported origin):
+```
+Dependency chain for custom-rpm (RPM):
+  rpms.lock.yaml: present → explicit install
+  SBOM verification: present in both final and base image SBOMs → base image (disagrees with lock file)
+  Origin: explicit install (disputed — SBOM comparison suggests base image; investigate manually)
+```
+
+Remediation: update the package spec in rpms.in.yaml / rpms.lock.yaml, and
+investigate the SBOM disagreement before closing.
 
 Note that the lock file contents and base image can differ across streams — always
 check at the specific stream's pinned commit.
