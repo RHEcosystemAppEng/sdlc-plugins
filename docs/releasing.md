@@ -15,17 +15,23 @@ This document describes how to release a new version of the sdlc-workflow plugin
    - `0.X.Y` → `0.X.(Y+1)` (z-stream) for enhancements, bug fixes, and polish
 
 3. **Cut a release branch** from the default branch — the bump and its re-pin land through a pull
-   request so CI gates them before they reach `main`:
+   request so CI gates them before they reach `main`. Below, `<remote>` is the remote pointing at
+   `RHEcosystemAppEng/sdlc-plugins` (named `upstream` or `origin`, depending on the clone):
    ```bash
-   git fetch upstream
-   git switch -c release/vX.Y.Z upstream/main
+   git fetch <remote>
+   git switch -c release/vX.Y.Z <remote>/main
    ```
 
 4. **Commit the version bump** with the message:
    ```
    chore(release): bump version to X.Y.Z
    ```
-   Push the branch. Its tip SHA is what the next step pins.
+   Push the branch **to `RHEcosystemAppEng/sdlc-plugins`, not to a fork** — Fullsend fetches the
+   pinned content by SHA from that repository, so a fork-only branch leaves the next step's pin
+   dangling. The branch's tip SHA is what the next step pins:
+   ```bash
+   git push -u <remote> HEAD
+   ```
 
 5. **Re-pin and re-lock Fullsend in the same branch** — `plugin.json` is Fullsend-pinned content,
    so the bump makes `.fullsend/lock.yaml` stale and Python Tests fails on
@@ -34,7 +40,8 @@ This document describes how to release a new version of the sdlc-workflow plugin
    ```bash
    fullsend lock --all --fullsend-dir .fullsend
    ```
-   Commit as `chore(fullsend): re-pin and re-lock to <bump-sha> (X.Y.Z bump)`. See
+   Commit as `chore(fullsend): re-pin and re-lock to <bump-sha> (X.Y.Z bump)` and push the branch
+   again, so the pull request carries the lock update. See
    [fullsend.md — Releasing an update](../fullsend.md#releasing-an-update-this-repo).
 
 6. **Open a PR into `main` and wait for CI** — Python Tests (which includes the lock-vs-checkout
@@ -42,9 +49,11 @@ This document describes how to release a new version of the sdlc-workflow plugin
    squash**: squashing discards the bump commit the harnesses pin to, and the pinned URLs would
    dangle.
 
-7. **Create a GitHub release** — tag the merge commit and create a GitHub release on
-   `RHEcosystemAppEng/sdlc-plugins` with notes from the changelog:
+7. **Create a GitHub release** — fetch first so the server-created merge commit exists locally,
+   then tag it and create a GitHub release on `RHEcosystemAppEng/sdlc-plugins` with notes from the
+   changelog:
    ```bash
+   git fetch <remote>
    git tag vX.Y.Z <merge-commit-sha>
    git push <remote> vX.Y.Z   # push to RHEcosystemAppEng/sdlc-plugins
    gh release create vX.Y.Z --repo RHEcosystemAppEng/sdlc-plugins --title "vX.Y.Z" --latest --notes "<changelog section for this version>"
