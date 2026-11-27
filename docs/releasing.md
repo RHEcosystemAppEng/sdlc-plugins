@@ -21,7 +21,18 @@ This document describes how to release a new version of the sdlc-workflow plugin
 
 4. **Push to the default branch.**
 
-5. **Create a GitHub release** — tag the release commit and create a GitHub release on `RHEcosystemAppEng/sdlc-plugins` with notes from the changelog:
+5. **Re-pin and re-lock Fullsend** — `plugin.json` is Fullsend-pinned content, so the bump makes
+   `.fullsend/lock.yaml` stale and Python Tests fails on `test_fullsend_lock_matches_checkout_bytes`.
+   Once the bump commit is on the default branch:
+   ```bash
+   # set the base: SHA in both harnesses to the bump commit, keeping each #sha256=
+   fullsend lock --all --fullsend-dir .fullsend
+   ```
+   Commit as `chore(fullsend): re-pin and re-lock to <bump-sha> (X.Y.Z bump)` and push. See
+   [fullsend.md — Releasing an update](../fullsend.md#releasing-an-update-this-repo).
+
+6. **Create a GitHub release** — tag the re-pin commit (so the release tree passes CI) and create a
+   GitHub release on `RHEcosystemAppEng/sdlc-plugins` with notes from the changelog:
    ```bash
    git tag vX.Y.Z <commit-sha>
    git push <remote> vX.Y.Z   # push to RHEcosystemAppEng/sdlc-plugins
@@ -29,7 +40,7 @@ This document describes how to release a new version of the sdlc-workflow plugin
    ```
    Use the corresponding `CHANGELOG.md` section as the release notes body.
 
-6. **Users update** by running:
+7. **Users update** by running:
    ```
    /plugin marketplace update
    ```
